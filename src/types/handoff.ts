@@ -36,12 +36,32 @@ export interface PriorHandoffSnapshot {
   excerpt: string;
 }
 
+export type TranscriptRole = "user" | "assistant" | "system" | "unknown";
+
+export interface TranscriptMessage {
+  role: TranscriptRole;
+  text: string;
+  ts?: string;
+}
+
+export interface SessionContext {
+  taskSummary: EvidenceItem;
+  filesExplored: string[];
+  keyFindings: EvidenceItem[];
+  decisions: EvidenceItem[];
+  openQuestions: EvidenceItem[];
+  rejectedApproaches: EvidenceItem[];
+  /** Absolute path or label such as "none". */
+  source: string;
+}
+
 export interface HandoffEvidence {
   git: GitContext;
   currentTask: CurrentTaskSnapshot;
   priorHandoff: PriorHandoffSnapshot | null;
   relatedDecisions: string[];
   relatedRejected: string[];
+  session: SessionContext | null;
 }
 
 export interface AutoDraft {
@@ -54,6 +74,7 @@ export interface AutoDraft {
   relatedRejected: EvidenceItem[];
   suggestedNextAction: EvidenceItem;
   notes: string;
+  session: SessionContext | null;
 }
 
 export interface HandoffInput {

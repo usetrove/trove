@@ -32,6 +32,10 @@ program
   .option("--decisions <text>", "optional decision to propose for durable memory")
   .option("--rejected <text>", "optional rejected approach to propose")
   .option("--skip-durable", "do not prompt for durable memory updates", false)
+  .option(
+    "--transcript <path>",
+    "session transcript (.jsonl or markdown) for session context",
+  )
   .action(async (nextArg: string | undefined, options) => {
     try {
       await runHandoff(process.cwd(), {

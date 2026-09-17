@@ -9,9 +9,15 @@ import type {
   TrovePaths,
 } from "../types/handoff";
 import { collectGitContext } from "./collectGitContext";
+import {
+  loadTranscript,
+  resolveTranscriptPath,
+} from "./collectTranscript";
+import { summarizeSession } from "./summarizeSession";
 
 export async function collectHandoffEvidence(
   paths: TrovePaths,
+  options: { transcript?: string } = {},
 ): Promise<HandoffEvidence> {
   const git = await collectGitContext(paths.root);
   const currentTask = await readCurrentTask(paths.currentTask);
@@ -25,12 +31,20 @@ export async function collectHandoffEvidence(
     git.changedFiles,
   );
 
+  const transcriptPath = resolveTranscriptPath(options.transcript);
+  const { messages, source } = await loadTranscript(transcriptPath);
+  const session =
+    source && messages.length > 0
+      ? summarizeSession(messages, git.changedFiles, source)
+      : null;
+
   return {
     git,
     currentTask,
     priorHandoff,
     relatedDecisions,
     relatedRejected,
+    session,
   };
 }
 

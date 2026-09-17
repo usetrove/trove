@@ -6,34 +6,21 @@ import type {
 } from "../types/handoff";
 
 export function buildAutoDraft(evidence: HandoffEvidence): AutoDraft {
-  const { git, currentTask, priorHandoff, relatedDecisions, relatedRejected } =
-    evidence;
+  const {
+    git,
+    currentTask,
+    priorHandoff,
+    relatedDecisions,
+    relatedRejected,
+    session,
+  } = evidence;
 
-  const objectiveText =
-    currentTask.objective ||
-    priorHandoff?.objective ||
-    inferObjectiveFromBranch(git.branch) ||
-    "Continue current work";
-
-  const objective: EvidenceItem = {
-    text: objectiveText,
-    confidence: currentTask.objective
-      ? "verified"
-      : priorHandoff?.objective
-        ? "inferred"
-        : git.branch
-          ? "inferred"
-          : "needs_confirmation",
-    source: currentTask.objective
-      ? ["current-task.md"]
-      : priorHandoff?.objective
-        ? ["prior-handoff"]
-        : git.branch
-          ? ["git-branch"]
-          : ["fallback"],
-  };
+  const objective = buildObjective(evidence);
 
   const completed: EvidenceItem[] = [];
+  if (session?.keyFindings.length) {
+    completed.push(...session.keyFindings);
+  }
   if (git.changedFiles.length > 0) {
     const sample = git.changedFiles.slice(0, 5).map(basename).join(", ");
     const more =
@@ -75,7 +62,9 @@ export function buildAutoDraft(evidence: HandoffEvidence): AutoDraft {
   ];
 
   const remaining: EvidenceItem[] = [];
-  if (currentTask.nextAction) {
+  if (session?.openQuestions.length) {
+    remaining.push(...session.openQuestions);
+  } else if (currentTask.nextAction) {
     remaining.push({
       text: `Previous next action was: ${currentTask.nextAction}`,
       confidence: "inferred",
@@ -96,26 +85,27 @@ export function buildAutoDraft(evidence: HandoffEvidence): AutoDraft {
   }
 
   const relevantFiles = unique([
-    ...currentTask.relevantFiles.filter(looksLikeSourceFile),
-    ...git.changedFiles.filter(looksLikeSourceFile),
+    ...(session?.filesExplored ?? []).filter(looksLikeRepoPath),
+    ...currentTask.relevantFiles.filter(looksLikeRepoPath),
+    ...git.changedFiles.filter(looksLikeGitFile),
   ]).slice(0, 20);
 
   const suggestedNextAction: EvidenceItem = {
     text:
       currentTask.nextAction ||
       priorHandoff?.nextAction ||
+      session?.openQuestions[0]?.text ||
       (git.changedFiles.length > 0
         ? "Continue work on files changed since the previous checkpoint."
         : "Confirm the next concrete action for this task."),
-    confidence:
-      currentTask.nextAction || priorHandoff?.nextAction
-        ? "needs_confirmation"
-        : "needs_confirmation",
+    confidence: "needs_confirmation",
     source: currentTask.nextAction
       ? ["current-task.md"]
       : priorHandoff?.nextAction
         ? ["prior-handoff"]
-        : ["suggestion"],
+        : session?.openQuestions[0]
+          ? ["transcript"]
+          : ["suggestion"],
   };
 
   return {
@@ -135,7 +125,8 @@ export function buildAutoDraft(evidence: HandoffEvidence): AutoDraft {
       source: ["rejected.md"],
     })),
     suggestedNextAction,
-    notes: "",
+    notes: session ? `Transcript: ${session.source}` : "",
+    session,
   };
 }
 
@@ -166,6 +157,15 @@ export function renderCompactDraftPreview(draft: AutoDraft): string {
   const lines = [
     "Draft:",
     `  Objective: ${draft.objective.text}  [${draft.objective.confidence}]`,
+  ];
+
+  if (draft.session) {
+    lines.push(
+      `  Session: task + ${draft.session.filesExplored.length} file(s), ${draft.session.keyFindings.length} finding(s) from transcript`,
+    );
+  }
+
+  lines.push(
     `  Completed: ${draft.completed.map((c) => c.text).join(" ")}`,
     `  Verification: ${draft.verification.map((v) => v.text).join(" ")}`,
     `  Files: ${
@@ -176,7 +176,7 @@ export function renderCompactDraftPreview(draft: AutoDraft): string {
             : "")
         : "(none)"
     }`,
-  ];
+  );
 
   if (draft.relatedDecisions.length) {
     lines.push(
@@ -190,6 +190,49 @@ export function renderCompactDraftPreview(draft: AutoDraft): string {
     `  Next action: [${draft.suggestedNextAction.confidence}] ${draft.suggestedNextAction.text}`,
   );
   return lines.join("\n");
+}
+
+function buildObjective(evidence: HandoffEvidence): EvidenceItem {
+  const { git, currentTask, priorHandoff, session } = evidence;
+
+  if (currentTask.objective) {
+    return {
+      text: currentTask.objective,
+      confidence: "verified",
+      source: ["current-task.md"],
+    };
+  }
+
+  if (session?.taskSummary.text) {
+    return {
+      text: session.taskSummary.text,
+      confidence: session.taskSummary.confidence,
+      source: unique(["transcript", ...session.taskSummary.source]),
+    };
+  }
+
+  if (priorHandoff?.objective) {
+    return {
+      text: priorHandoff.objective,
+      confidence: "inferred",
+      source: ["prior-handoff"],
+    };
+  }
+
+  const fromBranch = inferObjectiveFromBranch(git.branch);
+  if (fromBranch) {
+    return {
+      text: fromBranch,
+      confidence: "inferred",
+      source: ["git-branch"],
+    };
+  }
+
+  return {
+    text: "Continue current work",
+    confidence: "needs_confirmation",
+    source: ["fallback"],
+  };
 }
 
 function inferObjectiveFromBranch(branch: string | null): string | null {
@@ -212,12 +255,26 @@ function unique(items: string[]): string[] {
   return [...new Set(items)];
 }
 
-function looksLikeSourceFile(filePath: string): boolean {
+function looksLikeRepoPath(filePath: string): boolean {
   const normalized = filePath.replace(/\\/g, "/");
   if (!normalized || normalized.endsWith("/")) return false;
   if (normalized.startsWith("node_modules/") || normalized.startsWith("dist/")) return false;
   if (normalized === "package-lock.json") return false;
-  if (normalized.startsWith(".trove/sessions/")) return true;
+  if (/\/\.[^/]*$/.test(normalized)) return false; // e.g. sessions/.md
+  if (normalized.startsWith(".trove/sessions/")) {
+    return /\.[a-z0-9]+$/i.test(normalized);
+  }
+  if (normalized.startsWith(".trove/")) return false;
+  // Prefer paths with a directory; bare names are often examples.
+  if (!normalized.includes("/")) return false;
+  return true;
+}
+
+function looksLikeGitFile(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, "/");
+  if (!normalized || normalized.endsWith("/")) return false;
+  if (normalized.startsWith("node_modules/") || normalized.startsWith("dist/")) return false;
+  if (normalized === "package-lock.json") return false;
   if (normalized.startsWith(".trove/")) return false;
   return true;
 }

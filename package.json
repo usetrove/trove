@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "handoff:sample": "npm run build && node dist/index.js handoff -y --next \"Open the saved handoff and confirm Session context looks right\" --transcript ./fixtures/sample-transcript.md --objective \"Fix login redirect to /dashboard\" --skip-durable"
   },
   "bin": {
     "trove": "./dist/index.js"

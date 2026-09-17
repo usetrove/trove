@@ -38,6 +38,7 @@ function renderConfidenceBlock(title: string, items: EvidenceItem[]): string {
 
 export function renderHandoffMarkdown(doc: HandoffDocument): string {
   const { git, input, relevantFiles, id, createdAt, autoDraft } = doc;
+  const session = autoDraft.session;
   const files =
     relevantFiles.length > 0
       ? relevantFiles.map((f) => `- \`${f}\``).join("\n")
@@ -47,6 +48,9 @@ export function renderHandoffMarkdown(doc: HandoffDocument): string {
   const workingTree = git.hasUncommittedChanges
     ? "modified files present"
     : "clean";
+  const transcriptSource = session
+    ? pathBasename(session.source)
+    : "none";
 
   const evidenceItems = [
     ...autoDraft.completed,
@@ -98,6 +102,7 @@ branch: ${git.branch ?? "unknown"}
 commit: ${git.commitSha ?? "unknown"}
 status: active
 relevant_files:${frontmatterFiles ? `\n${frontmatterFiles}` : " []"}
+transcript_source: ${transcriptSource}
 ---
 
 # Handoff: ${input.objective.trim() || "Untitled"}
@@ -106,6 +111,7 @@ relevant_files:${frontmatterFiles ? `\n${frontmatterFiles}` : " []"}
 ${paragraph(input.objective)}
 _(${autoDraft.objective.confidence}; source: ${autoDraft.objective.source.join(", ")})_
 
+${renderSessionContext(doc)}
 ## Detected work
 ${bullets(input.completed)}
 ${git.hasUncommittedChanges ? "- The working tree contains uncommitted changes. _(verified)_" : "- Working tree is clean. _(verified)_"}
@@ -137,13 +143,81 @@ ${git.diffStat.trim() ? `\n### Diff stat\n\`\`\`\n${git.diffStat.trim()}\n\`\`\`
 `;
 }
 
+function renderSessionContext(doc: HandoffDocument): string {
+  const session = doc.autoDraft.session;
+  if (!session) {
+    return `## Session context
+_No transcript provided. Pass \`--transcript <path>\` or set \`TROVE_TRANSCRIPT\` to capture session-level context._
+
+`;
+  }
+
+  const files =
+    session.filesExplored.length > 0
+      ? session.filesExplored.map((f) => `- \`${f}\``).join("\n")
+      : "- _None detected._";
+
+  return `## Session context
+
+### Task summary
+${paragraph(session.taskSummary.text)}
+_(${session.taskSummary.confidence}; source: ${session.taskSummary.source.join(", ")})_
+
+### Files and modules explored
+${files}
+
+### Key findings
+${evidenceBullets(session.keyFindings)}
+
+### Decisions / focus areas
+${evidenceBullets(session.decisions)}
+
+### Open questions / next steps
+${evidenceBullets(session.openQuestions)}
+
+### Rejected approaches
+${evidenceBullets(session.rejectedApproaches)}
+
+`;
+}
+
+function evidenceBullets(items: EvidenceItem[], empty = "- _None detected._"): string {
+  if (items.length === 0) return empty;
+  return items.map((i) => `- ${i.text}`).join("\n");
+}
+
+function pathBasename(filePath: string): string {
+  return filePath.replace(/\\/g, "/").split("/").pop() || filePath;
+}
+
 export function renderReviewMarkdown(draft: AutoDraft): string {
+  const sessionBlock = draft.session
+    ? `## Session context (from transcript)
+${draft.session.taskSummary.text}
+_(${draft.session.taskSummary.confidence})_
+
+Files: ${
+        draft.session.filesExplored.length
+          ? draft.session.filesExplored.slice(0, 8).join(", ")
+          : "_none_"
+      }
+Findings: ${
+        draft.session.keyFindings.length
+          ? draft.session.keyFindings.map((f) => f.text).join("; ")
+          : "_none_"
+      }
+`
+    : `## Session context
+_No transcript provided._
+`;
+
   return `# Handoff Draft
 
 ## Current task
 ${draft.objective.text}
 _(${draft.objective.confidence})_
 
+${sessionBlock}
 ## Detected work
 ${draft.completed.map((c) => `- ${c.text} _(${c.confidence})_`).join("\n")}
 

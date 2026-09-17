@@ -31,6 +31,7 @@ export interface HandoffCliOptions {
   decisions?: string;
   rejected?: string;
   skipDurable?: boolean;
+  transcript?: string;
   /** Level-1 fallback: force the old full questionnaire (not default). */
   manual?: boolean;
 }
@@ -52,10 +53,21 @@ export async function runHandoff(
   }
 
   await readTroveConfig(paths.config);
-  const evidence = await collectHandoffEvidence(paths);
+  const evidence = await collectHandoffEvidence(paths, {
+    transcript: options.transcript,
+  });
   const autoDraft = buildAutoDraft(evidence);
 
   displayFoundSummary(evidence.git, autoDraft.objective.text);
+  if (evidence.session) {
+    console.log(
+      `Session context: ${evidence.session.filesExplored.length} file(s), ${evidence.session.keyFindings.length} finding(s) from transcript`,
+    );
+    console.log("");
+  } else if (options.transcript?.trim() || process.env.TROVE_TRANSCRIPT) {
+    console.log("Session context: transcript provided but no messages parsed.");
+    console.log("");
+  }
 
   if (evidence.git.branch === "main" || evidence.git.branch === "master") {
     console.log(`Warning: Current branch is \`${evidence.git.branch}\`.`);
