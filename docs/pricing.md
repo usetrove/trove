@@ -34,17 +34,23 @@ Prices are JSON **strings** (`"0.30"`), never numbers, so no float touches a pri
 | OpenAI | https://developers.openai.com/api/docs/pricing (`.md` form for exact tables) | https://developers.openai.com/api/docs/changelog |
 | Google | https://ai.google.dev/gemini-api/docs/pricing (`.md.txt` form for exact tables) | https://ai.google.dev/gemini-api/docs/changelog |
 
-Usage-field semantics were checked on the Anthropic prompt-caching and thinking pages, and the
-OpenAI prompt-caching and reasoning guides. The Gemini `usageMetadata` semantics are **not**
-verified yet; see "Known gaps".
+Usage-field semantics were checked on the Anthropic prompt-caching and thinking pages, the OpenAI
+prompt-caching and reasoning guides, and the Gemini `generateContent` reference (`UsageMetadata`:
+`promptTokenCount` includes cached content; `totalTokenCount` = prompt + tool-use + thoughts +
+candidates, so thought tokens are separate from candidates) plus the Gemini thinking guide
+("response pricing is the sum of output tokens and thinking tokens"). OpenAI model pages state
+that prompts over 272K are priced "for the full request" (GPT-6 Astra, GPT-5.6 Sol) or "for the
+full session" (GPT-5.5).
 
 ## What is not priced (and what the engine does)
 
 The engine returns `unpriced` (nothing priced) or `partial` (some components priced, the rest
 listed in `unpriced`) rather than guessing. It does this for: unknown models, requests before
-`effective_from`, fast/priority/flex/ultrafast service tiers, OpenAI regional uplift, cache
-writes on models with no write price, batch on models with no batch price, Gemini cache
-storage and search grounding (free-allowance dependent), and Gemini thought tokens.
+`effective_from`, service tiers a model does not have, premium tiers combined with batch, premium
+tiers above a long-context threshold the provider lists no price for, OpenAI regional uplift,
+cache writes on models with no write price, batch on models with no batch price, and Gemini
+search grounding (free-allowance dependent). Gemini cache storage and audio input are not
+modelled at all.
 
 ## Updating prices (checklist)
 
@@ -80,12 +86,17 @@ every entry whose `verified_at` is more than 30 days old. It never fails the rel
 
 ## Known gaps
 
-- Gemini: whether `thoughtsTokenCount` is included in the reported output count is not
-  verified, so the engine flags thought tokens instead of adding them. Cache storage and
-  grounding fees are not priced.
-- OpenAI: the page does not say whether the >272K prices cover the whole request or only the
-  tokens above the threshold; the engine assumes the whole request. Regional uplift applies
-  only to eligible models and is not modelled. o-series and GPT-4.x are not included.
+- Gemini: cache storage, search grounding and `toolUsePromptTokenCount` are not priced. The
+  thought-token handling rests on the API reference's `totalTokenCount` formula and the thinking
+  guide, not on a sentence that says "candidates exclude thoughts"; confirm with a real response
+  once the gateway records usage.
+- OpenAI: regional uplift applies only to eligible models and is not modelled. o-series and
+  GPT-4.x are not included. The batch cached-input price for gpt-5.4 is shown on the page as
+  $0.13 (0.125 rounded); Trove uses 0.125.
+- Service tiers: Anthropic fast-mode cache prices are derived from the documented multipliers
+  (the page lists only input and output). Flex is priced like batch, which matches every
+  in-scope OpenAI and Gemini model on the pages as of 2026-10-28. Adapters must map each
+  provider's own tier field onto `fast`, `ultrafast`, `priority` or `flex`.
 - GPT-5.6 Sol, Terra and Luna had price cuts; earlier prices are not on the current page, so
   requests before the cut are unpriced.
 - Claude Sonnet 4.5 and Opus 4.5: the current page lists no long-context premium; the old

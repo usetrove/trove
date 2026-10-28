@@ -13,16 +13,18 @@ import (
 //     cache_read_input_tokens, output_tokens. Thinking is billed inside output_tokens.
 //   - OpenAI: input_tokens includes cached and written tokens, so the adapter subtracts
 //     them to get UncachedInput; reasoning tokens are a subset of output_tokens.
-//   - Google: prompt tokens include cached tokens, so the adapter subtracts them.
-//     How thought tokens are reported is not verified yet; see Reasoning.
+//   - Google: promptTokenCount includes cachedContentTokenCount, so the adapter subtracts
+//     it. candidatesTokenCount (Output) excludes thoughtsTokenCount (Reasoning), which is
+//     billed on top at the output price (totalTokenCount = prompt + tool-use + thoughts +
+//     candidates; "response pricing is the sum of output tokens and thinking tokens").
+//     toolUsePromptTokenCount is not modelled.
 type Usage struct {
 	UncachedInput int64            `json:"uncached_input"`
 	CacheWrite    map[string]int64 `json:"cache_write,omitempty"` // by TTL
 	CacheRead     int64            `json:"cache_read"`
 	Output        int64            `json:"output"`
 	// Reasoning is informational for Anthropic and OpenAI (already inside Output).
-	// For Google it is reported as an unpriced component when non-zero, because
-	// whether it is already inside Output has not been verified.
+	// For Google it is additional to Output and billed at the output price.
 	Reasoning int64 `json:"reasoning,omitempty"`
 }
 
@@ -97,8 +99,24 @@ func (t *Table) Cost(req Request) Cost {
 	if e == nil {
 		return fail(reason)
 	}
-	if req.ServiceTier != "" && req.ServiceTier != "standard" {
-		return fail(fmt.Sprintf("the %q service tier is not priced yet; only standard is", req.ServiceTier))
+	batch := req.Batch
+	var premium *ServiceTier
+	switch req.ServiceTier {
+	case "", "standard":
+	case "flex":
+		if !e.FlexMatchesBatch {
+			return fail(fmt.Sprintf("no flex price on file for %s", e.Model))
+		}
+		batch = true // flex is priced exactly like batch for these models
+	default:
+		st, ok := e.ServiceTiers[req.ServiceTier]
+		if !ok {
+			return fail(fmt.Sprintf("no %q service tier price on file for %s", req.ServiceTier, e.Model))
+		}
+		if req.Batch {
+			return fail(fmt.Sprintf("the %q service tier cannot be combined with batch", req.ServiceTier))
+		}
+		premium = &st
 	}
 	regional := MustDec("1")
 	if req.Region != "" {
@@ -115,8 +133,18 @@ func (t *Table) Cost(req Request) Cost {
 
 	u := req.Usage
 	tier := e.Standard
+	if premium != nil {
+		tier = premium.Standard
+	}
 	if lc := e.LongContext; lc != nil && u.promptTokens() > lc.ThresholdTokens {
-		tier = lc.Tier
+		switch {
+		case premium == nil:
+			tier = lc.Tier
+		case premium.LongContext != nil:
+			tier = premium.LongContext.Tier
+		default:
+			return fail(fmt.Sprintf("no long-context price for the %q tier on %s; the prompt is over %d tokens", req.ServiceTier, e.Model, lc.ThresholdTokens))
+		}
 	}
 
 	add := func(name string, units int64, rate *Dec, mult *Dec, batchOK bool) {
@@ -128,7 +156,7 @@ func (t *Table) Cost(req Request) Cost {
 			return
 		}
 		v := tokensAt(*rate, units)
-		if req.Batch {
+		if batch {
 			if !batchOK || mult == nil {
 				c.Unpriced = append(c.Unpriced, UnpricedPart{name, fmt.Sprintf("%s has no batch price for %s on file", e.Model, name)})
 				return
@@ -157,14 +185,16 @@ func (t *Table) Cost(req Request) Cost {
 		add("cache_write_"+ttl, u.CacheWrite[ttl], rate, b.CacheWrite, hasBatch)
 	}
 	crRate, crMult := tier.CacheRead, b.CacheRead
-	if req.Batch && b.CacheReadPrice != nil {
+	if batch && b.CacheReadPrice != nil {
 		one := MustDec("1")
 		crRate, crMult = b.CacheReadPrice, &one
 	}
 	add("cache_read", u.CacheRead, crRate, crMult, hasBatch)
 	add("output", u.Output, &tier.Output, b.Output, hasBatch)
-	if u.Reasoning > 0 && e.Provider == Google {
-		c.Unpriced = append(c.Unpriced, UnpricedPart{"reasoning", "Gemini thought tokens are billed as output, but whether the reported output count already includes them is not verified, so they are not added"})
+	if e.Provider == Google {
+		// Gemini reports thought tokens separately from candidate tokens and bills
+		// them at the output price.
+		add("reasoning", u.Reasoning, &tier.Output, b.Output, hasBatch)
 	}
 
 	tools := make([]string, 0, len(req.ToolCalls))

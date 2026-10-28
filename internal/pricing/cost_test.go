@@ -193,9 +193,78 @@ func TestWorkedExamples(t *testing.T) {
 			status: Partial, usd: "2.5",
 		},
 		{
-			name:   "google thought tokens are flagged, not added, until the reporting is verified",
-			req:    Request{Provider: Google, Model: "gemini-2.5-flash", Time: at("2026-06-01"), Usage: Usage{Output: 1_000_000, Reasoning: 400_000}},
-			status: Partial, usd: "2.5",
+			name: "google thought tokens are billed on top of candidate tokens at the output price",
+			req:  Request{Provider: Google, Model: "gemini-2.5-flash", Time: at("2026-06-01"), Usage: Usage{Output: 1_000_000, Reasoning: 400_000}},
+			// 1,000,000x2.50 = 2.50; 400,000x2.50 = 1.00 -> 3.50
+			status: Priced, usd: "3.5",
+		},
+		{
+			name: "google thought tokens in batch use the batch output price",
+			req:  Request{Provider: Google, Model: "gemini-2.5-flash", Time: at("2026-06-01"), Batch: true, Usage: Usage{Output: 1_000_000, Reasoning: 400_000}},
+			// (1,000,000 + 400,000) x 1.25 = 1.75
+			status: Priced, usd: "1.75",
+		},
+		{
+			name: "openai gpt-6.1-sol fast mode",
+			req:  Request{Provider: OpenAI, Model: "gpt-6.1-sol", Time: at("2026-10-01"), ServiceTier: "fast", Usage: Usage{UncachedInput: 1_000, CacheWrite: map[string]int64{"30m": 10_000}, CacheRead: 50_000, Output: 500}},
+			// fast: input 4, 30m write 5, read 0.20, output 20.
+			// 1,000x4 = 0.004; 10,000x5 = 0.05; 50,000x0.20 = 0.01; 500x20 = 0.01 -> 0.074
+			status: Priced, usd: "0.074",
+		},
+		{
+			name: "openai gpt-6.1-sol fast mode long context",
+			req:  Request{Provider: OpenAI, Model: "gpt-6.1-sol", Time: at("2026-10-01"), ServiceTier: "fast", Usage: Usage{UncachedInput: 300_000, Output: 1_000}},
+			// fast long context: input 8, output 30. 300,000x8 = 2.40; 1,000x30 = 0.03 -> 2.43
+			status: Priced, usd: "2.43",
+		},
+		{
+			name: "openai gpt-6-astra ultrafast",
+			req:  Request{Provider: OpenAI, Model: "gpt-6-astra", Time: at("2026-10-01"), ServiceTier: "ultrafast", Usage: Usage{UncachedInput: 100_000, Output: 10_000}},
+			// 100,000x60 = 6.00; 10,000x300 = 3.00 -> 9.00
+			status: Priced, usd: "9",
+		},
+		{
+			name: "openai flex is priced like batch",
+			req:  Request{Provider: OpenAI, Model: "gpt-5.5", Time: at("2026-06-01"), ServiceTier: "flex", Usage: Usage{UncachedInput: 20_000, CacheRead: 80_000, Output: 3_000}},
+			// same as the batch example: 0.23 x 0.5 = 0.115
+			status: Priced, usd: "0.115",
+		},
+		{
+			name: "google gemini 3.1 pro priority, under 200k",
+			req:  Request{Provider: Google, Model: "gemini-3.1-pro-preview", Time: at("2026-06-01"), ServiceTier: "priority", Usage: Usage{UncachedInput: 150_000, Output: 5_000}},
+			// 150,000x3.60 = 0.54; 5,000x21.60 = 0.108 -> 0.648
+			status: Priced, usd: "0.648",
+		},
+		{
+			name: "google gemini 3.1 pro priority, over 200k",
+			req:  Request{Provider: Google, Model: "gemini-3.1-pro-preview", Time: at("2026-06-01"), ServiceTier: "priority", Usage: Usage{UncachedInput: 250_000, Output: 5_000}},
+			// 250,000x7.20 = 1.80; 5,000x32.40 = 0.162 -> 1.962
+			status: Priced, usd: "1.962",
+		},
+		{
+			name: "google argon priority doubles with the scheduled change",
+			req:  Request{Provider: Google, Model: "gemini-4-argon", Time: at("2026-12-01"), ServiceTier: "priority", Usage: Usage{UncachedInput: 1_000_000, Output: 100_000}},
+			// 1,000,000x7.20 = 7.20; 100,000x36 = 3.60 -> 10.80
+			status: Priced, usd: "10.8",
+		},
+		{
+			name: "google flex is priced like batch",
+			req:  Request{Provider: Google, Model: "gemini-2.5-pro", Time: at("2026-06-01"), ServiceTier: "flex", Usage: Usage{UncachedInput: 100_000, Output: 10_000}},
+			// batch: input 0.625, output 5. 100,000x0.625 = 0.0625; 10,000x5 = 0.05 -> 0.1125
+			status: Priced, usd: "0.1125",
+		},
+		{
+			name: "anthropic opus 5.5 fast mode, cache prices derived from the multipliers",
+			req:  Request{Provider: Anthropic, Model: "claude-opus-5-5", Time: at("2026-10-20"), ServiceTier: "fast", Usage: Usage{UncachedInput: 10_000, CacheWrite: map[string]int64{"5m": 20_000}, CacheRead: 100_000, Output: 1_000}},
+			// fast input 8, 5m write 8x1.25 = 10, read 8x0.05 = 0.40, output 40.
+			// 10,000x8 = 0.08; 20,000x10 = 0.20; 100,000x0.40 = 0.04; 1,000x40 = 0.04 -> 0.36
+			status: Priced, usd: "0.36",
+		},
+		{
+			name: "anthropic fast mode stacks with US data residency",
+			req:  Request{Provider: Anthropic, Model: "claude-opus-5", Time: at("2026-10-20"), ServiceTier: "fast", Region: "us", Usage: Usage{UncachedInput: 100_000, Output: 10_000}},
+			// (100,000x10 + 10,000x50) x 1.1 = (1.00 + 0.50) x 1.1 = 1.65
+			status: Priced, usd: "1.65",
 		},
 		{
 			name: "openai reasoning tokens are already inside output and not added again",
@@ -228,7 +297,11 @@ func TestUnpriced(t *testing.T) {
 		{"before the model existed", Request{Provider: Anthropic, Model: "claude-sonnet-5-5", Time: at("2026-09-27T23:59:59Z"), Usage: u}, "not priced before 2026-09-28"},
 		{"unsupported region", Request{Provider: Anthropic, Model: "claude-haiku-4-5", Time: at("2026-10-20"), Region: "us", Usage: u}, "region"},
 		{"openai regional uplift is not on file", Request{Provider: OpenAI, Model: "gpt-5.5", Time: at("2026-10-20"), Region: "us", Usage: u}, "region"},
-		{"fast service tier", Request{Provider: OpenAI, Model: "gpt-5.5", Time: at("2026-10-20"), ServiceTier: "fast", Usage: u}, "service tier"},
+		{"a service tier the model does not have", Request{Provider: OpenAI, Model: "gpt-5.5", Time: at("2026-10-20"), ServiceTier: "ultrafast", Usage: u}, "service tier price"},
+		{"an invented service tier", Request{Provider: OpenAI, Model: "gpt-5.5", Time: at("2026-10-20"), ServiceTier: "turbo", Usage: u}, "service tier price"},
+		{"fast with batch", Request{Provider: Anthropic, Model: "claude-opus-5-5", Time: at("2026-10-20"), ServiceTier: "fast", Batch: true, Usage: u}, "cannot be combined with batch"},
+		{"fast above the long-context threshold has no listed price", Request{Provider: OpenAI, Model: "gpt-5.5", Time: at("2026-10-20"), ServiceTier: "fast", Usage: Usage{UncachedInput: 300_000}}, "no long-context price"},
+		{"flex on a model without it", Request{Provider: Anthropic, Model: "claude-opus-5-5", Time: at("2026-10-20"), ServiceTier: "flex", Usage: u}, "no flex price"},
 		{"batch on a model without batch prices", Request{Provider: OpenAI, Model: "gpt-5.3-codex", Time: at("2026-10-20"), Batch: true, Usage: u}, "batch"},
 		{"negative tokens", Request{Provider: Anthropic, Model: "claude-haiku-4-5", Time: at("2026-10-20"), Usage: Usage{Output: -1}}, "negative"},
 	}

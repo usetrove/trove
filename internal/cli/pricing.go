@@ -62,7 +62,7 @@ func renderPricing(p pricingShow) string {
 	}
 	_ = w.Flush()
 	fmt.Fprintf(&b, "\nPrices are %s. Data version %s.\n", p.Basis, p.DataVersion)
-	fmt.Fprintln(&b, "Standard (non-batch) prices shown; long-context, batch, regional and tool-fee prices are in --json.")
+	fmt.Fprintln(&b, "Standard (non-batch) prices shown; long-context, batch, service-tier, regional and tool-fee prices are in --json.")
 	fmt.Fprintln(&b, "A request dated before a model's FROM date is reported as unpriced, never guessed.")
 	for _, n := range p.Notes {
 		fmt.Fprintln(&b, "- "+n)

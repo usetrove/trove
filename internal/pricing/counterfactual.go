@@ -9,7 +9,11 @@ import (
 const (
 	CatInput     = "input"      // uncached input
 	CatCacheRead = "cache_read" // priced at the cache-read rate, not the input rate
-	CatOutput    = "output"     // includes reasoning, which is billed as output
+	CatOutput    = "output"     // for Anthropic and OpenAI this includes reasoning
+	// CatReasoning removes Gemini thought tokens, which are billed on top of output.
+	// For Anthropic and OpenAI reasoning is already inside output, so removing it
+	// from here changes nothing; remove from CatOutput instead.
+	CatReasoning = "reasoning"
 
 	catWritePrefix = "cache_write_" // followed by the TTL, e.g. "cache_write_5m"
 )
@@ -49,6 +53,10 @@ func (t *Table) CostWithout(req Request, category string, n int64) (Counterfactu
 		have, set = after.Usage.CacheRead, func(v int64) { after.Usage.CacheRead = v }
 	case category == CatOutput:
 		have, set = after.Usage.Output, func(v int64) { after.Usage.Output = v }
+	case category == CatReasoning && req.Provider != Google:
+		return Counterfactual{}, fmt.Errorf("reasoning tokens are already inside output for %s; remove them with the output category", req.Provider)
+	case category == CatReasoning:
+		have, set = after.Usage.Reasoning, func(v int64) { after.Usage.Reasoning = v }
 	case strings.HasPrefix(category, catWritePrefix):
 		ttl := strings.TrimPrefix(category, catWritePrefix)
 		have = after.Usage.CacheWrite[ttl]
@@ -63,8 +71,10 @@ func (t *Table) CostWithout(req Request, category string, n int64) (Counterfactu
 	}
 	n = min(n, have)
 	set(have - n)
-	if after.Usage.Reasoning > after.Usage.Output {
-		after.Usage.Reasoning = after.Usage.Output // keep the informational count consistent
+	// For Anthropic and OpenAI, reasoning is a subset of output; keep it consistent.
+	// For Google it is separate and removed through CatReasoning.
+	if req.Provider != Google && after.Usage.Reasoning > after.Usage.Output {
+		after.Usage.Reasoning = after.Usage.Output
 	}
 
 	cf := Counterfactual{Before: t.Cost(req), After: t.Cost(after), Removed: n, Savings: zeroMoney()}

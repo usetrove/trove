@@ -138,6 +138,39 @@ func validateEntry(e *Entry) error {
 	if e.EffectiveFrom != nil && !strings.HasPrefix(e.EffectiveFromSource, "https://") {
 		return fmt.Errorf("effective_from needs an https effective_from_source")
 	}
+	if e.FlexMatchesBatch && e.Batch == nil {
+		return fmt.Errorf("flex_matches_batch needs batch prices")
+	}
+	for name, st := range e.ServiceTiers {
+		switch name {
+		case "fast", "ultrafast", "priority":
+		default:
+			return fmt.Errorf("unknown service tier %q; use fast, ultrafast or priority", name)
+		}
+		if !st.Standard.Input.IsSet() || !st.Standard.Output.IsSet() {
+			return fmt.Errorf("service tier %s needs input and output prices", name)
+		}
+		if err := checkTier("service tier "+name, st.Standard); err != nil {
+			return err
+		}
+		if lc := st.LongContext; lc != nil {
+			if e.LongContext == nil || lc.ThresholdTokens != e.LongContext.ThresholdTokens {
+				return fmt.Errorf("service tier %s long_context must use the entry's threshold", name)
+			}
+			if !lc.Input.IsSet() || !lc.Output.IsSet() {
+				return fmt.Errorf("service tier %s long_context needs input and output prices", name)
+			}
+			if err := checkTier("service tier "+name+" long_context", lc.Tier); err != nil {
+				return err
+			}
+			if lc.Input.Cmp(st.Standard.Input) < 0 || lc.Output.Cmp(st.Standard.Output) < 0 {
+				return fmt.Errorf("service tier %s long_context prices are lower than its standard", name)
+			}
+			if err := tierNotCheaper(st.Standard, lc.Tier); err != nil {
+				return err
+			}
+		}
+	}
 	for _, r := range e.Regional {
 		if r.Name == "" || !r.Multiplier.IsSet() || r.Multiplier.Sign() <= 0 {
 			return fmt.Errorf("regional entries need a name and a positive multiplier")

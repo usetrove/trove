@@ -46,11 +46,12 @@ openai     gpt-6-sol               2026-09-22  2      10      0.2         30m=2.
 openai     gpt-6.1-sol             2026-09-29  2      10      0.1         30m=2.5 12h=5       2026-10-28
 openai     gpt-6.1-terra           2026-10-26  1      5       0.05        30m=1.25 12h=2.5    2026-10-28
 
-Prices are estimated: published list prices, USD per million tokens. Data version 2026-10-28.1.
-Standard (non-batch) prices shown; long-context, batch, regional and tool-fee prices are in --json.
+Prices are estimated: published list prices, USD per million tokens. Data version 2026-10-28.2.
+Standard (non-batch) prices shown; long-context, batch, service-tier, regional and tool-fee prices are in --json.
 A request dated before a model's FROM date is reported as unpriced, never guessed.
 - All prices are USD per million tokens (tool fees per 1,000 calls) from the providers' published list prices. Values derived from them are estimates, not invoices.
-- Not priced: fast, priority, flex and ultrafast service tiers; audio input; cache-storage fees; OpenAI regional (data-residency) uplift, because eligibility is per model and not machine-readable; Gemini Contributor tier.
+- Service tiers: Request.ServiceTier accepts fast (OpenAI, Anthropic Opus), ultrafast (OpenAI), priority (Gemini) and flex (OpenAI, Gemini; priced like batch). Premium tiers cannot be combined with batch. Adapters map each provider's own field value onto these names.
+- Not priced: audio input; cache-storage fees; OpenAI regional (data-residency) uplift, because eligibility is per model and not machine-readable; Gemini Contributor tier.
 - Retired models and older families (for example Claude Opus 4/4.1, Sonnet 4, Haiku 3.5, OpenAI o-series and GPT-4.x, Gemini 2.0) are not included and come back unpriced.
 - effective_from is the launch date or the date of an announced price change, taken from the provider's release notes or changelog. A request dated before it is unpriced rather than guessed.
 - No tokenizer differences between model generations are published on the OpenAI or Google pricing pages; only Anthropic documents one (Claude 4.7 and later, about 30% more tokens for the same text).
