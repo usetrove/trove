@@ -49,16 +49,16 @@ Or rebuild the installed one: `go install ./cmd/trove`.
 
 ## Things not run
 
-- [ ] **7. CI.** Nothing is pushed. After pushing, confirm the lint job passes (my full-repo
+- [x] **7. CI.** Nothing is pushed. After pushing, confirm the lint job passes (my full-repo
       lint run timed out locally; the packages I touched were clean) and that the release
       workflow's "Check pricing freshness" step (`go run ./scripts/pricingage`) runs.
-      Outcome: ______
+      Outcome (2026-10-28): CI run 40776834158 on 7bca173 passed all 10 jobs, including full-repo lint, vulncheck and the four platform builds. Still unexercised on GitHub: the release workflow's "Check pricing freshness" step, which only runs on a v* tag (the same command, go run ./scripts/pricingage, ran fine locally).
 - [ ] **8. `scripts/pricing-update.sh`.** Never run, and shellcheck is not installed here. Try
       `scripts/pricing-update.sh fetch <new empty dir>` and `scripts/pricing-update.sh review`;
       confirm the `.md` URLs still work. Run shellcheck on it if you add it to CI.
       Outcome: ______
-- [ ] **9. Race tests.** CI runs `go test -race ./...` (needs cgo). Not run locally.
-      Outcome: ______
+- [x] **9. Race tests.** CI runs `go test -race ./...` (needs cgo). Not run locally.
+      Outcome (2026-10-28): passed in CI (go test -race ./... on ubuntu-latest and macos-latest) for 7bca173.
 
 ## Product decisions
 
