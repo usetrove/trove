@@ -1,0 +1,12 @@
+/trove
+/trove.exe
+/dist/
+/coverage.out
+*.db
+*.db-wal
+*.db-shm
+.env
+node_modules/
+__pycache__/
+.venv/
+.DS_Store
