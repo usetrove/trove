@@ -1,4 +1,4 @@
-module github.com/jaclynsunardi/trove
+module github.com/usetrove/trove
 
 go 1.27.0
 

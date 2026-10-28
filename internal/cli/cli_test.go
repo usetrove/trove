@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/jaclynsunardi/trove/internal/store"
+	"github.com/usetrove/trove/internal/store"
 )
 
 type harness struct {

@@ -11,7 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
-const DEFAULT_BASE = 'https://github.com/jaclynsunardi/trove/releases/download';
+const DEFAULT_BASE = 'https://github.com/usetrove/trove/releases/download';
 
 function target(platform = process.platform, arch = process.arch) {
   const goos = { darwin: 'darwin', linux: 'linux' }[platform];
@@ -19,7 +19,7 @@ function target(platform = process.platform, arch = process.arch) {
   if (!goos || !goarch) {
     throw new Error(
       `Trove has no prebuilt binary for ${platform}/${arch}. Supported: macOS and Linux on x64 or arm64. ` +
-      'Build from source instead: go install github.com/jaclynsunardi/trove/cmd/trove@latest');
+      'Build from source instead: go install github.com/usetrove/trove/cmd/trove@latest');
   }
   return { goos, goarch };
 }

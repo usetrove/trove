@@ -5,10 +5,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jaclynsunardi/trove/internal/pricing"
+	"github.com/usetrove/trove/internal/pricing"
 )
 
-// Set at build time with -ldflags "-X github.com/jaclynsunardi/trove/internal/cli.Version=...".
+// Set at build time with -ldflags "-X github.com/usetrove/trove/internal/cli.Version=...".
 var (
 	Version = "dev"
 	Commit  = "none"

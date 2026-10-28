@@ -2,7 +2,7 @@
 # Trove installer: downloads a release archive, verifies its SHA-256 against the
 # release's checksums.txt, and installs the binary. It refuses to install on a mismatch.
 #
-#   curl -fsSL https://raw.githubusercontent.com/jaclynsunardi/trove/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | sh
 #
 # Environment:
 #   TROVE_VERSION      version to install, e.g. 1.2.3 (default: latest release)
@@ -11,7 +11,7 @@
 #   TROVE_OS, TROVE_ARCH  override platform detection (darwin|linux, amd64|arm64); for testing
 set -eu
 
-REPO="jaclynsunardi/trove"
+REPO="usetrove/trove"
 BASE="${TROVE_BASE_URL:-https://github.com/$REPO/releases/download}"
 DEST="${TROVE_INSTALL_DIR:-$HOME/.local/bin}"
 

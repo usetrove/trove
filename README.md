@@ -9,14 +9,14 @@ Local-first (everything lives in `~/.trove`, no telemetry), API keys are never s
 
 ## Install (once a release exists)
 ```sh
-curl -fsSL https://raw.githubusercontent.com/jaclynsunardi/trove/main/install.sh | sh   # verifies the SHA-256 checksum
+curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | sh   # verifies the SHA-256 checksum
 npx trove-cli doctor                                                                     # downloads and verifies the binary
-brew install jaclynsunardi/trove/trove
+brew install usetrove/trove/trove
 ```
 Releases also carry a cosign signature over `checksums.txt` and an SBOM per archive. To verify the signature:
 ```sh
 cosign verify-blob \
-  --certificate-identity 'https://github.com/jaclynsunardi/trove/.github/workflows/release.yml@refs/tags/vX.Y.Z' \
+  --certificate-identity 'https://github.com/usetrove/trove/.github/workflows/release.yml@refs/tags/vX.Y.Z' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   --bundle checksums.txt.sigstore.json checksums.txt
 ```
@@ -46,7 +46,7 @@ Use `--data-dir <path>` (or `TROVE_DATA_DIR`) to keep experiments out of `~/.tro
 ```sh
 goreleaser release --snapshot --clean --skip=sign          # add ,sbom if syft is not installed
 ```
-Real releases run in GitHub Actions on a `v*` tag (`.github/workflows/release.yml`) and need a `HOMEBREW_TAP_GITHUB_TOKEN` secret with write access to `jaclynsunardi/homebrew-trove`. The `trove-cli` npm package version is set to the release version at publish time.
+Real releases run in GitHub Actions on a `v*` tag (`.github/workflows/release.yml`) and need a `HOMEBREW_TAP_GITHUB_TOKEN` secret with write access to `usetrove/homebrew-trove`. The `trove-cli` npm package version is set to the release version at publish time.
 
 ## License
 Apache-2.0

@@ -6,8 +6,8 @@ import (
 	"os"
 	"runtime/debug"
 
-	"github.com/jaclynsunardi/trove/internal/cli"
-	"github.com/jaclynsunardi/trove/internal/redact"
+	"github.com/usetrove/trove/internal/cli"
+	"github.com/usetrove/trove/internal/redact"
 )
 
 func main() {

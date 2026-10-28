@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Downloads, verifies and runs the Trove binary (the efficiency layer for AI coding agents).",
   "license": "Apache-2.0",
-  "repository": "github:jaclynsunardi/trove",
+  "repository": "github:usetrove/trove",
   "bin": { "trove": "bin/trove.js" },
   "files": ["bin", "lib", "README.md"],
   "engines": { "node": ">=18" },
