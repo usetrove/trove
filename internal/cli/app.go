@@ -2,12 +2,15 @@
 package cli
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/redact"
@@ -20,6 +23,16 @@ type App struct {
 	LookPath func(string) (string, error)
 	HomeDir  func() (string, error)
 
+	// In is where consent prompts are read from; nil means "no terminal", so
+	// anything needing consent requires --yes.
+	In io.Reader
+	// Ctx ends the long-running gateway; nil means run until interrupted.
+	Ctx context.Context
+	// Run executes an external command (service managers). Injected in tests.
+	Run func(name string, args ...string) error
+	// Executable returns the path of the running trove binary.
+	Executable func() (string, error)
+
 	// Global flags.
 	JSON    bool
 	NoColor bool
@@ -29,7 +42,17 @@ type App struct {
 
 // NewApp returns an App wired to the real process environment.
 func NewApp() *App {
-	return &App{Out: os.Stdout, Err: os.Stderr, Getenv: os.Getenv, LookPath: exec.LookPath, HomeDir: os.UserHomeDir}
+	return &App{
+		Out: os.Stdout, Err: os.Stderr, In: os.Stdin, Getenv: os.Getenv, LookPath: exec.LookPath, HomeDir: os.UserHomeDir,
+		Executable: os.Executable,
+		Run: func(name string, args ...string) error {
+			out, err := exec.Command(name, args...).CombinedOutput() //nolint:gosec // fixed service-manager commands shown to the user before they run
+			if err != nil {
+				return fmt.Errorf("%s %s failed: %v: %s", name, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+			}
+			return nil
+		},
+	}
 }
 
 // Logger returns a redacting logger on stderr.
@@ -68,4 +91,19 @@ func (a *App) paint(code, s string) string {
 		return s
 	}
 	return "\x1b[" + code + "m" + s + "\x1b[0m"
+}
+
+// confirm asks a yes/no question. It returns false when there is no terminal
+// input, so nothing is ever applied without an explicit yes.
+func (a *App) confirm(question string) bool {
+	if a.In == nil {
+		return false
+	}
+	_, _ = fmt.Fprintf(a.Out, "%s [y/N] ", question)
+	line, _ := bufio.NewReader(a.In).ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return true
+	}
+	return false
 }

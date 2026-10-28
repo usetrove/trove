@@ -8,6 +8,8 @@ retention_days = 90
 [gateway]
 # Local port for the opt-in gateway. It always listens on 127.0.0.1 only.
 port = 8787
+# A gap longer than this many minutes between requests starts a new session (1 to 1440).
+idle_minutes = 30
 
 [upstreams]
 # Where the gateway forwards your own API requests. Origin only, no path.

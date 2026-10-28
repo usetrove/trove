@@ -34,6 +34,8 @@ type Request struct {
 	OptimizationsApplied []byte // JSON
 	ShadowSavings        []byte // JSON
 	ErrorClass           string
+	UsageRaw             []byte // JSON: the provider's usage object, as reported
+	ServiceTier          string // as reported by the provider; empty if none
 }
 
 // WriterOptions tunes the Writer. Zero values pick sensible defaults.
@@ -174,8 +176,8 @@ const insertRequestSQL = `INSERT INTO requests (
 	ts, session_key, agent, agent_version, provider, model, endpoint, streamed, status_code,
 	latency_ms, ttft_ms, input_uncached_tokens, cache_write_tokens, cache_read_tokens,
 	output_tokens, reasoning_tokens, cost_usd, pricing_version, segment_token_estimates,
-	findings, optimizations_applied, shadow_savings, error_class
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+	findings, optimizations_applied, shadow_savings, error_class, usage_raw, service_tier
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 
 const upsertSessionSQL = `INSERT INTO sessions (
 	session_key, agent, started_at, ended_at, request_count,
@@ -231,7 +233,7 @@ func (d *DB) insertRequests(ctx context.Context, rows []Request) error {
 		if _, err := ins.ExecContext(ctx, ts, r.SessionKey, r.Agent, r.AgentVersion, r.Provider, r.Model, r.Endpoint,
 			r.Streamed, r.StatusCode, r.LatencyMS, ttft, r.InputUncachedTokens, r.CacheWriteTokens, r.CacheReadTokens,
 			r.OutputTokens, r.ReasoningTokens, cost, r.PricingVersion, jsonOrNil(r.SegmentTokenEstimate),
-			jsonOrNil(r.Findings), jsonOrNil(r.OptimizationsApplied), jsonOrNil(r.ShadowSavings), r.ErrorClass); err != nil {
+			jsonOrNil(r.Findings), jsonOrNil(r.OptimizationsApplied), jsonOrNil(r.ShadowSavings), r.ErrorClass, jsonOrNil(r.UsageRaw), r.ServiceTier); err != nil {
 			return err
 		}
 		if r.SessionKey != "" {
