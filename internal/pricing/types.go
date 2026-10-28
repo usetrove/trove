@@ -118,6 +118,9 @@ type Batch struct {
 	// provider's batch rate is not a clean multiple of the standard one. It takes
 	// the place of CacheRead and cannot be combined with a long-context tier.
 	CacheReadPrice *Dec `json:"cache_read_price,omitempty"`
+	// NoLongContext means the provider lists batch (and flex) prices only up to the
+	// long-context threshold; above it the request is unpriced.
+	NoLongContext bool `json:"no_long_context,omitempty"`
 }
 
 // Regional is a data-residency multiplier on all token prices.

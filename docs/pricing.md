@@ -18,7 +18,8 @@ historical costs stay correct. Per entry:
 | `effective_from`, `effective_from_source` | Launch or price-change date and the official page that states it. `null` means the provider publishes no date; such an entry never prices a request. |
 | `standard` | USD per million tokens: `input`, `output`, `cache_read`, `cache_write` by TTL. |
 | `long_context` | Threshold and the prices that replace `standard` for the whole request above it. |
-| `batch` | Multipliers per category (a missing one means "not priced in batch"), or an absolute `cache_read_price`. |
+| `batch`, `flex_matches_batch` | Multipliers per category (a missing one means "not priced in batch"), an absolute `cache_read_price`, or `no_long_context` when batch is listed only below the threshold. Flex uses the batch prices when `flex_matches_batch` is set. |
+| `service_tiers` | Full price sets for `fast`, `ultrafast` and `priority`; cannot be combined with batch. |
 | `regional` | Data-residency multipliers (for example Anthropic `us`, 1.1x). |
 | `tool_fees` | Per-1,000-call fees; `quota_depends` marks fees with a free allowance Trove cannot see. |
 | `tokenizer_note`, `notes` | Tokenizer differences and anything a reader needs to interpret the numbers. |
@@ -90,15 +91,22 @@ every entry whose `verified_at` is more than 30 days old. It never fails the rel
   thought-token handling rests on the API reference's `totalTokenCount` formula and the thinking
   guide, not on a sentence that says "candidates exclude thoughts"; confirm with a real response
   once the gateway records usage.
-- OpenAI: regional uplift applies only to eligible models and is not modelled. o-series and
-  GPT-4.x are not included. The batch cached-input price for gpt-5.4 is shown on the page as
+- OpenAI: regional uplift applies only to eligible models and is not modelled. o1, o3-mini, GPT-4.x,
+  gpt-5.2-pro (no official launch date found), cyber and research-program models are not included.
+  The batch cached-input price for gpt-5.4 is shown on the page as
   $0.13 (0.125 rounded); Trove uses 0.125.
 - Service tiers: Anthropic fast-mode cache prices are derived from the documented multipliers
   (the page lists only input and output). Flex is priced like batch, which matches every
   in-scope OpenAI and Gemini model on the pages as of 2026-10-28. Adapters must map each
   provider's own tier field onto `fast`, `ultrafast`, `priority` or `flex`.
-- GPT-5.6 Sol, Terra and Luna had price cuts; earlier prices are not on the current page, so
-  requests before the cut are unpriced.
+- GPT-5.6 Sol, Terra and Luna had price cuts (Sol 2026-08-21; Terra and Luna 2026-07-30). OpenAI
+  states only rounded percentages and the earlier prices appear on no official page, so requests
+  from launch (2026-07-09) to the cut are unpriced. Sol's price is promotional "at least through
+  2026-11-21": re-check it after that date.
+- o3 and o4-mini: flex input and output equal batch but flex cached input differs, so flex cache
+  reads are unpriced; their batch cache reads are unpriced too (no batch cached price listed).
+- gpt-5.5-pro lists batch/flex prices only up to 272K tokens (`no_long_context`); above that they
+  are unpriced.
 - Claude Sonnet 4.5 and Opus 4.5: the current page lists no long-context premium; the old
   1M-context beta premium is not described, so very long prompts could be under-priced.
 - Audio input (Gemini) is priced higher than text and usage does not say which is which.
