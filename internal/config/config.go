@@ -36,7 +36,8 @@ type Config struct {
 
 // Gateway holds local gateway settings. It always binds to 127.0.0.1.
 type Gateway struct {
-	Port int `toml:"port"`
+	Port        int `toml:"port"`
+	IdleMinutes int `toml:"idle_minutes"`
 }
 
 // Upstreams are the provider origins the gateway forwards to.
@@ -55,7 +56,7 @@ type Budget struct {
 // Default returns the built-in defaults.
 func Default() Config {
 	return Config{
-		Gateway:       Gateway{Port: 8787},
+		Gateway:       Gateway{Port: 8787, IdleMinutes: 30},
 		Upstreams:     Upstreams{Anthropic: "https://api.anthropic.com", OpenAI: "https://api.openai.com"},
 		Optimizers:    map[string]string{},
 		Budget:        Budget{Period: "monthly", CapUSD: 0, WarnAtPercent: 80},
@@ -82,6 +83,8 @@ retention_days = 90
 [gateway]
 # Local port for the opt-in gateway. It always listens on 127.0.0.1 only.
 port = 8787
+# A gap longer than this many minutes between requests starts a new session (1 to 1440).
+idle_minutes = 30
 
 [upstreams]
 # Where the gateway forwards your own API requests. Origin only, no path.
@@ -111,6 +114,9 @@ func (c Config) Validate() error {
 
 	if c.Gateway.Port < 1 || c.Gateway.Port > 65535 {
 		add("gateway.port is %d; use a port from 1 to 65535 (default 8787).", c.Gateway.Port)
+	}
+	if c.Gateway.IdleMinutes < 1 || c.Gateway.IdleMinutes > 1440 {
+		add("gateway.idle_minutes is %d; use a number of minutes from 1 to 1440 (default 30).", c.Gateway.IdleMinutes)
 	}
 	for name, v := range map[string]string{"upstreams.anthropic": c.Upstreams.Anthropic, "upstreams.openai": c.Upstreams.OpenAI} {
 		if problem := checkUpstream(v); problem != "" {
@@ -235,6 +241,9 @@ func applyEnv(c *Config, getenv func(string) string) error {
 		}
 	}
 	if err := intVar("TROVE_GATEWAY_PORT", &c.Gateway.Port); err != nil {
+		return err
+	}
+	if err := intVar("TROVE_GATEWAY_IDLE_MINUTES", &c.Gateway.IdleMinutes); err != nil {
 		return err
 	}
 	if err := intVar("TROVE_RETENTION_DAYS", &c.RetentionDays); err != nil {
