@@ -57,7 +57,7 @@ func OpenNoMigrate(dataDir string) (*DB, error) {
 	}
 	path := filepath.Join(dataDir, DBFileName)
 	// Create the file ourselves with 0600 so SQLite's WAL/SHM files inherit it.
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600) //nolint:gosec // path is inside the user's own data directory
 	if err != nil {
 		return nil, fmt.Errorf("cannot open the database file %s: %v. Check its permissions", path, err)
 	}

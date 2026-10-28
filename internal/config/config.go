@@ -113,8 +113,8 @@ func (c Config) Validate() error {
 		add("gateway.port is %d; use a port from 1 to 65535 (default 8787).", c.Gateway.Port)
 	}
 	for name, v := range map[string]string{"upstreams.anthropic": c.Upstreams.Anthropic, "upstreams.openai": c.Upstreams.OpenAI} {
-		if err := checkUpstream(v); err != nil {
-			add("%s %v", name, err)
+		if problem := checkUpstream(v); problem != "" {
+			add("%s %s", name, problem)
 		}
 	}
 	names := make([]string, 0, len(c.Optimizers))
@@ -149,19 +149,20 @@ func (c Config) Validate() error {
 	return errors.Join(errs...)
 }
 
-func checkUpstream(v string) error {
+// checkUpstream returns a plain-English problem with the URL, or "" if it is fine.
+func checkUpstream(v string) string {
 	u, err := url.Parse(v)
 	if err != nil || u.Host == "" {
-		return fmt.Errorf("is %q; use a full URL such as \"https://api.example.com\".", v)
+		return fmt.Sprintf("is %q; use a full URL such as \"https://api.example.com\".", v)
 	}
 	loopback := u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost" || u.Hostname() == "::1"
-	if u.Scheme != "https" && !(u.Scheme == "http" && loopback) {
-		return fmt.Errorf("is %q; use https:// (plain http is only allowed for localhost).", v)
+	if u.Scheme != "https" && (u.Scheme != "http" || !loopback) {
+		return fmt.Sprintf("is %q; use https:// (plain http is only allowed for localhost).", v)
 	}
 	if u.Path != "" && u.Path != "/" {
-		return fmt.Errorf("is %q; give the origin only, without a path, because the gateway forwards each request's own path.", v)
+		return fmt.Sprintf("is %q; give the origin only, without a path, because the gateway forwards each request's own path.", v)
 	}
-	return nil
+	return ""
 }
 
 // ResolveDataDir picks the data directory: flag, then TROVE_DATA_DIR, then ~/.trove.
@@ -184,7 +185,7 @@ func ResolveDataDir(flag string, getenv func(string) string) (string, error) {
 func Load(dataDir string, getenv func(string) string) (Config, error) {
 	cfg := Default()
 	path := filepath.Join(dataDir, FileName)
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) //nolint:gosec // path is inside the user's own data directory
 	switch {
 	case err == nil:
 		dec := toml.NewDecoder(strings.NewReader(string(b))).DisallowUnknownFields()
