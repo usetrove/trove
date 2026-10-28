@@ -1,0 +1,28 @@
+# Trove configuration. Every value shown is the default.
+# Environment variables prefixed TROVE_ override this file
+# (for example TROVE_GATEWAY_PORT=9000).
+
+# Delete usage rows older than this many days (1 to 3650).
+retention_days = 90
+
+[gateway]
+# Local port for the opt-in gateway. It always listens on 127.0.0.1 only.
+port = 8787
+
+[upstreams]
+# Where the gateway forwards your own API requests. Origin only, no path.
+anthropic = "https://api.anthropic.com"
+openai = "https://api.openai.com"
+
+[optimizers]
+# Each optimizer is "off", "shadow" (estimate only, change nothing) or "on".
+# Optimizers not listed here are off. Changes take effect at the next session.
+# example = "shadow"
+
+[budget]
+# Budget period: "daily", "weekly" or "monthly".
+period = "monthly"
+# Spending cap in USD for the period. 0 means no cap.
+cap_usd = 0.0
+# Warn when this percent of the cap is used (1 to 100).
+warn_at_percent = 80
