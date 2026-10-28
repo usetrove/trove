@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/store"
 )
 
@@ -45,7 +46,7 @@ func TestVersion(t *testing.T) {
 	if code := h.run("version"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
-	for _, want := range []string{"trove dev", "commit: none", "built: unknown", "pricing data: none"} {
+	for _, want := range []string{"trove dev", "commit: none", "built: unknown", "pricing data: " + pricing.DataVersion} {
 		if !strings.Contains(h.out.String(), want) {
 			t.Errorf("missing %q in %q", want, h.out)
 		}
