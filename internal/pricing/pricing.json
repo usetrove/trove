@@ -1,5 +1,1698 @@
 {
   "schema_version": 1,
-  "data_version": "none",
-  "entries": []
+  "data_version": "2026-10-28.1",
+  "notes": [
+    "All prices are USD per million tokens (tool fees per 1,000 calls) from the providers' published list prices. Values derived from them are estimates, not invoices.",
+    "Not priced: fast, priority, flex and ultrafast service tiers; audio input; cache-storage fees; OpenAI regional (data-residency) uplift, because eligibility is per model and not machine-readable; Gemini Contributor tier.",
+    "Retired models and older families (for example Claude Opus 4/4.1, Sonnet 4, Haiku 3.5, OpenAI o-series and GPT-4.x, Gemini 2.0) are not included and come back unpriced.",
+    "effective_from is the launch date or the date of an announced price change, taken from the provider's release notes or changelog. A request dated before it is unpriced rather than guessed.",
+    "No tokenizer differences between model generations are published on the OpenAI or Google pricing pages; only Anthropic documents one (Claude 4.7 and later, about 30% more tokens for the same text)."
+  ],
+  "entries": [
+    {
+      "provider": "anthropic",
+      "model": "claude-opus-4-5",
+      "aliases": [
+        "claude-opus-4-5-20251101"
+      ],
+      "effective_from": "2025-11-24",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "5",
+        "output": "25",
+        "cache_read": "0.5",
+        "cache_write": {
+          "1h": "10",
+          "5m": "6.25"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Uses the previous tokenizer; Claude 4.7 and later produce approximately 30% more tokens for the same text.",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-opus-4-6",
+      "effective_from": "2026-02-05",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "5",
+        "output": "25",
+        "cache_read": "0.5",
+        "cache_write": {
+          "1h": "10",
+          "5m": "6.25"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Uses the previous tokenizer; Claude 4.7 and later produce approximately 30% more tokens for the same text.",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-opus-4-7",
+      "effective_from": "2026-04-16",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "5",
+        "output": "25",
+        "cache_read": "0.5",
+        "cache_write": {
+          "1h": "10",
+          "5m": "6.25"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-opus-4-8",
+      "effective_from": "2026-05-28",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "5",
+        "output": "25",
+        "cache_read": "0.5",
+        "cache_write": {
+          "1h": "10",
+          "5m": "6.25"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-opus-5",
+      "effective_from": "2026-07-24",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "5",
+        "output": "25",
+        "cache_read": "0.5",
+        "cache_write": {
+          "1h": "10",
+          "5m": "6.25"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "effective_from": "2026-09-22",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "4",
+        "output": "20",
+        "cache_read": "0.2",
+        "cache_write": {
+          "1h": "8",
+          "5m": "5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
+      "notes": [
+        "Cache reads are 0.05x base input. The release notes list no cache-read change for this model since launch."
+      ],
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-fable-5",
+      "effective_from": "2026-06-09",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "10",
+        "output": "50",
+        "cache_read": "1",
+        "cache_write": {
+          "1h": "20",
+          "5m": "12.5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-fable-5-1",
+      "effective_from": "2026-09-01",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "10",
+        "output": "50",
+        "cache_read": "0.25",
+        "cache_write": {
+          "1h": "20",
+          "5m": "12.5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
+      "notes": [
+        "Cache reads are 0.025x base input."
+      ],
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-5",
+      "aliases": [
+        "claude-sonnet-4-5-20250929"
+      ],
+      "effective_from": "2025-09-29",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "3",
+        "output": "15",
+        "cache_read": "0.3",
+        "cache_write": {
+          "1h": "6",
+          "5m": "3.75"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Uses the previous tokenizer; Claude 4.7 and later produce approximately 30% more tokens for the same text.",
+      "notes": [
+        "The current pricing page lists no long-context premium. The 1M-context beta once priced prompts over 200k tokens higher, and that is not described on the current page, so very long prompts may be under-priced."
+      ],
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-6",
+      "effective_from": "2026-02-17",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "3",
+        "output": "15",
+        "cache_read": "0.3",
+        "cache_write": {
+          "1h": "6",
+          "5m": "3.75"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Uses the previous tokenizer; Claude 4.7 and later produce approximately 30% more tokens for the same text.",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5",
+      "effective_from": "2026-06-30",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "2",
+        "output": "10",
+        "cache_read": "0.2",
+        "cache_write": {
+          "1h": "4",
+          "5m": "2.5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
+      "notes": [
+        "$2/$10 launched as introductory pricing and became the standard price on 2026-08-10; the scheduled increase to $3/$15 will not occur."
+      ],
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5-5",
+      "effective_from": "2026-09-28",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "2",
+        "output": "10",
+        "cache_read": "0.2",
+        "cache_write": {
+          "1h": "4",
+          "5m": "2.5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
+      "notes": [
+        "Superseded on 2026-10-07 when cache reads dropped from $0.20 to $0.10 per MTok."
+      ],
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5-5",
+      "effective_from": "2026-10-07",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "2",
+        "output": "10",
+        "cache_read": "0.1",
+        "cache_write": {
+          "1h": "4",
+          "5m": "2.5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
+      "notes": [
+        "Cache reads are 0.05x base input (changed from 0.1x on 2026-10-07)."
+      ],
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5",
+      "aliases": [
+        "claude-haiku-4-5-20251001"
+      ],
+      "effective_from": "2025-10-15",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "1",
+        "output": "5",
+        "cache_read": "0.1",
+        "cache_write": {
+          "1h": "2",
+          "5m": "1.25"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Uses the previous tokenizer; Claude 4.7 and later produce approximately 30% more tokens for the same text.",
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-haiku-5-5",
+      "effective_from": "2026-10-07",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "0.1",
+        "output": "0.5",
+        "cache_read": "0.01",
+        "cache_write": {
+          "1h": "0.2",
+          "5m": "0.125"
+        }
+      },
+      "long_context": {
+        "threshold_tokens": 100000,
+        "input": "0.5",
+        "output": "2.5",
+        "cache_read": "0.05",
+        "cache_write": {
+          "1h": "1",
+          "5m": "0.625"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
+      "notes": [
+        "Priced per request by prompt length: prompts over 100,000 tokens (counting cache reads and writes) pay the higher prices for the whole request. The 1.1x US multiplier applies to both price sets."
+      ],
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-astra",
+      "effective_from": "2026-09-03",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "10",
+        "output": "50",
+        "cache_read": "1",
+        "cache_write": {
+          "12h": "25",
+          "30m": "12.5"
+        }
+      },
+      "long_context": {
+        "threshold_tokens": 272000,
+        "input": "20",
+        "output": "75",
+        "cache_read": "2",
+        "cache_write": {
+          "12h": "50",
+          "30m": "25"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6.1-sol",
+      "effective_from": "2026-09-29",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "2",
+        "output": "10",
+        "cache_read": "0.1",
+        "cache_write": {
+          "12h": "5",
+          "30m": "2.5"
+        }
+      },
+      "long_context": {
+        "threshold_tokens": 272000,
+        "input": "4",
+        "output": "15",
+        "cache_read": "0.2",
+        "cache_write": {
+          "12h": "10",
+          "30m": "5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6.1-terra",
+      "effective_from": "2026-10-26",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "1",
+        "output": "5",
+        "cache_read": "0.05",
+        "cache_write": {
+          "12h": "2.5",
+          "30m": "1.25"
+        }
+      },
+      "long_context": {
+        "threshold_tokens": 272000,
+        "input": "2",
+        "output": "7.5",
+        "cache_read": "0.1",
+        "cache_write": {
+          "12h": "5",
+          "30m": "2.5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-sol",
+      "effective_from": "2026-09-22",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "2",
+        "output": "10",
+        "cache_read": "0.2",
+        "cache_write": {
+          "12h": "5",
+          "30m": "2.5"
+        }
+      },
+      "long_context": {
+        "threshold_tokens": 272000,
+        "input": "4",
+        "output": "15",
+        "cache_read": "0.4",
+        "cache_write": {
+          "12h": "10",
+          "30m": "5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-6-luna",
+      "effective_from": "2026-09-22",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "0.1",
+        "output": "0.5",
+        "cache_read": "0.01",
+        "cache_write": {
+          "12h": "0.25",
+          "30m": "0.125"
+        }
+      },
+      "long_context": {
+        "threshold_tokens": 272000,
+        "input": "0.2",
+        "output": "0.75",
+        "cache_read": "0.02",
+        "cache_write": {
+          "12h": "0.5",
+          "30m": "0.25"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-sol",
+      "effective_from": "2026-08-21",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "4",
+        "output": "20",
+        "cache_read": "0.4",
+        "cache_write": {
+          "12h": "10",
+          "30m": "5"
+        }
+      },
+      "long_context": {
+        "threshold_tokens": 272000,
+        "input": "8",
+        "output": "30",
+        "cache_read": "0.8",
+        "cache_write": {
+          "12h": "20",
+          "30m": "10"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "Price in force since 2026-08-21 (a cut of 20% on input and 33% on output); the page says the promotional pricing runs at least through 2026-11-21, with no firm end date. Earlier prices are not on the current page, so earlier requests are unpriced.",
+        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-terra",
+      "effective_from": "2026-07-30",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "2",
+        "output": "12",
+        "cache_read": "0.2",
+        "cache_write": {
+          "12h": "5",
+          "30m": "2.5"
+        }
+      },
+      "long_context": {
+        "threshold_tokens": 272000,
+        "input": "4",
+        "output": "18",
+        "cache_read": "0.4",
+        "cache_write": {
+          "12h": "10",
+          "30m": "5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "Price in force since 2026-07-30 (a 20% cut). Earlier prices are not on the current page, so earlier requests are unpriced.",
+        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.6-luna",
+      "effective_from": "2026-07-30",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "0.2",
+        "output": "1.2",
+        "cache_read": "0.02",
+        "cache_write": {
+          "12h": "0.5",
+          "30m": "0.25"
+        }
+      },
+      "long_context": {
+        "threshold_tokens": 272000,
+        "input": "0.4",
+        "output": "1.8",
+        "cache_read": "0.04",
+        "cache_write": {
+          "12h": "1",
+          "30m": "0.5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "Price in force since 2026-07-30 (an 80% cut). Earlier prices are not on the current page, so earlier requests are unpriced.",
+        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "effective_from": "2026-04-24",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "5",
+        "output": "30",
+        "cache_read": "0.5"
+      },
+      "long_context": {
+        "threshold_tokens": 272000,
+        "input": "10",
+        "output": "45",
+        "cache_read": "1"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "No cache-write price: caching for this model works only with extended prompt caching.",
+        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4",
+      "effective_from": "2026-03-05",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "2.5",
+        "output": "15",
+        "cache_read": "0.25"
+      },
+      "long_context": {
+        "threshold_tokens": 272000,
+        "input": "5",
+        "output": "22.5",
+        "cache_read": "0.5"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "The batch page shows a cached-input price of $0.13, which is 0.125 rounded for display; Trove uses 0.5x standard (0.125).",
+        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-mini",
+      "effective_from": "2026-03-17",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "0.75",
+        "output": "4.5",
+        "cache_read": "0.075"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-nano",
+      "effective_from": "2026-03-17",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "0.2",
+        "output": "1.25",
+        "cache_read": "0.02"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.3-codex",
+      "effective_from": "2026-02-24",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "1.75",
+        "output": "14",
+        "cache_read": "0.175"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "Not listed on the batch pricing table, so batch requests are unpriced."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.2",
+      "effective_from": "2025-12-11",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "1.75",
+        "output": "14",
+        "cache_read": "0.175"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.1",
+      "effective_from": "2025-11-13",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "1.25",
+        "output": "10",
+        "cache_read": "0.125"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5",
+      "effective_from": "2025-08-07",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "1.25",
+        "output": "10",
+        "cache_read": "0.125"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-mini",
+      "effective_from": "2025-08-07",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "0.25",
+        "output": "2",
+        "cache_read": "0.025"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-nano",
+      "effective_from": "2025-08-07",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "0.05",
+        "output": "0.4",
+        "cache_read": "0.005"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-4-argon",
+      "effective_from": "2026-10-13",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "2",
+        "output": "10",
+        "cache_read": "0.1"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "14",
+          "quota_note": "5,000 free searches per month shared across Gemini 3 and newer models, then $14 per 1,000",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage.",
+        "Price is scheduled to change on 2026-12-01 (see the entry with that effective_from).",
+        "Implicit caching only; no storage fee."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-4-argon",
+      "effective_from": "2026-12-01",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "4",
+        "output": "20",
+        "cache_read": "0.2"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "14",
+          "quota_note": "5,000 free searches per month shared across Gemini 3 and newer models, then $14 per 1,000",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage.",
+        "Future-dated price published on the pricing page; effective_from comes from that page, not the changelog.",
+        "Implicit caching only; no storage fee."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-3.8-flash",
+      "effective_from": "2026-09-02",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "0.75",
+        "output": "3.75",
+        "cache_read": "0.075"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "14",
+          "quota_note": "5,000 free searches per month shared across Gemini 3 and newer models, then $14 per 1,000",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage.",
+        "Price is scheduled to change on 2027-01-01 (see the entry with that effective_from)."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-3.8-flash",
+      "effective_from": "2027-01-01",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "1.5",
+        "output": "7.5",
+        "cache_read": "0.15"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "14",
+          "quota_note": "5,000 free searches per month shared across Gemini 3 and newer models, then $14 per 1,000",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage.",
+        "Future-dated price published on the pricing page; effective_from comes from that page, not the changelog."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-3.6-flash",
+      "effective_from": "2026-07-21",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "0.75",
+        "output": "3.75",
+        "cache_read": "0.075"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "14",
+          "quota_note": "5,000 free searches per month shared across Gemini 3 and newer models, then $14 per 1,000",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage.",
+        "Price is scheduled to change on 2027-01-01 (see the entry with that effective_from)."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-3.6-flash",
+      "effective_from": "2027-01-01",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "1.5",
+        "output": "7.5",
+        "cache_read": "0.15"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "14",
+          "quota_note": "5,000 free searches per month shared across Gemini 3 and newer models, then $14 per 1,000",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage.",
+        "Future-dated price published on the pricing page; effective_from comes from that page, not the changelog."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-3.5-flash-lite",
+      "effective_from": "2026-07-21",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "0.3",
+        "output": "2.5",
+        "cache_read": "0.03"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read_price": "0.02"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "14",
+          "quota_note": "5,000 free searches per month shared across Gemini 3 and newer models, then $14 per 1,000",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-3.1-flash-lite",
+      "effective_from": "2026-05-07",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "0.25",
+        "output": "1.5",
+        "cache_read": "0.025"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "14",
+          "quota_note": "5,000 free searches per month shared across Gemini 3 and newer models, then $14 per 1,000",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage.",
+        "Launch date is general availability; the preview launched 2026-03-03 and its price is not recorded."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-3.1-pro-preview",
+      "aliases": [
+        "gemini-3.1-pro-preview-customtools"
+      ],
+      "effective_from": "2026-02-19",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "2",
+        "output": "12",
+        "cache_read": "0.2"
+      },
+      "long_context": {
+        "threshold_tokens": 200000,
+        "input": "4",
+        "output": "18",
+        "cache_read": "0.4"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "1"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "14",
+          "quota_note": "5,000 free searches per month shared across Gemini 3 and newer models, then $14 per 1,000",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage.",
+        "Launch date is the preview launch; the changelog records no price change since.",
+        "Prompts over 200k tokens pay the higher prices for the whole request."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-3-flash-preview",
+      "effective_from": "2025-12-17",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "0.5",
+        "output": "3",
+        "cache_read": "0.05"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "1"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "14",
+          "quota_note": "5,000 free searches per month shared across Gemini 3 and newer models, then $14 per 1,000",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage.",
+        "Launch date is the preview launch; the changelog records no price change since."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-2.5-pro",
+      "effective_from": "2025-06-17",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "1.25",
+        "output": "10",
+        "cache_read": "0.125"
+      },
+      "long_context": {
+        "threshold_tokens": 200000,
+        "input": "2.5",
+        "output": "15",
+        "cache_read": "0.25"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "1"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "35",
+          "quota_note": "1,500 free requests per day, then $35 per 1,000 grounded prompts",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage.",
+        "Prompts over 200k tokens pay the higher prices for the whole request."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-2.5-flash",
+      "effective_from": "2025-06-17",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "0.3",
+        "output": "2.5",
+        "cache_read": "0.03"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "1"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "35",
+          "quota_note": "1,500 free requests per day, then $35 per 1,000 grounded prompts",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "google",
+      "model": "gemini-2.5-flash-lite",
+      "effective_from": "2025-07-22",
+      "effective_from_source": "https://ai.google.dev/gemini-api/docs/changelog",
+      "standard": {
+        "input": "0.1",
+        "output": "0.4",
+        "cache_read": "0.01"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "1"
+      },
+      "tool_fees": [
+        {
+          "tool": "google_search",
+          "usd_per_1000_calls": "35",
+          "quota_note": "1,500 free requests per day, then $35 per 1,000 grounded prompts",
+          "quota_depends": true
+        }
+      ],
+      "notes": [
+        "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage.",
+        "Launch date is general availability; the preview launched 2025-06-17 and its price is not recorded."
+      ],
+      "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
+      "verified_at": "2026-10-28"
+    }
+  ]
 }
