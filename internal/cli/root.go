@@ -20,7 +20,7 @@ func Execute(a *App, args []string) int {
 		if a.JSON {
 			_ = json.NewEncoder(a.Err).Encode(map[string]string{"error": msg})
 		} else {
-			fmt.Fprintln(a.Err, "Error: "+msg)
+			_, _ = fmt.Fprintln(a.Err, "Error: "+msg)
 		}
 		return 1
 	}

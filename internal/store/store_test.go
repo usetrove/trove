@@ -56,7 +56,7 @@ func TestReopenKeepsData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	var v string
 	if err := db.QueryRow(`SELECT value FROM settings WHERE key='a'`).Scan(&v); err != nil || v != "b" {
 		t.Errorf("got %q, %v", v, err)
@@ -80,7 +80,7 @@ func TestFreshInstallPermissionsAndWAL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	var mode string
 	if err := db.QueryRow(`PRAGMA journal_mode`).Scan(&mode); err != nil || mode != "wal" {
 		t.Errorf("journal_mode = %q, %v", mode, err)

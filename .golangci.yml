@@ -19,6 +19,9 @@ linters:
         - -ST1022
   exclusions:
     rules:
+      # Error messages are full sentences that say what to do next.
+      - linters: [revive]
+        text: error-strings
       - path: _test\.go
         linters: [gosec]
 formatters:
