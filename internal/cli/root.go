@@ -67,6 +67,7 @@ func NewRoot(a *App) *cobra.Command {
 		stubCmd(a, "share", "Create a shareable, redacted summary", "share"),
 		cfg,
 		newDoctor(a),
+		newPricing(a),
 		newVersion(a),
 		stubCmd(a, "uninstall", "Remove Trove's changes and data", "uninstall"),
 	)

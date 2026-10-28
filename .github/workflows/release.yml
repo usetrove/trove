@@ -19,6 +19,9 @@ jobs:
         with:
           go-version: stable
           check-latest: true
+      # Warn (never fail) when any bundled price was last verified over 30 days ago.
+      - name: Check pricing freshness
+        run: go run ./scripts/pricingage
       - uses: sigstore/cosign-installer@v3
       - uses: anchore/sbom-action/download-syft@v0
         id: syft
