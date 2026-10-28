@@ -267,6 +267,71 @@ func TestWorkedExamples(t *testing.T) {
 			status: Priced, usd: "1.65",
 		},
 		{
+			name: "openai gpt-5.4-pro long context",
+			req:  Request{Provider: OpenAI, Model: "gpt-5.4-pro", Time: at("2026-06-01"), Usage: Usage{UncachedInput: 300_000, Output: 1_000}},
+			// prompt 300,000 > 272K. 300,000x60 = 18.00; 1,000x270 = 0.27 -> 18.27
+			status: Priced, usd: "18.27",
+		},
+		{
+			name: "openai gpt-5.4-pro batch",
+			req:  Request{Provider: OpenAI, Model: "gpt-5.4-pro", Time: at("2026-06-01"), Batch: true, Usage: Usage{UncachedInput: 100_000, Output: 10_000}},
+			// (100,000x30 + 10,000x180) x 0.5 = (3.00 + 1.80) x 0.5 = 2.40
+			status: Priced, usd: "2.4",
+		},
+		{
+			name: "openai gpt-5.5-pro batch under the threshold",
+			req:  Request{Provider: OpenAI, Model: "gpt-5.5-pro", Time: at("2026-06-01"), Batch: true, Usage: Usage{UncachedInput: 100_000, Output: 10_000}},
+			// same arithmetic as above: 2.40
+			status: Priced, usd: "2.4",
+		},
+		{
+			name:   "openai gpt-5.5-pro flex under the threshold",
+			req:    Request{Provider: OpenAI, Model: "gpt-5.5-pro", Time: at("2026-06-01"), ServiceTier: "flex", Usage: Usage{UncachedInput: 100_000, Output: 10_000}},
+			status: Priced, usd: "2.4",
+		},
+		{
+			name: "openai gpt-5-pro batch",
+			req:  Request{Provider: OpenAI, Model: "gpt-5-pro", Time: at("2025-11-01"), Batch: true, Usage: Usage{UncachedInput: 100_000, Output: 10_000}},
+			// (100,000x15 + 10,000x120) x 0.5 = (1.50 + 1.20) x 0.5 = 1.35
+			status: Priced, usd: "1.35",
+		},
+		{
+			name: "openai o3 after the 2025-06-10 price cut",
+			req:  Request{Provider: OpenAI, Model: "o3", Time: at("2025-07-01"), Usage: Usage{UncachedInput: 100_000, CacheRead: 200_000, Output: 10_000}},
+			// 100,000x2 = 0.20; 200,000x0.50 = 0.10; 10,000x8 = 0.08 -> 0.38
+			status: Priced, usd: "0.38",
+		},
+		{
+			name: "openai o3 batch has no cached-input price, so cache reads are unpriced",
+			req:  Request{Provider: OpenAI, Model: "o3", Time: at("2025-07-01"), Batch: true, Usage: Usage{UncachedInput: 100_000, CacheRead: 1_000, Output: 10_000}},
+			// (100,000x2 + 10,000x8) x 0.5 = (0.20 + 0.08) x 0.5 = 0.14; cache read unpriced
+			status: Partial, usd: "0.14",
+		},
+		{
+			name: "openai o3 fast",
+			req:  Request{Provider: OpenAI, Model: "o3", Time: at("2025-07-01"), ServiceTier: "fast", Usage: Usage{UncachedInput: 100_000, Output: 10_000}},
+			// 100,000x3.50 = 0.35; 10,000x14 = 0.14 -> 0.49
+			status: Priced, usd: "0.49",
+		},
+		{
+			name: "openai o3 flex input and output are priced like batch",
+			req:  Request{Provider: OpenAI, Model: "o3", Time: at("2025-07-01"), ServiceTier: "flex", Usage: Usage{UncachedInput: 100_000, Output: 10_000}},
+			// (100,000x2 + 10,000x8) x 0.5 = 0.14
+			status: Priced, usd: "0.14",
+		},
+		{
+			name: "openai o4-mini",
+			req:  Request{Provider: OpenAI, Model: "o4-mini", Time: at("2025-05-01"), Usage: Usage{UncachedInput: 1_000_000, Output: 100_000}},
+			// 1,000,000x1.10 = 1.10; 100,000x4.40 = 0.44 -> 1.54
+			status: Priced, usd: "1.54",
+		},
+		{
+			name: "anthropic mythos 5.1 with its cheaper cache reads",
+			req:  Request{Provider: Anthropic, Model: "claude-mythos-5-1", Time: at("2026-10-01"), Usage: Usage{UncachedInput: 100_000, CacheRead: 1_000_000, Output: 10_000}},
+			// 100,000x10 = 1.00; 1,000,000x0.25 = 0.25; 10,000x50 = 0.50 -> 1.75
+			status: Priced, usd: "1.75",
+		},
+		{
 			name: "openai reasoning tokens are already inside output and not added again",
 			req:  Request{Provider: OpenAI, Model: "gpt-5.5", Time: at("2026-06-01"), Usage: Usage{Output: 3_000, Reasoning: 2_000}},
 			// 3,000x30 = 0.09
@@ -301,6 +366,8 @@ func TestUnpriced(t *testing.T) {
 		{"an invented service tier", Request{Provider: OpenAI, Model: "gpt-5.5", Time: at("2026-10-20"), ServiceTier: "turbo", Usage: u}, "service tier price"},
 		{"fast with batch", Request{Provider: Anthropic, Model: "claude-opus-5-5", Time: at("2026-10-20"), ServiceTier: "fast", Batch: true, Usage: u}, "cannot be combined with batch"},
 		{"fast above the long-context threshold has no listed price", Request{Provider: OpenAI, Model: "gpt-5.5", Time: at("2026-10-20"), ServiceTier: "fast", Usage: Usage{UncachedInput: 300_000}}, "no long-context price"},
+		{"batch above the threshold when only short-context batch is listed", Request{Provider: OpenAI, Model: "gpt-5.5-pro", Time: at("2026-10-20"), Batch: true, Usage: Usage{UncachedInput: 300_000}}, "no long-context batch price"},
+		{"o3 before its 2025-06-10 price cut", Request{Provider: OpenAI, Model: "o3", Time: at("2025-06-09"), Usage: u}, "not priced before 2025-06-10"},
 		{"flex on a model without it", Request{Provider: Anthropic, Model: "claude-opus-5-5", Time: at("2026-10-20"), ServiceTier: "flex", Usage: u}, "no flex price"},
 		{"batch on a model without batch prices", Request{Provider: OpenAI, Model: "gpt-5.3-codex", Time: at("2026-10-20"), Batch: true, Usage: u}, "batch"},
 		{"negative tokens", Request{Provider: Anthropic, Model: "claude-haiku-4-5", Time: at("2026-10-20"), Usage: Usage{Output: -1}}, "negative"},

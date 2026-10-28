@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "data_version": "2026-10-28.2",
+  "data_version": "2026-10-28.3",
   "notes": [
     "All prices are USD per million tokens (tool fees per 1,000 calls) from the providers' published list prices. Values derived from them are estimates, not invoices.",
     "Service tiers: Request.ServiceTier accepts fast (OpenAI, Anthropic Opus), ultrafast (OpenAI), priority (Gemini) and flex (OpenAI, Gemini; priced like batch). Premium tiers cannot be combined with batch. Adapters map each provider's own field value onto these names.",
     "Not priced: audio input; cache-storage fees; OpenAI regional (data-residency) uplift, because eligibility is per model and not machine-readable; Gemini Contributor tier.",
-    "Retired models and older families (for example Claude Opus 4/4.1, Sonnet 4, Haiku 3.5, OpenAI o-series and GPT-4.x, Gemini 2.0) are not included and come back unpriced.",
+    "Retired models and older families (for example Claude Opus 4/4.1, Sonnet 4, Haiku 3.5, OpenAI o1, o3-mini, GPT-4.x and gpt-5.2-pro (no official launch date), cyber and research-program models, Gemini 2.0 and Gemini 3.7 Flash (not on the pricing page)) are not included and come back unpriced.",
     "effective_from is the launch date or the date of an announced price change, taken from the provider's release notes or changelog. A request dated before it is unpriced rather than guessed.",
     "No tokenizer differences between model generations are published on the OpenAI or Google pricing pages; only Anthropic documents one (Claude 4.7 and later, about 30% more tokens for the same text)."
   ],
@@ -622,6 +622,88 @@
       "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
       "notes": [
         "Priced per request by prompt length: prompts over 100,000 tokens (counting cache reads and writes) pay the higher prices for the whole request. The 1.1x US multiplier applies to both price sets."
+      ],
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-mythos-5",
+      "effective_from": "2026-06-09",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "10",
+        "output": "50",
+        "cache_read": "1",
+        "cache_write": {
+          "1h": "20",
+          "5m": "12.5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
+      "notes": [
+        "Limited availability: only organizations verified through Anthropic's verification programs can use it.",
+        "Launched alongside Claude Fable 5 with the same prices."
+      ],
+      "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "anthropic",
+      "model": "claude-mythos-5-1",
+      "effective_from": "2026-09-01",
+      "effective_from_source": "https://platform.claude.com/docs/en/release-notes/overview",
+      "standard": {
+        "input": "10",
+        "output": "50",
+        "cache_read": "0.25",
+        "cache_write": {
+          "1h": "20",
+          "5m": "12.5"
+        }
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "cache_read": "0.5",
+        "cache_write": "0.5"
+      },
+      "regional": [
+        {
+          "name": "us",
+          "multiplier": "1.1",
+          "note": "inference_geo: \"us\"; applies to all token categories"
+        }
+      ],
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10"
+        }
+      ],
+      "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
+      "notes": [
+        "Limited availability: only organizations verified through Anthropic's verification programs can use it.",
+        "Cache reads are 0.025x base input, like Claude Fable 5.1."
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
       "verified_at": "2026-10-28"
@@ -1644,6 +1726,229 @@
           "usd_per_1000_calls": "2.5",
           "quota_note": "Responses API only; storage billed separately"
         }
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.5-pro",
+      "effective_from": "2026-04-24",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "30",
+        "output": "180"
+      },
+      "long_context": {
+        "threshold_tokens": 272000,
+        "input": "60",
+        "output": "270"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5",
+        "no_long_context": true
+      },
+      "flex_matches_batch": true,
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family).",
+        "No cache price: the page lists none. Batch and flex are listed only up to 272K tokens ($15/$90); above that they are unpriced."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5.4-pro",
+      "effective_from": "2026-03-05",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "30",
+        "output": "180"
+      },
+      "long_context": {
+        "threshold_tokens": 272000,
+        "input": "60",
+        "output": "270"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5"
+      },
+      "flex_matches_batch": true,
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family).",
+        "No cache price: the page lists none."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "gpt-5-pro",
+      "effective_from": "2025-10-06",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "15",
+        "output": "120"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "No cache price: the page lists none."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "o3-pro",
+      "effective_from": "2025-06-10",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "20",
+        "output": "80"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5"
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "No cache price: the page lists none. Launched 2025-06-10."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "o3",
+      "effective_from": "2025-06-10",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "2",
+        "output": "8",
+        "cache_read": "0.5"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5"
+      },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "3.5",
+            "output": "14",
+            "cache_read": "0.875"
+          }
+        }
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "Effective date is the 2025-06-10 price reduction announced in the OpenAI changelog; the earlier price is not on any current page, so earlier requests are unpriced. The batch table lists no cached-input price. Flex input and output equal batch, but flex cached input ($0.25 for o3, $0.138 for o4-mini) differs from the batch rate, so flex cache reads are unpriced."
+      ],
+      "source_url": "https://developers.openai.com/api/docs/pricing",
+      "verified_at": "2026-10-28"
+    },
+    {
+      "provider": "openai",
+      "model": "o4-mini",
+      "effective_from": "2025-04-16",
+      "effective_from_source": "https://developers.openai.com/api/docs/changelog",
+      "standard": {
+        "input": "1.1",
+        "output": "4.4",
+        "cache_read": "0.275"
+      },
+      "batch": {
+        "input": "0.5",
+        "output": "0.5"
+      },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "2",
+            "output": "8",
+            "cache_read": "0.5"
+          }
+        }
+      },
+      "tool_fees": [
+        {
+          "tool": "web_search",
+          "usd_per_1000_calls": "10",
+          "quota_note": "search content tokens are billed separately at model rates"
+        },
+        {
+          "tool": "file_search",
+          "usd_per_1000_calls": "2.5",
+          "quota_note": "Responses API only; storage billed separately"
+        }
+      ],
+      "notes": [
+        "The batch table lists no cached-input price, so batch cache reads are unpriced. Flex input and output equal batch, but flex cached input ($0.25 for o3, $0.138 for o4-mini) differs from the batch rate, so flex cache reads are unpriced."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
       "verified_at": "2026-10-28"

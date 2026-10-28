@@ -139,6 +139,9 @@ func (t *Table) Cost(req Request) Cost {
 	if lc := e.LongContext; lc != nil && u.promptTokens() > lc.ThresholdTokens {
 		switch {
 		case premium == nil:
+			if batch && e.Batch != nil && e.Batch.NoLongContext {
+				return fail(fmt.Sprintf("no long-context batch price for %s; the prompt is over %d tokens", e.Model, lc.ThresholdTokens))
+			}
 			tier = lc.Tier
 		case premium.LongContext != nil:
 			tier = premium.LongContext.Tier

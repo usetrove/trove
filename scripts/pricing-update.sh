@@ -4,16 +4,17 @@
 #   scripts/pricing-update.sh fetch <dir>   save the official pricing pages as text in <dir> (a NEW, empty directory)
 #   scripts/pricing-update.sh review        run the checks and show what changed since the last commit
 #
+# The .md / .md.txt endpoints return readable text; the plain page URLs return HTML.
 # This script never edits pricing.json. A person reads each page and edits the file,
 # because verified_at must only move for prices someone actually compared.
 set -eu
 
-ANTHROPIC_PRICING="https://platform.claude.com/docs/en/about-claude/pricing"
-ANTHROPIC_RELEASES="https://platform.claude.com/docs/en/release-notes/overview"
+ANTHROPIC_PRICING="https://platform.claude.com/docs/en/about-claude/pricing.md"
+ANTHROPIC_RELEASES="https://platform.claude.com/docs/en/release-notes/overview.md"
 OPENAI_PRICING="https://developers.openai.com/api/docs/pricing.md"
 OPENAI_CHANGELOG="https://developers.openai.com/api/docs/changelog.md"
 GOOGLE_PRICING="https://ai.google.dev/gemini-api/docs/pricing.md.txt"
-GOOGLE_CHANGELOG="https://ai.google.dev/gemini-api/docs/changelog"
+GOOGLE_CHANGELOG="https://ai.google.dev/gemini-api/docs/changelog.md.txt"
 
 fetch() {
 	dir=${1:?usage: pricing-update.sh fetch <new-empty-dir>}
