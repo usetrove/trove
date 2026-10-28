@@ -10,9 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jaclynsunardi/trove/internal/config"
-	"github.com/jaclynsunardi/trove/internal/redact"
-	"github.com/jaclynsunardi/trove/internal/store"
+	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/redact"
+	"github.com/usetrove/trove/internal/store"
 )
 
 // Check statuses.

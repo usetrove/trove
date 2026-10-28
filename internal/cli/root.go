@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/jaclynsunardi/trove/internal/redact"
+	"github.com/usetrove/trove/internal/redact"
 )
 
 // Execute runs the CLI with args and returns the process exit code.

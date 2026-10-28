@@ -9,8 +9,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/jaclynsunardi/trove/internal/config"
-	"github.com/jaclynsunardi/trove/internal/redact"
+	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/redact"
 )
 
 // App carries the shared state and injectable dependencies for all commands.

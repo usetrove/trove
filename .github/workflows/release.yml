@@ -31,5 +31,5 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # A token with write access to jaclynsunardi/homebrew-trove (the default token cannot push to another repo).
+          # A token with write access to usetrove/homebrew-trove (the default token cannot push to another repo).
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

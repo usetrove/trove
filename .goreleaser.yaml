@@ -15,9 +15,9 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/jaclynsunardi/trove/internal/cli.Version={{ .Version }}
-      - -X github.com/jaclynsunardi/trove/internal/cli.Commit={{ .Commit }}
-      - -X github.com/jaclynsunardi/trove/internal/cli.Date={{ .Date }}
+      - -X github.com/usetrove/trove/internal/cli.Version={{ .Version }}
+      - -X github.com/usetrove/trove/internal/cli.Commit={{ .Commit }}
+      - -X github.com/usetrove/trove/internal/cli.Date={{ .Date }}
 
 archives:
   - id: trove
@@ -33,7 +33,7 @@ checksum:
 # Keyless cosign signature over checksums.txt (which covers every archive).
 # Verify with:
 #   cosign verify-blob \
-#     --certificate-identity 'https://github.com/jaclynsunardi/trove/.github/workflows/release.yml@refs/tags/vX.Y.Z' \
+#     --certificate-identity 'https://github.com/usetrove/trove/.github/workflows/release.yml@refs/tags/vX.Y.Z' \
 #     --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
 #     --bundle checksums.txt.sigstore.json checksums.txt
 signs:
@@ -56,10 +56,10 @@ sboms:
 brews:
   - name: trove
     repository:
-      owner: jaclynsunardi
+      owner: usetrove
       name: homebrew-trove
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: https://github.com/jaclynsunardi/trove
+    homepage: https://github.com/usetrove/trove
     description: The efficiency layer for AI coding agents
     license: Apache-2.0
     test: |
@@ -67,7 +67,7 @@ brews:
 
 release:
   github:
-    owner: jaclynsunardi
+    owner: usetrove
     name: trove
 
 changelog:
