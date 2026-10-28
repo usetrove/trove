@@ -1,9 +1,10 @@
 {
   "schema_version": 1,
-  "data_version": "2026-10-28.1",
+  "data_version": "2026-10-28.2",
   "notes": [
     "All prices are USD per million tokens (tool fees per 1,000 calls) from the providers' published list prices. Values derived from them are estimates, not invoices.",
-    "Not priced: fast, priority, flex and ultrafast service tiers; audio input; cache-storage fees; OpenAI regional (data-residency) uplift, because eligibility is per model and not machine-readable; Gemini Contributor tier.",
+    "Service tiers: Request.ServiceTier accepts fast (OpenAI, Anthropic Opus), ultrafast (OpenAI), priority (Gemini) and flex (OpenAI, Gemini; priced like batch). Premium tiers cannot be combined with batch. Adapters map each provider's own field value onto these names.",
+    "Not priced: audio input; cache-storage fees; OpenAI regional (data-residency) uplift, because eligibility is per model and not machine-readable; Gemini Contributor tier.",
     "Retired models and older families (for example Claude Opus 4/4.1, Sonnet 4, Haiku 3.5, OpenAI o-series and GPT-4.x, Gemini 2.0) are not included and come back unpriced.",
     "effective_from is the launch date or the date of an announced price change, taken from the provider's release notes or changelog. A request dated before it is unpriced rather than guessed.",
     "No tokenizer differences between model generations are published on the OpenAI or Google pricing pages; only Anthropic documents one (Claude 4.7 and later, about 30% more tokens for the same text)."
@@ -136,6 +137,20 @@
         "cache_read": "0.5",
         "cache_write": "0.5"
       },
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "10",
+            "output": "50",
+            "cache_read": "1",
+            "cache_write": {
+              "1h": "20",
+              "5m": "12.5"
+            }
+          },
+          "note": "Fast mode (research preview or later). Input and output are listed on the pricing page; cache prices are derived from the documented multipliers, which the page says apply on top of fast pricing. Not available with batch."
+        }
+      },
       "regional": [
         {
           "name": "us",
@@ -173,6 +188,20 @@
         "cache_read": "0.5",
         "cache_write": "0.5"
       },
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "10",
+            "output": "50",
+            "cache_read": "1",
+            "cache_write": {
+              "1h": "20",
+              "5m": "12.5"
+            }
+          },
+          "note": "Fast mode (research preview or later). Input and output are listed on the pricing page; cache prices are derived from the documented multipliers, which the page says apply on top of fast pricing. Not available with batch."
+        }
+      },
       "regional": [
         {
           "name": "us",
@@ -209,6 +238,20 @@
         "output": "0.5",
         "cache_read": "0.5",
         "cache_write": "0.5"
+      },
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "8",
+            "output": "40",
+            "cache_read": "0.4",
+            "cache_write": {
+              "1h": "16",
+              "5m": "10"
+            }
+          },
+          "note": "Fast mode (research preview or later). Input and output are listed on the pricing page; cache prices are derived from the documented multipliers, which the page says apply on top of fast pricing. Not available with batch."
+        }
       },
       "regional": [
         {
@@ -613,6 +656,51 @@
         "cache_read": "0.5",
         "cache_write": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "20",
+            "output": "100",
+            "cache_read": "2",
+            "cache_write": {
+              "12h": "50",
+              "30m": "25"
+            }
+          },
+          "long_context": {
+            "threshold_tokens": 272000,
+            "input": "40",
+            "output": "150",
+            "cache_read": "4",
+            "cache_write": {
+              "12h": "100",
+              "30m": "50"
+            }
+          }
+        },
+        "ultrafast": {
+          "standard": {
+            "input": "60",
+            "output": "300",
+            "cache_read": "6",
+            "cache_write": {
+              "12h": "150",
+              "30m": "75"
+            }
+          },
+          "long_context": {
+            "threshold_tokens": 272000,
+            "input": "120",
+            "output": "450",
+            "cache_read": "12",
+            "cache_write": {
+              "12h": "300",
+              "30m": "150"
+            }
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "web_search",
@@ -626,7 +714,7 @@
         }
       ],
       "notes": [
-        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+        "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
       "verified_at": "2026-10-28"
@@ -661,6 +749,51 @@
         "cache_read": "0.5",
         "cache_write": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "4",
+            "output": "20",
+            "cache_read": "0.2",
+            "cache_write": {
+              "12h": "10",
+              "30m": "5"
+            }
+          },
+          "long_context": {
+            "threshold_tokens": 272000,
+            "input": "8",
+            "output": "30",
+            "cache_read": "0.4",
+            "cache_write": {
+              "12h": "20",
+              "30m": "10"
+            }
+          }
+        },
+        "ultrafast": {
+          "standard": {
+            "input": "12",
+            "output": "60",
+            "cache_read": "0.6",
+            "cache_write": {
+              "12h": "30",
+              "30m": "15"
+            }
+          },
+          "long_context": {
+            "threshold_tokens": 272000,
+            "input": "24",
+            "output": "90",
+            "cache_read": "1.2",
+            "cache_write": {
+              "12h": "60",
+              "30m": "30"
+            }
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "web_search",
@@ -674,7 +807,7 @@
         }
       ],
       "notes": [
-        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+        "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
       "verified_at": "2026-10-28"
@@ -709,6 +842,30 @@
         "cache_read": "0.5",
         "cache_write": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "2",
+            "output": "10",
+            "cache_read": "0.1",
+            "cache_write": {
+              "12h": "5",
+              "30m": "2.5"
+            }
+          },
+          "long_context": {
+            "threshold_tokens": 272000,
+            "input": "4",
+            "output": "15",
+            "cache_read": "0.2",
+            "cache_write": {
+              "12h": "10",
+              "30m": "5"
+            }
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "web_search",
@@ -722,7 +879,7 @@
         }
       ],
       "notes": [
-        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+        "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
       "verified_at": "2026-10-28"
@@ -757,6 +914,30 @@
         "cache_read": "0.5",
         "cache_write": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "4",
+            "output": "20",
+            "cache_read": "0.4",
+            "cache_write": {
+              "12h": "10",
+              "30m": "5"
+            }
+          },
+          "long_context": {
+            "threshold_tokens": 272000,
+            "input": "8",
+            "output": "30",
+            "cache_read": "0.8",
+            "cache_write": {
+              "12h": "20",
+              "30m": "10"
+            }
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "web_search",
@@ -770,7 +951,7 @@
         }
       ],
       "notes": [
-        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+        "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
       "verified_at": "2026-10-28"
@@ -805,6 +986,30 @@
         "cache_read": "0.5",
         "cache_write": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "0.2",
+            "output": "1",
+            "cache_read": "0.02",
+            "cache_write": {
+              "12h": "0.5",
+              "30m": "0.25"
+            }
+          },
+          "long_context": {
+            "threshold_tokens": 272000,
+            "input": "0.4",
+            "output": "1.5",
+            "cache_read": "0.04",
+            "cache_write": {
+              "12h": "1",
+              "30m": "0.5"
+            }
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "web_search",
@@ -818,7 +1023,7 @@
         }
       ],
       "notes": [
-        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+        "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
       "verified_at": "2026-10-28"
@@ -853,6 +1058,30 @@
         "cache_read": "0.5",
         "cache_write": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "8",
+            "output": "40",
+            "cache_read": "0.8",
+            "cache_write": {
+              "12h": "20",
+              "30m": "10"
+            }
+          },
+          "long_context": {
+            "threshold_tokens": 272000,
+            "input": "16",
+            "output": "60",
+            "cache_read": "1.6",
+            "cache_write": {
+              "12h": "40",
+              "30m": "20"
+            }
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "web_search",
@@ -867,7 +1096,7 @@
       ],
       "notes": [
         "Price in force since 2026-08-21 (a cut of 20% on input and 33% on output); the page says the promotional pricing runs at least through 2026-11-21, with no firm end date. Earlier prices are not on the current page, so earlier requests are unpriced.",
-        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+        "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
       "verified_at": "2026-10-28"
@@ -902,6 +1131,30 @@
         "cache_read": "0.5",
         "cache_write": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "4",
+            "output": "24",
+            "cache_read": "0.4",
+            "cache_write": {
+              "12h": "10",
+              "30m": "5"
+            }
+          },
+          "long_context": {
+            "threshold_tokens": 272000,
+            "input": "8",
+            "output": "36",
+            "cache_read": "0.8",
+            "cache_write": {
+              "12h": "20",
+              "30m": "10"
+            }
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "web_search",
@@ -916,7 +1169,7 @@
       ],
       "notes": [
         "Price in force since 2026-07-30 (a 20% cut). Earlier prices are not on the current page, so earlier requests are unpriced.",
-        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+        "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
       "verified_at": "2026-10-28"
@@ -951,6 +1204,30 @@
         "cache_read": "0.5",
         "cache_write": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "0.4",
+            "output": "2.4",
+            "cache_read": "0.04",
+            "cache_write": {
+              "12h": "1",
+              "30m": "0.5"
+            }
+          },
+          "long_context": {
+            "threshold_tokens": 272000,
+            "input": "0.8",
+            "output": "3.6",
+            "cache_read": "0.08",
+            "cache_write": {
+              "12h": "2",
+              "30m": "1"
+            }
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "web_search",
@@ -965,7 +1242,7 @@
       ],
       "notes": [
         "Price in force since 2026-07-30 (an 80% cut). Earlier prices are not on the current page, so earlier requests are unpriced.",
-        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+        "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
       "verified_at": "2026-10-28"
@@ -991,6 +1268,17 @@
         "output": "0.5",
         "cache_read": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "12.5",
+            "output": "75",
+            "cache_read": "1.25"
+          },
+          "note": "The page lists no long-context price for Fast mode on this model, so prompts over 272K tokens are unpriced in this tier."
+        }
+      },
       "tool_fees": [
         {
           "tool": "web_search",
@@ -1005,7 +1293,7 @@
       ],
       "notes": [
         "No cache-write price: caching for this model works only with extended prompt caching.",
-        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+        "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
       "verified_at": "2026-10-28"
@@ -1031,6 +1319,17 @@
         "output": "0.5",
         "cache_read": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "5",
+            "output": "30",
+            "cache_read": "0.5"
+          },
+          "note": "The page lists no long-context price for Fast mode on this model, so prompts over 272K tokens are unpriced in this tier."
+        }
+      },
       "tool_fees": [
         {
           "tool": "web_search",
@@ -1045,7 +1344,7 @@
       ],
       "notes": [
         "The batch page shows a cached-input price of $0.13, which is 0.125 rounded for display; Trove uses 0.5x standard (0.125).",
-        "Long-context prices apply above 272K input tokens. The page does not say whether they apply to the whole request or only to tokens above the threshold; Trove assumes the whole request."
+        "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
       "verified_at": "2026-10-28"
@@ -1064,6 +1363,16 @@
         "input": "0.5",
         "output": "0.5",
         "cache_read": "0.5"
+      },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "1.5",
+            "output": "9",
+            "cache_read": "0.15"
+          }
+        }
       },
       "tool_fees": [
         {
@@ -1095,6 +1404,7 @@
         "output": "0.5",
         "cache_read": "0.5"
       },
+      "flex_matches_batch": true,
       "tool_fees": [
         {
           "tool": "web_search",
@@ -1119,6 +1429,15 @@
         "input": "1.75",
         "output": "14",
         "cache_read": "0.175"
+      },
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "3.5",
+            "output": "28",
+            "cache_read": "0.35"
+          }
+        }
       },
       "tool_fees": [
         {
@@ -1153,6 +1472,16 @@
         "output": "0.5",
         "cache_read": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "3.5",
+            "output": "28",
+            "cache_read": "0.35"
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "web_search",
@@ -1182,6 +1511,16 @@
         "input": "0.5",
         "output": "0.5",
         "cache_read": "0.5"
+      },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "2.5",
+            "output": "20",
+            "cache_read": "0.25"
+          }
+        }
       },
       "tool_fees": [
         {
@@ -1213,6 +1552,16 @@
         "output": "0.5",
         "cache_read": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "2.5",
+            "output": "20",
+            "cache_read": "0.25"
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "web_search",
@@ -1242,6 +1591,16 @@
         "input": "0.5",
         "output": "0.5",
         "cache_read": "0.5"
+      },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "fast": {
+          "standard": {
+            "input": "0.45",
+            "output": "3.6",
+            "cache_read": "0.045"
+          }
+        }
       },
       "tool_fees": [
         {
@@ -1273,6 +1632,7 @@
         "output": "0.5",
         "cache_read": "0.5"
       },
+      "flex_matches_batch": true,
       "tool_fees": [
         {
           "tool": "web_search",
@@ -1302,6 +1662,16 @@
         "input": "0.5",
         "output": "0.5",
         "cache_read": "0.5"
+      },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "3.6",
+            "output": "18",
+            "cache_read": "0.18"
+          }
+        }
       },
       "tool_fees": [
         {
@@ -1334,6 +1704,16 @@
         "output": "0.5",
         "cache_read": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "7.2",
+            "output": "36",
+            "cache_read": "0.36"
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "google_search",
@@ -1365,6 +1745,16 @@
         "output": "0.5",
         "cache_read": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "1.35",
+            "output": "6.75",
+            "cache_read": "0.135"
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "google_search",
@@ -1394,6 +1784,16 @@
         "input": "0.5",
         "output": "0.5",
         "cache_read": "0.5"
+      },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "2.7",
+            "output": "13.5",
+            "cache_read": "0.27"
+          }
+        }
       },
       "tool_fees": [
         {
@@ -1425,6 +1825,16 @@
         "output": "0.5",
         "cache_read": "0.5"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "1.35",
+            "output": "6.75",
+            "cache_read": "0.135"
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "google_search",
@@ -1454,6 +1864,16 @@
         "input": "0.5",
         "output": "0.5",
         "cache_read": "0.5"
+      },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "2.7",
+            "output": "13.5",
+            "cache_read": "0.27"
+          }
+        }
       },
       "tool_fees": [
         {
@@ -1485,6 +1905,16 @@
         "output": "0.5",
         "cache_read_price": "0.02"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "0.54",
+            "output": "4.5",
+            "cache_read": "0.05"
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "google_search",
@@ -1513,6 +1943,16 @@
         "input": "0.5",
         "output": "0.5",
         "cache_read": "0.5"
+      },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "0.45",
+            "output": "2.7",
+            "cache_read": "0.045"
+          }
+        }
       },
       "tool_fees": [
         {
@@ -1553,6 +1993,22 @@
         "output": "0.5",
         "cache_read": "1"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "3.6",
+            "output": "21.6",
+            "cache_read": "0.36"
+          },
+          "long_context": {
+            "threshold_tokens": 200000,
+            "input": "7.2",
+            "output": "32.4",
+            "cache_read": "0.72"
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "google_search",
@@ -1583,6 +2039,16 @@
         "input": "0.5",
         "output": "0.5",
         "cache_read": "1"
+      },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "0.9",
+            "output": "5.4",
+            "cache_read": "0.09"
+          }
+        }
       },
       "tool_fees": [
         {
@@ -1620,6 +2086,22 @@
         "output": "0.5",
         "cache_read": "1"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "2.25",
+            "output": "18",
+            "cache_read": "0.225"
+          },
+          "long_context": {
+            "threshold_tokens": 200000,
+            "input": "4.5",
+            "output": "27",
+            "cache_read": "0.45"
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "google_search",
@@ -1650,6 +2132,16 @@
         "output": "0.5",
         "cache_read": "1"
       },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "0.54",
+            "output": "4.5",
+            "cache_read": "0.054"
+          }
+        }
+      },
       "tool_fees": [
         {
           "tool": "google_search",
@@ -1678,6 +2170,16 @@
         "input": "0.5",
         "output": "0.5",
         "cache_read": "1"
+      },
+      "flex_matches_batch": true,
+      "service_tiers": {
+        "priority": {
+          "standard": {
+            "input": "0.18",
+            "output": "0.72",
+            "cache_read": "0.018"
+          }
+        }
       },
       "tool_fees": [
         {

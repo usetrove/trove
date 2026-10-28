@@ -68,9 +68,15 @@ type Entry struct {
 	LongContext *LongContext `json:"long_context,omitempty"`
 	// Batch gives multipliers applied to each category; a missing multiplier means
 	// "not priced in batch mode".
-	Batch    *Batch     `json:"batch,omitempty"`
-	Regional []Regional `json:"regional,omitempty"`
-	ToolFees []ToolFee  `json:"tool_fees,omitempty"`
+	Batch *Batch `json:"batch,omitempty"`
+	// FlexMatchesBatch says the provider's flex tier is priced exactly like batch
+	// for this model, so Request.ServiceTier "flex" uses the batch prices.
+	FlexMatchesBatch bool `json:"flex_matches_batch,omitempty"`
+	// ServiceTiers holds premium tiers by name ("fast", "ultrafast", "priority"),
+	// each a full replacement for Standard. They cannot be combined with batch.
+	ServiceTiers map[string]ServiceTier `json:"service_tiers,omitempty"`
+	Regional     []Regional             `json:"regional,omitempty"`
+	ToolFees     []ToolFee              `json:"tool_fees,omitempty"`
 
 	TokenizerNote string   `json:"tokenizer_note,omitempty"`
 	Notes         []string `json:"notes,omitempty"`
@@ -85,6 +91,15 @@ type Tier struct {
 	Output     Dec            `json:"output"`
 	CacheRead  *Dec           `json:"cache_read,omitempty"`
 	CacheWrite map[string]Dec `json:"cache_write,omitempty"` // by TTL: "5m", "1h", "30m", "12h"
+}
+
+// ServiceTier is the price set for a premium processing tier. When the model has a
+// long-context threshold and the tier has no LongContext, prompts over the
+// threshold are unpriced for this tier (the provider lists no price).
+type ServiceTier struct {
+	Standard    Tier         `json:"standard"`
+	LongContext *LongContext `json:"long_context,omitempty"` // threshold must equal the entry's
+	Note        string       `json:"note,omitempty"`
 }
 
 // LongContext is the price set above a prompt-length threshold.

@@ -75,8 +75,16 @@ func TestCostWithoutErrorsAndUnpriced(t *testing.T) {
 	if _, err := tb.CostWithout(req, CatOutput, -1); err == nil {
 		t.Error("a negative removal must be an error")
 	}
+	if _, err := tb.CostWithout(req, CatReasoning, 1); err == nil {
+		t.Error("removing reasoning separately is only valid for Google")
+	}
+	g := Request{Provider: Google, Model: "gemini-2.5-flash", Time: at("2026-06-01"), Usage: Usage{Output: 1_000_000, Reasoning: 400_000}}
+	cf, err := tb.CostWithout(g, CatReasoning, 100_000) // 100,000 x 2.50 = 0.25
+	if err != nil || !cf.Valid || cf.Savings.Cmp(MoneyFromString("0.25")) != 0 {
+		t.Errorf("google reasoning removal: %+v, %v", cf.Savings, err)
+	}
 	req.Model = "claude-unknown"
-	cf, err := tb.CostWithout(req, CatOutput, 5)
+	cf, err = tb.CostWithout(req, CatOutput, 5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,6 +122,20 @@ func TestPropertyCostNonNegativeAndMonotone(t *testing.T) {
 					UncachedInput: pick(1_000_000), CacheRead: pick(1_000_000), Output: pick(100_000),
 					CacheWrite: map[string]int64{"5m": pick(300_000), "1h": pick(300_000), "30m": pick(300_000), "12h": pick(300_000)},
 				}}
+			if e.Provider == Google {
+				req.Usage.Reasoning = pick(100_000)
+			}
+			switch rng.Intn(4) {
+			case 0:
+				for name := range e.ServiceTiers {
+					req.ServiceTier, req.Batch = name, false
+					break
+				}
+			case 1:
+				if e.FlexMatchesBatch {
+					req.ServiceTier = "flex"
+				}
+			}
 			if rng.Intn(3) == 0 && len(e.Regional) > 0 {
 				req.Region = e.Regional[0].Name
 			}
@@ -125,9 +147,17 @@ func TestPropertyCostNonNegativeAndMonotone(t *testing.T) {
 				t.Fatalf("%s/%s: negative cost %s for %+v", e.Provider, e.Model, base.Total, req.Usage)
 			}
 			cat := cats[rng.Intn(len(cats))]
+			if e.Provider == Google && rng.Intn(4) == 0 {
+				cat = CatReasoning
+			}
 			cf, err := tb.CostWithout(req, cat, rng.Int63n(400_000))
 			if err != nil {
 				t.Fatal(err)
+			}
+			// "Unpriced" is the absence of a cost (for example a premium tier with no
+			// long-context price), not a cost of zero, so only compare real costs.
+			if cf.Before.Status == Unpriced || cf.After.Status == Unpriced {
+				continue
 			}
 			if cf.After.Total.Cmp(cf.Before.Total) > 0 {
 				t.Fatalf("%s/%s: removing %d from %s raised cost %s -> %s; usage %+v batch=%v",
