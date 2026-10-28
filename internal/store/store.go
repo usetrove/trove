@@ -1,0 +1,240 @@
+// Package store owns Trove's SQLite database: opening it with safe
+// permissions, versioned migrations, retention, and the non-blocking writer.
+// It stores metadata only, never prompt text, code, file paths or tool output.
+package store
+
+import (
+	"context"
+	"database/sql"
+	"embed"
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	_ "modernc.org/sqlite" // pure-Go SQLite driver (no cgo)
+)
+
+// DBFileName is the database file inside the data directory.
+const DBFileName = "trove.db"
+
+//go:embed migrations/*.sql
+var migrationFS embed.FS
+
+// DB wraps the SQLite handle.
+type DB struct {
+	*sql.DB
+	path string
+}
+
+// Path returns the database file path.
+func (d *DB) Path() string { return d.path }
+
+// Open creates the data directory (0700) and database file (0600) if needed,
+// opens the database in WAL mode and applies any pending migrations.
+func Open(dataDir string) (*DB, error) {
+	db, err := OpenNoMigrate(dataDir)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Migrate(context.Background()); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
+// OpenNoMigrate is like Open but leaves the schema untouched (used by doctor).
+func OpenNoMigrate(dataDir string) (*DB, error) {
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		return nil, fmt.Errorf("cannot create the data directory %s: %v. Check that the parent folder is writable, or pass --data-dir", dataDir, err)
+	}
+	path := filepath.Join(dataDir, DBFileName)
+	// Create the file ourselves with 0600 so SQLite's WAL/SHM files inherit it.
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open the database file %s: %v. Check its permissions", path, err)
+	}
+	_ = f.Close()
+
+	dsn := path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
+	sdb, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open the database %s: %v", path, err)
+	}
+	if err := sdb.Ping(); err != nil {
+		_ = sdb.Close()
+		return nil, fmt.Errorf("the database %s could not be opened: %v. If it is damaged, move it aside and Trove will create a new one", path, err)
+	}
+	return &DB{DB: sdb, path: path}, nil
+}
+
+type migration struct {
+	version int
+	name    string
+	sql     string
+}
+
+func loadMigrations() ([]migration, error) {
+	entries, err := fs.ReadDir(migrationFS, "migrations")
+	if err != nil {
+		return nil, err
+	}
+	var ms []migration
+	for _, e := range entries {
+		name := e.Name()
+		prefix, _, ok := strings.Cut(name, "_")
+		v, err := strconv.Atoi(prefix)
+		if !ok || err != nil {
+			return nil, fmt.Errorf("migration %q must be named NNNN_description.sql", name)
+		}
+		b, err := migrationFS.ReadFile("migrations/" + name)
+		if err != nil {
+			return nil, err
+		}
+		ms = append(ms, migration{v, name, string(b)})
+	}
+	sort.Slice(ms, func(i, j int) bool { return ms[i].version < ms[j].version })
+	for i := 1; i < len(ms); i++ {
+		if ms[i].version == ms[i-1].version {
+			return nil, fmt.Errorf("duplicate migration version %d", ms[i].version)
+		}
+	}
+	return ms, nil
+}
+
+// LatestVersion is the newest schema version this binary knows.
+func LatestVersion() (int, error) {
+	ms, err := loadMigrations()
+	if err != nil || len(ms) == 0 {
+		return 0, err
+	}
+	return ms[len(ms)-1].version, nil
+}
+
+// CurrentVersion is the schema version applied to this database (0 if none).
+func (d *DB) CurrentVersion(ctx context.Context) (int, error) {
+	var n int
+	err := d.QueryRowContext(ctx, `SELECT COALESCE(MAX(version), 0) FROM schema_migrations`).Scan(&n)
+	if err != nil {
+		if strings.Contains(err.Error(), "no such table") {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return n, nil
+}
+
+// Migrate applies pending migrations, each in its own transaction. Running it
+// again is a no-op. A database newer than this binary is refused.
+func (d *DB) Migrate(ctx context.Context) error {
+	ms, err := loadMigrations()
+	if err != nil {
+		return err
+	}
+	if _, err := d.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
+		version INTEGER PRIMARY KEY, applied_at INTEGER NOT NULL)`); err != nil {
+		return fmt.Errorf("cannot prepare migrations: %v", err)
+	}
+	cur, err := d.CurrentVersion(ctx)
+	if err != nil {
+		return err
+	}
+	if len(ms) > 0 && cur > ms[len(ms)-1].version {
+		return fmt.Errorf("the database is at schema version %d but this Trove only knows up to %d. Upgrade Trove, or use a different --data-dir", cur, ms[len(ms)-1].version)
+	}
+	for _, m := range ms {
+		if m.version <= cur {
+			continue
+		}
+		tx, err := d.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, m.sql); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("migration %s failed: %v. The database was left unchanged; please report this", m.name, err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO schema_migrations(version, applied_at) VALUES(?, ?)`, m.version, time.Now().UnixMilli()); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// PermissionProblems reports a data dir or database file that is more open
+// than 0700 / 0600. It returns nothing on Windows, where mode bits are not meaningful.
+func PermissionProblems(dataDir string) []string {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	var out []string
+	check := func(path string, want fs.FileMode) {
+		fi, err := os.Stat(path)
+		if err != nil {
+			return
+		}
+		if got := fi.Mode().Perm(); got&^want != 0 {
+			out = append(out, fmt.Sprintf("%s has permissions %04o; run: chmod %04o %s", path, got, want, path))
+		}
+	}
+	check(dataDir, 0o700)
+	for _, f := range []string{DBFileName, DBFileName + "-wal", DBFileName + "-shm", "config.toml"} {
+		check(filepath.Join(dataDir, f), 0o600)
+	}
+	return out
+}
+
+// Purge deletes requests and finished sessions older than days, relative to now.
+// It returns the number of request rows removed.
+func (d *DB) Purge(ctx context.Context, days int, now time.Time) (int64, error) {
+	if days < 1 {
+		return 0, errors.New("retention days must be at least 1")
+	}
+	cutoff := now.AddDate(0, 0, -days).UnixMilli()
+	tx, err := d.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	res, err := tx.ExecContext(ctx, `DELETE FROM requests WHERE ts < ?`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE COALESCE(ended_at, started_at) < ?`, cutoff); err != nil {
+		return 0, err
+	}
+	return n, tx.Commit()
+}
+
+// RunRetention purges once immediately and then every interval until ctx ends.
+// days is read on each run so config changes apply. Errors go to onErr (may be nil).
+func (d *DB) RunRetention(ctx context.Context, days func() int, interval time.Duration, onErr func(error)) {
+	run := func() {
+		if _, err := d.Purge(ctx, days(), time.Now()); err != nil && onErr != nil && ctx.Err() == nil {
+			onErr(err)
+		}
+	}
+	run()
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			run()
+		}
+	}
+}
