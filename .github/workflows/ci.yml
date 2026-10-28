@@ -18,7 +18,10 @@ jobs:
           go-version: stable
       - uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.13
+          version: v2.15.0
+          # Build the linter with the runner's Go. Prebuilt binaries lag the newest
+          # stable Go and fail with "export data version ... greater than maximum".
+          install-mode: goinstall
 
   test:
     strategy:
