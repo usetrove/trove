@@ -72,7 +72,7 @@ func TestVersion(t *testing.T) {
 
 func TestStubsPrintNotImplemented(t *testing.T) {
 	cmds := [][]string{
-		{"fix"}, {"config", "get"}, {"config", "get", "gateway.port"},
+		{"config", "get"}, {"config", "get", "gateway.port"},
 		{"config", "set", "gateway.port", "9000"}, {"uninstall"},
 	}
 	for _, c := range cmds {

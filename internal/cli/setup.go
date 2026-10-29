@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/fixer"
 	"github.com/usetrove/trove/internal/setup"
 )
 
@@ -295,18 +296,26 @@ func turnOffSteps() []string {
 }
 
 func newUndo(a *App) *cobra.Command {
-	return &cobra.Command{
-		Use:   "undo",
-		Short: "Reverse everything `trove setup` changed",
-		Args:  cobra.NoArgs,
-		RunE: func(*cobra.Command, []string) error {
+	var all bool
+	c := &cobra.Command{
+		Use:   "undo [id...]",
+		Short: "Reverse changes made by `trove setup` and `trove fix`",
+		Long: "With one or more ids (a fix id from `trove fix`, or a change id), reverses just those changes.\n" +
+			"With no id, or with --all, reverses everything Trove changed, newest first. Files you have not edited since are restored byte for byte.",
+		RunE: func(_ *cobra.Command, ids []string) error {
+			if all && len(ids) > 0 {
+				return errors.New("give either --all or specific ids, not both")
+			}
 			dir, err := a.ResolveDataDir()
 			if err != nil {
 				return err
 			}
-			res, err := setup.Undo(dir)
+			res, err := setup.UndoSelected(dir, ids)
 			if err != nil {
 				return err
+			}
+			if err := fixer.MarkReverted(dir, res, time.Now()); err != nil {
+				fmt.Fprintf(a.Err, "Note: the files were restored, but Trove could not update its record of the fixes (%v).\n", err)
 			}
 			if len(res) == 0 {
 				return a.emit(map[string]any{"undone": []setup.UndoResult{}}, "Nothing to undo: Trove has not changed any agent settings.")
@@ -315,8 +324,12 @@ func newUndo(a *App) *cobra.Command {
 			for _, r := range res {
 				fmt.Fprintf(&b, "%s: %s (%s)\n", r.Agent, r.Detail, r.Path)
 			}
-			b.WriteString("Your agents talk to their providers directly again. Stop the gateway with `trove gateway stop` if it is running.")
-			return a.emit(map[string]any{"undone": res}, b.String())
+			if len(ids) == 0 {
+				b.WriteString("Your agents talk to their providers directly again. Stop the gateway with `trove gateway stop` if it is running.")
+			}
+			return a.emit(map[string]any{"undone": res}, strings.TrimRight(b.String(), "\n"))
 		},
 	}
+	c.Flags().BoolVar(&all, "all", false, "reverse everything (the default when no id is given)")
+	return c
 }
