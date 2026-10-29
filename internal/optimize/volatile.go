@@ -211,3 +211,11 @@ func (VolatilePrefixMover) Transform(ctx context.Context, r *Request) (*Request,
 	}
 	return out, Report{}
 }
+
+// IsVolatileLine reports whether a line looks like content that changes between
+// sessions (see isVolatileLine). It is exported for `trove fix`.
+func IsVolatileLine(l string) bool { return isVolatileLine(l) }
+
+// HasVolatilePhrase reports whether a line says it holds the current date or
+// time ("today's date", "current time"). It is exported for `trove fix`.
+func HasVolatilePhrase(l string) bool { return hasVolatilePhrase(l) }

@@ -72,3 +72,17 @@ enabled = true
 # How you pay for the agent: "api_key" or "subscription". Leave empty to let Trove
 # estimate it from your settings and environment (it never reads credentials).
 plan = ""
+
+[fixer]
+# "trove fix" proposes edits to your agent's config files. Nothing changes until
+# you approve a fix, every changed file is backed up, and "trove undo" reverses it.
+# How many recent sessions in a project Trove must have seen before it calls an
+# MCP server unused there (3 to 1000), and how many days back to look (1 to 365).
+min_sessions = 5
+lookback_days = 30
+# Context files (CLAUDE.md, AGENTS.md) larger than this many estimated tokens are
+# checked for sections that can be removed (100 to 100000).
+context_min_tokens = 1500
+# Fixes are not applied while an agent session was active this recently (minutes,
+# 1 to 1440); they are queued and applied when the agent is idle.
+activity_minutes = 30
