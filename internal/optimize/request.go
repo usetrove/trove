@@ -46,6 +46,14 @@ type Block struct {
 	TextOnly bool
 }
 
+// SystemBlock is one element of an array-form system prompt.
+type SystemBlock struct {
+	Span Span
+	Type string
+	// Text is the JSON string value of a text block (zero otherwise).
+	Text Span
+}
+
 // Message is one entry of the messages array.
 type Message struct {
 	Span   Span
@@ -56,11 +64,15 @@ type Message struct {
 // Request is a parsed Anthropic Messages request. Raw is never modified; Apply
 // returns a new Request.
 type Request struct {
-	Raw      []byte
-	Model    string
-	System   Span // zero if absent
-	Tools    Span // zero if absent
-	Messages []Message
+	Raw    []byte
+	Model  string
+	System Span // zero if absent
+	Tools  Span // zero if absent
+	// SystemBlocks is set when system is an array; a string system leaves it nil.
+	SystemBlocks []SystemBlock
+	// ToolSpans are the elements of the tools array.
+	ToolSpans []Span
+	Messages  []Message
 	// Root is the span of the top-level object, [S, E) with E one past '}'.
 	Root Span
 	// RootClose is the offset of the closing '}' of the root object.
@@ -112,6 +124,41 @@ func ParseRequest(body []byte) (*Request, error) {
 		return nil, err
 	}
 	r.RootEmpty = n == 0
+	if r.System.E != 0 && body[r.System.S] == '[' {
+		err = eachElem(body, r.System, func(sp Span) error {
+			blk := SystemBlock{Span: sp}
+			if body[sp.S] == '{' {
+				if err := eachField(body, sp, func(key []byte, val Span) error {
+					switch string(key) {
+					case "type":
+						if body[val.S] == '"' {
+							blk.Type, _ = decodeString(body[val.S:val.E])
+						}
+					case "text":
+						if body[val.S] == '"' {
+							blk.Text = val
+						}
+					}
+					return nil
+				}); err != nil {
+					return err
+				}
+			}
+			r.SystemBlocks = append(r.SystemBlocks, blk)
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	if r.Tools.E != 0 && body[r.Tools.S] == '[' {
+		if err = eachElem(body, r.Tools, func(sp Span) error {
+			r.ToolSpans = append(r.ToolSpans, sp)
+			return nil
+		}); err != nil {
+			return nil, err
+		}
+	}
 	if msgs.E == 0 || body[msgs.S] != '[' {
 		return r, nil // no messages array: nothing for message optimizers to do
 	}
