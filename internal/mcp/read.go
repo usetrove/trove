@@ -23,10 +23,10 @@ const (
 
 // ReadArgs are the trove_read inputs.
 type ReadArgs struct {
-	Path   string `json:"path" jsonschema:"file path relative to the project"`
-	Symbol string `json:"symbol,omitempty" jsonschema:"function or type name"`
-	Start  int    `json:"start,omitempty" jsonschema:"first line (1-based)"`
-	End    int    `json:"end,omitempty" jsonschema:"last line"`
+	Path   string `json:"path"`
+	Symbol string `json:"symbol,omitempty"`
+	Start  int    `json:"start,omitempty"`
+	End    int    `json:"end,omitempty"`
 }
 
 // Read implements trove_read. It only ever opens files inside the project.

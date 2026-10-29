@@ -86,3 +86,11 @@ context_min_tokens = 1500
 # Fixes are not applied while an agent session was active this recently (minutes,
 # 1 to 1440); they are queued and applied when the agent is idle.
 activity_minutes = 30
+
+[recovery]
+# The MCP tools keep the full text of any output they shorten here, in
+# ~/.trove/recovery (owner-only files), so nothing is ever lost.
+# Total size limit in MB (1 to 10000); the oldest outputs are removed first.
+max_mb = 200
+# Days an output is kept (1 to 365).
+ttl_days = 7

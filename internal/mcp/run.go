@@ -43,7 +43,7 @@ type Blob interface {
 
 // RunArgs are the trove_run inputs.
 type RunArgs struct {
-	Name string `json:"name" jsonschema:"allowlisted command, e.g. test"`
+	Name string `json:"name"`
 }
 
 // Command is one entry in .trove/commands.toml. Run is an argument list that is

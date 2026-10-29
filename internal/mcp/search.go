@@ -34,8 +34,8 @@ var skipDirs = map[string]bool{
 
 // SearchArgs are the trove_search inputs.
 type SearchArgs struct {
-	Query string `json:"query" jsonschema:"text to find (case-insensitive)"`
-	Glob  string `json:"glob,omitempty" jsonschema:"limit to paths, e.g. **/*.go"`
+	Query string `json:"query"`
+	Glob  string `json:"glob,omitempty"`
 }
 
 type hit struct {

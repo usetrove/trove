@@ -36,6 +36,7 @@ type Config struct {
 	Notifications Notifications     `toml:"notifications"`
 	History       History           `toml:"history"`
 	Fixer         Fixer             `toml:"fixer"`
+	Recovery      Recovery          `toml:"recovery"`
 	RetentionDays int               `toml:"retention_days"`
 }
 
@@ -153,6 +154,7 @@ func Default() Config {
 		RetentionDays: 90,
 		History:       History{Enabled: true},
 		Fixer:         Fixer{MinSessions: 5, LookbackDays: 30, ContextMinTokens: 1500, ActivityMinutes: 30},
+		Recovery:      Recovery{MaxMB: 200, TTLDays: 7},
 	}
 }
 
@@ -253,6 +255,14 @@ context_min_tokens = 1500
 # Fixes are not applied while an agent session was active this recently (minutes,
 # 1 to 1440); they are queued and applied when the agent is idle.
 activity_minutes = 30
+
+[recovery]
+# The MCP tools keep the full text of any output they shorten here, in
+# ~/.trove/recovery (owner-only files), so nothing is ever lost.
+# Total size limit in MB (1 to 10000); the oldest outputs are removed first.
+max_mb = 200
+# Days an output is kept (1 to 365).
+ttl_days = 7
 `
 
 var optimizerName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
@@ -311,6 +321,12 @@ func (c Config) Validate() error {
 	}
 	if f.ActivityMinutes < 1 || f.ActivityMinutes > 1440 {
 		add("fixer.activity_minutes is %d; use a number of minutes from 1 to 1440 (default 30).", f.ActivityMinutes)
+	}
+	if c.Recovery.MaxMB < 1 || c.Recovery.MaxMB > 10000 {
+		add("recovery.max_mb is %d; use a size in MB from 1 to 10000 (default 200).", c.Recovery.MaxMB)
+	}
+	if c.Recovery.TTLDays < 1 || c.Recovery.TTLDays > 365 {
+		add("recovery.ttl_days is %d; use a number of days from 1 to 365 (default 7).", c.Recovery.TTLDays)
 	}
 	switch c.History.Plan {
 	case "", "api_key", "subscription":
@@ -468,4 +484,13 @@ func applyEnv(c *Config, getenv func(string) string) error {
 		c.Budget.CapUSD = f
 	}
 	return nil
+}
+
+// Recovery holds the limits of the local recovery store, where the full text of
+// shortened tool output is kept so the agent can fetch it back (see docs/mcp.md).
+type Recovery struct {
+	// MaxMB caps the store's total size. The oldest outputs go first.
+	MaxMB int `toml:"max_mb"`
+	// TTLDays is how long an output is kept.
+	TTLDays int `toml:"ttl_days"`
 }
