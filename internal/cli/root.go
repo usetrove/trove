@@ -67,6 +67,7 @@ func NewRoot(a *App) *cobra.Command {
 		cfg,
 		newDoctor(a),
 		newPricing(a),
+		newOptimize(a),
 		newVersion(a),
 		stubCmd(a, "uninstall", "Remove Trove's changes and data", "uninstall"),
 	)
