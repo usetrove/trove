@@ -88,6 +88,10 @@ func TestOptimizerOnForwardsTheOptimizedBodyAndRecordsIt(t *testing.T) {
 			t.Errorf("prompt text reached %s: %s", name, col)
 		}
 	}
+	// Outcome signals are recorded as counts only.
+	if !strings.Contains(string(row.Signals), `"tool_calls":1`) || strings.Contains(string(row.Signals), "SENTINEL") || strings.Contains(string(row.Signals), "Bash") {
+		t.Errorf("signals = %s", row.Signals)
+	}
 	assertNoSecrets(t, g)
 }
 

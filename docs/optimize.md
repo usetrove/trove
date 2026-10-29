@@ -118,6 +118,9 @@ Labels come from `gateway/agent`. `claude_code` and `codex` cannot be listed.
   every request. Switching off mid-session changes what the provider sees, so
   expect one cache re-write; `trove optimize resume` undoes it.
 
+Baselines, measured savings and automatic rollback to shadow are described in
+[measurement.md](measurement.md). While the baseline runs, `on` is held at shadow.
+
 ## What is recorded
 
 Per request, in the existing `requests` row (metadata only): `optimizations_applied`

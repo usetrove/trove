@@ -1,0 +1,210 @@
+{
+  "period": {
+    "name": "month",
+    "label": "this month (since Oct 1)",
+    "from": "2026-10-01",
+    "to": "2026-10-29"
+  },
+  "state": "ok",
+  "requests": 30,
+  "headline": {
+    "spend_usd": {
+      "value": 73.5,
+      "label": "estimated",
+      "n": 30
+    },
+    "tokens": {
+      "value": 1560000,
+      "label": "measured",
+      "n": 30
+    },
+    "waste_usd": {
+      "value": 5.85,
+      "label": "estimated",
+      "n": 18
+    },
+    "waste_percent": {
+      "value": 7.959183673469388,
+      "label": "estimated",
+      "n": 18
+    },
+    "savings_usd": {
+      "value": 0.5,
+      "label": "estimated",
+      "n": 10
+    },
+    "measured_note": "not enough data yet to compare sessions with and without an optimizer. The dollar savings above are estimates."
+  },
+  "spend": {
+    "by_agent": [
+      {
+        "key": "claude_code",
+        "requests": 20,
+        "input_uncached_tokens": 200000,
+        "cache_write_tokens": 0,
+        "cache_read_tokens": 800000,
+        "output_tokens": 40000,
+        "cost_usd": {
+          "value": 50,
+          "label": "estimated",
+          "n": 20
+        }
+      },
+      {
+        "key": "codex_cli",
+        "requests": 10,
+        "input_uncached_tokens": 100000,
+        "cache_write_tokens": 0,
+        "cache_read_tokens": 400000,
+        "output_tokens": 20000,
+        "cost_usd": {
+          "value": 23.5,
+          "label": "estimated",
+          "n": 10
+        }
+      }
+    ],
+    "by_model": [
+      {
+        "key": "claude-a",
+        "requests": 10,
+        "input_uncached_tokens": 100000,
+        "cache_write_tokens": 0,
+        "cache_read_tokens": 400000,
+        "output_tokens": 20000,
+        "cost_usd": {
+          "value": 25,
+          "label": "estimated",
+          "n": 10
+        }
+      },
+      {
+        "key": "claude-b",
+        "requests": 10,
+        "input_uncached_tokens": 100000,
+        "cache_write_tokens": 0,
+        "cache_read_tokens": 400000,
+        "output_tokens": 20000,
+        "cost_usd": {
+          "value": 25,
+          "label": "estimated",
+          "n": 10
+        }
+      },
+      {
+        "key": "gpt-x",
+        "requests": 10,
+        "input_uncached_tokens": 100000,
+        "cache_write_tokens": 0,
+        "cache_read_tokens": 400000,
+        "output_tokens": 20000,
+        "cost_usd": {
+          "value": 23.5,
+          "label": "estimated",
+          "n": 10
+        }
+      }
+    ]
+  },
+  "leaks": [
+    {
+      "category": "duplicate_tool_result",
+      "title": "Repeated tool results",
+      "usd": {
+        "value": 4.5,
+        "label": "estimated",
+        "n": 15
+      },
+      "tokens": {
+        "value": 60000,
+        "label": "estimated",
+        "n": 15
+      },
+      "command": "duplicate_result_collapser = \"on\"",
+      "advice": "Add this line under [optimizers] in config.toml. It applies from your next session."
+    },
+    {
+      "category": "noisy_output",
+      "title": "Noisy tool output",
+      "usd": {
+        "value": 3,
+        "label": "estimated",
+        "n": 15
+      },
+      "tokens": {
+        "value": 90000,
+        "label": "estimated",
+        "n": 15
+      },
+      "command": "trove optimize status",
+      "advice": "noise_normalizer is on. See what it saved under Optimizers."
+    },
+    {
+      "category": "cache_miss",
+      "title": "Prompt cache misses",
+      "usd": {
+        "value": 1.35,
+        "label": "estimated",
+        "n": 3
+      },
+      "tokens": {
+        "value": 27000,
+        "label": "estimated",
+        "n": 3
+      },
+      "advice": "Cache misses happen when the start of a request changes between turns. Avoid editing early context mid-session."
+    }
+  ],
+  "optimizers": {
+    "kill_switch": false,
+    "rows": [
+      {
+        "name": "volatile_prefix_mover",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "noise_normalizer",
+        "configured": "on",
+        "effective": "shadow",
+        "rolled_back": "repeated tool calls rose 45% against the comparison sessions",
+        "saved_usd": {
+          "value": 0.5,
+          "label": "estimated",
+          "n": 10
+        }
+      },
+      {
+        "name": "output_trimmer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "duplicate_result_collapser",
+        "configured": "off",
+        "effective": "off",
+        "would_save_usd": {
+          "value": 3.6,
+          "label": "estimated",
+          "n": 12
+        },
+        "enable": "duplicate_result_collapser = \"on\""
+      },
+      {
+        "name": "cache_breakpoints",
+        "configured": "off",
+        "effective": "off"
+      }
+    ],
+    "guardrail_events": [
+      {
+        "when": "2026-10-29",
+        "optimizer": "noise_normalizer",
+        "rule": "retries",
+        "reason": "Trove set noise_normalizer back to shadow because repeated tool calls rose 45% against the comparison sessions. Review it with `trove report`.",
+        "cleared": false
+      }
+    ]
+  },
+  "recommendations": []
+}

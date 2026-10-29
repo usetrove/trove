@@ -1,0 +1,113 @@
+{
+  "period": {
+    "name": "month",
+    "label": "this month (since Oct 1)",
+    "from": "2026-10-01",
+    "to": "2026-10-29"
+  },
+  "state": "small",
+  "requests": 5,
+  "headline": {
+    "spend_usd": {
+      "value": 6.25,
+      "label": "estimated",
+      "n": 5
+    },
+    "tokens": {
+      "value": 260000,
+      "label": "measured",
+      "n": 5
+    },
+    "waste_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "waste_percent": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "savings_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "measured_note": "not enough data yet to compare sessions with and without an optimizer. The dollar savings above are estimates."
+  },
+  "spend": {
+    "by_agent": [
+      {
+        "key": "claude_code",
+        "requests": 5,
+        "input_uncached_tokens": 50000,
+        "cache_write_tokens": 0,
+        "cache_read_tokens": 200000,
+        "output_tokens": 10000,
+        "cost_usd": {
+          "value": 6.25,
+          "label": "estimated",
+          "n": 5
+        }
+      }
+    ],
+    "by_model": [
+      {
+        "key": "claude-a",
+        "requests": 5,
+        "input_uncached_tokens": 50000,
+        "cache_write_tokens": 0,
+        "cache_read_tokens": 200000,
+        "output_tokens": 10000,
+        "cost_usd": {
+          "value": 6.25,
+          "label": "estimated",
+          "n": 5
+        }
+      }
+    ]
+  },
+  "leaks": null,
+  "optimizers": {
+    "baseline": {
+      "active": true,
+      "days_elapsed": 2,
+      "days_needed": 7,
+      "sessions_seen": 5,
+      "sessions_needed": 20
+    },
+    "kill_switch": false,
+    "rows": [
+      {
+        "name": "volatile_prefix_mover",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "noise_normalizer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "output_trimmer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "duplicate_result_collapser",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "cache_breakpoints",
+        "configured": "off",
+        "effective": "off"
+      }
+    ],
+    "guardrail_events": []
+  },
+  "recommendations": [],
+  "notes": [
+    "Only 5 requests so far, so these numbers are rough. They firm up as you use your agent."
+  ]
+}

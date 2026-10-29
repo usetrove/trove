@@ -33,6 +33,9 @@ type App struct {
 	// Executable returns the path of the running trove binary.
 	Executable func() (string, error)
 
+	inReader *bufio.Reader // wraps inSource on first use
+	inSource io.Reader
+
 	// Global flags.
 	JSON    bool
 	NoColor bool
@@ -100,7 +103,10 @@ func (a *App) confirm(question string) bool {
 		return false
 	}
 	_, _ = fmt.Fprintf(a.Out, "%s [y/N] ", question)
-	line, _ := bufio.NewReader(a.In).ReadString('\n')
+	if a.inReader == nil || a.inSource != a.In { // one reader per input, so piped answers are not lost
+		a.inReader, a.inSource = bufio.NewReader(a.In), a.In
+	}
+	line, _ := a.inReader.ReadString('\n')
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
 		return true

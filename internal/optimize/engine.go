@@ -29,6 +29,8 @@ type Options struct {
 	BytesPerToken float64
 	// Pipeline overrides the optimizer list; tests use it. Default: Pipeline().
 	Pipeline []Optimizer
+	// Gate lowers states for new sessions (see StateGate); nil changes nothing.
+	Gate StateGate
 }
 
 // Engine runs the optimizer pipeline over requests. It is safe for concurrent use.
@@ -42,13 +44,14 @@ type Engine struct {
 	log      *slog.Logger
 	bpt      float64
 	budget   time.Duration
+	gate     StateGate
 }
 
 // New returns an Engine.
 func New(o Options) *Engine {
 	e := &Engine{
 		cfg: o.Config, pipeline: o.Pipeline, pins: newPinBook(o.Pins),
-		killFile: o.KillFile, getenv: o.Getenv, now: o.Now, log: o.Log, bpt: o.BytesPerToken,
+		killFile: o.KillFile, getenv: o.Getenv, now: o.Now, log: o.Log, bpt: o.BytesPerToken, gate: o.Gate,
 	}
 	if e.pipeline == nil {
 		e.pipeline = Pipeline()
@@ -153,7 +156,7 @@ func (e *Engine) Run(ctx context.Context, in Input) (res Result) {
 		return res
 	}
 
-	pin, err := e.pins.get(ctx, in.SessionKey, e.cfg, e.bpt, e.now())
+	pin, err := e.pins.get(ctx, in.SessionKey, e.cfg, e.bpt, e.now(), e.gate)
 	if err != nil {
 		// The pin still works from memory; only restart-survival is at risk.
 		e.log.Warn("could not save the session's optimizer settings; continuing with them in memory", "err", err)

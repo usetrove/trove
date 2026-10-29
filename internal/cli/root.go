@@ -34,6 +34,11 @@ func Execute(a *App, args []string) int {
 
 // NewRoot builds the command tree.
 func NewRoot(a *App) *cobra.Command {
+	// On Windows cobra checks whether the program was started from Explorer, which
+	// walks the process list and costs about 30 ms on every command. That would
+	// blow the status line's 50 ms budget, and Trove is a terminal tool.
+	cobra.MousetrapHelpText = ""
+	var rootPeriod periodFlags
 	root := &cobra.Command{
 		Use:           "trove",
 		Short:         "The efficiency layer for AI coding agents",
@@ -41,8 +46,9 @@ func NewRoot(a *App) *cobra.Command {
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE:          stub(a, "report"),
+		RunE:          func(*cobra.Command, []string) error { return runReport(a, rootPeriod) },
 	}
+	rootPeriod.add(root)
 	f := root.PersistentFlags()
 	f.BoolVar(&a.JSON, "json", false, "output machine-readable JSON")
 	f.BoolVar(&a.NoColor, "no-color", false, "disable colored output (NO_COLOR is also respected)")
@@ -58,12 +64,13 @@ func NewRoot(a *App) *cobra.Command {
 	root.AddCommand(
 		newSetup(a),
 		newGateway(a),
-		stubCmd(a, "report", "Show token usage, waste and savings", "report"),
-		stubCmd(a, "budget", "Show or set a spending budget", "budget"),
-		stubCmd(a, "status-line", "Print a one-line status for agent status bars", "status-line"),
+		newReport(a),
+		newBudget(a),
+		newReceipts(a),
+		newStatusLine(a),
 		stubCmd(a, "fix", "Apply safe configuration fixes", "fix"),
 		newUndo(a),
-		stubCmd(a, "share", "Create a shareable, redacted summary", "share"),
+		newShare(a),
 		cfg,
 		newDoctor(a),
 		newPricing(a),

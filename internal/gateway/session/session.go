@@ -27,11 +27,17 @@ import (
 	"time"
 )
 
+// ClaudeCodeKey is the base key for a Claude Code session id. The status line
+// uses it to find the session it runs in without storing the raw id.
+func ClaudeCodeKey(id string) string {
+	sum := sha256.Sum256([]byte("claude-code\x00" + id))
+	return "c-" + hex.EncodeToString(sum[:])[:24]
+}
+
 // DeriveKey returns the base key for a request, or "" if none can be derived.
 func DeriveKey(h http.Header, body []byte) string {
 	if id := h.Get("X-Claude-Code-Session-Id"); id != "" {
-		sum := sha256.Sum256([]byte("claude-code\x00" + id))
-		return "c-" + hex.EncodeToString(sum[:])[:24]
+		return ClaudeCodeKey(id)
 	}
 	if len(body) == 0 {
 		return ""

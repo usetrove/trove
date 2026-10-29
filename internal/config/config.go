@@ -32,7 +32,42 @@ type Config struct {
 	Optimizers    map[string]string `toml:"optimizers"`
 	Optimize      Optimize          `toml:"optimize"`
 	Budget        Budget            `toml:"budget"`
+	Measure       Measure           `toml:"measure"`
+	Notifications Notifications     `toml:"notifications"`
 	RetentionDays int               `toml:"retention_days"`
+}
+
+// Notifications holds the optional desktop notification settings.
+type Notifications struct {
+	// Desktop shows a desktop notification with the receipt when a session ends.
+	// Off by default.
+	Desktop bool `toml:"desktop"`
+}
+
+// Measure holds the settings for baselines, interleaving and guardrails
+// (see docs/measurement.md).
+type Measure struct {
+	// BaselineDays and BaselineSessions: until BOTH have passed since install,
+	// every optimizer runs in shadow mode only.
+	BaselineDays     int `toml:"baseline_days"`
+	BaselineSessions int `toml:"baseline_sessions"`
+	// Interleave alternates whole sessions between on and off for a cleaner comparison.
+	Interleave bool `toml:"interleave"`
+	// GitSignals counts commits made during or shortly after a session (read-only).
+	GitSignals bool `toml:"git_signals"`
+	// GitRepo is the local repository to count commits in. The gateway cannot
+	// know which repo an agent works in (Trove never stores file paths), so the
+	// user names it here.
+	GitRepo string `toml:"git_repo"`
+	// MinSessions is the smallest sample, per side, before any guardrail may fire
+	// or any comparison is reported as a conclusion.
+	MinSessions int `toml:"min_sessions"`
+	// RetryIncreasePercent triggers rollback when repeated identical tool calls
+	// per session are this much higher than the comparison.
+	RetryIncreasePercent int `toml:"retry_increase_percent"`
+	// RefetchRatePercent triggers rollback when this percent of sessions that an
+	// optimizer acted on re-fetch what it removed.
+	RefetchRatePercent int `toml:"refetch_rate_percent"`
 }
 
 // Gateway holds local gateway settings. It always binds to 127.0.0.1.
@@ -79,11 +114,15 @@ type Budget struct {
 // Default returns the built-in defaults.
 func Default() Config {
 	return Config{
-		Gateway:       Gateway{Port: 8787, IdleMinutes: 30},
-		Upstreams:     Upstreams{Anthropic: "https://api.anthropic.com", OpenAI: "https://api.openai.com"},
-		Optimizers:    map[string]string{},
-		Optimize:      Optimize{CustomAgents: []string{}, BudgetMS: 25},
-		Budget:        Budget{Period: "monthly", CapUSD: 0, WarnAtPercent: 80},
+		Gateway:    Gateway{Port: 8787, IdleMinutes: 30},
+		Upstreams:  Upstreams{Anthropic: "https://api.anthropic.com", OpenAI: "https://api.openai.com"},
+		Optimizers: map[string]string{},
+		Optimize:   Optimize{CustomAgents: []string{}, BudgetMS: 25},
+		Budget:     Budget{Period: "monthly", CapUSD: 0, WarnAtPercent: 80},
+		Measure: Measure{
+			BaselineDays: 7, BaselineSessions: 20, MinSessions: 20,
+			RetryIncreasePercent: 30, RefetchRatePercent: 25,
+		},
 		RetentionDays: 90,
 	}
 }
@@ -136,6 +175,32 @@ period = "monthly"
 cap_usd = 0.0
 # Warn when this percent of the cap is used (1 to 100).
 warn_at_percent = 80
+
+[measure]
+# For the first baseline_days days AND baseline_sessions sessions after install,
+# every optimizer runs in shadow mode only (estimates, nothing changed).
+baseline_days = 7
+baseline_sessions = 20
+# Alternate whole sessions between on and off for a cleaner comparison. Off by
+# default: the off sessions forgo the savings. Sessions are never switched mid-way.
+interleave = false
+# Count commits made during or shortly after a session, read-only, from the local
+# git repo. Only counts are stored, never messages, file names or diffs.
+git_signals = false
+# The repository to count commits in when git_signals is on (a folder path).
+git_repo = ""
+# Fewest sessions on each side before a guardrail may fire or a comparison is
+# called a conclusion. Below this Trove says "not enough data yet".
+min_sessions = 20
+# Roll an optimizer back to shadow when repeated identical tool calls per session
+# rise by this percent (1 to 1000), or when this percent of sessions it acted on
+# re-fetch what it removed (1 to 100).
+retry_increase_percent = 30
+refetch_rate_percent = 25
+
+[notifications]
+# Show a desktop notification with the receipt when a session ends.
+desktop = false
 `
 
 var optimizerName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
@@ -192,6 +257,25 @@ func (c Config) Validate() error {
 	}
 	if c.Budget.WarnAtPercent < 1 || c.Budget.WarnAtPercent > 100 {
 		add("budget.warn_at_percent is %d; use a number from 1 to 100.", c.Budget.WarnAtPercent)
+	}
+	m := c.Measure
+	if m.BaselineDays < 0 || m.BaselineDays > 365 {
+		add("measure.baseline_days is %d; use a number of days from 0 to 365 (default 7).", m.BaselineDays)
+	}
+	if m.BaselineSessions < 0 || m.BaselineSessions > 10000 {
+		add("measure.baseline_sessions is %d; use a number from 0 to 10000 (default 20).", m.BaselineSessions)
+	}
+	if m.GitSignals && m.GitRepo == "" {
+		add("measure.git_signals is on but measure.git_repo is empty; set git_repo to the folder of the repository to count commits in, or turn git_signals off.")
+	}
+	if m.MinSessions < 5 || m.MinSessions > 10000 {
+		add("measure.min_sessions is %d; use a number from 5 to 10000 (default 20). Fewer than 5 cannot support any comparison.", m.MinSessions)
+	}
+	if m.RetryIncreasePercent < 1 || m.RetryIncreasePercent > 1000 {
+		add("measure.retry_increase_percent is %d; use a number from 1 to 1000 (default 30).", m.RetryIncreasePercent)
+	}
+	if m.RefetchRatePercent < 1 || m.RefetchRatePercent > 100 {
+		add("measure.refetch_rate_percent is %d; use a number from 1 to 100 (default 25).", m.RefetchRatePercent)
 	}
 	if c.RetentionDays < 1 || c.RetentionDays > 3650 {
 		add("retention_days is %d; use a number of days from 1 to 3650.", c.RetentionDays)
@@ -299,6 +383,13 @@ func applyEnv(c *Config, getenv func(string) string) error {
 	strVar("TROVE_UPSTREAMS_ANTHROPIC", &c.Upstreams.Anthropic)
 	strVar("TROVE_UPSTREAMS_OPENAI", &c.Upstreams.OpenAI)
 	strVar("TROVE_BUDGET_PERIOD", &c.Budget.Period)
+	if v := getenv("TROVE_NOTIFICATIONS_DESKTOP"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("TROVE_NOTIFICATIONS_DESKTOP is %q; use true or false.", v)
+		}
+		c.Notifications.Desktop = b
+	}
 	if v := getenv("TROVE_BUDGET_CAP_USD"); v != "" {
 		f, err := strconv.ParseFloat(v, 64)
 		if err != nil {

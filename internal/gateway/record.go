@@ -15,6 +15,7 @@ import (
 	"github.com/usetrove/trove/internal/gateway/agent"
 	"github.com/usetrove/trove/internal/gateway/session"
 	"github.com/usetrove/trove/internal/gateway/usage"
+	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/store"
@@ -45,6 +46,12 @@ func (s *Server) record(f *flight, captured []byte, over, cleanEnd, clientGone b
 	row := s.buildRow(f, res, status, streamed, first, end)
 	if status < 400 && !clientGone {
 		s.analyze(&row, f, res)
+		if f.provider == "anthropic" && f.path == "/v1/messages" {
+			// Counts only: tool calls, errors, repeats. See internal/measure.
+			if sig, ok := measure.Extract(f.reqBody); ok {
+				row.Signals = sig.JSON()
+			}
+		}
 	}
 	if clientGone {
 		row.ErrorClass = "client_disconnected"

@@ -1,0 +1,51 @@
+Trove report: this month (since Oct 1)
+
+Headline
+  Spend        ~$73.50 (estimated at list prices, not an invoice); 1.6M tokens
+               (measured)
+  Waste found  at least ~$5.85, 8% of spend (estimated; overlapping findings
+               counted once)
+  Savings      ~$0.50 so far (estimated)
+  Measured     not enough data yet to compare sessions with and without an
+               optimizer. The dollar savings above are estimates.
+  Budget       ~$73.50 of $1,000 used (7%, estimated), 92% of the month gone.
+               Under pace.
+
+Spend by agent and model
+  Agent        Requests  Tokens (measured)  Cost (estimated)
+  claude_code        20                 1M           ~$50.00
+  codex_cli          10               520K           ~$23.50
+
+  Model     Requests  Tokens (measured)  Cost (estimated)
+  claude-a        10               520K           ~$25.00
+  claude-b        10               520K           ~$25.00
+  gpt-x           10               520K           ~$23.50
+
+Biggest leaks (estimated, overlapping, not additive)
+  1. Repeated tool results: ~$4.50 (estimated), 60K tokens (estimated)
+     Do this: duplicate_result_collapser = "on"
+     Add this line under [optimizers] in config.toml. It applies from your next
+     session.
+  2. Noisy tool output: ~$3.00 (estimated), 90K tokens (estimated)
+     Do this: trove optimize status
+     noise_normalizer is on. See what it saved under Optimizers.
+  3. Prompt cache misses: ~$1.35 (estimated), 27K tokens (estimated)
+     Cache misses happen when the start of a request changes between turns.
+     Avoid editing early context mid-session.
+
+Optimizers
+  volatile_prefix_mover: off
+  noise_normalizer: on
+    Saved ~$0.50 (estimated).
+  output_trimmer: off
+  duplicate_result_collapser: off
+    Would have saved ~$3.60 (estimated, shadow mode).
+    To turn on, add under [optimizers] in config.toml:
+    duplicate_result_collapser = "on"
+  cache_breakpoints: off
+  Guardrail events: none.
+  No regression detected locally. Trove checks retries, tool errors and
+  re-fetches; it does not prove output quality.
+
+Recommendations (suggestions only; Trove changes nothing on its own)
+  None yet. These need more recorded usage.

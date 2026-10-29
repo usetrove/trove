@@ -1,0 +1,4 @@
+Trove report: today
+
+No requests were recorded today. Try `trove report --month`, or check that
+   `trove gateway` is running.

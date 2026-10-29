@@ -1,0 +1,34 @@
+Trove report: this month (since Oct 1)
+Only 5 requests so far, so these numbers are rough. They firm up as you use your
+agent.
+
+Headline
+  Spend        ~$6.25 (estimated at list prices, not an invoice); 260K tokens
+               (measured)
+  Waste found  none yet (estimated)
+  Savings      none yet; no optimizer has been on (estimated)
+  Measured     not enough data yet to compare sessions with and without an
+               optimizer. The dollar savings above are estimates.
+
+Spend by agent and model
+  Agent        Requests  Tokens (measured)  Cost (estimated)
+  claude_code         5               260K            ~$6.25
+
+  Model     Requests  Tokens (measured)  Cost (estimated)
+  claude-a         5               260K            ~$6.25
+
+Biggest leaks (estimated, overlapping, not additive)
+  No waste found yet.
+
+Optimizers
+  Baseline in progress: day 3 of 7 and 5 of 20 sessions. Until both pass, every
+  optimizer only estimates and changes nothing.
+  volatile_prefix_mover: off
+  noise_normalizer: off
+  output_trimmer: off
+  duplicate_result_collapser: off
+  cache_breakpoints: off
+  Guardrail events: none.
+
+Recommendations (suggestions only; Trove changes nothing on its own)
+  None yet. These need more recorded usage.

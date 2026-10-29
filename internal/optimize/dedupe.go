@@ -89,10 +89,14 @@ func (DuplicateCollapser) Transform(ctx context.Context, r *Request) (*Request, 
 	return out, Report{}
 }
 
+// CollapsedPrefix starts the note that replaces a collapsed duplicate result.
+// internal/measure uses it to recognise results an optimizer removed.
+const CollapsedPrefix = "[Trove: this tool result is identical to the earlier result in "
+
 func duplicateNote(f firstSeen) string {
 	ref := "message " + strconv.Itoa(f.msg)
 	if f.id != "" {
 		ref += ", tool call " + f.id
 	}
-	return "[Trove: this tool result is identical to the earlier result in " + ref + "; it is not repeated here.]"
+	return CollapsedPrefix + ref + "; it is not repeated here.]"
 }
