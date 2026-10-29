@@ -127,6 +127,7 @@ func AppliedJSON(reports []Report, failures []Failure) []byte {
 func Pipeline() []Optimizer {
 	return []Optimizer{
 		NoiseNormalizer{},
+		DuplicateCollapser{},
 	}
 }
 
