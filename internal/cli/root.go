@@ -54,6 +54,7 @@ func NewRoot(a *App) *cobra.Command {
 	f.BoolVar(&a.NoColor, "no-color", false, "disable colored output (NO_COLOR is also respected)")
 	f.StringVar(&a.DataDir, "data-dir", "", "Trove data directory (default ~/.trove, or TROVE_DATA_DIR)")
 	f.BoolVar(&a.Verbose, "verbose", false, "print debug logs to stderr")
+	f.BoolVar(&a.NoHistory, "no-history", false, "do not read your agent's local session history for this run")
 
 	cfg := &cobra.Command{Use: "config", Short: "Read or change Trove settings", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error { return c.Help() }}
 	cfg.AddCommand(
@@ -65,6 +66,7 @@ func NewRoot(a *App) *cobra.Command {
 		newSetup(a),
 		newGateway(a),
 		newReport(a),
+		newLogs(a),
 		newBudget(a),
 		newReceipts(a),
 		newStatusLine(a),

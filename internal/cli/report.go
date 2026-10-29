@@ -88,6 +88,16 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 	if err != nil {
 		return report.Report{}, err
 	}
+	// Read the agent's own session history first, so the report works without
+	// the gateway. This fails open: a problem here never stops the report.
+	var planEvidence []string
+	if cfg.History.Enabled && !a.NoHistory {
+		res, err := scanHistory(context.Background(), a, dir, cfg, false, true)
+		if err != nil {
+			_, _ = fmt.Fprintf(a.Err, "Could not read your agent history (%v). Showing what Trove already has. Run `trove logs status` for details.\n", err)
+		}
+		planEvidence = append(append([]string{}, res.Plan.Evidence...), res.Codex.Evidence...)
+	}
 	db, err := openExisting(dir)
 	if err != nil {
 		return report.Report{}, err
@@ -101,7 +111,7 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 	if perr != nil {
 		tbl = nil // suggestions that need prices are skipped
 	}
-	r, err := report.Build(context.Background(), db, report.Inputs{Config: cfg, Now: now, Prices: tbl, KillSwitch: on}, p)
+	r, err := report.Build(context.Background(), db, report.Inputs{Config: cfg, Now: now, Prices: tbl, KillSwitch: on, HistoryPlanEvidence: planEvidence}, p)
 	if err != nil {
 		return r, fmt.Errorf("cannot read recorded usage: %v. Run `trove doctor` for details", err)
 	}

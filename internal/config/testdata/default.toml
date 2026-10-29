@@ -63,3 +63,12 @@ refetch_rate_percent = 25
 [notifications]
 # Show a desktop notification with the receipt when a session ends.
 desktop = false
+
+[history]
+# Read your agent's own session logs (Claude Code, Codex CLI) so trove can
+# report without the gateway. Read-only: Trove never edits them and stores only
+# counts, sizes and hashes, never prompts, code, paths or tool output.
+enabled = true
+# How you pay for the agent: "api_key" or "subscription". Leave empty to let Trove
+# estimate it from your settings and environment (it never reads credentials).
+plan = ""

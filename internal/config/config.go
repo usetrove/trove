@@ -34,7 +34,18 @@ type Config struct {
 	Budget        Budget            `toml:"budget"`
 	Measure       Measure           `toml:"measure"`
 	Notifications Notifications     `toml:"notifications"`
+	History       History           `toml:"history"`
 	RetentionDays int               `toml:"retention_days"`
+}
+
+// History holds the settings for reading agents' local session logs
+// (see docs/logs.md). Trove only reads them; it never changes them.
+type History struct {
+	// Enabled lets `trove` read local session logs (Claude Code, Codex CLI).
+	Enabled bool `toml:"enabled"`
+	// Plan overrides plan detection: "api_key" or "subscription". Empty detects it
+	// from settings and environment (estimated).
+	Plan string `toml:"plan"`
 }
 
 // Notifications holds the optional desktop notification settings.
@@ -124,6 +135,7 @@ func Default() Config {
 			RetryIncreasePercent: 30, RefetchRatePercent: 25,
 		},
 		RetentionDays: 90,
+		History:       History{Enabled: true},
 	}
 }
 
@@ -201,6 +213,15 @@ refetch_rate_percent = 25
 [notifications]
 # Show a desktop notification with the receipt when a session ends.
 desktop = false
+
+[history]
+# Read your agent's own session logs (Claude Code, Codex CLI) so trove can
+# report without the gateway. Read-only: Trove never edits them and stores only
+# counts, sizes and hashes, never prompts, code, paths or tool output.
+enabled = true
+# How you pay for the agent: "api_key" or "subscription". Leave empty to let Trove
+# estimate it from your settings and environment (it never reads credentials).
+plan = ""
 `
 
 var optimizerName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
@@ -246,6 +267,11 @@ func (c Config) Validate() error {
 	}
 	if c.Optimize.BudgetMS < 1 || c.Optimize.BudgetMS > 1000 {
 		add("optimize.budget_ms is %d; use a number of milliseconds from 1 to 1000 (default 25).", c.Optimize.BudgetMS)
+	}
+	switch c.History.Plan {
+	case "", "api_key", "subscription":
+	default:
+		add("history.plan is %q; use \"api_key\", \"subscription\" or leave it empty.", c.History.Plan)
 	}
 	switch c.Budget.Period {
 	case "daily", "weekly", "monthly":
