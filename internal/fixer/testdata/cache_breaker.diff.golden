@@ -1,0 +1,10 @@
+--- CLAUDE.md
++++ CLAUDE.md
+@@ -1,7 +1,5 @@
+ # Demo
+ 
+-Today's date: 2026-10-29
+-Last updated: 2026-10-28 by the build script
+ We chose Postgres on 2026-03-01 after the review.
+ 
+ ```
