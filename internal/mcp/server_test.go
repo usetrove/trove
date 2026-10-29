@@ -161,3 +161,14 @@ func TestSchemaSizeBudget(t *testing.T) {
 		t.Errorf("tool schemas are about %d tokens, over the %d budget; shorten descriptions", sz.EstimatedTokens, budget)
 	}
 }
+
+func TestSnippetStaysShort(t *testing.T) {
+	if n := SnippetTokens(); n > 100 {
+		t.Errorf("the context-file snippet is about %d tokens; keep it under 100", n)
+	}
+	for _, name := range []string{"trove_read", "trove_search", "trove_run", "trove_fetch_full"} {
+		if !strings.Contains(Snippet, name) {
+			t.Errorf("snippet should mention %s", name)
+		}
+	}
+}
