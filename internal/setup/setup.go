@@ -506,6 +506,10 @@ func undoChange(c Change, res UndoResult) (UndoResult, bool, error) {
 		next = stripMarked(cur)
 	case ClaudeStatusLine:
 		next, err = stripStatusLine(cur, c.Value)
+	case CodexMCP:
+		next = stripBetween(cur, mcpMarkerOpen, mcpMarkerClose)
+	case ProjectMCP:
+		next, err = stripMCPJSON(cur)
 	default:
 		res.Action, res.Detail = "left_alone", "unknown agent in the manifest"
 		return res, false, nil

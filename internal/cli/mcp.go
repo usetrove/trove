@@ -37,7 +37,7 @@ func newMCP(a *App) *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&rootDir, "root", "", "project folder the tools may read (default: the current folder)")
-	c.AddCommand(newMCPSchemaSize(a), newMCPSnippet(a))
+	c.AddCommand(newMCPInstall(a), newMCPUninstall(a), newMCPStatus(a), newMCPSchemaSize(a), newMCPSnippet(a))
 	return c
 }
 
@@ -99,4 +99,17 @@ func newMCPSnippet(a *App) *cobra.Command {
 			return a.emit(map[string]any{"snippet": mcp.Snippet, "estimated_tokens": mcp.SnippetTokens(), "label": "estimated"}, mcp.Snippet)
 		},
 	}
+}
+
+// openRecovery opens the recovery store with the configured limits.
+func openRecovery(a *App) (*recovery.Store, string, error) {
+	dir, cfg, err := loadConfig(a)
+	if err != nil {
+		return nil, "", err
+	}
+	st, err := recovery.Open(filepath.Join(dir, "recovery"), recovery.Options{
+		MaxBytes: int64(cfg.Recovery.MaxMB) << 20,
+		TTL:      time.Duration(cfg.Recovery.TTLDays) * 24 * time.Hour,
+	})
+	return st, dir, err
 }
