@@ -1,0 +1,57 @@
+{
+  "end": {
+    "Offset": 2263,
+    "Lines": 11,
+    "Turns": 2
+  },
+  "events": [
+    {
+      "Source": "codex",
+      "SessionKey": "o-706a88e641e396465550d0ef",
+      "RequestKey": "a53d60a7c72be0b745637793",
+      "Turn": 1,
+      "TS": 1792490404000,
+      "Model": "gpt-5",
+      "Sidechain": false,
+      "Input": 200,
+      "CacheWrite5m": 0,
+      "CacheWrite1h": 0,
+      "CacheWriteNA": 0,
+      "CacheRead": 800,
+      "Output": 50,
+      "ServiceTier": "",
+      "Tools": [
+        {
+          "Name": "shell",
+          "ResultBytes": 32,
+          "ResultHash": "236b49891f3d5f81",
+          "Error": false
+        }
+      ]
+    },
+    {
+      "Source": "codex",
+      "SessionKey": "o-706a88e641e396465550d0ef",
+      "RequestKey": "1d18ce751ef00a8342947d5f",
+      "Turn": 2,
+      "TS": 1792490408000,
+      "Model": "gpt-5",
+      "Sidechain": false,
+      "Input": 300,
+      "CacheWrite5m": 0,
+      "CacheWrite1h": 0,
+      "CacheWriteNA": 0,
+      "CacheRead": 1000,
+      "Output": 70,
+      "ServiceTier": "",
+      "Tools": null
+    }
+  ],
+  "stats": {
+    "Lines": 11,
+    "Skipped": 1,
+    "Unknown": 2,
+    "FormatVersion": "0.99.0",
+    "UnknownFormat": false
+  }
+}
