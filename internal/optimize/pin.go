@@ -102,6 +102,10 @@ func newPin(key string, cfg config.Config, bpt float64, now time.Time) Pin {
 	}
 }
 
+// EffectiveState is the state an optimizer really runs in for a configured
+// state: the same clamp the engine applies when it pins a session.
+func EffectiveState(name, state string) string { return effectiveState(name, state) }
+
 // effectiveState clamps a configured state to what is allowed. The output
 // trimmer needs the MCP fetch tool, which does not exist yet, so it can never
 // be on (config validation rejects it too; this is the second lock).
