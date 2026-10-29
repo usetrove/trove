@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/usetrove/trove/internal/mcp"
 	"github.com/usetrove/trove/internal/mcp/install"
 	"os"
 	"path/filepath"
@@ -112,7 +113,15 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 	if perr != nil {
 		tbl = nil // suggestions that need prices are skipped
 	}
-	r, err := report.Build(context.Background(), db, report.Inputs{Config: cfg, Now: now, Prices: tbl, KillSwitch: on, HistoryPlanEvidence: planEvidence, Recoverable: install.Registered(dir)}, p)
+	registered := install.Registered(dir)
+	schemaTokens := 0
+	if registered {
+		// Sized through a real in-memory MCP session; a failure only drops the figure.
+		if sz, serr := mcp.MeasureSchema(context.Background(), mcp.Options{Version: Version}); serr == nil {
+			schemaTokens = sz.EstimatedTokens
+		}
+	}
+	r, err := report.Build(context.Background(), db, report.Inputs{Config: cfg, Now: now, Prices: tbl, KillSwitch: on, HistoryPlanEvidence: planEvidence, Recoverable: registered, SchemaTokens: schemaTokens}, p)
 	if err != nil {
 		return r, fmt.Errorf("cannot read recorded usage: %v. Run `trove doctor` for details", err)
 	}

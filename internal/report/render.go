@@ -123,6 +123,13 @@ func Render(r Report, o Options) string {
 		}
 	}
 
+	if r.Tools != nil {
+		b.WriteString("\n" + heading("Trove tools (MCP)"))
+		for _, l := range toolsLines(r.Tools) {
+			b.WriteString(wrap(l, o.width(), "  ", "    ") + "\n")
+		}
+	}
+
 	b.WriteString("\n" + heading("Recommendations (suggestions only; Trove changes nothing on its own)"))
 	if len(r.Recommendations) == 0 {
 		b.WriteString("  None yet. These need more recorded usage.\n")
@@ -456,4 +463,48 @@ func fixLine(f measure.FixEffect) string {
 		m = fmt.Sprintf("%.0f%% fewer prompt tokens per request after the fix (%d sessions before, %d after)", f.Percent, f.NBefore, f.NAfter)
 	}
 	return fmt.Sprintf("Measured: %s. Estimated: %s. Note: %s.", m, est, f.Text)
+}
+
+// toolsLines describes the Trove MCP tools. Every number says whether it was
+// measured (gateway requests) or estimated (session logs, token sizes).
+func toolsLines(t *Tools) []string {
+	a := t.Adoption
+	var out []string
+	if t.Registered {
+		l := "Registered with your agent."
+		if t.SchemaTokens != nil {
+			l += fmt.Sprintf(" The tool definitions add about %s tokens to every request (estimated).", FormatTokens(t.SchemaTokens.Value))
+		}
+		out = append(out, l)
+	} else {
+		out = append(out, "Not registered now, but your session logs show the tools in use.")
+	}
+	switch {
+	case a.Rate != nil:
+		out = append(out, fmt.Sprintf("Use: Claude Code chose a Trove tool for %s of its file reads and searches (estimated from session logs; %d calls in %d session(s)).",
+			FormatPercent(a.Rate.Value), a.Rate.N, a.ClaudeSessions))
+	case t.Registered:
+		out = append(out, "Use: no Claude Code file reads or searches in this period yet. If your agent ignores the tools, `trove mcp snippet` prints a few lines for CLAUDE.md or AGENTS.md.")
+	}
+	if a.TroveRun > 0 || a.CodexTroveCalls > 0 {
+		var parts []string
+		if a.TroveRun > 0 {
+			parts = append(parts, fmt.Sprintf("trove_run %d calls (Claude Code also made %d Bash calls, most not test or build runs)", a.TroveRun, a.BuiltinBash))
+		}
+		if a.CodexTroveCalls > 0 {
+			parts = append(parts, fmt.Sprintf("Codex made %d Trove tool calls (no built-in comparison for Codex)", a.CodexTroveCalls))
+		}
+		out = append(out, "Also: "+strings.Join(parts, "; ")+" (estimated from session logs).")
+	}
+	switch {
+	case a.FetchBack != nil:
+		l := fmt.Sprintf("Fetch-back (measured): %d trove_fetch_full calls for %d trimmed outputs, %s.", a.Fetches, a.Trimmed, FormatPercent(a.FetchBack.Value))
+		if a.TooAggressive {
+			l += " That is high: the agent often needs what was trimmed, so trimming may be too aggressive. Consider setting output_trimmer = \"shadow\" under [optimizers]; it applies from the next session."
+		}
+		out = append(out, l)
+	case a.Trimmed > 0:
+		out = append(out, fmt.Sprintf("Fetch-back (measured): %s (%d trimmed outputs so far, %d needed).", measure.TextNotEnough, a.Trimmed, measure.MinFetchBackSample))
+	}
+	return out
 }

@@ -27,6 +27,9 @@ type Inputs struct {
 	// HistoryPlanEvidence names the local signals behind the detected plan (names
 	// only, never values). It is shown with history figures.
 	HistoryPlanEvidence []string
+	// SchemaTokens is the estimated size of the Trove tool definitions; 0 when
+	// unknown.
+	SchemaTokens int
 	// Recoverable is true when the Trove MCP server is registered, so trimmed
 	// output can be fetched back and output_trimmer may be on.
 	Recoverable bool
@@ -143,6 +146,16 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	}
 	if r.Fixes, err = measure.FixEffects(ctx, db, in.Config.Measure); err != nil {
 		return r, err
+	}
+	ad, err := measure.AdoptionFor(ctx, db, w, in.Config.Measure)
+	if err != nil {
+		return r, err
+	}
+	if in.Recoverable || ad.Any() {
+		r.Tools = &Tools{Registered: in.Recoverable, Adoption: ad}
+		if in.SchemaTokens > 0 {
+			r.Tools.SchemaTokens = &measure.Figure{Value: float64(in.SchemaTokens), Label: measure.Estimated}
+		}
 	}
 	return r, nil
 }

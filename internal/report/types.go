@@ -43,6 +43,20 @@ type Report struct {
 	// History is the part of the figures that came from agents' local session
 	// logs. Nil when there is none.
 	History *History `json:"history,omitempty"`
+	// Tools is how the Trove MCP tools are doing. Nil when the server is not
+	// registered and no agent has used them.
+	Tools *Tools `json:"trove_tools,omitempty"`
+}
+
+// Tools reports on the Trove MCP server: what its definitions cost, whether
+// agents use the tools, and whether trimming is too aggressive.
+type Tools struct {
+	Registered bool `json:"registered"`
+	// SchemaTokens is what the tool definitions add to every request. Estimated.
+	SchemaTokens *measure.Figure `json:"schema_tokens,omitempty"`
+	// Adoption holds use versus built-in tools (estimated, from session logs) and
+	// the fetch-back rate (measured, from gateway requests).
+	Adoption measure.Adoption `json:"adoption"`
 }
 
 // PeriodInfo describes the span covered.

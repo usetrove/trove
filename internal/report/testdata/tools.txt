@@ -1,0 +1,50 @@
+Trove report: this month (since Oct 1)
+
+Headline
+  Spend        ~$12.00 (estimated at list prices, not an invoice); 1M tokens
+               (measured)
+  From history 24 requests in 4 sessions read from your agent's local logs
+               (estimated, not seen by the gateway). Plan: API key (estimated
+               from local settings), so this counts as spend. 3 log lines could
+               not be read and were skipped
+  Waste found  at least ~$0.96, 8% of spend (estimated; overlapping findings
+               counted once)
+  Savings      none yet; no optimizer has been on (estimated)
+  Measured     not enough data yet to compare sessions with and without an
+               optimizer. The dollar savings above are estimates.
+
+Spend by agent and model
+  Agent                  Requests  Tokens (measured)  Cost (estimated)
+  claude_code (history)        24                 1M           ~$12.00
+
+  Model     Requests  Tokens (measured)  Cost (estimated)
+  claude-a        24                 1M           ~$12.00
+
+Biggest leaks (estimated, overlapping, not additive)
+  1. Oversized tool output: ~$0.96 (estimated), 64K tokens (estimated)
+     Do this: trove mcp install
+     Estimate only until the Trove MCP server is registered, so your agent can
+     fetch trimmed output back. Run `trove mcp install`, then add output_trimmer
+     = "on" under [optimizers]; it applies from the next session.
+
+Optimizers
+  Baseline in progress: day 61 of 7 and 0 of 20 sessions. Until both pass, every
+  optimizer only estimates and changes nothing.
+  volatile_prefix_mover: off
+  noise_normalizer: off
+  output_trimmer: off
+  duplicate_result_collapser: off
+  cache_breakpoints: off
+  Guardrail events: none.
+
+Trove tools (MCP)
+  Registered with your agent. The tool definitions add about 351 tokens to every
+    request (estimated).
+  Use: Claude Code chose a Trove tool for 30% of its file reads and searches
+    (estimated from session logs; 10 calls in 1 session(s)).
+  Also: trove_run 3 calls (Claude Code also made 10 Bash calls, most not test or
+    build runs) (estimated from session logs).
+  Fetch-back (measured): 3 trove_fetch_full calls for 30 trimmed outputs, 10%.
+
+Recommendations (suggestions only; Trove changes nothing on its own)
+  None yet. These need more recorded usage.

@@ -19,6 +19,10 @@ type Signals struct {
 	ToolErrors    int `json:"tool_errors"`    // tool_result blocks marked is_error
 	Collapsed     int `json:"collapsed"`      // results an optimizer replaced with a note
 	Refetches     int `json:"refetches"`      // calls repeated after their result was collapsed
+	// The Trove MCP tools (see internal/mcp), counted by name only.
+	TroveCalls   int `json:"trove_calls,omitempty"`   // calls to any trove_* tool
+	TroveFetches int `json:"trove_fetches,omitempty"` // calls to trove_fetch_full
+	Trimmed      int `json:"trimmed,omitempty"`       // results that carry a Trove "lines trimmed" marker
 }
 
 // Repeats is how many tool calls repeated an identical earlier call.
@@ -80,9 +84,19 @@ func Extract(body []byte) (s Signals, ok bool) {
 				hashOf[b.ID] = h
 				seen[h] = true
 				s.ToolCalls++
+				switch ClassifyTool(b.Name) {
+				case ToolTroveFetch:
+					s.TroveFetches++
+					s.TroveCalls++
+				case ToolTroveRead, ToolTroveSearch, ToolTroveRun:
+					s.TroveCalls++
+				}
 			case "tool_result":
 				if b.IsError {
 					s.ToolErrors++
+				}
+				if hasTrimMarker(b.Content) {
+					s.Trimmed++
 				}
 				if isCollapsed(b.Content) {
 					s.Collapsed++
@@ -111,6 +125,27 @@ func compact(raw json.RawMessage) []byte {
 		return raw
 	}
 	return b
+}
+
+// hasTrimMarker reports whether a tool_result carries the "lines trimmed" marker
+// that the output trimmer and trove_run write.
+func hasTrimMarker(content json.RawMessage) bool {
+	const needle = "lines trimmed; full output sha256:"
+	var s string
+	if json.Unmarshal(content, &s) == nil {
+		return strings.Contains(s, needle)
+	}
+	var parts []struct {
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(content, &parts) == nil {
+		for _, p := range parts {
+			if strings.Contains(p.Text, needle) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // isCollapsed reports whether a tool_result's content is the note the

@@ -1,0 +1,182 @@
+{
+  "period": {
+    "name": "month",
+    "label": "this month (since Oct 1)",
+    "from": "2026-10-01",
+    "to": "2026-10-29"
+  },
+  "state": "ok",
+  "requests": 24,
+  "headline": {
+    "spend_usd": {
+      "value": 12,
+      "label": "estimated",
+      "n": 24
+    },
+    "tokens": {
+      "value": 1022400,
+      "label": "measured",
+      "n": 24
+    },
+    "waste_usd": {
+      "value": 0.96,
+      "label": "estimated",
+      "n": 8
+    },
+    "waste_percent": {
+      "value": 8,
+      "label": "estimated",
+      "n": 8
+    },
+    "savings_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "measured_note": "not enough data yet to compare sessions with and without an optimizer. The dollar savings above are estimates."
+  },
+  "spend": {
+    "by_agent": [
+      {
+        "key": "claude_code (history)",
+        "requests": 24,
+        "input_uncached_tokens": 2400,
+        "cache_write_tokens": 48000,
+        "cache_read_tokens": 960000,
+        "output_tokens": 12000,
+        "cost_usd": {
+          "value": 12,
+          "label": "estimated",
+          "n": 24
+        }
+      }
+    ],
+    "by_model": [
+      {
+        "key": "claude-a",
+        "requests": 24,
+        "input_uncached_tokens": 2400,
+        "cache_write_tokens": 48000,
+        "cache_read_tokens": 960000,
+        "output_tokens": 12000,
+        "cost_usd": {
+          "value": 12,
+          "label": "estimated",
+          "n": 24
+        }
+      }
+    ]
+  },
+  "leaks": [
+    {
+      "category": "oversized_tool_output",
+      "title": "Oversized tool output",
+      "usd": {
+        "value": 0.96,
+        "label": "estimated",
+        "n": 8
+      },
+      "tokens": {
+        "value": 64000,
+        "label": "estimated",
+        "n": 8
+      },
+      "command": "trove mcp install",
+      "advice": "Estimate only until the Trove MCP server is registered, so your agent can fetch trimmed output back. Run `trove mcp install`, then add output_trimmer = \"on\" under [optimizers]; it applies from the next session."
+    }
+  ],
+  "optimizers": {
+    "baseline": {
+      "active": true,
+      "days_elapsed": 60,
+      "days_needed": 7,
+      "sessions_seen": 0,
+      "sessions_needed": 20
+    },
+    "kill_switch": false,
+    "rows": [
+      {
+        "name": "volatile_prefix_mover",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "noise_normalizer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "output_trimmer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "duplicate_result_collapser",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "cache_breakpoints",
+        "configured": "off",
+        "effective": "off"
+      }
+    ],
+    "guardrail_events": []
+  },
+  "recommendations": [],
+  "history": {
+    "requests": 24,
+    "sessions": 4,
+    "excluded_sessions": 0,
+    "files": 1,
+    "skipped_lines": 3,
+    "plan": "api_key",
+    "value_usd": {
+      "value": 12,
+      "label": "estimated",
+      "n": 24
+    },
+    "basis": "spend",
+    "gateway_seen": true,
+    "not_available": {
+      "cache_miss": "needs consecutive request bodies to compare prefixes",
+      "context_file_weight": "needs the prompt text",
+      "long_session_drift": "not yet implemented for history",
+      "noisy_output": "needs tool output text, which is not stored",
+      "unused_tool_schemas": "needs the tool definitions sent with each request"
+    }
+  },
+  "trove_tools": {
+    "registered": true,
+    "schema_tokens": {
+      "value": 351,
+      "label": "estimated",
+      "n": 0
+    },
+    "adoption": {
+      "claude_sessions": 1,
+      "trove_read": 2,
+      "trove_search": 1,
+      "trove_run": 3,
+      "trove_fetch_full": 0,
+      "builtin_read": 5,
+      "builtin_grep_glob": 2,
+      "builtin_bash": 10,
+      "codex_trove_calls": 0,
+      "adoption_rate": {
+        "value": 30,
+        "label": "estimated",
+        "n": 10
+      },
+      "gateway_sessions": 2,
+      "trimmed_outputs": 30,
+      "fetches": 3,
+      "fetch_back_rate": {
+        "value": 10,
+        "label": "measured",
+        "n": 30
+      },
+      "trimming_too_aggressive": false
+    }
+  }
+}
