@@ -1,0 +1,6 @@
+Trove report: this month (since Oct 1)
+
+Trove has not recorded any requests yet.
+1. Run `trove setup` to point your coding agent at Trove.
+2. Start the gateway with `trove gateway` and use your agent as usual.
+3. Run `trove` again. Your first numbers show up after a few requests.

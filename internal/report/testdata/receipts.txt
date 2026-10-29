@@ -1,0 +1,31 @@
+No finished sessions yet. A session finishes after 30 minutes without requests,
+then its receipt appears here. Receipts are written while `trove gateway` is
+running, and `trove receipts` also catches up when you run it.
+
+Recent sessions. Dollar amounts are estimated from list prices; cache hits are
+measured.
+
+Oct 29 14:05 · claude_code · claude-a
+  ~$3.20 (estimated), 42 calls, 81% cache hits (measured), saved ~$0.40
+  (estimated)
+
+Oct 29 11:05 · codex_cli · gpt-x (+2 more)
+  at least <$0.01 (estimated), 1 call
+
+Oct 28 12:05 · (unknown) · claude-b
+  ~$212 (estimated), 7 calls, 0% cache hits (measured), saved ~$31.50
+  (estimated)
+
+== narrow
+Recent sessions. Dollar amounts are
+estimated from list prices; cache hits
+are measured.
+
+Oct 29 14:05 · claude_code · claude-a
+  ~$3.20 (estimated), 42 calls, 81%
+  cache hits (measured), saved ~$0.40
+  (estimated)
+
+== notification text
+~$3.20 (estimated), 42 calls, 81% cache hits (measured), saved ~$0.40 (estimated)
+at least <$0.01 (estimated), 1 call

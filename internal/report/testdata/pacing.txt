@@ -1,0 +1,38 @@
+== none
+No budget is set. Set one with `trove budget set 1500 --period month`.
+== on pace
+Budget: $1,500 per month (spend is estimated at list prices; it is not an invoice)
+
+  ~$660 of $1,500 used (44%, estimated), 45% of the month gone. On pace.
+  At this rate you spend about $1,461 this month (estimated), which stays under
+  the cap.
+
+== close to ahead: projection reaches the cap
+Budget: $1,500 per month (spend is estimated at list prices; it is not an invoice)
+
+  ~$700 of $1,500 used (47%, estimated), 45% of the month gone. Ahead of pace.
+  At this rate you reach the cap around Oct 31 (estimated), before the month
+  ends.
+
+== ahead
+Budget: $1,500 per month (spend is estimated at list prices; it is not an invoice)
+
+  ~$1,000 of $1,500 used (67%, estimated), 45% of the month gone. Ahead of pace.
+  3 requests could not be priced, so spend is at least this.
+  At this rate you reach the cap around Oct 22 (estimated), before the month
+  ends.
+  What would change it: The biggest leak, Repeated tool results, is estimated at
+  $120 in this month (since Oct 1). See `trove report`.
+
+== over
+Budget: $1,500 per month (spend is estimated at list prices; it is not an invoice)
+
+  ~$1,600 of $1,500 used (107%, estimated), 45% of the month gone. The cap is
+  reached.
+
+== early
+Budget: $1,500 per month (spend is estimated at list prices; it is not an invoice)
+
+  ~$10.00 of $1,500 used (<1%, estimated), 1% of the month gone. Too early in
+  the month to judge pace.
+

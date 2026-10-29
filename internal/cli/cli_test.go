@@ -23,9 +23,15 @@ func newHarness(t *testing.T, env map[string]string, binaries ...string) *harnes
 	t.Helper()
 	h := &harness{out: &bytes.Buffer{}, err: &bytes.Buffer{}}
 	home := t.TempDir()
+	// Never let a test resolve the real ~/.trove: point the data directory into
+	// the temporary home unless the test chose one.
+	all := map[string]string{"TROVE_DATA_DIR": filepath.Join(home, ".trove")}
+	for k, v := range env {
+		all[k] = v
+	}
 	h.app = &App{
 		Out: h.out, Err: h.err,
-		Getenv: func(k string) string { return env[k] },
+		Getenv: func(k string) string { return all[k] },
 		LookPath: func(name string) (string, error) {
 			for _, b := range binaries {
 				if b == name {
@@ -66,8 +72,7 @@ func TestVersion(t *testing.T) {
 
 func TestStubsPrintNotImplemented(t *testing.T) {
 	cmds := [][]string{
-		{}, {"report"}, {"budget"},
-		{"status-line"}, {"fix"}, {"share"}, {"config", "get"}, {"config", "get", "gateway.port"},
+		{"fix"}, {"config", "get"}, {"config", "get", "gateway.port"},
 		{"config", "set", "gateway.port", "9000"}, {"uninstall"},
 	}
 	for _, c := range cmds {

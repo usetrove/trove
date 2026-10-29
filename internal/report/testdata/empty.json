@@ -1,0 +1,55 @@
+{
+  "period": {
+    "name": "month",
+    "label": "this month (since Oct 1)",
+    "from": "2026-10-01",
+    "to": "2026-10-29"
+  },
+  "state": "empty",
+  "requests": 0,
+  "headline": {
+    "spend_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "tokens": {
+      "value": 0,
+      "label": "measured",
+      "n": 0
+    },
+    "waste_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "waste_percent": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "savings_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "measured_note": ""
+  },
+  "spend": {
+    "by_agent": [],
+    "by_model": []
+  },
+  "leaks": [],
+  "optimizers": {
+    "kill_switch": false,
+    "rows": [],
+    "guardrail_events": []
+  },
+  "recommendations": [],
+  "notes": [
+    "Trove has not recorded any requests yet.",
+    "1. Run `trove setup` to point your coding agent at Trove.",
+    "2. Start the gateway with `trove gateway` and use your agent as usual.",
+    "3. Run `trove` again. Your first numbers show up after a few requests."
+  ]
+}

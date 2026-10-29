@@ -37,6 +37,8 @@ import (
 const (
 	ClaudeCode = "claude_code"
 	Codex      = "codex"
+	// ClaudeStatusLine is the optional statusLine entry in Claude Code's settings.
+	ClaudeStatusLine = "claude_code_statusline"
 )
 
 const (
@@ -123,6 +125,68 @@ func PlanClaudeCode(claudeDir string, port int, upstream string) (*Edit, error) 
 	}
 	env[baseURLKey], _ = json.Marshal(want)
 	doc["env"], _ = json.Marshal(env)
+	out, err := marshalIndent(doc)
+	if err != nil {
+		return nil, err
+	}
+	e.updated = out
+	return e, nil
+}
+
+// StatusLineExistsError means settings.json already has a statusLine that is not
+// Trove's. Trove never replaces it.
+type StatusLineExistsError struct {
+	Path    string
+	Current string // the command already configured, if it has one
+}
+
+func (e *StatusLineExistsError) Error() string {
+	return fmt.Sprintf("%s already has a statusLine, so Trove left it alone", e.Path)
+}
+
+// PlanStatusLine plans adding Trove's line to Claude Code's status bar:
+//
+//	"statusLine": { "type": "command", "command": <command> }
+//
+// Verified against code.claude.com/docs/en/statusline on 2026-10-29: the
+// statusLine setting takes type "command" and a command that receives session
+// JSON on stdin and prints the line. command is what Claude Code will run.
+// An existing statusLine is never replaced: a *StatusLineExistsError comes back
+// instead. Plan this after the gateway edit has been applied, so it starts from
+// the file as it then is.
+func PlanStatusLine(claudeDir, command string) (*Edit, error) {
+	path := filepath.Join(claudeDir, "settings.json")
+	old, err := readOptional(path)
+	if err != nil {
+		return nil, err
+	}
+	doc := map[string]json.RawMessage{}
+	if old != nil {
+		if err := json.Unmarshal(old, &doc); err != nil {
+			return nil, fmt.Errorf("%s is not valid JSON (%v). Fix or move that file, then run `trove setup` again; Trove will not overwrite a file it cannot read", path, err)
+		}
+	}
+	entry, _ := json.Marshal(struct {
+		Type    string `json:"type"`
+		Command string `json:"command"`
+	}{"command", command})
+	e := &Edit{Agent: ClaudeStatusLine, Path: path, value: command, old: old,
+		Show:    "\"statusLine\": " + string(entry),
+		Summary: "Show Trove's spend, budget pace and savings in Claude Code's status line.",
+		Note:    "Claude Code runs this command after each reply and shows its one line of output. It reads only Trove's local summary and makes no network call.",
+	}
+	if raw, ok := doc["statusLine"]; ok {
+		var cur struct {
+			Command string `json:"command"`
+		}
+		_ = json.Unmarshal(raw, &cur)
+		if cur.Command == command {
+			e.NoOp = true
+			return e, nil
+		}
+		return nil, &StatusLineExistsError{Path: path, Current: cur.Command}
+	}
+	doc["statusLine"] = entry
 	out, err := marshalIndent(doc)
 	if err != nil {
 		return nil, err
@@ -360,6 +424,8 @@ func undoOne(c Change) (UndoResult, error) {
 		next, err = stripClaude(cur, c.Value, c.Previous)
 	case Codex:
 		next = stripMarked(cur)
+	case ClaudeStatusLine:
+		next, err = stripStatusLine(cur, c.Value)
 	default:
 		res.Action, res.Detail = "left_alone", "unknown agent in the manifest"
 		return res, nil
@@ -401,6 +467,24 @@ func stripClaude(cur []byte, value, previous string) ([]byte, error) {
 	} else {
 		doc["env"], _ = json.Marshal(env)
 	}
+	return marshalIndent(doc)
+}
+
+// stripStatusLine removes the statusLine entry only if it is still the one
+// Trove added.
+func stripStatusLine(cur []byte, command string) ([]byte, error) {
+	doc := map[string]json.RawMessage{}
+	if err := json.Unmarshal(cur, &doc); err != nil {
+		return nil, errors.New("the file is no longer valid JSON; remove the statusLine entry by hand")
+	}
+	var got struct {
+		Command string `json:"command"`
+	}
+	_ = json.Unmarshal(doc["statusLine"], &got)
+	if got.Command != command {
+		return cur, nil // changed by you since; not ours to remove
+	}
+	delete(doc, "statusLine")
 	return marshalIndent(doc)
 }
 

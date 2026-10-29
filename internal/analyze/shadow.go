@@ -93,6 +93,12 @@ func DayRollup(ctx context.Context, db Querier, day time.Time) (Rollup, error) {
 		d.UnixMilli(), d.Add(24*time.Hour).UnixMilli())
 }
 
+// WindowRollup sums the stored shadow savings of requests in [from, to).
+func WindowRollup(ctx context.Context, db Querier, from, to time.Time) (Rollup, error) {
+	return rollup(ctx, db, `SELECT shadow_savings FROM requests WHERE ts >= ? AND ts < ? AND shadow_savings IS NOT NULL`,
+		from.UnixMilli(), to.UnixMilli())
+}
+
 func rollup(ctx context.Context, db Querier, query string, args ...any) (Rollup, error) {
 	r := Rollup{Label: "estimated", Optimizers: map[string]RollupOptimizer{}}
 	rows, err := db.QueryContext(ctx, query, args...)

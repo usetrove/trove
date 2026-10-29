@@ -1,0 +1,52 @@
+{
+  "period": {
+    "name": "today",
+    "label": "today",
+    "from": "2026-10-29",
+    "to": "2026-10-29"
+  },
+  "state": "quiet",
+  "requests": 0,
+  "headline": {
+    "spend_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "tokens": {
+      "value": 0,
+      "label": "measured",
+      "n": 0
+    },
+    "waste_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "waste_percent": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "savings_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "measured_note": ""
+  },
+  "spend": {
+    "by_agent": [],
+    "by_model": []
+  },
+  "leaks": [],
+  "optimizers": {
+    "kill_switch": false,
+    "rows": [],
+    "guardrail_events": []
+  },
+  "recommendations": [],
+  "notes": [
+    "No requests were recorded today. Try `trove report --month`, or check that `trove gateway` is running."
+  ]
+}

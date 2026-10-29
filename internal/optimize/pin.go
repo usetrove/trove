@@ -46,7 +46,7 @@ func newPinBook(store PinStore) *pinBook {
 
 // get returns the session's pin, creating it from cfg on the session's first
 // request. A store failure never blocks a request: the in-memory pin is used.
-func (b *pinBook) get(ctx context.Context, key string, cfg config.Config, bpt float64, now time.Time) (Pin, error) {
+func (b *pinBook) get(ctx context.Context, key string, cfg config.Config, bpt float64, now time.Time, gate StateGate) (Pin, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if p, ok := b.pins[key]; ok {
@@ -62,7 +62,7 @@ func (b *pinBook) get(ctx context.Context, key string, cfg config.Config, bpt fl
 			return p, nil
 		}
 	}
-	p := newPin(key, cfg, bpt, now)
+	p := newPin(key, cfg, bpt, now, gate)
 	b.put(p)
 	if b.store != nil && storeErr == nil {
 		storeErr = b.store.Save(ctx, p)
@@ -88,10 +88,21 @@ func (b *pinBook) put(p Pin) {
 	b.pins[p.SessionKey] = p
 }
 
-func newPin(key string, cfg config.Config, bpt float64, now time.Time) Pin {
+// StateGate may lower an optimizer's state when a session starts (baseline
+// period, guardrail rollback, interleaving). It is called once per optimizer
+// per new session and its answer is pinned with the session. It must be quick
+// and must not block; the engine only ever lowers states with the result
+// (on -> shadow/off, shadow -> off), never raises them.
+type StateGate func(sessionKey, optimizer, configured string, now time.Time) string
+
+func newPin(key string, cfg config.Config, bpt float64, now time.Time, gate StateGate) Pin {
 	states := make(map[string]string, len(PipelineNames))
 	for _, n := range PipelineNames {
-		states[n] = effectiveState(n, cfg.OptimizerState(n))
+		s := effectiveState(n, cfg.OptimizerState(n))
+		if gate != nil {
+			s = lowerOf(s, effectiveState(n, gate(key, n, s, now)))
+		}
+		states[n] = s
 	}
 	return Pin{
 		SessionKey:    key,
@@ -100,6 +111,24 @@ func newPin(key string, cfg config.Config, bpt float64, now time.Time) Pin {
 		BytesPerToken: bpt,
 		PinnedAt:      now.UTC(),
 	}
+}
+
+func rank(s string) int {
+	switch s {
+	case config.StateOn:
+		return 2
+	case config.StateShadow:
+		return 1
+	}
+	return 0
+}
+
+// lowerOf returns the lower of two states, so a gate can never turn anything on.
+func lowerOf(a, b string) string {
+	if rank(b) < rank(a) {
+		return b
+	}
+	return a
 }
 
 // EffectiveState is the state an optimizer really runs in for a configured

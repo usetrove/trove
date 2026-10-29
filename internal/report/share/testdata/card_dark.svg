@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="t d">
+<title id="t">Trove summary for Oct 2026</title>
+<desc id="d">Estimated spend ~$612, waste found at least ~$74, 12% of spend, saved ~$47. Biggest leak: Repeated tool results.</desc>
+<rect width="1200" height="630" fill="#0E1217"/>
+<rect x="64" y="126" width="1072" height="2" fill="#2A323D"/>
+<rect x="64" y="164" width="341.3333333333333" height="262" rx="20" fill="#171D25"/>
+<rect x="429.3333333333333" y="164" width="341.3333333333333" height="262" rx="20" fill="#171D25"/>
+<rect x="794.6666666666666" y="164" width="341.3333333333333" height="262" rx="20" fill="#171D25"/>
+<rect x="64" y="566" width="1072" height="2" fill="#2A323D"/>
+<text x="64" y="100" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="36" font-weight="700" fill="#F3F5F7">trove</text>
+<text x="1136" y="98" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="28" font-weight="400" text-anchor="end" fill="#9AA6B5">Oct 2026</text>
+<text x="92" y="218" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="400" fill="#9AA6B5">SPEND</text>
+<text x="92" y="320" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="84" font-weight="700" fill="#F3F5F7">~$612</text>
+<text x="92" y="362" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="400" fill="#9AA6B5">at list prices</text>
+<text x="92" y="394" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="#9AA6B5">estimated</text>
+<text x="457.3333333333333" y="218" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="400" fill="#9AA6B5">WASTE FOUND</text>
+<text x="457.3333333333333" y="320" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="84" font-weight="700" fill="#F2A83B">~$74</text>
+<text x="457.3333333333333" y="362" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="400" fill="#9AA6B5">12% of spend, at least</text>
+<text x="457.3333333333333" y="394" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="#9AA6B5">estimated</text>
+<text x="822.6666666666666" y="218" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="400" fill="#9AA6B5">SAVED</text>
+<text x="822.6666666666666" y="320" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="84" font-weight="700" fill="#46D39A">~$47</text>
+<text x="822.6666666666666" y="362" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="22" font-weight="400" fill="#9AA6B5">by optimizers that were on</text>
+<text x="822.6666666666666" y="394" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="700" fill="#9AA6B5">estimated</text>
+<text x="64" y="482" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="400" fill="#9AA6B5">BIGGEST LEAK</text>
+<text x="64" y="532" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="44" font-weight="700" fill="#F3F5F7">Repeated tool results</text>
+<text x="64" y="604" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="400" fill="#9AA6B5">Dollar figures are estimates from list prices, not invoices.</text>
+<text x="1136" y="604" font-family="Inter, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="20" font-weight="400" text-anchor="end" fill="#9AA6B5">Made locally. Nothing uploaded.</text>
+</svg>

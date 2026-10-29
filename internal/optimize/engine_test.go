@@ -328,7 +328,7 @@ func TestTrimmerNeverOn(t *testing.T) {
 	// Even if validation were bypassed, the pin clamps the trimmer to shadow.
 	cfg := config.Default()
 	cfg.Optimizers[config.OptimizerOutputTrimmer] = config.StateOn
-	p := newPin("k", cfg, 3.5, time.Now())
+	p := newPin("k", cfg, 3.5, time.Now(), nil)
 	if got := p.States[config.OptimizerOutputTrimmer]; got != config.StateShadow {
 		t.Errorf("trimmer state = %q, want shadow", got)
 	}
@@ -337,7 +337,7 @@ func TestTrimmerNeverOn(t *testing.T) {
 func TestCustomAgentNeverClaudeCodeOrCodex(t *testing.T) {
 	cfg := config.Default()
 	cfg.Optimize.CustomAgents = []string{"sdk", "claude_code", "codex"}
-	p := newPin("k", cfg, 3.5, time.Now())
+	p := newPin("k", cfg, 3.5, time.Now(), nil)
 	for agent, want := range map[string]bool{"sdk": true, "other": false, "claude_code": false, "codex": false} {
 		if got := p.customFor(agent); got != want {
 			t.Errorf("customFor(%s) = %v, want %v", agent, got, want)
@@ -377,5 +377,42 @@ func TestEngineNeverForwardsAMalformedResult(t *testing.T) {
 				t.Errorf("failure not recorded: %+v", res.Failures)
 			}
 		})
+	}
+}
+
+func TestGateOnlyLowersStatesAndOnlyForNewSessions(t *testing.T) {
+	cfg := config.Default()
+	cfg.Optimizers["noise_normalizer"] = config.StateOn
+	cfg.Optimizers["cache_breakpoints"] = config.StateShadow
+	raise := func(_, _, _ string, _ time.Time) string { return config.StateOn } // a misbehaving gate
+	p := newPin("k", cfg, 3.5, time.Now(), raise)
+	if p.States["noise_normalizer"] != config.StateOn || p.States["cache_breakpoints"] != config.StateShadow || p.States["volatile_prefix_mover"] != config.StateOff {
+		t.Errorf("a gate must never raise a state: %v", p.States)
+	}
+	lower := func(_, name, configured string, _ time.Time) string {
+		if name == "noise_normalizer" {
+			return config.StateShadow
+		}
+		return configured
+	}
+	p = newPin("k", cfg, 3.5, time.Now(), lower)
+	if p.States["noise_normalizer"] != config.StateShadow || p.States["cache_breakpoints"] != config.StateShadow {
+		t.Errorf("gate did not lower noise_normalizer: %v", p.States)
+	}
+
+	// A pinned session keeps its states even if the gate changes its mind.
+	calls := 0
+	gate := func(_, _, configured string, _ time.Time) string {
+		calls++
+		if calls > len(PipelineNames) {
+			return config.StateOff
+		}
+		return configured
+	}
+	book := newPinBook(nil)
+	first, _ := book.get(context.Background(), "s", cfg, 3.5, time.Now(), gate)
+	second, _ := book.get(context.Background(), "s", cfg, 3.5, time.Now(), gate)
+	if first.States["noise_normalizer"] != config.StateOn || second.States["noise_normalizer"] != config.StateOn {
+		t.Errorf("the gate changed a running session: %v then %v", first.States, second.States)
 	}
 }

@@ -1,0 +1,12 @@
+no budget                  ~$603 this month · saved ~$10.00
+no budget, session         ~$603 this month · session ~$3.20 · saved ~$10.00
+under cap                  ~$603 / $2,000 · 30% used · 92% of month · under pace · session ~$3.20 · saved ~$10.00
+ahead (claude, color)      ~$360 / $700 · 51% used · 37% of month · <ESC>[33mahead of pace<ESC>[0m · session ~$3.20
+ahead (tmux, color)        ~$360 / $700 · 51% used · 37% of month · #[fg=yellow]ahead of pace#[default] · session ~$3.20
+ahead (shell)              ~$360 / $700 · 51% used · 37% of month · ahead of pace · session ~$3.20
+ahead (no color)           ~$360 / $700 · 51% used · 37% of month · ahead of pace · session ~$3.20
+near cap                   ~$603 / $700 · 86% used · 92% of month · <ESC>[31mnear cap<ESC>[0m · saved ~$10.00
+over cap                   ~$603 / $500 · 121% used · 92% of month · <ESC>[31mover cap<ESC>[0m · saved ~$10.00
+empty period               Trove: no usage yet
+no data at all             Trove: no usage yet
+unpriced calls             ~$603+ this month · saved ~$10.00
