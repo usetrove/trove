@@ -121,6 +121,12 @@ func trimOutput(text string) (string, bool) {
 		return text, false
 	}
 
+	return collapseRuns(text, lines, keepLines(lines), minTrimmedLines)
+}
+
+// keepLines marks the lines worth keeping: the head and tail, every failure or
+// stack-frame line with its context, and any existing trim marker.
+func keepLines(lines []string) []bool {
 	keep := make([]bool, len(lines))
 	for i := 0; i < len(lines) && i < keepHead; i++ {
 		keep[i] = true
@@ -152,6 +158,12 @@ func trimOutput(text string) (string, bool) {
 		}
 	}
 
+	return keep
+}
+
+// collapseRuns replaces each run of unkept lines with one marker line. It reports
+// false, returning text unchanged, when fewer than minTrimmed lines go.
+func collapseRuns(text string, lines []string, keep []bool, minTrimmed int) (string, bool) {
 	var out []string
 	hash := sha256.Sum256([]byte(text))
 	short := hex.EncodeToString(hash[:8])
@@ -170,8 +182,30 @@ func trimOutput(text string) (string, bool) {
 		trimmed += j - i
 		i = j
 	}
-	if trimmed < minTrimmedLines {
+	if trimmed < minTrimmed {
 		return text, false
 	}
 	return strings.Join(out, "\n"), true
+}
+
+// Condense shortens command output for the MCP trove_run tool with the same
+// rules the trimmer uses: failures, stack traces, their context and the first
+// and last lines survive, and the rest becomes marker lines naming the full
+// output's hash. Unlike the trimmer it does not need the text to look like a
+// test run, because the caller already knows it is command output. It reports
+// false when the output is too short to be worth shortening.
+func Condense(text string) (string, bool) {
+	if len(text) < 2000 {
+		return text, false
+	}
+	lines := strings.Split(text, "\n")
+	if len(lines) < 30 {
+		return text, false
+	}
+	return collapseRuns(text, lines, keepLines(lines), 10)
+}
+
+// IsFailureLine reports whether a line of command output carries a failure.
+func IsFailureLine(l string) bool {
+	return len(l) <= maxTrimLineBytes && failureRe.MatchString(l)
 }
