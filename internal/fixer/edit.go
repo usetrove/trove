@@ -456,8 +456,17 @@ func SetTOMLTopString(src []byte, key, value string) ([]byte, error) {
 			return finishTOML(ls, key, value)
 		}
 	}
+	// Insert after the last top-level content line, so a blank line before the
+	// first table stays a blank line before the table.
+	at := firstTable
+	for at > 0 && strings.TrimSpace(ls[at-1]) == "" {
+		at--
+	}
 	line := key + ` = "` + value + `"` + nl
-	ls = append(ls[:firstTable], append([]string{line}, ls[firstTable:]...)...)
+	if at > 0 && !strings.HasSuffix(ls[at-1], "\n") {
+		ls[at-1] += nl
+	}
+	ls = append(ls[:at], append([]string{line}, ls[at:]...)...)
 	return finishTOML(ls, key, value)
 }
 

@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 func jsonUnmarshal(s string, v any) error { return json.Unmarshal([]byte(s), v) }
@@ -24,15 +26,31 @@ func jsonUnmarshal(s string, v any) error { return json.Unmarshal([]byte(s), v) 
 // forced by something Trove must not override: ANTHROPIC_MODEL in the
 // environment (it wins over the file), a managed policy, or a project setting.
 //
-// Codex is not covered: its history format is unverified.
+// Codex gets the same suggestion, setting model in ~/.codex/config.toml. Its
+// history format is not verified against real installs, so the evidence is only
+// as good as that parser.
 const (
 	modelMinRequests = 20
 	modelMinShare    = 0.4 // share of the frontier model's requests that were small tasks
 )
 
 func detectModelDefault(ctx context.Context, e *Env) ([]*Fix, error) {
-	if e.DB == nil || e.ClaudeDir == "" {
-		return nil, nil
+	var out []*Fix
+	for _, a := range []string{"claude_code", "codex"} {
+		out = append(out, detectModelDefaultFor(ctx, e, a)...)
+	}
+	return out, nil
+}
+
+// detectModelDefaultFor looks at one agent only, so Claude and Codex models are
+// never mixed in one count.
+func detectModelDefaultFor(ctx context.Context, e *Env, agent string) []*Fix {
+	dir := e.ClaudeDir
+	if agent == "codex" {
+		dir = e.CodexDir
+	}
+	if e.DB == nil || dir == "" {
+		return nil
 	}
 	since := e.now().Add(-time.Duration(e.Cfg.LookbackDays) * 24 * time.Hour).UnixMilli()
 	type agg struct {
@@ -46,16 +64,16 @@ func detectModelDefault(ctx context.Context, e *Env) ([]*Fix, error) {
 		}
 		return by[m]
 	}
-	// Only Claude Code requests: gateway rows from the claude_code agent, and
-	// history rows from the Claude Code source. A session appears in one or the
+	// Only this agent's requests: gateway rows from the agent, and history
+	// rows from its source. A session appears in one or the
 	// other, so the two are not double counted.
 	for _, q := range []struct{ count, finds string }{
-		{`SELECT model, COUNT(*) FROM requests WHERE ts >= ? AND agent = 'claude_code' AND model != '' GROUP BY model`,
-			`SELECT model, findings FROM requests WHERE ts >= ? AND agent = 'claude_code' AND findings LIKE '%expensive_model_small_task%'`},
-		{`SELECT model, COUNT(*) FROM history_requests WHERE ts >= ? AND source = 'claude_code' AND sidechain = 0 AND model != '' GROUP BY model`,
-			`SELECT model, findings FROM history_requests WHERE ts >= ? AND source = 'claude_code' AND sidechain = 0 AND findings LIKE '%expensive_model_small_task%'`},
+		{`SELECT model, COUNT(*) FROM requests WHERE ts >= ? AND agent = ? AND model != '' GROUP BY model`,
+			`SELECT model, findings FROM requests WHERE ts >= ? AND agent = ? AND findings LIKE '%expensive_model_small_task%'`},
+		{`SELECT model, COUNT(*) FROM history_requests WHERE ts >= ? AND source = ? AND sidechain = 0 AND model != '' GROUP BY model`,
+			`SELECT model, findings FROM history_requests WHERE ts >= ? AND source = ? AND sidechain = 0 AND findings LIKE '%expensive_model_small_task%'`},
 	} {
-		rows, err := e.DB.QueryContext(ctx, q.count, since)
+		rows, err := e.DB.QueryContext(ctx, q.count, since, agent)
 		if err != nil {
 			continue // a table that is not there yet means no data from it
 		}
@@ -67,7 +85,7 @@ func detectModelDefault(ctx context.Context, e *Env) ([]*Fix, error) {
 			}
 		}
 		_ = rows.Close()
-		rows, err = e.DB.QueryContext(ctx, q.finds, since)
+		rows, err = e.DB.QueryContext(ctx, q.finds, since, agent)
 		if err != nil {
 			continue
 		}
@@ -116,16 +134,19 @@ func detectModelDefault(ctx context.Context, e *Env) ([]*Fix, error) {
 		if alt == "" {
 			continue
 		}
-		settings := filepath.Join(e.ClaudeDir, "settings.json")
+		settings, envVar, label := filepath.Join(dir, "settings.json"), "ANTHROPIC_MODEL", "claude_code"
+		if agent == "codex" {
+			settings, envVar, label = filepath.Join(dir, "config.toml"), "", "codex"
+		}
 		old, err := os.ReadFile(settings) //nolint:gosec // an allowed agent config file
 		if err != nil {
 			old = nil
 		}
 		f := &Fix{
-			ID: fixID(ModelDefault, settings, m, alt), Kind: ModelDefault, Agent: "claude_code", Path: settings, Suggestion: true,
+			ID: fixID(ModelDefault, settings, m, alt), Kind: ModelDefault, Agent: label, Path: settings, Suggestion: true,
 			Title: fmt.Sprintf("Make %s your default model instead of %s", alt, m),
 			Why: fmt.Sprintf("%d of your %d recent %s requests (%.0f%%) were small tasks: a short prompt and a short reply. "+
-				"A cheaper default model often handles those, and you can still pick %s for hard work with /model.", a.small, a.total, m, 100*float64(a.small)/float64(a.total), m),
+				"A cheaper default model often handles those, and you can still pick %s for hard work.", a.small, a.total, m, 100*float64(a.small)/float64(a.total), m),
 			Evidence: []string{
 				fmt.Sprintf("%d of %d requests on %s in the last %d days were small tasks", a.small, a.total, m, e.Cfg.LookbackDays),
 			},
@@ -138,8 +159,16 @@ func detectModelDefault(ctx context.Context, e *Env) ([]*Fix, error) {
 			old: old,
 		}
 		switch {
-		case e.getenv("ANTHROPIC_MODEL") != "":
-			f.Advisory = "The ANTHROPIC_MODEL environment variable is set, and it overrides the model in settings files. Unset it, or change it where you set it."
+		case envVar != "" && e.getenv(envVar) != "":
+			f.Advisory = "The " + envVar + " environment variable is set, and it overrides the model in settings files. Unset it, or change it where you set it."
+		case agent == "codex":
+			if why := codexModelSetElsewhere(e, old); why != "" {
+				f.Advisory = why
+			} else if upd, err := SetTOMLTopString(old, "model", alt); err != nil {
+				f.Advisory = fmt.Sprintf("%s cannot be edited safely (%v). Set model = %q there yourself.", settings, err, alt)
+			} else {
+				f.updated = upd
+			}
 		default:
 			if why := modelSetElsewhere(e); why != "" {
 				f.Advisory = why
@@ -151,7 +180,32 @@ func detectModelDefault(ctx context.Context, e *Env) ([]*Fix, error) {
 		}
 		out = append(out, f)
 	}
-	return out, nil
+	return out
+}
+
+// codexModelSetElsewhere says why editing ~/.codex/config.toml would not take
+// effect. Per learn.chatgpt.com/docs/config-file/config-basic (checked
+// 2026-10-29) a trusted project's .codex/config.toml and a --profile file both
+// outrank the user file. Trove cannot see CLI flags or whether the project is
+// trusted, so a project model is reported either way.
+func codexModelSetElsewhere(e *Env, userCfg []byte) string {
+	if e.ProjectDir != "" {
+		if b, err := os.ReadFile(filepath.Join(e.ProjectDir, ".codex", "config.toml")); err == nil { //nolint:gosec // an allowed agent config file
+			var doc map[string]any
+			if toml.Unmarshal(b, &doc) == nil {
+				if _, ok := doc["model"]; ok {
+					return "This project's .codex/config.toml sets its own model, which wins over your default when the project is trusted. Change it there if you want."
+				}
+			}
+		}
+	}
+	var doc map[string]any
+	if toml.Unmarshal(userCfg, &doc) == nil {
+		if p, _ := doc["profile"].(string); p != "" {
+			return "Your config.toml selects the profile " + p + ", and a profile can override the default model. Check it before changing the default."
+		}
+	}
+	return ""
 }
 
 // modelSetElsewhere says why editing the user setting would not take effect: a
