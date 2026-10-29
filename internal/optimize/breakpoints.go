@@ -77,15 +77,18 @@ func (CacheBreakpoints) Tier() Tier { return TierLossless }
 
 // Applies implements Optimizer.
 func (CacheBreakpoints) Applies(r *Request, s Session) bool {
-	if !s.Custom || r.HasCacheControl || r.RootEmpty || len(r.Messages) == 0 {
+	if !s.Custom || r.RootEmpty || len(r.Messages) == 0 {
 		return false
 	}
 	min, ok := cacheMinimum(r.Model)
-	return ok && len(r.Raw)/approxBytesPerToken >= min
+	return ok && len(r.Raw)/approxBytesPerToken >= min && !r.HasCacheControl()
 }
 
 // Transform implements Optimizer.
 func (CacheBreakpoints) Transform(_ context.Context, r *Request) (*Request, Report) {
+	if err := r.Ensure(); err != nil {
+		return r, Report{Err: err.Error()}
+	}
 	// Top-level automatic caching goes first in the object so "messages" stays
 	// last and a growing history only ever appends to the end of the body.
 	edits := []Edit{{Span: Span{r.Root.S + 1, r.Root.S + 1}, New: []byte(`"cache_control":` + ephemeral + `,`)}}

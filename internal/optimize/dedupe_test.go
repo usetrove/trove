@@ -44,6 +44,9 @@ func collapse(t *testing.T, b []byte) *Request {
 	if rep.Err != "" {
 		t.Fatal(rep.Err)
 	}
+	if err := out.Ensure(); err != nil {
+		t.Fatal(err)
+	}
 	return out
 }
 

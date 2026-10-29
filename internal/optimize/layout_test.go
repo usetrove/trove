@@ -51,6 +51,9 @@ func TestVolatilePrefixMoverPreservesEveryLine(t *testing.T) {
 	sys := "Intro line\nToday's date: 2026-10-29\nSecond rule\nrequest 3f2504e0-4f89-41d3-9a0c-0305e82c3301\n\nLast rule"
 	r, _ := ParseRequest(req{system: sys, msgs: []msg{user(text("hi"))}}.body())
 	out, rep := VolatilePrefixMover{}.Transform(context.Background(), r)
+	if err := out.Ensure(); err != nil {
+		t.Fatal(err)
+	}
 	if rep.Err != "" || len(out.SystemBlocks) != 2 {
 		t.Fatalf("expected two system blocks, got %d (%s)", len(out.SystemBlocks), rep.Err)
 	}
@@ -122,6 +125,9 @@ func TestCacheBreakpointsPlacementAndLimit(t *testing.T) {
 	if rep.Err != "" {
 		t.Fatal(rep.Err)
 	}
+	if err := out.Ensure(); err != nil {
+		t.Fatal(err)
+	}
 	if n := countMarkers(out.Raw); n != 3 {
 		t.Errorf("want 3 markers (top level, last tool, system), got %d", n)
 	}
@@ -152,6 +158,9 @@ func TestCacheBreakpointsKeepsVolatileTextOutOfTheCachedPrefix(t *testing.T) {
 	// With the mover run first, the stable block is marked and the volatile one is not.
 	moved, _ := VolatilePrefixMover{}.Transform(context.Background(), r)
 	out, _ = CacheBreakpoints{}.Transform(context.Background(), moved)
+	if err := out.Ensure(); err != nil {
+		t.Fatal(err)
+	}
 	if n := countMarkers(out.Raw); n != 3 {
 		t.Fatalf("want 3 markers after moving the volatile text, got %d", n)
 	}
@@ -237,5 +246,39 @@ func TestCacheStability50TurnsCustomAgent(t *testing.T) {
 			t.Fatalf("turn %d: transformed prefix differs from the previous turn", turn)
 		}
 		prev = res.Body
+	}
+}
+
+func TestIsVolatileLine(t *testing.T) {
+	tests := []struct {
+		line string
+		want bool
+	}{
+		{"Today's date: 2026-10-29", true},
+		{"The current date is unknown", true},
+		{"CURRENT TIME: noon", true},
+		{"date today is Thursday", true},
+		{"Updated 2026-10-29T10:00:00Z by build", true},
+		{"build 2026-10-29", true},
+		{"session 3f2504e0-4f89-41d3-9a0c-0305e82c3301 started", true},
+		{"ID=3F2504E0-4F89-41D3-9A0C-0305E82C3301", true},
+		{"epoch 1761700000 now", true},
+		{"epoch ms 1761700000123", true},
+		{"You are a helpful coding agent.", false},
+		{"Rule 12: always explain the reason for a change.", false},
+		{"version 12026-10-29x", false},                   // glued to other word characters
+		{"phone 1234567890", false},                       // 10 digits but not an epoch (starts 12)
+		{"id 11761700000", false},                         // 11 digits
+		{"17617000001234", false},                         // 14 digits
+		{"2026-1-29", false},                              // not a full ISO date
+		{"3f2504e0-4f89-41d3-9a0c", false},                // truncated UUID
+		{"the data today is stored", false},               // 'date today' needs the exact phrase
+		{strings.Repeat("a ", 300) + "2026-10-29", false}, // long paragraph, not a volatile line
+		{"", false},
+	}
+	for _, tt := range tests {
+		if got := isVolatileLine(tt.line); got != tt.want {
+			t.Errorf("isVolatileLine(%.60q) = %v, want %v", tt.line, got, tt.want)
+		}
 	}
 }

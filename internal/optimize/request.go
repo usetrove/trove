@@ -16,6 +16,10 @@ import (
 // byte offsets of the parts optimizers care about, and a change is expressed as
 // an Edit that replaces one span. Everything outside the edited spans is copied
 // through verbatim.
+//
+// The scan is a single descent: each byte of the body is visited about once, and
+// strings are skipped with a vectorized search, because this runs on every
+// request and again after every optimizer that changes something.
 
 // Span is a half-open byte range [S, E) of the request body.
 type Span struct{ S, E int }
@@ -79,9 +83,24 @@ type Request struct {
 	RootClose int
 	// RootEmpty is true when the root object has no fields.
 	RootEmpty bool
-	// HasCacheControl is true if the body mentions cache_control anywhere. It is
-	// a byte search on purpose: it can only err toward "markers present".
-	HasCacheControl bool
+	// parsed is false for a Request made by Apply, which is parsed on demand.
+	parsed bool
+	// cacheControl caches HasCacheControl: 0 unknown, 1 no, 2 yes.
+	cacheControl uint8
+}
+
+// HasCacheControl reports whether the body mentions cache_control anywhere. It is
+// a byte search on purpose: it can only err toward "markers present". It is a
+// method, not a field, because the search reads the whole body and only
+// cache_breakpoints needs it.
+func (r *Request) HasCacheControl() bool {
+	if r.cacheControl == 0 {
+		r.cacheControl = 1
+		if bytes.Contains(r.Raw, []byte(`"cache_control"`)) {
+			r.cacheControl = 2
+		}
+	}
+	return r.cacheControl == 2
 }
 
 var errMalformed = errors.New("malformed request")
@@ -94,187 +113,219 @@ func ParseRequest(body []byte) (*Request, error) {
 	if i >= len(body) || body[i] != '{' {
 		return nil, fmt.Errorf("%w: body is not a JSON object", errMalformed)
 	}
-	end, err := scanValue(body, i)
+	fields := 0
+	end, err := walkObject(body, i, func(key []byte, vs int) (int, error) {
+		fields++
+		switch string(key) {
+		case "model":
+			ve, err := scanValue(body, vs)
+			if err == nil && body[vs] == '"' {
+				r.Model, _ = decodeString(body[vs:ve])
+			}
+			return ve, err
+		case "system":
+			ve, err := r.parseSystem(vs)
+			r.System = Span{vs, ve}
+			return ve, err
+		case "tools":
+			ve, err := r.parseTools(vs)
+			r.Tools = Span{vs, ve}
+			return ve, err
+		case "messages":
+			return r.parseMessages(vs)
+		}
+		return scanValue(body, vs)
+	})
 	if err != nil {
 		return nil, err
 	}
 	r.Root = Span{i, end}
 	r.RootClose = end - 1
-	r.HasCacheControl = bytes.Contains(body, []byte(`"cache_control"`))
-
-	var msgs Span
-	n := 0
-	err = eachField(body, r.Root, func(key []byte, val Span) error {
-		n++
-		switch string(key) {
-		case "model":
-			if body[val.S] == '"' {
-				r.Model, _ = decodeString(body[val.S:val.E])
-			}
-		case "system":
-			r.System = val
-		case "tools":
-			r.Tools = val
-		case "messages":
-			msgs = val
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	r.RootEmpty = n == 0
-	if r.System.E != 0 && body[r.System.S] == '[' {
-		err = eachElem(body, r.System, func(sp Span) error {
-			blk := SystemBlock{Span: sp}
-			if body[sp.S] == '{' {
-				if err := eachField(body, sp, func(key []byte, val Span) error {
-					switch string(key) {
-					case "type":
-						if body[val.S] == '"' {
-							blk.Type, _ = decodeString(body[val.S:val.E])
-						}
-					case "text":
-						if body[val.S] == '"' {
-							blk.Text = val
-						}
-					}
-					return nil
-				}); err != nil {
-					return err
-				}
-			}
-			r.SystemBlocks = append(r.SystemBlocks, blk)
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-	if r.Tools.E != 0 && body[r.Tools.S] == '[' {
-		if err = eachElem(body, r.Tools, func(sp Span) error {
-			r.ToolSpans = append(r.ToolSpans, sp)
-			return nil
-		}); err != nil {
-			return nil, err
-		}
-	}
-	if msgs.E == 0 || body[msgs.S] != '[' {
-		return r, nil // no messages array: nothing for message optimizers to do
-	}
-	err = eachElem(body, msgs, func(m Span) error {
-		msg, err := parseMessage(body, m)
-		if err != nil {
-			return err
-		}
-		r.Messages = append(r.Messages, msg)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
+	r.RootEmpty = fields == 0
+	r.parsed = true
 	return r, nil
 }
 
-func parseMessage(body []byte, sp Span) (Message, error) {
-	msg := Message{Span: sp}
-	if body[sp.S] != '{' {
-		return msg, nil
-	}
-	var content Span
-	err := eachField(body, sp, func(key []byte, val Span) error {
-		switch string(key) {
-		case "role":
-			if body[val.S] == '"' {
-				msg.Role, _ = decodeString(body[val.S:val.E])
-			}
-		case "content":
-			content = val
-		}
+// Ensure parses a Request returned by Apply, which is left unparsed because the
+// next optimizer may not need it, or there may be no next optimizer. It is a
+// no-op on a parsed Request. Optimizers call it first; it fails only if an
+// earlier edit produced a malformed body.
+func (r *Request) Ensure() error {
+	if r.parsed {
 		return nil
-	})
+	}
+	p, err := ParseRequest(r.Raw)
 	if err != nil {
-		return msg, err
+		return err
 	}
-	if content.E == 0 || body[content.S] != '[' {
-		return msg, nil
-	}
-	err = eachElem(body, content, func(b Span) error {
-		blk, err := parseBlock(body, b)
-		if err != nil {
-			return err
-		}
-		msg.Blocks = append(msg.Blocks, blk)
-		return nil
-	})
-	return msg, err
+	*r = *p
+	return nil
 }
 
-func parseBlock(body []byte, sp Span) (Block, error) {
-	blk := Block{Span: sp}
-	if body[sp.S] != '{' {
-		return blk, nil
+func (r *Request) parseSystem(vs int) (int, error) {
+	b := r.Raw
+	if b[vs] != '[' {
+		return scanValue(b, vs)
 	}
-	err := eachField(body, sp, func(key []byte, val Span) error {
+	return walkArray(b, vs, func(es int) (int, error) {
+		blk := SystemBlock{}
+		if b[es] != '{' {
+			ee, err := scanValue(b, es)
+			blk.Span = Span{es, ee}
+			r.SystemBlocks = append(r.SystemBlocks, blk)
+			return ee, err
+		}
+		ee, err := walkObject(b, es, func(key []byte, vs int) (int, error) {
+			ve, err := scanValue(b, vs)
+			switch string(key) {
+			case "type":
+				if err == nil && b[vs] == '"' {
+					blk.Type = internStr(b[vs:ve])
+				}
+			case "text":
+				if b[vs] == '"' {
+					blk.Text = Span{vs, ve}
+				}
+			}
+			return ve, err
+		})
+		blk.Span = Span{es, ee}
+		r.SystemBlocks = append(r.SystemBlocks, blk)
+		return ee, err
+	})
+}
+
+func (r *Request) parseTools(vs int) (int, error) {
+	b := r.Raw
+	if b[vs] != '[' {
+		return scanValue(b, vs)
+	}
+	return walkArray(b, vs, func(es int) (int, error) {
+		ee, err := scanValue(b, es)
+		r.ToolSpans = append(r.ToolSpans, Span{es, ee})
+		return ee, err
+	})
+}
+
+func (r *Request) parseMessages(vs int) (int, error) {
+	b := r.Raw
+	if b[vs] != '[' {
+		return scanValue(b, vs)
+	}
+	r.Messages = make([]Message, 0, 64)
+	return walkArray(b, vs, func(es int) (int, error) {
+		msg := Message{}
+		if b[es] != '{' {
+			ee, err := scanValue(b, es)
+			msg.Span = Span{es, ee}
+			r.Messages = append(r.Messages, msg)
+			return ee, err
+		}
+		ee, err := walkObject(b, es, func(key []byte, vs int) (int, error) {
+			switch string(key) {
+			case "role":
+				ve, err := scanValue(b, vs)
+				if err == nil && b[vs] == '"' {
+					msg.Role = internStr(b[vs:ve])
+				}
+				return ve, err
+			case "content":
+				if b[vs] == '[' {
+					return walkArray(b, vs, func(bs int) (int, error) {
+						blk, be, err := parseBlock(b, bs)
+						msg.Blocks = append(msg.Blocks, blk)
+						return be, err
+					})
+				}
+			}
+			return scanValue(b, vs)
+		})
+		msg.Span = Span{es, ee}
+		r.Messages = append(r.Messages, msg)
+		return ee, err
+	})
+}
+
+// parseBlock reads one content block starting at b[bs] and returns it with the
+// offset one past its end.
+func parseBlock(b []byte, bs int) (Block, int, error) {
+	blk := Block{}
+	if b[bs] != '{' {
+		be, err := scanValue(b, bs)
+		blk.Span = Span{bs, be}
+		return blk, be, err
+	}
+	be, err := walkObject(b, bs, func(key []byte, vs int) (int, error) {
+		ve, err := scanValue(b, vs)
+		if err != nil {
+			return 0, err
+		}
 		switch string(key) {
 		case "type":
-			if body[val.S] == '"' {
-				blk.Type, _ = decodeString(body[val.S:val.E])
+			if b[vs] == '"' {
+				blk.Type = internStr(b[vs:ve])
 			}
 		case "tool_use_id":
-			if body[val.S] == '"' {
-				blk.ToolUseID, _ = decodeString(body[val.S:val.E])
+			if b[vs] == '"' {
+				blk.ToolUseID, _ = decodeString(b[vs:ve])
 			}
 		case "is_error":
-			blk.IsError = bytes.Equal(body[val.S:val.E], []byte("true"))
+			blk.IsError = bytes.Equal(b[vs:ve], []byte("true"))
 		case "content":
-			blk.Content = val
+			blk.Content = Span{vs, ve}
 		}
-		return nil
+		return ve, nil
 	})
+	blk.Span = Span{bs, be}
 	if err != nil || blk.Type != "tool_result" || blk.Content.E == 0 {
-		return blk, err
+		return blk, be, err
 	}
-	switch body[blk.Content.S] {
+	switch b[blk.Content.S] {
 	case '"':
 		blk.Texts = []Span{blk.Content}
 		blk.TextOnly = true
 	case '[':
 		blk.TextOnly = true
-		err = eachElem(body, blk.Content, func(c Span) error {
-			if body[c.S] != '{' {
+		_, err = walkArray(b, blk.Content.S, func(cs int) (int, error) {
+			if b[cs] != '{' {
 				blk.TextOnly = false
-				return nil
+				return scanValue(b, cs)
 			}
 			var typ string
 			var text Span
-			if err := eachField(body, c, func(key []byte, val Span) error {
+			ce, err := walkObject(b, cs, func(key []byte, vs int) (int, error) {
+				ve, err := scanValue(b, vs)
+				if err != nil {
+					return 0, err
+				}
 				switch string(key) {
 				case "type":
-					if body[val.S] == '"' {
-						typ, _ = decodeString(body[val.S:val.E])
+					if b[vs] == '"' {
+						typ = internStr(b[vs:ve])
 					}
 				case "text":
-					text = val
+					text = Span{vs, ve}
 				}
-				return nil
-			}); err != nil {
-				return err
+				return ve, nil
+			})
+			if err != nil {
+				return 0, err
 			}
-			if typ == "text" && text.E != 0 && body[text.S] == '"' {
+			if typ == "text" && text.E != 0 && b[text.S] == '"' {
 				blk.Texts = append(blk.Texts, text)
 			} else {
 				blk.TextOnly = false
 			}
-			return nil
+			return ce, nil
 		})
 	default:
 		// null or an object: not something we rewrite.
 	}
-	return blk, err
+	return blk, be, err
 }
 
-// Apply returns a new Request with edits applied. Edits must not overlap.
+// Apply returns a new, unparsed Request with edits applied. Edits must not
+// overlap. Call Ensure on the result before reading its structure.
 func (r *Request) Apply(edits []Edit) (*Request, error) {
 	if len(edits) == 0 {
 		return r, nil
@@ -298,11 +349,34 @@ func (r *Request) Apply(edits []Edit) (*Request, error) {
 		at = e.E
 	}
 	out = append(out, r.Raw[at:]...)
-	return ParseRequest(out)
+	return &Request{Raw: out}, nil
 }
 
 // DecodeString decodes the JSON string at sp.
 func (r *Request) DecodeString(sp Span) (string, bool) { return decodeString(r.Raw[sp.S:sp.E]) }
+
+// internStr decodes a short JSON string that is almost always one of a few known
+// words (block types, roles), without allocating for those.
+func internStr(b []byte) string {
+	switch string(b) {
+	case `"text"`:
+		return "text"
+	case `"tool_use"`:
+		return "tool_use"
+	case `"tool_result"`:
+		return "tool_result"
+	case `"user"`:
+		return "user"
+	case `"assistant"`:
+		return "assistant"
+	case `"image"`:
+		return "image"
+	case `"thinking"`:
+		return "thinking"
+	}
+	s, _ := decodeString(b)
+	return s
+}
 
 func decodeString(b []byte) (string, bool) {
 	// Fast path: no escapes.
@@ -390,68 +464,100 @@ func scanValue(b []byte, i int) (int, error) {
 	}
 }
 
+// scanString returns the offset one past the string that opens at b[i]. It jumps
+// from quote to quote with a vectorized search and counts the backslashes in
+// front of each to tell an escaped quote from the closing one.
 func scanString(b []byte, i int) (int, error) {
-	for j := i + 1; j < len(b); j++ {
-		switch b[j] {
-		case '\\':
-			j++
-		case '"':
-			return j + 1, nil
+	j := i + 1
+	for {
+		k := bytes.IndexByte(b[j:], '"')
+		if k < 0 {
+			return 0, errMalformed
 		}
+		q := j + k
+		n := 0
+		for p := q - 1; p > i && b[p] == '\\'; p-- {
+			n++
+		}
+		if n%2 == 0 {
+			return q + 1, nil
+		}
+		j = q + 1
 	}
-	return 0, errMalformed
 }
 
-// eachField calls fn with the raw key (between its quotes) and value span of
-// every field of the object at sp.
-func eachField(b []byte, sp Span, fn func(key []byte, val Span) error) error {
-	i := skipWS(b, sp.S+1)
-	for i < sp.E-1 {
-		if b[i] == ',' {
-			i = skipWS(b, i+1)
-			continue
-		}
-		if b[i] != '"' {
-			return errMalformed
+// walkObject walks the object that opens at b[i], calling fn for each field with
+// the raw key (between its quotes) and the offset where its value starts. fn
+// returns the offset one past the value, by descending into it or skipping it
+// with scanValue, so the value is scanned once. walkObject returns the offset one
+// past the closing brace.
+func walkObject(b []byte, i int, fn func(key []byte, valStart int) (int, error)) (int, error) {
+	i = skipWS(b, i+1)
+	if i < len(b) && b[i] == '}' {
+		return i + 1, nil
+	}
+	for {
+		if i >= len(b) || b[i] != '"' {
+			return 0, errMalformed
 		}
 		kend, err := scanString(b, i)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		key := b[i+1 : kend-1]
 		i = skipWS(b, kend)
 		if i >= len(b) || b[i] != ':' {
-			return errMalformed
+			return 0, errMalformed
 		}
 		i = skipWS(b, i+1)
-		vend, err := scanValue(b, i)
-		if err != nil {
-			return err
+		if i >= len(b) {
+			return 0, errMalformed
 		}
-		if err := fn(key, Span{i, vend}); err != nil {
-			return err
+		vend, err := fn(key, i)
+		if err != nil {
+			return 0, err
 		}
 		i = skipWS(b, vend)
+		if i >= len(b) {
+			return 0, errMalformed
+		}
+		switch b[i] {
+		case ',':
+			i = skipWS(b, i+1)
+		case '}':
+			return i + 1, nil
+		default:
+			return 0, errMalformed
+		}
 	}
-	return nil
 }
 
-// eachElem calls fn with the span of every element of the array at sp.
-func eachElem(b []byte, sp Span, fn func(Span) error) error {
-	i := skipWS(b, sp.S+1)
-	for i < sp.E-1 {
-		if b[i] == ',' {
-			i = skipWS(b, i+1)
-			continue
-		}
-		vend, err := scanValue(b, i)
-		if err != nil {
-			return err
-		}
-		if err := fn(Span{i, vend}); err != nil {
-			return err
-		}
-		i = skipWS(b, vend)
+// walkArray is walkObject for arrays: fn gets the offset where each element
+// starts and returns the offset one past it.
+func walkArray(b []byte, i int, fn func(elemStart int) (int, error)) (int, error) {
+	i = skipWS(b, i+1)
+	if i < len(b) && b[i] == ']' {
+		return i + 1, nil
 	}
-	return nil
+	for {
+		if i >= len(b) {
+			return 0, errMalformed
+		}
+		eend, err := fn(i)
+		if err != nil {
+			return 0, err
+		}
+		i = skipWS(b, eend)
+		if i >= len(b) {
+			return 0, errMalformed
+		}
+		switch b[i] {
+		case ',':
+			i = skipWS(b, i+1)
+		case ']':
+			return i + 1, nil
+		default:
+			return 0, errMalformed
+		}
+	}
 }

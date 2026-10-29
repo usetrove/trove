@@ -97,3 +97,25 @@ func TestCacheStability50Turns(t *testing.T) {
 	t.Run("steady", func(t *testing.T) { run(t, 0) })
 	t.Run("restart every 7 turns", func(t *testing.T) { run(t, 7) })
 }
+
+// TestMemoNeverChangesOutput runs a 50-turn session through an engine whose
+// optimizers memoize and through one that does not, and requires identical
+// bytes on every turn. The memo is only a speed-up; correctness must not
+// depend on it.
+func TestMemoNeverChangesOutput(t *testing.T) {
+	cfg := config.Default()
+	cfg.Optimizers["noise_normalizer"] = config.StateOn
+	cfg.Optimizers["duplicate_result_collapser"] = config.StateOn
+	cfg.Optimize.BudgetMS = 1000
+	withMemo := New(Options{Config: cfg, Getenv: func(string) string { return "" }})
+	noMemo := New(Options{Config: cfg, Getenv: func(string) string { return "" },
+		Pipeline: []Optimizer{NoiseNormalizer{}, DuplicateCollapser{}}})
+	for turn := 1; turn <= 50; turn++ {
+		body := req{system: "stable system prompt", tools: []string{"bash"}, msgs: sessionTurns(turn)}.body()
+		a := withMemo.Run(context.Background(), input(body))
+		b := noMemo.Run(context.Background(), input(body))
+		if !bytes.Equal(a.Body, b.Body) || a.TokensRemoved() != b.TokensRemoved() {
+			t.Fatalf("turn %d: output differs with and without the memo", turn)
+		}
+	}
+}

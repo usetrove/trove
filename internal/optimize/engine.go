@@ -185,6 +185,11 @@ func (e *Engine) Run(ctx context.Context, in Input) (res Result) {
 		if state != config.StateShadow && state != config.StateOn {
 			continue
 		}
+		if err := cur.Ensure(); err != nil {
+			// An earlier optimizer produced a body we cannot read. Never forward it.
+			res.Failures = append(res.Failures, Failure{Optimizer: "engine", Class: "malformed"})
+			return Result{Body: in.Body, Failures: res.Failures}
+		}
 		out, rep, fail := guard(ctx, o, cur, sess)
 		if fail != nil {
 			res.Failures = append(res.Failures, *fail)
@@ -210,6 +215,11 @@ func (e *Engine) Run(ctx context.Context, in Input) (res Result) {
 		}
 	}
 	if string(cur.Raw) != string(in.Body) {
+		// Edits are applied without re-reading the body between optimizers, so
+		// check the final result once before it can be forwarded.
+		if _, err := ParseRequest(cur.Raw); err != nil {
+			return Result{Body: in.Body, Failures: append(res.Failures, Failure{Optimizer: "engine", Class: "malformed"})}
+		}
 		res.Body, res.Changed = cur.Raw, true
 	}
 	return res

@@ -33,7 +33,45 @@ func IsProgress(l string) bool {
 // start with | / \ or -, which would catch bullet lists, ASCII tables and diffs
 // that must never be dropped.
 func IsSpinnerFrame(l string) bool {
-	return len(l) <= 120 && strings.ContainsAny(l, Braille)
+	// Braille glyphs are three bytes starting 0xE2; checking that byte first
+	// keeps the multi-byte set search off almost every line.
+	return len(l) <= 120 && strings.IndexByte(l, 0xE2) >= 0 && strings.ContainsAny(l, Braille)
+}
+
+// isFrame reports whether a line is one frame of a progress bar or spinner.
+func isFrame(l string) bool {
+	return len(l) <= maxFrameLine && (IsProgress(l) || IsSpinnerFrame(l))
+}
+
+// needsWork is a cheap, allocation-free check that Clean could change text. Most
+// tool output is already clean, and Clean runs on all of it for every request.
+func needsWork(text string) bool {
+	if strings.IndexByte(text, 0x1b) >= 0 || strings.IndexByte(text, '\r') >= 0 {
+		return true
+	}
+	prev, run := "", 0
+	for start := 0; start <= len(text); {
+		end := strings.IndexByte(text[start:], '\n')
+		if end < 0 {
+			end = len(text)
+		} else {
+			end += start
+		}
+		line := text[start:end]
+		if isFrame(line) {
+			return true
+		}
+		if run > 0 && line == prev {
+			if run++; run >= minRun {
+				return true
+			}
+		} else {
+			run = 1
+		}
+		prev = line
+		start = end + 1
+	}
+	return false
 }
 
 const (
@@ -53,7 +91,7 @@ var repeatMarker = regexp.MustCompile(`^\(repeated \d+ times\)\r?$`)
 // A line that differs from its neighbors is never removed, apart from the
 // progress and spinner frames described above.
 func Clean(text string) string {
-	if text == "" {
+	if text == "" || !needsWork(text) {
 		return text
 	}
 	hasEsc := strings.IndexByte(text, 0x1b) >= 0
@@ -78,13 +116,14 @@ func Clean(text string) string {
 	}
 
 	// Progress and spinner frames: keep only the last of each consecutive group.
-	frame := func(l string) bool {
-		return len(l) <= maxFrameLine && (IsProgress(l) || IsSpinnerFrame(l))
+	frames := make([]bool, len(lines))
+	for i, l := range lines {
+		frames[i] = isFrame(l)
 	}
 	var keep []string
 	dropped := false
 	for i := 0; i < len(lines); i++ {
-		if frame(lines[i]) && i+1 < len(lines) && frame(lines[i+1]) {
+		if frames[i] && i+1 < len(lines) && frames[i+1] {
 			dropped = true
 			continue
 		}

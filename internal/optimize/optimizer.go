@@ -127,7 +127,7 @@ func AppliedJSON(reports []Report, failures []Failure) []byte {
 func Pipeline() []Optimizer {
 	return []Optimizer{
 		VolatilePrefixMover{},
-		NoiseNormalizer{},
+		NoiseNormalizer{memo: newSpanMemo()},
 		OutputTrimmer{},
 		DuplicateCollapser{},
 		CacheBreakpoints{},

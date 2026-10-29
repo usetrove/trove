@@ -30,6 +30,9 @@ func TestNoiseNormalizerOutput(t *testing.T) {
 	body := req{msgs: []msg{user(toolResult("t1", noisyOutput()))}}.body()
 	r, _ := ParseRequest(body)
 	out, _ := NoiseNormalizer{}.Transform(t.Context(), r)
+	if err := out.Ensure(); err != nil {
+		t.Fatal(err)
+	}
 	got, _ := out.DecodeString(out.Messages[0].Blocks[0].Texts[0])
 	want := "ERROR start\nretrying connection to the build cache retrying connection to the build cache \n(repeated 37 times)\ndone\n"
 	if got != want {

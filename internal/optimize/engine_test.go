@@ -35,7 +35,7 @@ func TestParseRequest(t *testing.T) {
 	if got, _ := r.DecodeString(b[0].Texts[0]); got != "out" {
 		t.Errorf("decoded %q", got)
 	}
-	if r.HasCacheControl {
+	if r.HasCacheControl() {
 		t.Error("no cache_control expected")
 	}
 }
@@ -353,5 +353,29 @@ func TestAppliedJSON(t *testing.T) {
 	want := `{"label":"estimated","optimizers":[{"name":"noise_normalizer","state":"on","bytes_removed":70,"tokens_removed":20},{"name":"x","state":"failed","bytes_removed":0,"tokens_removed":0,"failed":"panic"}]}`
 	if string(b) != want {
 		t.Errorf("got %s", b)
+	}
+}
+
+func TestEngineNeverForwardsAMalformedResult(t *testing.T) {
+	body := req{msgs: []msg{user(text("hello"))}}.body()
+	breaks := stub{name: "noise_normalizer", applies: true, transform: replaceFirst(`"messages"`, `"messages`)} // drops a quote
+	tests := []struct {
+		name     string
+		pipeline []Optimizer
+	}{
+		{"last optimizer breaks the body", []Optimizer{breaks}},
+		{"a later optimizer receives the broken body", []Optimizer{breaks, stub{name: "duplicate_result_collapser", applies: true, transform: replaceFirst("x", "y")}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := testEngine(t, map[string]string{"noise_normalizer": "on", "duplicate_result_collapser": "on"}, tt.pipeline...)
+			res := e.Run(context.Background(), input(body))
+			if res.Changed || !bytes.Equal(res.Body, body) {
+				t.Fatalf("a malformed body was forwarded: %s", res.Body)
+			}
+			if len(res.Failures) == 0 || res.Failures[len(res.Failures)-1].Class != "malformed" {
+				t.Errorf("failure not recorded: %+v", res.Failures)
+			}
+		})
 	}
 }
