@@ -1,0 +1,48 @@
+Trove report: this month (since Oct 1)
+
+Headline
+  Spend        ~$73.50 (estimated at list prices, not an invoice); 1.6M tokens
+               (measured)
+  Waste found  at least ~$5.85, 8% of spend (estimated; overlapping findings
+               counted once)
+  Savings      ~$0.50 so far (estimated)
+  Measured     not enough data yet to compare sessions with and without an
+               optimizer. The dollar savings above are estimates.
+
+Spend by agent and model
+  Agent        Requests  Tokens (measured)  Cost (estimated)
+  claude_code        20                 1M           ~$50.00
+  codex_cli          10               520K           ~$23.50
+
+  Model     Requests  Tokens (measured)  Cost (estimated)
+  claude-a        10               520K           ~$25.00
+  claude-b        10               520K           ~$25.00
+  gpt-x           10               520K           ~$23.50
+
+Biggest leaks (estimated, overlapping, not additive)
+  1. Repeated tool results: ~$4.50 (estimated), 60K tokens (estimated)
+     Do this: trove optimize status
+     duplicate_result_collapser can remove this. Nothing is offered or switched
+     on until the baseline period ends (see Optimizers).
+  2. Noisy tool output: ~$3.00 (estimated), 90K tokens (estimated)
+     Do this: trove optimize status
+     noise_normalizer can remove this. Nothing is offered or switched on until
+     the baseline period ends (see Optimizers).
+  3. Prompt cache misses: ~$1.35 (estimated), 27K tokens (estimated)
+     Cache misses happen when the start of a request changes between turns.
+     Avoid editing early context mid-session.
+
+Optimizers
+  Baseline in progress: day 3 of 7 and 30 of 20 sessions. Until both pass, every
+  optimizer only estimates and changes nothing.
+  volatile_prefix_mover: off
+  noise_normalizer: shadow (set to on)
+    Saved ~$0.50 (estimated).
+  output_trimmer: off
+  duplicate_result_collapser: off
+    Would have saved ~$3.60 (estimated, shadow mode).
+  cache_breakpoints: off
+  Guardrail events: none.
+
+Recommendations (suggestions only; Trove changes nothing on its own)
+  None yet. These need more recorded usage.

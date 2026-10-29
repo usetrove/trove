@@ -75,6 +75,30 @@ func OpenNoMigrate(dataDir string) (*DB, error) {
 	return &DB{DB: sdb, path: path}, nil
 }
 
+// OpenReadOnly opens an existing database for reading only: it creates nothing,
+// runs no migration and holds no write lock. It is what the status line uses, so
+// it stays fast and can never disturb the gateway. A missing file is an error
+// that satisfies os.IsNotExist.
+func OpenReadOnly(dataDir string) (*DB, error) {
+	path := filepath.Join(dataDir, DBFileName)
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	dsn := "file:" + filepath.ToSlash(path) + "?mode=ro&_pragma=busy_timeout(200)"
+	if !strings.HasPrefix(filepath.ToSlash(path), "/") {
+		dsn = "file:/" + filepath.ToSlash(path) + "?mode=ro&_pragma=busy_timeout(200)" // Windows drive paths
+	}
+	sdb, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("cannot open the database %s: %v", path, err)
+	}
+	if err := sdb.Ping(); err != nil {
+		_ = sdb.Close()
+		return nil, fmt.Errorf("the database %s could not be opened for reading: %v", path, err)
+	}
+	return &DB{DB: sdb, path: path}, nil
+}
+
 type migration struct {
 	version int
 	name    string
@@ -213,6 +237,14 @@ func (d *DB) Purge(ctx context.Context, days int, now time.Time) (int64, error) 
 	}
 	n, _ := res.RowsAffected()
 	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE COALESCE(ended_at, started_at) < ?`, cutoff); err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM session_pins WHERE pinned_at < ?`, cutoff); err != nil {
+		return 0, err
+	}
+	// History rows older than the cutoff go too. File checkpoints stay, so the
+	// next scan does not re-read old files and bring the rows back.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM history_requests WHERE ts < ?`, cutoff); err != nil {
 		return 0, err
 	}
 	return n, tx.Commit()

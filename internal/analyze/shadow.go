@@ -8,13 +8,14 @@ import (
 	"time"
 )
 
-// Provisional optimizer names. Prompt 5 defines the real optimizers; until
-// then each is derived from the waste detector it would act on, so shadow
-// estimates and roll-ups already use stable names.
+// Optimizer names, as defined by internal/optimize. Each is derived from the
+// waste detector it would act on, so shadow estimates and roll-ups use the same
+// names as the optimizers that act on them. prune_unused_tools has no optimizer
+// yet and is estimate-only.
 const (
-	OptDedupe   = "dedupe_tool_results"
-	OptNoise    = "strip_noise"
-	OptTruncate = "truncate_oversized_output"
+	OptDedupe   = "duplicate_result_collapser"
+	OptNoise    = "noise_normalizer"
+	OptTruncate = "output_trimmer"
 	OptPrune    = "prune_unused_tools"
 )
 
@@ -90,6 +91,12 @@ func DayRollup(ctx context.Context, db Querier, day time.Time) (Rollup, error) {
 	d := day.UTC().Truncate(24 * time.Hour)
 	return rollup(ctx, db, `SELECT shadow_savings FROM requests WHERE ts >= ? AND ts < ? AND shadow_savings IS NOT NULL`,
 		d.UnixMilli(), d.Add(24*time.Hour).UnixMilli())
+}
+
+// WindowRollup sums the stored shadow savings of requests in [from, to).
+func WindowRollup(ctx context.Context, db Querier, from, to time.Time) (Rollup, error) {
+	return rollup(ctx, db, `SELECT shadow_savings FROM requests WHERE ts >= ? AND ts < ? AND shadow_savings IS NOT NULL`,
+		from.UnixMilli(), to.UnixMilli())
 }
 
 func rollup(ctx context.Context, db Querier, query string, args ...any) (Rollup, error) {

@@ -1,0 +1,37 @@
+# trovebench defaults. Every value can be overridden with --config <file>.
+# This file's hash is recorded in versions.json for each batch.
+
+agent: claude_code
+
+# Pin an explicit model ID, never an alias, so results are reproducible.
+# The model must have a price in internal/pricing/pricing.json.
+model: claude-haiku-5-5
+
+repeats: 3            # runs per task per condition
+order_seed: 1         # seed for the randomized run order
+
+limits:
+  batch_cap_usd: 25.0     # hard stop for the whole batch
+  run_cap_usd: 1.50       # passed to claude --max-budget-usd, also the worst case assumed per run
+  run_timeout_s: 1800     # wall-clock kill for one run (container is destroyed)
+
+# Conditions. "direct" has no gateway; "passthrough" runs the gateway with every
+# optimizer off; "alone:<name>" turns one optimizer on; "all_safe" turns on every
+# optimizer that can be "on" for the agent.
+conditions:
+  - direct
+  - passthrough
+  - alone:noise_normalizer
+  - alone:duplicate_result_collapser
+  - all_safe
+
+# Ship rule: an optimizer is recommended for automatic mode only if all hold,
+# comparing its condition against `reference` over paired runs.
+ship_rule:
+  reference: passthrough
+  min_cost_reduction_pct: 5      # X: upper bound of the cost-change CI must be <= -X%
+  success_margin_pts: 5          # lower bound of the success-difference CI must be >= -margin
+  min_pairs: 30                  # fewer paired runs than this -> "need more data"
+  confidence: 0.95
+  bootstrap_resamples: 10000
+  bootstrap_seed: 20261029

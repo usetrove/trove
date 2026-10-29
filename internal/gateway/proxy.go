@@ -14,7 +14,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/usetrove/trove/internal/gateway/agent"
 	"github.com/usetrove/trove/internal/gateway/auth"
+	"github.com/usetrove/trove/internal/gateway/session"
+	"github.com/usetrove/trove/internal/optimize"
 )
 
 // maxRequestBody bounds how much of a request body is held in memory. It is
@@ -35,7 +38,13 @@ type flight struct {
 	start     time.Time
 	ctx       context.Context // the client request context; ends when the client disconnects
 	reqHeader http.Header
-	reqBody   []byte
+	reqBody   []byte // what was forwarded upstream (after any optimizer ran)
+
+	// sessionKey is set only when the optimizer engine ran; it was derived from
+	// the original body before any transform. Otherwise record derives it.
+	sessionKey string
+	keyed      bool
+	opt        *optimize.Result
 
 	mu        sync.Mutex
 	status    int
@@ -81,7 +90,9 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, provider, prefi
 	if r.URL.RawPath != "" {
 		rawPath = strings.TrimPrefix(r.URL.RawPath, prefix)
 	}
-	f := &flight{provider: provider, path: path, start: start, ctx: r.Context(), reqHeader: r.Header.Clone(), reqBody: body}
+	f := &flight{provider: provider, path: path, start: start, ctx: r.Context(), reqHeader: r.Header.Clone()}
+	body = s.optimizeBody(r, f, body)
+	f.reqBody = body
 
 	proxy := &httputil.ReverseProxy{
 		Transport:     s.transport,
@@ -231,4 +242,26 @@ func providerError(w http.ResponseWriter, provider string, code int, msg string)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// optimizeBody runs the optimizer engine, if one is configured and enabled, and
+// returns the body to forward. The engine never fails: on any problem it returns
+// the original bytes. The session key is derived here, from the original body,
+// so a transform can never change which session a request belongs to.
+func (s *Server) optimizeBody(r *http.Request, f *flight, body []byte) []byte {
+	eng := s.opts.Optimizer
+	if eng == nil || f.provider != "anthropic" || !eng.Enabled() {
+		return body
+	}
+	label, _ := agent.Label(r.Header)
+	f.sessionKey, f.keyed = s.sessions.Key(session.DeriveKey(r.Header, body), f.start), true
+	res := eng.Run(r.Context(), optimize.Input{
+		Provider: f.provider, Path: f.path, Header: r.Header, Body: body,
+		SessionKey: f.sessionKey, Agent: label,
+	})
+	f.opt = &res
+	for _, fl := range res.Failures {
+		s.log.Warn("an optimizer could not finish, so the original request was forwarded unchanged", "optimizer", fl.Optimizer, "reason", fl.Class)
+	}
+	return res.Body
 }

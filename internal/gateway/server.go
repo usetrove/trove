@@ -31,6 +31,7 @@ import (
 	"github.com/usetrove/trove/internal/analyze"
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/gateway/session"
+	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -53,6 +54,7 @@ type Options struct {
 	Recorder  Recorder          // required
 	Pricing   *pricing.Table    // nil: costs are recorded as unknown
 	Analyzer  *analyze.Analyzer // nil: no structure analysis; runs after the response, never on the request path
+	Optimizer *optimize.Engine  // nil: requests are forwarded byte for byte
 	Logger    *slog.Logger      // must already redact; nil discards
 	Version   string
 	Now       func() time.Time  // tests only

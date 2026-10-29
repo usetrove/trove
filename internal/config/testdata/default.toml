@@ -21,6 +21,15 @@ openai = "https://api.openai.com"
 # Optimizers not listed here are off. Changes take effect at the next session.
 # example = "shadow"
 
+[optimize]
+# Agent labels you explicitly mark as custom agents, for optimizers that give a
+# custom agent a better cache layout (cache_breakpoints, volatile_prefix_mover).
+# Allowed labels: "sdk", "other". Claude Code and Codex are never allowed.
+custom_agents = []
+# If the optimizers take longer than this many milliseconds (1 to 1000), Trove
+# forwards your original request unmodified.
+budget_ms = 25
+
 [budget]
 # Budget period: "daily", "weekly" or "monthly".
 period = "monthly"
@@ -28,3 +37,38 @@ period = "monthly"
 cap_usd = 0.0
 # Warn when this percent of the cap is used (1 to 100).
 warn_at_percent = 80
+
+[measure]
+# For the first baseline_days days AND baseline_sessions sessions after install,
+# every optimizer runs in shadow mode only (estimates, nothing changed).
+baseline_days = 7
+baseline_sessions = 20
+# Alternate whole sessions between on and off for a cleaner comparison. Off by
+# default: the off sessions forgo the savings. Sessions are never switched mid-way.
+interleave = false
+# Count commits made during or shortly after a session, read-only, from the local
+# git repo. Only counts are stored, never messages, file names or diffs.
+git_signals = false
+# The repository to count commits in when git_signals is on (a folder path).
+git_repo = ""
+# Fewest sessions on each side before a guardrail may fire or a comparison is
+# called a conclusion. Below this Trove says "not enough data yet".
+min_sessions = 20
+# Roll an optimizer back to shadow when repeated identical tool calls per session
+# rise by this percent (1 to 1000), or when this percent of sessions it acted on
+# re-fetch what it removed (1 to 100).
+retry_increase_percent = 30
+refetch_rate_percent = 25
+
+[notifications]
+# Show a desktop notification with the receipt when a session ends.
+desktop = false
+
+[history]
+# Read your agent's own session logs (Claude Code, Codex CLI) so trove can
+# report without the gateway. Read-only: Trove never edits them and stores only
+# counts, sizes and hashes, never prompts, code, paths or tool output.
+enabled = true
+# How you pay for the agent: "api_key" or "subscription". Leave empty to let Trove
+# estimate it from your settings and environment (it never reads credentials).
+plan = ""

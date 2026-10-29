@@ -2,6 +2,7 @@ package pricing
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -116,4 +117,76 @@ func copyWrites(m map[string]int64) map[string]int64 {
 		out[k] = v
 	}
 	return out
+}
+
+// CostWithAdded is the reverse of CostWithoutAll: req is what was billed after
+// an optimizer removed tokens, and added is how many tokens it removed. It
+// prices the request as if those tokens had still been sent, and returns that as
+// Before, with req's own cost as After, so Savings is what the optimizer saved.
+//
+// The removed tokens are spread over the prompt categories in proportion to how
+// the request's prompt was actually billed (input, cache reads, each cache-write
+// TTL). That is an estimate: a removed token sat in the cached prefix more often
+// than not, but where exactly is not known after the fact. Long-context tiers
+// are re-evaluated on the larger prompt. Removed is the number of tokens added.
+func (t *Table) CostWithAdded(req Request, added int64) (Counterfactual, error) {
+	if added < 0 {
+		return Counterfactual{}, fmt.Errorf("cannot add back a negative number of tokens (%d)", added)
+	}
+	before := req
+	before.Usage.CacheWrite = copyWrites(req.Usage.CacheWrite)
+
+	type part struct {
+		n   int64
+		set func(int64)
+	}
+	parts := []part{
+		{req.Usage.UncachedInput, func(v int64) { before.Usage.UncachedInput += v }},
+		{req.Usage.CacheRead, func(v int64) { before.Usage.CacheRead += v }},
+	}
+	ttls := make([]string, 0, len(req.Usage.CacheWrite))
+	for ttl := range req.Usage.CacheWrite {
+		ttls = append(ttls, ttl)
+	}
+	sort.Strings(ttls)
+	for _, ttl := range ttls {
+		ttl := ttl
+		parts = append(parts, part{req.Usage.CacheWrite[ttl], func(v int64) { before.Usage.CacheWrite[ttl] += v }})
+	}
+	var total int64
+	for _, p := range parts {
+		total += p.n
+	}
+	if total == 0 {
+		parts[0].set(added) // no prompt to copy the mix from: price as plain input
+	} else {
+		// Largest-remainder split so the shares add up to exactly added.
+		shares := make([]int64, len(parts))
+		rems := make([]int64, len(parts))
+		var given int64
+		for i, p := range parts {
+			shares[i], rems[i] = added*p.n/total, added*p.n%total
+			given += shares[i]
+		}
+		for left := added - given; left > 0; left-- {
+			best := 0
+			for i := range rems {
+				if rems[i] > rems[best] {
+					best = i
+				}
+			}
+			shares[best]++
+			rems[best] = -1
+		}
+		for i, p := range parts {
+			p.set(shares[i])
+		}
+	}
+
+	cf := Counterfactual{Before: t.Cost(before), After: t.Cost(req), Removed: added, Savings: zeroMoney()}
+	if cf.Before.Status == Priced && cf.After.Status == Priced {
+		cf.Valid = true
+		cf.Savings = cf.Before.Total.Sub(cf.After.Total)
+	}
+	return cf, nil
 }

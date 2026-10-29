@@ -20,7 +20,7 @@ func TestAnalysisFillsMetadataColumnsWithoutPromptText(t *testing.T) {
 		`{"role":"user","content":[{"type":"tool_result","tool_use_id":"b","content":` + quote(dup) + `}]}]}`
 	do(t, "POST", g.gw.URL+"/anthropic/v1/messages", anthropicHdr, []byte(body))
 	row := g.rec.wait(t)
-	if len(row.SegmentTokenEstimate) == 0 || !strings.Contains(string(row.Findings), "duplicate_tool_result") || !strings.Contains(string(row.ShadowSavings), "dedupe_tool_results") {
+	if len(row.SegmentTokenEstimate) == 0 || !strings.Contains(string(row.Findings), "duplicate_tool_result") || !strings.Contains(string(row.ShadowSavings), "duplicate_result_collapser") {
 		t.Fatalf("analysis missing from the row: est=%s findings=%s shadow=%s", row.SegmentTokenEstimate, row.Findings, row.ShadowSavings)
 	}
 	for _, col := range [][]byte{row.SegmentTokenEstimate, row.Findings, row.ShadowSavings} {

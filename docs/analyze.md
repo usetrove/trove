@@ -71,9 +71,9 @@ billed as cache read, cache write and uncached input
 
 ## Shadow mode
 
-Optimizer names are provisional until Prompt 5 defines the real ones; each is
-derived from the detector it would act on: `dedupe_tool_results`,
-`strip_noise`, `truncate_oversized_output`, `prune_unused_tools`. Per request
+Optimizer names match the optimizers in `internal/optimize` (see
+`docs/optimize.md`); each is derived from the detector it would act on: `duplicate_result_collapser`,
+`noise_normalizer`, `output_trimmer`, `prune_unused_tools`. Per request
 the estimate equals the matching finding. Cache effects: tokens removed from
 the cached prefix are valued at the cache-read price, from the written part at
 the write price, from the rest at the input price. Optimizers change only at

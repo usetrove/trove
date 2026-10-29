@@ -36,6 +36,14 @@ type Request struct {
 	ErrorClass           string
 	UsageRaw             []byte // JSON: the provider's usage object, as reported
 	ServiceTier          string // as reported by the provider; empty if none
+	// TokensRemoved is the estimated tokens the optimizers in "on" state took
+	// out of this request.
+	TokensRemoved int64
+	// CostDiffUSD is the estimated money those tokens would have cost; nil when
+	// the request could not be priced exactly.
+	CostDiffUSD *float64
+	// Signals is a JSON object of integer outcome counts (see internal/measure).
+	Signals []byte
 }
 
 // WriterOptions tunes the Writer. Zero values pick sensible defaults.
@@ -176,8 +184,9 @@ const insertRequestSQL = `INSERT INTO requests (
 	ts, session_key, agent, agent_version, provider, model, endpoint, streamed, status_code,
 	latency_ms, ttft_ms, input_uncached_tokens, cache_write_tokens, cache_read_tokens,
 	output_tokens, reasoning_tokens, cost_usd, pricing_version, segment_token_estimates,
-	findings, optimizations_applied, shadow_savings, error_class, usage_raw, service_tier
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+	findings, optimizations_applied, shadow_savings, error_class, usage_raw, service_tier,
+	tokens_removed, cost_diff_usd, signals
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 
 const upsertSessionSQL = `INSERT INTO sessions (
 	session_key, agent, started_at, ended_at, request_count,
@@ -193,6 +202,19 @@ ON CONFLICT(session_key) DO UPDATE SET
 	total_cache_read_tokens = total_cache_read_tokens + excluded.total_cache_read_tokens,
 	total_output_tokens = total_output_tokens + excluded.total_output_tokens,
 	total_cost_usd = total_cost_usd + excluded.total_cost_usd`
+
+// upsertDailySQL keeps usage_daily in step with requests. It counts the same
+// requests TotalsBy does (status 1 to 399).
+const upsertDailySQL = `INSERT INTO usage_daily (day, requests, unpriced, spend_usd, saved_usd)
+VALUES (?,1,?,?,?)
+ON CONFLICT(day) DO UPDATE SET
+	requests = requests + 1,
+	unpriced = unpriced + excluded.unpriced,
+	spend_usd = spend_usd + excluded.spend_usd,
+	saved_usd = saved_usd + excluded.saved_usd`
+
+// DayKey is the local calendar date usage_daily files a request under.
+func DayKey(t time.Time) string { return t.Local().Format("2006-01-02") }
 
 func jsonOrNil(b []byte) any {
 	if len(b) == 0 {
@@ -218,6 +240,11 @@ func (d *DB) insertRequests(ctx context.Context, rows []Request) error {
 		return err
 	}
 	defer func() { _ = ses.Close() }()
+	day, err := tx.PrepareContext(ctx, upsertDailySQL)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = day.Close() }()
 
 	for _, r := range rows {
 		ts := r.TS.UnixMilli()
@@ -230,11 +257,29 @@ func (d *DB) insertRequests(ctx context.Context, rows []Request) error {
 		if r.TTFTMS != nil {
 			ttft = *r.TTFTMS
 		}
+		var costDiff any
+		if r.CostDiffUSD != nil {
+			costDiff = *r.CostDiffUSD
+		}
 		if _, err := ins.ExecContext(ctx, ts, r.SessionKey, r.Agent, r.AgentVersion, r.Provider, r.Model, r.Endpoint,
 			r.Streamed, r.StatusCode, r.LatencyMS, ttft, r.InputUncachedTokens, r.CacheWriteTokens, r.CacheReadTokens,
 			r.OutputTokens, r.ReasoningTokens, cost, r.PricingVersion, jsonOrNil(r.SegmentTokenEstimate),
-			jsonOrNil(r.Findings), jsonOrNil(r.OptimizationsApplied), jsonOrNil(r.ShadowSavings), r.ErrorClass, jsonOrNil(r.UsageRaw), r.ServiceTier); err != nil {
+			jsonOrNil(r.Findings), jsonOrNil(r.OptimizationsApplied), jsonOrNil(r.ShadowSavings), r.ErrorClass, jsonOrNil(r.UsageRaw), r.ServiceTier,
+			r.TokensRemoved, costDiff, jsonOrNil(r.Signals)); err != nil {
 			return err
+		}
+		if r.StatusCode > 0 && r.StatusCode < 400 {
+			unpriced := 0
+			if r.CostUSD == nil {
+				unpriced = 1
+			}
+			var saved float64
+			if r.TokensRemoved > 0 && len(r.OptimizationsApplied) > 0 && r.CostDiffUSD != nil {
+				saved = *r.CostDiffUSD
+			}
+			if _, err := day.ExecContext(ctx, DayKey(r.TS), unpriced, costSum, saved); err != nil {
+				return err
+			}
 		}
 		if r.SessionKey != "" {
 			if _, err := ses.ExecContext(ctx, r.SessionKey, r.Agent, ts, ts, r.InputUncachedTokens,

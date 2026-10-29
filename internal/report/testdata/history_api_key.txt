@@ -1,0 +1,34 @@
+Trove report: this month (since Oct 1)
+
+Headline
+  Spend        ~$12.00 (estimated at list prices, not an invoice); 1M tokens
+               (measured)
+  From history 24 requests in 4 sessions read from your agent's local logs
+               (estimated, not seen by the gateway). Plan: API key (estimated
+               from local settings), so this counts as spend. 3 log lines could
+               not be read and were skipped
+  Waste found  at least ~$0.96, 8% of spend (estimated; overlapping findings
+               counted once)
+  Savings      none yet; no optimizer has been on (estimated)
+  Measured     not enough data yet to compare sessions with and without an
+               optimizer. The dollar savings above are estimates.
+
+Spend by agent and model
+  Agent                  Requests  Tokens (measured)  Cost (estimated)
+  claude_code (history)        24                 1M           ~$12.00
+
+  Model     Requests  Tokens (measured)  Cost (estimated)
+  claude-a        24                 1M           ~$12.00
+
+Biggest leaks (estimated, overlapping, not additive)
+  1. Oversized tool output: ~$0.96 (estimated), 64K tokens (estimated)
+     Do this: trove optimize status
+     Estimate only for now: the trimmer needs the MCP fetch tool, which does not
+     exist yet.
+
+Optimizers
+  Optimizers act on live requests, so they need the gateway. Your history above
+  is read-only. Run `trove setup` to route your agent through Trove.
+
+Recommendations (suggestions only; Trove changes nothing on its own)
+  None yet. These need more recorded usage.
