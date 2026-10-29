@@ -70,7 +70,7 @@ func runSetup(a *App, yes bool) error {
 		if spec.binary == "codex" {
 			e, perr = setup.PlanCodex(cfgDir, cfg.Gateway.Port)
 		} else {
-			e, perr = setup.PlanClaudeCode(cfgDir, cfg.Gateway.Port)
+			e, perr = setup.PlanClaudeCode(cfgDir, cfg.Gateway.Port, cfg.Upstreams.Anthropic)
 		}
 		switch {
 		case perr != nil:

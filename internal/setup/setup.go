@@ -56,9 +56,10 @@ type Edit struct {
 	Note    string `json:"note,omitempty"`
 	NoOp    bool   `json:"no_op,omitempty"` // already configured
 
-	old     []byte // nil if the file does not exist
-	updated []byte
-	value   string // the value we set, for surgical undo
+	old      []byte // nil if the file does not exist
+	updated  []byte
+	value    string // the value we set, for surgical undo
+	previous string // the value we replaced, restored by surgical undo
 }
 
 // GatewayURL is the base URL an agent should use for a provider route.
@@ -68,7 +69,12 @@ func GatewayURL(port int, route string) string {
 
 // PlanClaudeCode plans the settings.json change. claudeDir is the Claude Code
 // config directory (~/.claude or CLAUDE_CONFIG_DIR).
-func PlanClaudeCode(claudeDir string, port int) (*Edit, error) {
+//
+// upstream is the configured Anthropic origin. If the file already sets
+// ANTHROPIC_BASE_URL to that origin or to Anthropic's own default, the value
+// is replaced (and remembered so undo can put it back); any other value is
+// treated as someone's gateway and left alone.
+func PlanClaudeCode(claudeDir string, port int, upstream string) (*Edit, error) {
 	path := filepath.Join(claudeDir, "settings.json")
 	want := GatewayURL(port, "/anthropic")
 	old, err := readOptional(path)
@@ -96,8 +102,20 @@ func PlanClaudeCode(claudeDir string, port int) (*Edit, error) {
 	if raw, ok := env[baseURLKey]; ok {
 		var cur string
 		_ = json.Unmarshal(raw, &cur)
-		if cur == want {
+		switch {
+		case cur == want:
 			e.NoOp = true
+			return e, nil
+		case isDefaultAnthropic(cur, upstream):
+			e.previous = cur
+			e.Note += " Your file already set " + baseURLKey + " to Anthropic's default address (" + cur + "); Trove replaces it and `trove undo` puts it back."
+			env[baseURLKey], _ = json.Marshal(want)
+			doc["env"], _ = json.Marshal(env)
+			out, err := marshalIndent(doc)
+			if err != nil {
+				return nil, err
+			}
+			e.updated = out
 			return e, nil
 		}
 		return nil, fmt.Errorf("%s already sets %s to %q. Trove will not overwrite it (it may be your organization's gateway). "+
@@ -111,6 +129,11 @@ func PlanClaudeCode(claudeDir string, port int) (*Edit, error) {
 	}
 	e.updated = out
 	return e, nil
+}
+
+func isDefaultAnthropic(v, upstream string) bool {
+	v = strings.TrimRight(v, "/")
+	return v == "https://api.anthropic.com" || (upstream != "" && v == strings.TrimRight(upstream, "/"))
 }
 
 // marshalIndent writes keys in sorted order. Key order and spacing in the
@@ -190,6 +213,7 @@ type Change struct {
 	Backup    string    `json:"backup,omitempty"`
 	SHAAfter  string    `json:"sha256_after"`
 	Value     string    `json:"value"`
+	Previous  string    `json:"previous,omitempty"` // value replaced by setup, restored on undo
 	AppliedAt time.Time `json:"applied_at"`
 }
 
@@ -206,7 +230,7 @@ func Apply(dataDir string, edits []*Edit, now time.Time) ([]Change, error) {
 			continue
 		}
 		c := Change{ID: now.UTC().Format("20060102T150405.000000000Z") + "-" + e.Agent, Agent: e.Agent, Path: e.Path,
-			Created: e.old == nil, Value: e.value, AppliedAt: now.UTC()}
+			Created: e.old == nil, Value: e.value, Previous: e.previous, AppliedAt: now.UTC()}
 		if e.old != nil {
 			bdir := filepath.Join(dataDir, "backups")
 			if err := os.MkdirAll(bdir, 0o700); err != nil {
@@ -333,7 +357,7 @@ func undoOne(c Change) (UndoResult, error) {
 	var next []byte
 	switch c.Agent {
 	case ClaudeCode:
-		next, err = stripClaude(cur, c.Value)
+		next, err = stripClaude(cur, c.Value, c.Previous)
 	case Codex:
 		next = stripMarked(cur)
 	default:
@@ -355,7 +379,7 @@ func undoOne(c Change) (UndoResult, error) {
 	return res, nil
 }
 
-func stripClaude(cur []byte, value string) ([]byte, error) {
+func stripClaude(cur []byte, value, previous string) ([]byte, error) {
 	doc := map[string]json.RawMessage{}
 	if err := json.Unmarshal(cur, &doc); err != nil {
 		return nil, errors.New("the file is no longer valid JSON; remove the " + baseURLKey + " line by hand")
@@ -367,7 +391,11 @@ func stripClaude(cur []byte, value string) ([]byte, error) {
 	if got != value {
 		return cur, nil // changed by you since; not ours to remove
 	}
-	delete(env, baseURLKey)
+	if previous != "" {
+		env[baseURLKey], _ = json.Marshal(previous)
+	} else {
+		delete(env, baseURLKey)
+	}
 	if len(env) == 0 {
 		delete(doc, "env")
 	} else {

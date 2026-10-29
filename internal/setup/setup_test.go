@@ -11,6 +11,8 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+const up = "https://api.anthropic.com"
+
 var t0 = time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
 
 func write(t *testing.T, path, s string) {
@@ -51,7 +53,7 @@ func TestClaudeCodeApplyAndExactUndo(t *testing.T) {
 	data, claude := t.TempDir(), t.TempDir()
 	path := filepath.Join(claude, "settings.json")
 	write(t, path, claudeOriginal)
-	e, err := PlanClaudeCode(claude, 8787)
+	e, err := PlanClaudeCode(claude, 8787, up)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +78,7 @@ func TestClaudeCodeApplyAndExactUndo(t *testing.T) {
 		t.Error("Trove must never write credentials")
 	}
 	// Idempotent.
-	if again, _ := PlanClaudeCode(claude, 8787); !again.NoOp {
+	if again, _ := PlanClaudeCode(claude, 8787, up); !again.NoOp {
 		t.Error("a second plan should be a no-op")
 	}
 	res, err := Undo(data)
@@ -93,7 +95,7 @@ func TestClaudeCodeApplyAndExactUndo(t *testing.T) {
 
 func TestClaudeCodeFileCreatedByTrovelIsRemoved(t *testing.T) {
 	data, claude := t.TempDir(), filepath.Join(t.TempDir(), ".claude")
-	e, err := PlanClaudeCode(claude, 9000)
+	e, err := PlanClaudeCode(claude, 9000, up)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +114,7 @@ func TestClaudeCodeEditedSinceOnlyOurKeyIsRemoved(t *testing.T) {
 	data, claude := t.TempDir(), t.TempDir()
 	path := filepath.Join(claude, "settings.json")
 	write(t, path, claudeOriginal)
-	e, _ := PlanClaudeCode(claude, 8787)
+	e, _ := PlanClaudeCode(claude, 8787, up)
 	if _, err := Apply(data, []*Edit{e}, t0); err != nil {
 		t.Fatal(err)
 	}
@@ -135,11 +137,11 @@ func TestClaudeCodeRefusesToOverrideExistingBaseURLOrBrokenJSON(t *testing.T) {
 	claude := t.TempDir()
 	path := filepath.Join(claude, "settings.json")
 	write(t, path, `{"env":{"ANTHROPIC_BASE_URL":"https://corp.example"}}`)
-	if _, err := PlanClaudeCode(claude, 8787); err == nil || !strings.Contains(err.Error(), "will not overwrite") {
+	if _, err := PlanClaudeCode(claude, 8787, up); err == nil || !strings.Contains(err.Error(), "will not overwrite") {
 		t.Errorf("got %v", err)
 	}
 	write(t, path, `{broken`)
-	if _, err := PlanClaudeCode(claude, 8787); err == nil || !strings.Contains(err.Error(), "not valid JSON") {
+	if _, err := PlanClaudeCode(claude, 8787, up); err == nil || !strings.Contains(err.Error(), "not valid JSON") {
 		t.Errorf("got %v", err)
 	}
 	if read(t, path) != `{broken` {
@@ -241,7 +243,7 @@ func TestUndoReversesEverythingNewestFirst(t *testing.T) {
 	data, claude, codex := t.TempDir(), t.TempDir(), t.TempDir()
 	write(t, filepath.Join(claude, "settings.json"), claudeOriginal)
 	write(t, filepath.Join(codex, "config.toml"), codexOriginal)
-	a, _ := PlanClaudeCode(claude, 8787)
+	a, _ := PlanClaudeCode(claude, 8787, up)
 	b, _ := PlanCodex(codex, 8787)
 	if _, err := Apply(data, []*Edit{a, b}, t0); err != nil {
 		t.Fatal(err)
@@ -255,5 +257,43 @@ func TestUndoReversesEverythingNewestFirst(t *testing.T) {
 	}
 	if res2, err := Undo(data); err != nil || len(res2) != 0 {
 		t.Errorf("a second undo has nothing to do: %v %+v", err, res2)
+	}
+}
+
+func TestClaudeCodeReplacesAnthropicDefaultAndUndoPutsItBack(t *testing.T) {
+	data, claude := t.TempDir(), t.TempDir()
+	path := filepath.Join(claude, "settings.json")
+	orig := "{\n  \"env\": {\n    \"ANTHROPIC_BASE_URL\": \"https://api.anthropic.com\"\n  }\n}\n"
+	write(t, path, orig)
+	e, err := PlanClaudeCode(claude, 8787, up)
+	if err != nil || e.NoOp {
+		t.Fatalf("the default address should be replaceable: %v", err)
+	}
+	if _, err := Apply(data, []*Edit{e}, t0); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(read(t, path), "127.0.0.1:8787/anthropic") {
+		t.Fatal("not replaced")
+	}
+	// Exact undo from the backup.
+	if _, err := Undo(data); err != nil || read(t, path) != orig {
+		t.Fatalf("undo: %v\n%s", err, read(t, path))
+	}
+	// Edited since: surgical undo restores the previous value instead of deleting the key.
+	e, _ = PlanClaudeCode(claude, 8787, up)
+	if _, err := Apply(data, []*Edit{e}, t0.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	_ = json.Unmarshal([]byte(read(t, path)), &doc)
+	doc["theme"] = "dark"
+	b, _ := json.Marshal(doc)
+	write(t, path, string(b))
+	if _, err := Undo(data); err != nil {
+		t.Fatal(err)
+	}
+	got := read(t, path)
+	if !strings.Contains(got, `"ANTHROPIC_BASE_URL": "https://api.anthropic.com"`) || !strings.Contains(got, "dark") {
+		t.Errorf("surgical undo should restore the previous value and keep your edit:\n%s", got)
 	}
 }
