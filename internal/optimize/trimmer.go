@@ -70,6 +70,9 @@ func (OutputTrimmer) Applies(r *Request, _ Session) bool {
 
 // Transform implements Optimizer.
 func (OutputTrimmer) Transform(ctx context.Context, r *Request) (*Request, Report) {
+	if err := r.Ensure(); err != nil {
+		return r, Report{Err: err.Error()}
+	}
 	var edits []Edit
 	for _, m := range r.Messages {
 		for _, b := range m.Blocks {

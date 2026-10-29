@@ -56,6 +56,9 @@ type firstSeen struct {
 
 // Transform implements Optimizer.
 func (DuplicateCollapser) Transform(ctx context.Context, r *Request) (*Request, Report) {
+	if err := r.Ensure(); err != nil {
+		return r, Report{Err: err.Error()}
+	}
 	seen := map[[sha256.Size]byte]firstSeen{}
 	var edits []Edit
 	for mi, m := range r.Messages {
