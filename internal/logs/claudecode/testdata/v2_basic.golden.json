@@ -1,0 +1,57 @@
+{
+  "end": {
+    "Offset": 2387,
+    "Lines": 9,
+    "Turns": 2
+  },
+  "events": [
+    {
+      "Source": "claude_code",
+      "SessionKey": "c-31ac080ac1fc731c36acd6c2",
+      "RequestKey": "3b165f2fd34d26fbb79c32b7",
+      "Turn": 1,
+      "TS": 1792490402000,
+      "Model": "claude-sonnet-5-5",
+      "Sidechain": false,
+      "Input": 10,
+      "CacheWrite5m": 0,
+      "CacheWrite1h": 300,
+      "CacheWriteNA": 0,
+      "CacheRead": 1000,
+      "Output": 50,
+      "ServiceTier": "standard",
+      "Tools": [
+        {
+          "Name": "Read",
+          "ResultBytes": 31,
+          "ResultHash": "dd2163d8e5b390f3",
+          "Error": false
+        }
+      ]
+    },
+    {
+      "Source": "claude_code",
+      "SessionKey": "c-31ac080ac1fc731c36acd6c2",
+      "RequestKey": "79758f37ffb1bf9e80282dfe",
+      "Turn": 2,
+      "TS": 1792490405000,
+      "Model": "claude-sonnet-5-5",
+      "Sidechain": false,
+      "Input": 5,
+      "CacheWrite5m": 0,
+      "CacheWrite1h": 0,
+      "CacheWriteNA": 0,
+      "CacheRead": 1300,
+      "Output": 20,
+      "ServiceTier": "standard",
+      "Tools": null
+    }
+  ],
+  "stats": {
+    "Lines": 9,
+    "Skipped": 0,
+    "Unknown": 4,
+    "FormatVersion": "2.1.302",
+    "UnknownFormat": false
+  }
+}
