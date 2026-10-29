@@ -31,4 +31,4 @@ You are helping build Trove, "the efficiency layer for AI coding agents."
 - At the end: what changed, how to test it, known gaps, and what to verify next.
 
 ## Layout
-cmd/trove (entry), internal/{cli,config,store,redact} implemented in the foundation; pricing, gateway, analyze, optimize, measure, report, logs, fixer, mcp, hooks are placeholders for later prompts; bench/ (Python, later).
+cmd/trove (entry), internal/{cli,config,store,redact} implemented in the foundation; pricing, gateway, analyze, optimize, measure, report and logs (history parsers and audit, see docs/logs.md) are implemented; fixer, mcp, hooks are placeholders for later prompts; bench/ (Python, later).
