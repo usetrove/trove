@@ -73,6 +73,18 @@ func New(o Options) *Engine {
 	return e
 }
 
+// Enabled reports whether any optimizer is configured as shadow or on. When it
+// is false the gateway skips the engine entirely, so a default install pays
+// nothing for the framework.
+func (e *Engine) Enabled() bool {
+	for _, o := range e.pipeline {
+		if s := effectiveState(o.Name(), e.cfg.OptimizerState(o.Name())); s == config.StateShadow || s == config.StateOn {
+			return true
+		}
+	}
+	return false
+}
+
 // Input is one request as the gateway sees it.
 type Input struct {
 	Provider string

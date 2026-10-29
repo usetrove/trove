@@ -215,6 +215,9 @@ func (d *DB) Purge(ctx context.Context, days int, now time.Time) (int64, error) 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE COALESCE(ended_at, started_at) < ?`, cutoff); err != nil {
 		return 0, err
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM session_pins WHERE pinned_at < ?`, cutoff); err != nil {
+		return 0, err
+	}
 	return n, tx.Commit()
 }
 

@@ -123,13 +123,15 @@ func TestSchemaIsMetadataOnly(t *testing.T) {
 		"requests": {"id", "ts", "session_key", "agent", "agent_version", "provider", "model", "endpoint", "streamed",
 			"status_code", "latency_ms", "ttft_ms", "input_uncached_tokens", "cache_write_tokens", "cache_read_tokens",
 			"output_tokens", "reasoning_tokens", "cost_usd", "pricing_version", "segment_token_estimates", "findings",
-			"optimizations_applied", "shadow_savings", "error_class", "usage_raw", "service_tier"},
+			"optimizations_applied", "shadow_savings", "error_class", "usage_raw", "service_tier",
+			"tokens_removed", "cost_diff_usd"},
 		"sessions": {"session_key", "agent", "started_at", "ended_at", "request_count", "total_input_uncached_tokens",
 			"total_cache_write_tokens", "total_cache_read_tokens", "total_output_tokens", "total_cost_usd", "outcome_signals"},
 		"optimizations": {"name", "tier", "state", "changed_at", "reason"},
 		"measurements":  {"id", "optimizer", "window", "metric", "value", "label", "sample_size"},
 		"budgets":       {"id", "period", "cap_usd", "starts_at"},
 		"settings":      {"key", "value"},
+		"session_pins":  {"session_key", "states", "custom_agents", "bytes_per_token", "pinned_at"},
 	}
 	banned := []string{"prompt", "content", "body", "path", "message", "text", "code", "output_text", "tool"}
 	for table, cols := range want {

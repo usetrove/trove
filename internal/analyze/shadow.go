@@ -8,13 +8,14 @@ import (
 	"time"
 )
 
-// Provisional optimizer names. Prompt 5 defines the real optimizers; until
-// then each is derived from the waste detector it would act on, so shadow
-// estimates and roll-ups already use stable names.
+// Optimizer names, as defined by internal/optimize. Each is derived from the
+// waste detector it would act on, so shadow estimates and roll-ups use the same
+// names as the optimizers that act on them. prune_unused_tools has no optimizer
+// yet and is estimate-only.
 const (
-	OptDedupe   = "dedupe_tool_results"
-	OptNoise    = "strip_noise"
-	OptTruncate = "truncate_oversized_output"
+	OptDedupe   = "duplicate_result_collapser"
+	OptNoise    = "noise_normalizer"
+	OptTruncate = "output_trimmer"
 	OptPrune    = "prune_unused_tools"
 )
 
