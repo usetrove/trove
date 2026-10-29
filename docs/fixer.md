@@ -25,14 +25,14 @@ Every command takes `--json`. Under `--json`, `--apply` without `--yes` applies 
 | `mcp-` | `mcp_prune` | Adds an unused server to `disabledMcpjsonServers` in `.claude/settings.local.json` (your machine only; `.mcp.json` is not edited) | at least `fixer.min_sessions` recent sessions in this project's Claude Code history, none calling `mcp__<server>__*` |
 | `ctx-` | `context_slim` | Deletes whole sections of `CLAUDE.md` / `.claude/CLAUDE.md` / `AGENTS.md` that repeat the README or `docs/`, are generic overview/boilerplate headings with no rules or commands, or repeat an earlier section | file larger than `fixer.context_min_tokens` (estimated) |
 | `cache-` | `cache_breaker_fix` | Deletes lines that state the current date/time or a generated/updated stamp | the line matches the optimizer's volatile-line classifier and says it holds the current time |
-| `model-` | `model_default` | **Suggestion.** Sets `"model"` in `~/.claude/settings.json` | at least 20 small-task requests, 40% or more of a frontier model's requests |
+| `model-` | `model_default` | **Suggestion.** Sets `"model"` in `~/.claude/settings.json`, or `model = ` in `~/.codex/config.toml` for Codex | at least 20 small-task requests, 40% or more of a frontier model's requests |
 
 Trove never writes new prose and never rewrites a file: edits are text splices that
 keep comments, key order, indentation and line endings. A result that fails to
 re-parse as JSON/TOML is discarded.
 
 `model_default` is never part of `--all`, is turned into advice if `ANTHROPIC_MODEL`
-is set or the project sets its own model, and carries no saving estimate, because
+is set, the project sets its own model, or (Codex) the project's `.codex/config.toml` sets one or your config selects a `profile`, and carries no saving estimate, because
 Trove cannot know how many tasks a cheaper model would handle as well.
 
 ## Safety rules
@@ -76,7 +76,7 @@ Verified against official docs:
   `model`, `ANTHROPIC_MODEL` wins over files; `.mcp.json` project scope; `disabledMcpjsonServers`; tool search defers
   MCP schemas by default.
 - Codex CLI (learn.chatgpt.com/docs/config-file/config-basic, /docs/extend/mcp, /docs/agent-configuration/agents-md):
-  `~/.codex/config.toml`, trusted-project `.codex/config.toml`, `[mcp_servers.<name>] enabled = false`, AGENTS.md
+  `~/.codex/config.toml`, trusted-project `.codex/config.toml`, `[mcp_servers.<name>] enabled = false`, `model` in `~/.codex/config.toml` and precedence (CLI flags > trusted project `.codex/config.toml` > `--profile` > user > cloud > `/etc/codex`), AGENTS.md
   discovery and the 32 KiB `project_doc_max_bytes` default.
 
 Not verified, and what Trove does about it:
@@ -88,9 +88,9 @@ Not verified, and what Trove does about it:
   lower than the estimate.
 - **Servers in `~/.claude.json`** (user and local scope) are not read: the file holds account and OAuth state that Trove
   must not handle. Use `/mcp` to disable those.
-- **Codex MCP usage** is not detected: the Codex history format is unverified and has no documented MCP tool-name
-  convention. Codex servers get no `mcp_prune` fix; the TOML splice helper exists but is not yet used by a detector.
-- **Codex model default** is not proposed (Codex history is unverified).
+- **Codex MCP usage** is not detected: Codex's official docs (checked 2026-10-29) do not say how MCP tool calls are named in
+  session files, and Trove does not guess. Codex servers get no `mcp_prune` fix; the TOML splice helper exists but is not yet used by a detector.
+- **Codex model default** is proposed from Codex history rows, whose parser is unverified on real installs. Trove cannot see CLI flags or whether a project is trusted, so a project `model` is reported as advice either way.
 - Token counts for context files are bytes / 4, an estimate.
 - Managed settings in effect cannot be seen by Trove; a managed `model` would override the `model_default` edit.
 

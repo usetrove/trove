@@ -1,0 +1,9 @@
+--- .codex/config.toml
++++ .codex/config.toml
+@@ -1,5 +1,6 @@
+ # my codex config
+ sandbox_mode = "workspace-write"
++model = "gpt-mini-test"
+ 
+ [mcp_servers.docs]
+ command = "docs-mcp"
