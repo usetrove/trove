@@ -21,6 +21,15 @@ openai = "https://api.openai.com"
 # Optimizers not listed here are off. Changes take effect at the next session.
 # example = "shadow"
 
+[optimize]
+# Agent labels you explicitly mark as custom agents, for optimizers that give a
+# custom agent a better cache layout (cache_breakpoints, volatile_prefix_mover).
+# Allowed labels: "sdk", "other". Claude Code and Codex are never allowed.
+custom_agents = []
+# If the optimizers take longer than this many milliseconds (1 to 1000), Trove
+# forwards your original request unmodified.
+budget_ms = 25
+
 [budget]
 # Budget period: "daily", "weekly" or "monthly".
 period = "monthly"
