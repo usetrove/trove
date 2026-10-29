@@ -21,8 +21,14 @@ type WasteTotal struct {
 
 // WasteTotalIn computes WasteTotal for w. Both figures are estimated.
 func WasteTotalIn(ctx context.Context, db *store.DB, w Window) (WasteTotal, error) {
-	rows, err := db.QueryContext(ctx, `SELECT findings FROM requests WHERE ts >= ? AND ts < ? AND findings IS NOT NULL`,
+	return wasteTotal(ctx, db, `SELECT findings FROM requests WHERE ts >= ? AND ts < ? AND findings IS NOT NULL`,
 		w.From.UnixMilli(), w.To.UnixMilli())
+}
+
+// wasteTotal is WasteTotalIn over any query that returns one findings JSON
+// column per row.
+func wasteTotal(ctx context.Context, db *store.DB, query string, args ...any) (WasteTotal, error) {
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return WasteTotal{}, err
 	}

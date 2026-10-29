@@ -24,6 +24,9 @@ type Inputs struct {
 	Prices *pricing.Table
 	// KillSwitch is true when the user stopped every optimizer.
 	KillSwitch bool
+	// HistoryPlanEvidence names the local signals behind the detected plan (names
+	// only, never values). It is shown with history figures.
+	HistoryPlanEvidence []string
 }
 
 // Build assembles the report for p. It reads only through the measurement layer.
@@ -41,11 +44,26 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	}
 	sortByCost(byAgent)
 	sortByCost(byModel)
+	hist, err := loadHistory(ctx, db, w, in)
+	if err != nil {
+		return r, err
+	}
+	byAgent, byModel = hist.mergeSpend(byAgent, byModel)
 	r.Spend = Spend{ByAgent: byAgent, ByModel: byModel}
 	r.Headline.Spend, r.Headline.Tokens, r.Requests = sumTotals(byAgent)
+	if hist != nil {
+		r.History = &hist.h
+		r.Requests += hist.otherReqs
+		r.Headline.Tokens.Value += hist.otherTok
+		r.Headline.Tokens.N = r.Requests
+		if hist.otherUSD.N+hist.otherUSD.Unpriced > 0 {
+			v := hist.otherUSD
+			r.Headline.APIEquivalent = &v
+		}
+	}
 
 	var ever int
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM (SELECT 1 FROM requests LIMIT 1)`).Scan(&ever); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM (SELECT 1 FROM requests UNION ALL SELECT 1 FROM history_requests LIMIT 1)`).Scan(&ever); err != nil {
 		return r, err
 	}
 	switch {
@@ -76,8 +94,15 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	if err != nil {
 		return r, err
 	}
+	if hist != nil {
+		waste = addWaste(waste, hist.waste)
+	}
 	r.Headline.Waste = waste.USD
-	r.Headline.WastePercent = measure.Figure{Label: measure.Estimated, N: waste.USD.N, Value: percent(waste.USD.Value, r.Headline.Spend.Value)}
+	base := r.Headline.Spend.Value
+	if r.Headline.APIEquivalent != nil {
+		base += r.Headline.APIEquivalent.Value
+	}
+	r.Headline.WastePercent = measure.Figure{Label: measure.Estimated, N: waste.USD.N, Value: percent(waste.USD.Value, base)}
 
 	savings, err := measure.SavingsByOptimizer(ctx, db, w, in.Config.Measure)
 	if err != nil {
@@ -89,6 +114,9 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	cats, err := measure.WasteByCategory(ctx, db, w)
 	if err != nil {
 		return r, err
+	}
+	if hist != nil {
+		cats = mergeWasteCats(cats, hist.cats)
 	}
 	offers, err := measure.Offers(ctx, db, w, in.Config, measure.DefaultOfferRules, in.Now)
 	if err != nil {

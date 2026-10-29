@@ -37,6 +37,9 @@ type Report struct {
 	Recommendations []Recommendation `json:"recommendations"`
 	// Notes are plain-English caveats and next steps (for example the empty state).
 	Notes []string `json:"notes,omitempty"`
+	// History is the part of the figures that came from agents' local session
+	// logs. Nil when there is none.
+	History *History `json:"history,omitempty"`
 }
 
 // PeriodInfo describes the span covered.
@@ -61,6 +64,10 @@ type Headline struct {
 	WastePercent measure.Figure `json:"waste_percent"`
 	// Savings is what optimizers that were on saved (estimated).
 	Savings measure.Figure `json:"savings_usd"`
+	// APIEquivalent is the API list-price value of usage that is not paid per
+	// token (a subscription, or a plan Trove could not tell). Estimated, and not
+	// a bill. Nil when there is none.
+	APIEquivalent *measure.Figure `json:"api_equivalent_usd,omitempty"`
 	// MeasuredNote says what, if anything, has been measured about savings.
 	MeasuredNote string `json:"measured_note"`
 }
