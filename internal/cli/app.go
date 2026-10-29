@@ -41,6 +41,8 @@ type App struct {
 	NoColor bool
 	DataDir string
 	Verbose bool
+	// NoHistory skips reading agents' local session history (--no-history).
+	NoHistory bool
 }
 
 // NewApp returns an App wired to the real process environment.
