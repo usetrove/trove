@@ -206,6 +206,9 @@ type Offer struct {
 type OfferRules struct {
 	MinSessions int     // sessions the estimate must rest on
 	MinUSD      float64 // estimated dollars over the window
+	// Recoverable is true when trimmed output can be fetched back (the Trove MCP
+	// server is registered), which is what lets output_trimmer be offered.
+	Recoverable bool
 }
 
 // DefaultOfferRules are modest: enough sessions to be more than one lucky day,
@@ -214,7 +217,8 @@ var DefaultOfferRules = OfferRules{MinSessions: 10, MinUSD: 1}
 
 // Offers returns the optimizers whose shadow estimate passes the rules. No
 // offers are made during the baseline, and none for optimizers that cannot be
-// turned on yet (output_trimmer) or that are rolled back.
+// turned on (output_trimmer until the MCP server is registered) or that are
+// rolled back.
 func Offers(ctx context.Context, db *store.DB, w Window, cfg config.Config, rules OfferRules, now time.Time) ([]Offer, error) {
 	st, _, err := LoadStatus(ctx, db, cfg.Measure, now)
 	if err != nil {
@@ -236,7 +240,7 @@ func Offers(ctx context.Context, db *store.DB, w Window, cfg config.Config, rule
 		if _, back := rolled[s.Optimizer]; back {
 			continue
 		}
-		if s.Optimizer == config.OptimizerOutputTrimmer || s.Optimizer == analyze.OptPrune {
+		if (s.Optimizer == config.OptimizerOutputTrimmer && !rules.Recoverable) || s.Optimizer == analyze.OptPrune {
 			continue // cannot be switched on
 		}
 		if s.Sessions < rules.MinSessions || s.USD.Value < rules.MinUSD {

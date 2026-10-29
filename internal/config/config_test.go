@@ -97,7 +97,6 @@ func TestLoad(t *testing.T) {
 		{name: "bad env int", env: map[string]string{"TROVE_GATEWAY_PORT": "abc"}, wantErr: []string{"TROVE_GATEWAY_PORT", "whole number"}},
 		{name: "bad env float", env: map[string]string{"TROVE_BUDGET_CAP_USD": "lots"}, wantErr: []string{"TROVE_BUDGET_CAP_USD"}},
 		{name: "bad optimizer state", file: "[optimizers]\ntrim = \"maybe\"\n", wantErr: []string{"optimizers.trim", "\"off\", \"shadow\" or \"on\""}},
-		{name: "trimmer cannot be on", file: "[optimizers]\noutput_trimmer = \"on\"\n", wantErr: []string{"output_trimmer cannot be", "MCP fetch tool"}},
 		{name: "claude code cannot be custom", file: "[optimize]\ncustom_agents = [\"claude_code\"]\n", wantErr: []string{"claude_code", "manage their own prompts"}},
 		{name: "bad optimize budget", file: "[optimize]\nbudget_ms = 0\n", wantErr: []string{"optimize.budget_ms is 0"}},
 		{name: "bad optimizer name", file: "[optimizers]\n\"Bad Name\" = \"on\"\n", wantErr: []string{"not a valid optimizer name"}},

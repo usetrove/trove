@@ -60,6 +60,10 @@ type Report struct {
 	// Err is set when the optimizer could not finish; the engine then forwards
 	// the original request.
 	Err string `json:"error,omitempty"`
+	// Originals holds the full text of every output the optimizer shortened, so
+	// the engine can store it before the shortened request is forwarded. It is
+	// never recorded or serialized.
+	Originals []string `json:"-"`
 }
 
 // Optimizer is one request transformation.

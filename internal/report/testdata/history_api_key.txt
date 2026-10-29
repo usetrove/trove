@@ -22,9 +22,10 @@ Spend by agent and model
 
 Biggest leaks (estimated, overlapping, not additive)
   1. Oversized tool output: ~$0.96 (estimated), 64K tokens (estimated)
-     Do this: trove optimize status
-     Estimate only for now: the trimmer needs the MCP fetch tool, which does not
-     exist yet.
+     Do this: trove mcp install
+     Estimate only until the Trove MCP server is registered, so your agent can
+     fetch trimmed output back. Run `trove mcp install`, then add output_trimmer
+     = "on" under [optimizers]; it applies from the next session.
 
 Optimizers
   Optimizers act on live requests, so they need the gateway. Your history above

@@ -115,10 +115,11 @@ type Optimize struct {
 	BudgetMS int `toml:"budget_ms"`
 }
 
-// Optimizers that are built but must not be turned on yet.
+// Optimizers with extra requirements before "on" takes effect.
 const (
-	// OptimizerOutputTrimmer needs the MCP fetch tool (Prompt 11) so the agent
-	// can retrieve what was trimmed. It may run in shadow mode only.
+	// OptimizerOutputTrimmer needs the Trove MCP server registered with the agent
+	// (so it can call trove_fetch_full) and a working recovery store. Until then
+	// "on" runs as "shadow": the engine clamps it when it pins a session.
 	OptimizerOutputTrimmer = "output_trimmer"
 )
 
@@ -297,9 +298,6 @@ func (c Config) Validate() error {
 		default:
 			add("optimizers.%s is %q; use \"off\", \"shadow\" or \"on\".", n, c.Optimizers[n])
 		}
-	}
-	if c.Optimizers[OptimizerOutputTrimmer] == StateOn {
-		add("optimizers.%s cannot be \"on\" yet: it needs the MCP fetch tool so your agent can retrieve trimmed output. Use \"shadow\" to see estimates.", OptimizerOutputTrimmer)
 	}
 	for _, a := range c.Optimize.CustomAgents {
 		if a != "sdk" && a != "other" {

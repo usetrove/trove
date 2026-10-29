@@ -27,6 +27,9 @@ type Inputs struct {
 	// HistoryPlanEvidence names the local signals behind the detected plan (names
 	// only, never values). It is shown with history figures.
 	HistoryPlanEvidence []string
+	// Recoverable is true when the Trove MCP server is registered, so trimmed
+	// output can be fetched back and output_trimmer may be on.
+	Recoverable bool
 }
 
 // Build assembles the report for p. It reads only through the measurement layer.
@@ -118,7 +121,9 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	if hist != nil {
 		cats = mergeWasteCats(cats, hist.cats)
 	}
-	offers, err := measure.Offers(ctx, db, w, in.Config, measure.DefaultOfferRules, in.Now)
+	rules := measure.DefaultOfferRules
+	rules.Recoverable = in.Recoverable
+	offers, err := measure.Offers(ctx, db, w, in.Config, rules, in.Now)
 	if err != nil {
 		return r, err
 	}
@@ -300,7 +305,7 @@ func optimizerAction(info leakInfo, cfg config.Config, offer map[string]measure.
 	name := info.optimizer
 	switch {
 	case name == config.OptimizerOutputTrimmer:
-		return "trove optimize status", "Estimate only for now: the trimmer needs the MCP fetch tool, which does not exist yet."
+		return "trove mcp install", "Estimate only until the Trove MCP server is registered, so your agent can fetch trimmed output back. Run `trove mcp install`, then add output_trimmer = \"on\" under [optimizers]; it applies from the next session."
 	case name == analyze.OptPrune:
 		return "", info.advice
 	case baseline:
@@ -343,7 +348,7 @@ func buildOptimizers(ctx context.Context, db *store.DB, in Inputs, w measure.Win
 
 	for _, name := range optimize.PipelineNames {
 		configured := in.Config.OptimizerState(name)
-		row := OptimizerRow{Name: name, Configured: configured, Effective: optimize.EffectiveState(name, configured)}
+		row := OptimizerRow{Name: name, Configured: configured, Effective: optimize.EffectiveStateFor(name, configured, in.Recoverable)}
 		if out.Baseline != nil && row.Effective == config.StateOn {
 			row.Effective = config.StateShadow // the baseline keeps every optimizer in shadow
 		}

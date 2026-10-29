@@ -81,8 +81,8 @@
         "label": "estimated",
         "n": 8
       },
-      "command": "trove optimize status",
-      "advice": "Estimate only for now: the trimmer needs the MCP fetch tool, which does not exist yet."
+      "command": "trove mcp install",
+      "advice": "Estimate only until the Trove MCP server is registered, so your agent can fetch trimmed output back. Run `trove mcp install`, then add output_trimmer = \"on\" under [optimizers]; it applies from the next session."
     }
   ],
   "optimizers": {

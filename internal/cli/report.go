@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/usetrove/trove/internal/mcp/install"
 	"os"
 	"path/filepath"
 	"time"
@@ -111,7 +112,7 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 	if perr != nil {
 		tbl = nil // suggestions that need prices are skipped
 	}
-	r, err := report.Build(context.Background(), db, report.Inputs{Config: cfg, Now: now, Prices: tbl, KillSwitch: on, HistoryPlanEvidence: planEvidence}, p)
+	r, err := report.Build(context.Background(), db, report.Inputs{Config: cfg, Now: now, Prices: tbl, KillSwitch: on, HistoryPlanEvidence: planEvidence, Recoverable: install.Registered(dir)}, p)
 	if err != nil {
 		return r, fmt.Errorf("cannot read recorded usage: %v. Run `trove doctor` for details", err)
 	}

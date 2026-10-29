@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/usetrove/trove/internal/mcp/install"
 	"io"
 	"net"
 	"net/http"
@@ -139,10 +140,20 @@ func runGateway(a *App, listen string) error {
 		log.Warn("pricing data could not be loaded; costs will be recorded as unknown", "err", err)
 		tbl = nil
 	}
-	engine := optimize.New(optimize.Options{
+	opts := optimize.Options{
 		Config: cfg, Pins: db.Pins(), KillFile: optimize.KillFile(dir), Getenv: a.Getenv, Log: log,
 		Gate: measure.NewGate(db, cfg.Measure, nil).State,
-	})
+	}
+	if install.Registered(dir) {
+		// The output trimmer may be on only if trimmed output can be stored and
+		// fetched back with the Trove MCP server.
+		if rec, _, err := openRecovery(a); err != nil {
+			log.Warn("the recovery store could not be opened, so the output trimmer stays in shadow mode", "err", err)
+		} else {
+			opts.Recovery = rec
+		}
+	}
+	engine := optimize.New(opts)
 	srv, err := gateway.New(gateway.Options{Config: cfg, Recorder: writer, Pricing: tbl, Analyzer: analyze.New(analyze.Options{Pricing: tbl, Logger: log}), Optimizer: engine, Logger: log, Version: Version})
 	if err != nil {
 		return err

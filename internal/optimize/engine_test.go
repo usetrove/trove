@@ -324,13 +324,18 @@ func TestPinStoreFailureFailsOpenToMemory(t *testing.T) {
 	}
 }
 
-func TestTrimmerNeverOn(t *testing.T) {
-	// Even if validation were bypassed, the pin clamps the trimmer to shadow.
+func TestTrimmerNotOnWithoutRecovery(t *testing.T) {
+	// "on" is valid config, but the pin clamps it to shadow unless trimmed output
+	// can be fetched back.
 	cfg := config.Default()
 	cfg.Optimizers[config.OptimizerOutputTrimmer] = config.StateOn
 	p := newPin("k", cfg, 3.5, time.Now(), nil)
 	if got := p.States[config.OptimizerOutputTrimmer]; got != config.StateShadow {
 		t.Errorf("trimmer state = %q, want shadow", got)
+	}
+	p = newPinFor("k", cfg, 3.5, time.Now(), nil, true)
+	if got := p.States[config.OptimizerOutputTrimmer]; got != config.StateOn {
+		t.Errorf("with recovery the trimmer state = %q, want on", got)
 	}
 }
 

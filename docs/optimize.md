@@ -43,7 +43,7 @@ Fixed, because order changes bytes:
 |---|---|---|---|
 | 1 | `volatile_prefix_mover` | lossless (position changes) | custom agents only |
 | 2 | `noise_normalizer` | lossless | tool results |
-| 3 | `output_trimmer` | recoverable | tool results (**shadow only for now**) |
+| 3 | `output_trimmer` | recoverable | tool results (**shadow until `trove mcp install`**) |
 | 4 | `duplicate_result_collapser` | lossless | tool results |
 | 5 | `cache_breakpoints` | lossless | custom agents only |
 
@@ -88,10 +88,17 @@ analysis uses. Custom agents only.
 
 **`output_trimmer`** keeps failures, stack traces, a little context and the first
 and last lines of large test and build output, and replaces the rest with a
-marker naming the line count and a hash of the full output. Because the agent
-cannot get the full output back until the MCP fetch tool exists (Phase B), the
-trimmer **cannot be switched on**: `on` is rejected by config validation and
-clamped to `shadow` by the engine.
+marker naming the line count and the output's ID (the first 16 hex characters of
+the sha256 of the full output). Before a trimmed request is forwarded, the gateway
+saves the full output in the local recovery store (`~/.trove/recovery`, owner-only
+files, 200 MB and 7 days by default; see `[recovery]` in `config.toml`), and the
+agent gets it back with the `trove_fetch_full` tool of the Trove MCP server. If the
+output cannot be saved, the request is forwarded unchanged.
+
+The trimmer can be `on` only when the MCP server is registered with an agent
+(`trove mcp install`; see `docs/mcp.md`). Until then `on` runs as `shadow`, which
+only estimates. Like every optimizer it is pinned per session, so registering the
+server or changing the setting applies from the next session.
 
 ### Marking a custom agent
 

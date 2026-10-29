@@ -38,6 +38,9 @@ type pinBook struct {
 	mu    sync.Mutex
 	pins  map[string]Pin
 	store PinStore
+	// recoverable is true when trimmed output can be stored and fetched back, so
+	// the output trimmer may be "on". It is fixed when the engine is built.
+	recoverable bool
 }
 
 func newPinBook(store PinStore) *pinBook {
@@ -62,7 +65,7 @@ func (b *pinBook) get(ctx context.Context, key string, cfg config.Config, bpt fl
 			return p, nil
 		}
 	}
-	p := newPin(key, cfg, bpt, now, gate)
+	p := newPinFor(key, cfg, bpt, now, gate, b.recoverable)
 	b.put(p)
 	if b.store != nil && storeErr == nil {
 		storeErr = b.store.Save(ctx, p)
@@ -96,11 +99,15 @@ func (b *pinBook) put(p Pin) {
 type StateGate func(sessionKey, optimizer, configured string, now time.Time) string
 
 func newPin(key string, cfg config.Config, bpt float64, now time.Time, gate StateGate) Pin {
+	return newPinFor(key, cfg, bpt, now, gate, false)
+}
+
+func newPinFor(key string, cfg config.Config, bpt float64, now time.Time, gate StateGate, recoverable bool) Pin {
 	states := make(map[string]string, len(PipelineNames))
 	for _, n := range PipelineNames {
-		s := effectiveState(n, cfg.OptimizerState(n))
+		s := effectiveStateFor(n, cfg.OptimizerState(n), recoverable)
 		if gate != nil {
-			s = lowerOf(s, effectiveState(n, gate(key, n, s, now)))
+			s = lowerOf(s, effectiveStateFor(n, gate(key, n, s, now), recoverable))
 		}
 		states[n] = s
 	}
@@ -132,14 +139,25 @@ func lowerOf(a, b string) string {
 }
 
 // EffectiveState is the state an optimizer really runs in for a configured
-// state: the same clamp the engine applies when it pins a session.
+// state when trimmed output cannot be recovered: the same clamp the engine
+// applies when it pins a session.
 func EffectiveState(name, state string) string { return effectiveState(name, state) }
 
-// effectiveState clamps a configured state to what is allowed. The output
-// trimmer needs the MCP fetch tool, which does not exist yet, so it can never
-// be on (config validation rejects it too; this is the second lock).
-func effectiveState(name, state string) string {
-	if name == config.OptimizerOutputTrimmer && state == config.StateOn {
+// EffectiveStateFor is EffectiveState when recoverable says whether trimmed
+// output can be fetched back (the MCP server is registered and the recovery
+// store works).
+func EffectiveStateFor(name, state string, recoverable bool) string {
+	return effectiveStateFor(name, state, recoverable)
+}
+
+func effectiveState(name, state string) string { return effectiveStateFor(name, state, false) }
+
+// effectiveStateFor clamps a configured state to what is allowed. The output
+// trimmer removes text from tool results, so it may be on only when the agent
+// can fetch the full output back (trove_fetch_full); otherwise it stays in
+// shadow, which only estimates.
+func effectiveStateFor(name, state string, recoverable bool) string {
+	if name == config.OptimizerOutputTrimmer && state == config.StateOn && !recoverable {
 		return config.StateShadow
 	}
 	switch state {

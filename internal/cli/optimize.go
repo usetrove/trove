@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/usetrove/trove/internal/mcp/install"
 	"os"
 	"path/filepath"
 	"sort"
@@ -73,13 +74,14 @@ func optimizeStatusCmd(a *App) error {
 		CustomAgents: cfg.Optimize.CustomAgents,
 		BudgetMS:     cfg.Optimize.BudgetMS,
 	}
+	recoverable := install.Registered(dir)
 	known := map[string]bool{}
 	for _, o := range optimize.Pipeline() {
 		known[o.Name()] = true
 	}
 	for _, name := range optimize.PipelineNames {
 		info := optimizerInfo{Name: name, Configured: cfg.OptimizerState(name)}
-		info.Effective = optimize.EffectiveState(name, info.Configured)
+		info.Effective = optimize.EffectiveStateFor(name, info.Configured, recoverable)
 		for _, o := range optimize.Pipeline() {
 			if o.Name() == name {
 				info.Tier = string(o.Tier())
@@ -87,7 +89,10 @@ func optimizeStatusCmd(a *App) error {
 		}
 		switch name {
 		case config.OptimizerOutputTrimmer:
-			info.Note = "needs the MCP fetch tool; estimate-only (shadow) until it exists"
+			info.Note = "needs the Trove MCP server so your agent can fetch trimmed output back; estimate-only (shadow) until `trove mcp install`"
+			if recoverable {
+				info.Note = "trimmed output is stored locally and the agent can fetch it back with trove_fetch_full"
+			}
 		case "cache_breakpoints", "volatile_prefix_mover":
 			info.Note = "custom agents only"
 			if len(cfg.Optimize.CustomAgents) == 0 {
