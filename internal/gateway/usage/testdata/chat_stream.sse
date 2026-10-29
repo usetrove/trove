@@ -1,0 +1,6 @@
+data: {"id":"c1","object":"chat.completion.chunk","model":"gpt-x","service_tier":"default","choices":[{"index":0,"delta":{"content":"REDACTED"}}],"usage":null}
+
+data: {"id":"c1","object":"chat.completion.chunk","model":"gpt-x","service_tier":"default","choices":[],"usage":{"prompt_tokens":1200,"completion_tokens":300,"total_tokens":1500,"prompt_tokens_details":{"cached_tokens":1000},"completion_tokens_details":{"reasoning_tokens":120}}}
+
+data: [DONE]
+

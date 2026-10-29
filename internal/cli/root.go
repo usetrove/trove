@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -15,7 +16,11 @@ func Execute(a *App, args []string) int {
 	root.SetArgs(args)
 	root.SetOut(a.Out)
 	root.SetErr(a.Err)
-	if err := root.Execute(); err != nil {
+	ctx := a.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := root.ExecuteContext(ctx); err != nil {
 		msg := redact.String(err.Error())
 		if a.JSON {
 			_ = json.NewEncoder(a.Err).Encode(map[string]string{"error": msg})
@@ -44,12 +49,6 @@ func NewRoot(a *App) *cobra.Command {
 	f.StringVar(&a.DataDir, "data-dir", "", "Trove data directory (default ~/.trove, or TROVE_DATA_DIR)")
 	f.BoolVar(&a.Verbose, "verbose", false, "print debug logs to stderr")
 
-	gateway := &cobra.Command{Use: "gateway", Short: "Run the opt-in local gateway", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error { return c.Help() }}
-	gateway.AddCommand(
-		stubCmd(a, "start", "Start the local gateway", "gateway start"),
-		stubCmd(a, "stop", "Stop the local gateway", "gateway stop"),
-		stubCmd(a, "status", "Show whether the gateway is running", "gateway status"),
-	)
 	cfg := &cobra.Command{Use: "config", Short: "Read or change Trove settings", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error { return c.Help() }}
 	cfg.AddCommand(
 		stubArgCmd(a, "get [key]", "Show a setting (or all settings)", "config get", cobra.MaximumNArgs(1)),
@@ -57,13 +56,13 @@ func NewRoot(a *App) *cobra.Command {
 	)
 
 	root.AddCommand(
-		stubCmd(a, "setup", "Guided setup for your agents", "setup"),
-		gateway,
+		newSetup(a),
+		newGateway(a),
 		stubCmd(a, "report", "Show token usage, waste and savings", "report"),
 		stubCmd(a, "budget", "Show or set a spending budget", "budget"),
 		stubCmd(a, "status-line", "Print a one-line status for agent status bars", "status-line"),
 		stubCmd(a, "fix", "Apply safe configuration fixes", "fix"),
-		stubCmd(a, "undo", "Undo the last fix", "undo"),
+		newUndo(a),
 		stubCmd(a, "share", "Create a shareable, redacted summary", "share"),
 		cfg,
 		newDoctor(a),
