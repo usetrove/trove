@@ -242,6 +242,11 @@ func (d *DB) Purge(ctx context.Context, days int, now time.Time) (int64, error) 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM session_pins WHERE pinned_at < ?`, cutoff); err != nil {
 		return 0, err
 	}
+	// History rows older than the cutoff go too. File checkpoints stay, so the
+	// next scan does not re-read old files and bring the rows back.
+	if _, err := tx.ExecContext(ctx, `DELETE FROM history_requests WHERE ts < ?`, cutoff); err != nil {
+		return 0, err
+	}
 	return n, tx.Commit()
 }
 
