@@ -177,3 +177,29 @@ func TestReportEmptyStateTellsWhatToDo(t *testing.T) {
 		t.Errorf("empty report shows zeros:\n%s", out)
 	}
 }
+
+func TestReportShowsAppliedFixesWithHonestLabels(t *testing.T) {
+	r := newReport(mustPeriod(t, Month), false)
+	r.State, r.Requests = StateOK, 100
+	usd := 0.02
+	r.Fixes = []measure.FixEffect{
+		{FixID: "ctx-1", Kind: "context_slim", AppliedAt: now, EstTokens: 900, EstUSD: &usd, NBefore: 3, NAfter: 2, Label: measure.Estimated,
+			Text: "not enough data yet"},
+		{FixID: "mcp-2", Kind: "mcp_prune", AppliedAt: now, EstTokens: 1200, NBefore: 30, NAfter: 25, Label: measure.Measured, Enough: true,
+			Reduced: true, Percent: 18, Text: "supports but does not prove"},
+	}
+	out := Render(r, Options{})
+	for _, want := range []string{
+		"Config fixes you applied", "ctx-1", "900 tokens saved", "Measured: not enough data yet",
+		"Measured: 18% fewer prompt tokens per request",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in:\n%s", want, out)
+		}
+	}
+	// With no fixes the section is absent.
+	r.Fixes = nil
+	if strings.Contains(Render(r, Options{}), "Config fixes") {
+		t.Error("the section must not appear when no fix was applied")
+	}
+}

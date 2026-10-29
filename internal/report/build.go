@@ -136,6 +136,9 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	for _, s := range sugg {
 		r.Recommendations = append(r.Recommendations, Recommendation{s})
 	}
+	if r.Fixes, err = measure.FixEffects(ctx, db, in.Config.Measure); err != nil {
+		return r, err
+	}
 	return r, nil
 }
 

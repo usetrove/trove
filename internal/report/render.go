@@ -115,6 +115,14 @@ func Render(r Report, o Options) string {
 		renderOptimizers(&b, r.Optimizers, o)
 	}
 
+	if len(r.Fixes) > 0 {
+		b.WriteString("\n" + heading("Config fixes you applied"))
+		for _, f := range r.Fixes {
+			b.WriteString(wrap(fmt.Sprintf("%s (%s), applied %s", f.FixID, f.Kind, day(f.AppliedAt.Local())), o.width(), "  ", "    ") + "\n")
+			b.WriteString(wrap(fixLine(f), o.width(), "    ", "    ") + "\n")
+		}
+	}
+
 	b.WriteString("\n" + heading("Recommendations (suggestions only; Trove changes nothing on its own)"))
 	if len(r.Recommendations) == 0 {
 		b.WriteString("  None yet. These need more recorded usage.\n")
@@ -427,4 +435,25 @@ func RenderPacing(p *Pacing, o Options) string {
 		b.WriteString(wrap("What would change it: "+p.Lever+" See `trove report`.", o.width(), "  ", "  ") + "\n")
 	}
 	return b.String()
+}
+
+// fixLine says what is known about an applied config fix. A measured figure is
+// only printed when both sides have enough sessions; the estimate made when the
+// fix was proposed is always labeled estimated.
+func fixLine(f measure.FixEffect) string {
+	est := "no estimate was made"
+	if f.EstTokens > 0 {
+		est = fmt.Sprintf("about %d tokens saved per session", f.EstTokens)
+		if f.EstUSD != nil {
+			est += fmt.Sprintf(" (about %s)", FormatUSD(*f.EstUSD))
+		}
+	}
+	if !f.Enough {
+		return fmt.Sprintf("Measured: %s (%d sessions before, %d after). Estimated: %s.", measure.TextNotEnough, f.NBefore, f.NAfter, est)
+	}
+	m := fmt.Sprintf("no clear reduction in prompt tokens per request yet (%d sessions before, %d after)", f.NBefore, f.NAfter)
+	if f.Reduced {
+		m = fmt.Sprintf("%.0f%% fewer prompt tokens per request after the fix (%d sessions before, %d after)", f.Percent, f.NBefore, f.NAfter)
+	}
+	return fmt.Sprintf("Measured: %s. Estimated: %s. Note: %s.", m, est, f.Text)
 }
