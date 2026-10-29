@@ -35,7 +35,23 @@ type Config struct {
 	Measure       Measure           `toml:"measure"`
 	Notifications Notifications     `toml:"notifications"`
 	History       History           `toml:"history"`
+	Fixer         Fixer             `toml:"fixer"`
 	RetentionDays int               `toml:"retention_days"`
+}
+
+// Fixer holds the settings for `trove fix` (see docs/fixer.md).
+type Fixer struct {
+	// MinSessions is how many recent sessions in a project Trove must have seen
+	// before it calls an MCP server unused there.
+	MinSessions int `toml:"min_sessions"`
+	// LookbackDays is how far back that history reaches.
+	LookbackDays int `toml:"lookback_days"`
+	// ContextMinTokens is the size (estimated tokens) above which a context file
+	// is checked for removable sections.
+	ContextMinTokens int `toml:"context_min_tokens"`
+	// ActivityMinutes: a fix is not applied while an agent session has been
+	// active this recently; it is queued instead.
+	ActivityMinutes int `toml:"activity_minutes"`
 }
 
 // History holds the settings for reading agents' local session logs
@@ -136,6 +152,7 @@ func Default() Config {
 		},
 		RetentionDays: 90,
 		History:       History{Enabled: true},
+		Fixer:         Fixer{MinSessions: 5, LookbackDays: 30, ContextMinTokens: 1500, ActivityMinutes: 30},
 	}
 }
 
@@ -222,6 +239,20 @@ enabled = true
 # How you pay for the agent: "api_key" or "subscription". Leave empty to let Trove
 # estimate it from your settings and environment (it never reads credentials).
 plan = ""
+
+[fixer]
+# "trove fix" proposes edits to your agent's config files. Nothing changes until
+# you approve a fix, every changed file is backed up, and "trove undo" reverses it.
+# How many recent sessions in a project Trove must have seen before it calls an
+# MCP server unused there (3 to 1000), and how many days back to look (1 to 365).
+min_sessions = 5
+lookback_days = 30
+# Context files (CLAUDE.md, AGENTS.md) larger than this many estimated tokens are
+# checked for sections that can be removed (100 to 100000).
+context_min_tokens = 1500
+# Fixes are not applied while an agent session was active this recently (minutes,
+# 1 to 1440); they are queued and applied when the agent is idle.
+activity_minutes = 30
 `
 
 var optimizerName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
@@ -267,6 +298,19 @@ func (c Config) Validate() error {
 	}
 	if c.Optimize.BudgetMS < 1 || c.Optimize.BudgetMS > 1000 {
 		add("optimize.budget_ms is %d; use a number of milliseconds from 1 to 1000 (default 25).", c.Optimize.BudgetMS)
+	}
+	f := c.Fixer
+	if f.MinSessions < 3 || f.MinSessions > 1000 {
+		add("fixer.min_sessions is %d; use a number from 3 to 1000 (default 5).", f.MinSessions)
+	}
+	if f.LookbackDays < 1 || f.LookbackDays > 365 {
+		add("fixer.lookback_days is %d; use a number of days from 1 to 365 (default 30).", f.LookbackDays)
+	}
+	if f.ContextMinTokens < 100 || f.ContextMinTokens > 100000 {
+		add("fixer.context_min_tokens is %d; use a number from 100 to 100000 (default 1500).", f.ContextMinTokens)
+	}
+	if f.ActivityMinutes < 1 || f.ActivityMinutes > 1440 {
+		add("fixer.activity_minutes is %d; use a number of minutes from 1 to 1440 (default 30).", f.ActivityMinutes)
 	}
 	switch c.History.Plan {
 	case "", "api_key", "subscription":

@@ -62,6 +62,23 @@ type Edit struct {
 	updated  []byte
 	value    string // the value we set, for surgical undo
 	previous string // the value we replaced, restored by surgical undo
+	fixID    string // set for edits made by `trove fix`
+}
+
+// FixPrefix starts the Agent name of every change made by `trove fix`
+// (fix_mcp_prune, fix_context_slim, ...). It avoids ':' so the name is safe in
+// the backup file name on Windows.
+const FixPrefix = "fix_"
+
+// IsFix reports whether an Agent name belongs to a `trove fix` change.
+func IsFix(agent string) bool { return strings.HasPrefix(agent, FixPrefix) }
+
+// NewFixEdit builds an Edit for a fix. old is the file as planned (nil if it
+// does not exist) and updated is what should replace it. Apply refuses to write
+// if the file is no longer exactly old, and Undo restores old byte for byte.
+func NewFixEdit(kind, fixID, path, show, summary string, old, updated []byte) *Edit {
+	return &Edit{Agent: FixPrefix + kind, Path: path, Show: show, Summary: summary,
+		old: old, updated: updated, fixID: fixID, NoOp: bytes.Equal(old, updated) && old != nil}
 }
 
 // GatewayURL is the base URL an agent should use for a provider route.
@@ -278,7 +295,26 @@ type Change struct {
 	SHAAfter  string    `json:"sha256_after"`
 	Value     string    `json:"value"`
 	Previous  string    `json:"previous,omitempty"` // value replaced by setup, restored on undo
+	FixID     string    `json:"fix_id,omitempty"`   // set for changes made by `trove fix`
 	AppliedAt time.Time `json:"applied_at"`
+}
+
+// uniqueID returns id, or id with a counter if the manifest already has it.
+func uniqueID(cs []Change, id string) string {
+	cand := id
+	for n := 2; ; n++ {
+		taken := false
+		for _, c := range cs {
+			if c.ID == cand {
+				taken = true
+				break
+			}
+		}
+		if !taken {
+			return cand
+		}
+		cand = fmt.Sprintf("%s-%d", id, n)
+	}
 }
 
 // Apply writes edits (skipping no-ops), backing up each original and recording
@@ -293,8 +329,13 @@ func Apply(dataDir string, edits []*Edit, now time.Time) ([]Change, error) {
 		if e == nil || e.NoOp {
 			continue
 		}
-		c := Change{ID: now.UTC().Format("20060102T150405.000000000Z") + "-" + e.Agent, Agent: e.Agent, Path: e.Path,
-			Created: e.old == nil, Value: e.value, Previous: e.previous, AppliedAt: now.UTC()}
+		if cur, err := readOptional(e.Path); err != nil {
+			return applied, err
+		} else if !bytes.Equal(cur, e.old) || (cur == nil) != (e.old == nil) {
+			return applied, fmt.Errorf("%s changed after the change was planned, so nothing was written. Run the command again to plan from the file as it is now", e.Path)
+		}
+		c := Change{ID: uniqueID(changes, now.UTC().Format("20060102T150405.000000000Z")+"-"+e.Agent), Agent: e.Agent, Path: e.Path,
+			Created: e.old == nil, Value: e.value, Previous: e.previous, FixID: e.fixID, AppliedAt: now.UTC()}
 		if e.old != nil {
 			bdir := filepath.Join(dataDir, "backups")
 			if err := os.MkdirAll(bdir, 0o700); err != nil {
@@ -359,6 +400,7 @@ func saveChanges(dataDir string, cs []Change) error {
 type UndoResult struct {
 	Agent  string `json:"agent"`
 	Path   string `json:"path"`
+	FixID  string `json:"fix_id,omitempty"`
 	Action string `json:"action"` // restored, removed_file, removed_our_lines, already_gone, left_alone
 	Detail string `json:"detail"`
 }
@@ -367,21 +409,47 @@ type UndoResult struct {
 // as Trove left it, the backup is restored byte for byte (or the file removed
 // if Trove created it). If you have edited it since, only Trove's own lines
 // are removed and the rest is left alone.
-func Undo(dataDir string) ([]UndoResult, error) {
+func Undo(dataDir string) ([]UndoResult, error) { return UndoSelected(dataDir, nil) }
+
+// UndoSelected is Undo limited to the changes whose change ID or fix ID is in
+// ids (all changes if ids is empty), newest first. It returns an error naming
+// any id that matches nothing, before touching a file. A fix whose file you
+// have edited since is left alone and stays recorded, because Trove cannot tell
+// which lines are its own; undo the later change first, or restore the backup
+// by hand.
+func UndoSelected(dataDir string, ids []string) ([]UndoResult, error) {
 	cs, err := LoadChanges(dataDir)
 	if err != nil {
 		return nil, err
 	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		found := false
+		for _, c := range cs {
+			if c.ID == id || (c.FixID != "" && c.FixID == id) {
+				found = true
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("no recorded change has the id %q. Run `trove fix` to see applied fix ids, or `trove undo` with no id to reverse everything", id)
+		}
+		want[id] = true
+	}
 	var out []UndoResult
-	for len(cs) > 0 {
-		c := cs[len(cs)-1]
-		r, err := undoOne(c)
+	for i := len(cs) - 1; i >= 0; i-- {
+		c := cs[i]
+		if len(want) > 0 && !want[c.ID] && !(c.FixID != "" && want[c.FixID]) {
+			continue
+		}
+		r, keep, err := undoOne(c)
 		if err != nil {
 			_ = saveChanges(dataDir, cs) // keep what is left so a retry can finish
 			return out, err
 		}
 		out = append(out, r)
-		cs = cs[:len(cs)-1]
+		if !keep {
+			cs = append(cs[:i], cs[i+1:]...)
+		}
 		if err := saveChanges(dataDir, cs); err != nil {
 			return out, err
 		}
@@ -389,33 +457,45 @@ func Undo(dataDir string) ([]UndoResult, error) {
 	return out, nil
 }
 
-func undoOne(c Change) (UndoResult, error) {
-	res := UndoResult{Agent: c.Agent, Path: c.Path}
+// undoOne reverses one change. keep is true when the record must stay in the
+// manifest because nothing was reversed and it could still be.
+func undoOne(c Change) (UndoResult, bool, error) {
+	res := UndoResult{Agent: c.Agent, Path: c.Path, FixID: c.FixID}
+	r, keep, err := undoChange(c, res)
+	return r, keep, err
+}
+
+func undoChange(c Change, res UndoResult) (UndoResult, bool, error) {
 	cur, err := readOptional(c.Path)
 	if err != nil {
-		return res, err
+		return res, false, err
 	}
 	if cur == nil {
 		res.Action, res.Detail = "already_gone", "the file no longer exists; nothing to undo"
-		return res, nil
+		return res, false, nil
+	}
+	if IsFix(c.Agent) && sum(cur) != c.SHAAfter {
+		res.Action = "left_alone"
+		res.Detail = "the file was edited after the fix was applied, so Trove did not touch it. Your original is in " + c.Backup + "; undo later changes first or merge by hand"
+		return res, true, nil
 	}
 	if sum(cur) == c.SHAAfter { // untouched since setup: exact reversal
 		if c.Created {
 			if err := os.Remove(c.Path); err != nil {
-				return res, fmt.Errorf("cannot remove %s: %v", c.Path, err)
+				return res, false, fmt.Errorf("cannot remove %s: %v", c.Path, err)
 			}
 			res.Action, res.Detail = "removed_file", "removed the file Trove created"
-			return res, nil
+			return res, false, nil
 		}
 		orig, err := os.ReadFile(c.Backup) //nolint:gosec // backup path recorded by Trove
 		if err != nil {
-			return res, fmt.Errorf("cannot read the backup %s: %v. Remove the Trove lines from %s by hand", c.Backup, err, c.Path)
+			return res, false, fmt.Errorf("cannot read the backup %s: %v. Remove the Trove lines from %s by hand", c.Backup, err, c.Path)
 		}
 		if err := writeAtomic(c.Path, orig); err != nil {
-			return res, fmt.Errorf("cannot restore %s: %v", c.Path, err)
+			return res, false, fmt.Errorf("cannot restore %s: %v", c.Path, err)
 		}
 		res.Action, res.Detail = "restored", "restored your original file from the backup"
-		return res, nil
+		return res, false, nil
 	}
 	// The file changed since setup: remove only our lines.
 	var next []byte
@@ -428,21 +508,21 @@ func undoOne(c Change) (UndoResult, error) {
 		next, err = stripStatusLine(cur, c.Value)
 	default:
 		res.Action, res.Detail = "left_alone", "unknown agent in the manifest"
-		return res, nil
+		return res, false, nil
 	}
 	if err != nil {
 		res.Action, res.Detail = "left_alone", err.Error()
-		return res, nil
+		return res, false, nil
 	}
 	if bytes.Equal(next, cur) {
 		res.Action, res.Detail = "left_alone", "Trove's lines were already removed"
-		return res, nil
+		return res, false, nil
 	}
 	if err := writeAtomic(c.Path, next); err != nil {
-		return res, fmt.Errorf("cannot update %s: %v", c.Path, err)
+		return res, false, fmt.Errorf("cannot update %s: %v", c.Path, err)
 	}
 	res.Action, res.Detail = "removed_our_lines", "you had edited the file since setup, so only Trove's lines were removed"
-	return res, nil
+	return res, false, nil
 }
 
 func stripClaude(cur []byte, value, previous string) ([]byte, error) {

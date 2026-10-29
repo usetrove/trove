@@ -70,7 +70,7 @@ func NewRoot(a *App) *cobra.Command {
 		newBudget(a),
 		newReceipts(a),
 		newStatusLine(a),
-		stubCmd(a, "fix", "Apply safe configuration fixes", "fix"),
+		newFix(a),
 		newUndo(a),
 		newShare(a),
 		cfg,

@@ -35,6 +35,9 @@ type Report struct {
 	Leaks           []Leak           `json:"leaks"`
 	Optimizers      Optimizers       `json:"optimizers"`
 	Recommendations []Recommendation `json:"recommendations"`
+	// Fixes are the config fixes from `trove fix` that are still in place, with
+	// what the data shows about each. Empty when none was applied.
+	Fixes []measure.FixEffect `json:"fixes,omitempty"`
 	// Notes are plain-English caveats and next steps (for example the empty state).
 	Notes []string `json:"notes,omitempty"`
 	// History is the part of the figures that came from agents' local session

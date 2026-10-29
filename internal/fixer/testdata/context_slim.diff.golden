@@ -1,0 +1,19 @@
+--- CLAUDE.md
++++ CLAUDE.md
+@@ -1,16 +1,5 @@
+ # Demo project
+ 
+-## Overview
+-
+-This is a demo project. It is a service that does useful things for people.
+-
+-## Deployments
+-
+-The demo service reads events from the queue and writes summaries to the database nightly.
+-Configuration lives in config.yaml and every key has a default documented below in this file.
+-Deployments are done through the release pipeline which tags the repository and publishes artifacts.
+-Run the migrations before starting the service for the first time on a new machine or database.
+-
+ ## Rules
+ 
+ Never edit generated files under gen/. Always run `make check` before committing.
