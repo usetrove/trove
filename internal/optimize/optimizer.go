@@ -128,6 +128,7 @@ func Pipeline() []Optimizer {
 	return []Optimizer{
 		VolatilePrefixMover{},
 		NoiseNormalizer{},
+		OutputTrimmer{},
 		DuplicateCollapser{},
 		CacheBreakpoints{},
 	}
