@@ -125,7 +125,9 @@ func AppliedJSON(reports []Report, failures []Failure) []byte {
 //
 // The order is part of the cache-safety contract: changing it changes bytes.
 func Pipeline() []Optimizer {
-	return []Optimizer{}
+	return []Optimizer{
+		NoiseNormalizer{},
+	}
 }
 
 // PipelineNames is the fixed order of names, for documentation and status output.

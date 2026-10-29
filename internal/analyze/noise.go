@@ -3,12 +3,15 @@ package analyze
 import (
 	"regexp"
 	"strings"
+
+	"github.com/usetrove/trove/internal/noise"
 )
 
+// The ANSI and progress patterns are shared with the noise_normalizer optimizer
+// so the detector and the cleaner agree on what noise is.
 var (
-	ansiRe     = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)`)
-	progressRe = regexp.MustCompile(`\d{1,3}(?:\.\d+)?%.*[#=█▓░>]{4,}|[#=█▓░>]{8,}.*\d{1,3}(?:\.\d+)?%|\d+(?:\.\d+)?\s?[kKMG]i?B/s`)
-	spinnerRe  = regexp.MustCompile(`[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]|^\s*[|/\\-]\s*\S{0,40}$`)
+	ansiRe    = noise.ANSI
+	spinnerRe = regexp.MustCompile(`[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]|^\s*[|/\\-]\s*\S{0,40}$`)
 )
 
 const (
@@ -126,9 +129,7 @@ func measureNoise(text string) Noise {
 // expressions only run on lines that could match; they dominate the cost
 // otherwise.
 
-func isProgress(l string) bool {
-	return (strings.Contains(l, "%") || strings.Contains(l, "B/s")) && progressRe.MatchString(l)
-}
+func isProgress(l string) bool { return noise.IsProgress(l) }
 
 func isSpinner(l string) bool {
 	if strings.ContainsAny(l, "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏") {
