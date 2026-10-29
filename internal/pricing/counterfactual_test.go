@@ -1,6 +1,7 @@
 package pricing
 
 import (
+	"math"
 	"math/rand"
 	"testing"
 	"time"
@@ -167,5 +168,29 @@ func TestPropertyCostNonNegativeAndMonotone(t *testing.T) {
 				t.Fatalf("%s/%s: negative cost after removal", e.Provider, e.Model)
 			}
 		}
+	}
+}
+
+func TestCostWithoutAllMatchesSequentialRemovals(t *testing.T) {
+	tbl, err := Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := Request{Provider: Anthropic, Model: "claude-opus-4-8", Time: time.Date(2026, 10, 29, 0, 0, 0, 0, time.UTC),
+		Usage: Usage{UncachedInput: 1000, CacheRead: 2000, CacheWrite: map[string]int64{"5m": 500}, Output: 100}}
+	cf, err := tbl.CostWithoutAll(req, map[string]int64{CatInput: 400, CatCacheRead: 300, CatCacheWrite("5m"): 100, CatOutput: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 400 x $5/M + 300 x $0.50/M + 100 x $6.25/M
+	want := 400*5e-6 + 300*0.5e-6 + 100*6.25e-6
+	if !cf.Valid || cf.Removed != 800 || math.Abs(cf.Savings.Float64()-want) > 1e-12 {
+		t.Fatalf("got removed=%d savings=%s, want 800 and %g", cf.Removed, cf.Savings, want)
+	}
+	if _, err := tbl.CostWithoutAll(req, map[string]int64{CatInput: -1}); err == nil {
+		t.Error("negative removal accepted")
+	}
+	if _, err := tbl.CostWithoutAll(req, map[string]int64{"bogus": 1}); err == nil {
+		t.Error("unknown category accepted")
 	}
 }

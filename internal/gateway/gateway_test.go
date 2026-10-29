@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/usetrove/trove/internal/analyze"
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/redact"
@@ -78,7 +79,7 @@ func newRig(t *testing.T, upstream http.Handler) *rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := New(Options{Config: cfg, Recorder: rec, Pricing: tbl, Logger: redact.NewLogger(logs, true), Version: "test"})
+	s, err := New(Options{Config: cfg, Recorder: rec, Pricing: tbl, Analyzer: analyze.New(analyze.Options{Pricing: tbl}), Logger: redact.NewLogger(logs, true), Version: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
