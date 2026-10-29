@@ -26,9 +26,11 @@ Back up first: `cp -r <project> <project>.bak`. Afterwards `diff -r` against it.
 - [ ] **Does Claude Code reload settings mid-session?** Is it right to hold fixes while a session is open?
 - [ ] **Tool search.** With tool search on, does an unused MCP server still add tool definitions to the prompt?
       If not, the `mcp_prune` token estimate is too high. Compare gateway `segment_token_estimates` with the server on and off.
-- [ ] **Codex.** Find how MCP tool calls appear in `~/.codex/sessions/**/rollout-*.jsonl`, and whether `cwd` is in `session_meta`.
-      Needed before a Codex `mcp_prune` (the TOML helper `DisableMCPServerTOML` is ready). Confirm `enabled = false` under
-      `[mcp_servers.<name>]` disables the server.
+- [ ] **Codex MCP usage (blocks Codex `mcp_prune`).** Codex's official docs do not say how MCP tool calls are named in
+      `~/.codex/sessions/**/rollout-*.jsonl`. Run Codex in a throwaway project with one MCP server, make it call a tool,
+      and look at the rollout: is it a `function_call` with a namespaced name, or a separate event type? Does
+      `session_meta` carry `cwd`? Send the redacted lines (or say what you saw) so the detector can be written.
+      Also confirm `enabled = false` under `[mcp_servers.<name>]` really disables the server.
 - [ ] **Model setting.** After a `model_default` fix, `/status` in Claude Code should show the new model. Confirm a project
       `model` or `ANTHROPIC_MODEL` really overrides it (the fix refuses in both cases).
 
@@ -54,10 +56,24 @@ Back up first: `cp -r <project> <project>.bak`. Afterwards `diff -r` against it.
       `trove gateway`, it shows a number; sanity-check it against the server's real tool count.
 - [ ] `.mcp.json` itself is byte-identical afterwards.
 
-### model_default
+### model_default (Claude Code)
 - [ ] Needs 20+ small-task requests on a frontier model (gateway or `trove logs scan` history). Check the stated percentage.
 - [ ] Shown as "suggestion"; `trove fix --all --apply --yes` does NOT apply it; `trove fix <id> --apply` does.
 - [ ] With `ANTHROPIC_MODEL` set it becomes a manual step.
+
+### model_default (Codex)
+- [ ] Needs 20+ small-task requests on one frontier model from Codex history (`trove logs scan`). First check the Codex
+      history rows are right: model names and request counts against what you remember using (the parser is unverified).
+- [ ] The suggested model exists and is one you can use with your account. Trove picks it from its pricing table.
+- [ ] `trove fix <id>` diff adds one `model = "..."` line after your top-level keys, before the first `[table]`, and
+      touches nothing else (comments, blank lines intact). Try a `config.toml` with no tables, with CRLF, and with a
+      `model` line already present (it should be replaced, not duplicated).
+- [ ] After applying, start Codex: does it use the new model by default (`/status` or the session header)?
+- [ ] With a `model` in the project's `.codex/config.toml`, or `profile = "x"` in `~/.codex/config.toml`, the fix is
+      advice only and nothing is edited. Confirm that is the real precedence on your install.
+- [ ] `trove fix --all --apply --yes` does NOT apply it; `trove fix <id> --apply` does; `trove undo <id>` restores the
+      file byte for byte (`cmp` with a copy).
+- [ ] Known blind spots: Trove cannot see CLI flags (`-m`), cloud-managed defaults, or whether the project is trusted.
 
 ## 3. Safety behavior
 
@@ -92,4 +108,5 @@ Back up first: `cp -r <project> <project>.bak`. Afterwards `diff -r` against it.
 - Several fixes in place mix their effects; the report says so but does not separate them.
 - Token estimates for files are bytes / 4.
 - `trove undo` with no id reverses everything including fixes; there is no "setup only" mode.
+- Codex `mcp_prune` is not built (see section 1).
 - `fix` only checks the current project (`--project`), not every project in your history.
