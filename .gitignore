@@ -10,3 +10,12 @@ node_modules/
 __pycache__/
 .venv/
 .DS_Store
+
+# bench
+bench/results/
+bench/runs/
+bench/tasks/*/
+!bench/tasks/smoke/
+*.egg-info/
+.pytest_cache/
+bench/cache/

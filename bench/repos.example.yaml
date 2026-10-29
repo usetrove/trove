@@ -1,0 +1,9 @@
+# Allowlist of repos for `python -m trovebench mine`. Copy to repos.yaml and edit.
+# Only repos with a permissive license (MIT, Apache-2.0, BSD, ISC) are mined; anything else is skipped.
+# `test_cmd` runs the PR's own test files; {test_files} is filled in per task.
+repos:
+  - repo: pallets/click
+    image: python:3.12-slim
+    setup:
+      - pip install -q -e . pytest
+    test_cmd: "python -m pytest -q -p no:cacheprovider {test_files}"

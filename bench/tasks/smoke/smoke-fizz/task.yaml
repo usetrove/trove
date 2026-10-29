@@ -1,0 +1,15 @@
+id: smoke-fizz
+source: smoke
+repo: "local:repo"
+base_commit: local
+license: MIT
+prompt: |
+  The unit tests in test_fizz.py fail. Fix fizzbuzz in fizz.py. Do not modify the
+  tests. Run `python -m unittest` to check your work.
+image: python:3.12-slim
+setup: []
+grading_setup:
+  - git checkout HEAD -- test_fizz.py
+success_cmd: python -m unittest -q
+timeout_s: 600
+tags: [smoke, python]
