@@ -79,8 +79,14 @@ type WasteRow struct {
 // WasteByCategory sums the analyzer's findings in w. Every figure is estimated,
 // and categories can overlap, so the rows are not meant to be added up.
 func WasteByCategory(ctx context.Context, db *store.DB, w Window) ([]WasteRow, error) {
-	rows, err := db.QueryContext(ctx, `SELECT findings FROM requests WHERE ts >= ? AND ts < ? AND findings IS NOT NULL`,
+	return wasteByCategory(ctx, db, `SELECT findings FROM requests WHERE ts >= ? AND ts < ? AND findings IS NOT NULL`,
 		w.From.UnixMilli(), w.To.UnixMilli())
+}
+
+// wasteByCategory is WasteByCategory over any query that returns one findings
+// JSON column per row.
+func wasteByCategory(ctx context.Context, db *store.DB, query string, args ...any) ([]WasteRow, error) {
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

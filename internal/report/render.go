@@ -70,6 +70,12 @@ func Render(r Report, o Options) string {
 		b.WriteString(wrap(v, o.width(), "  "+padRight(k, 13), strings.Repeat(" ", 15)) + "\n")
 	}
 	kv("Spend", spendText(h))
+	if h.APIEquivalent != nil {
+		kv("API value", apiEquivText(h))
+	}
+	if r.History != nil {
+		kv("From history", historyText(r.History))
+	}
 	kv("Waste found", wasteText(h))
 	kv("Savings", savingsText(h))
 	kv("Measured", h.MeasuredNote)
@@ -77,10 +83,16 @@ func Render(r Report, o Options) string {
 		kv("Budget", RenderPacingLine(r.Budget, o))
 	}
 
-	b.WriteString("\n" + heading("Spend by agent and model"))
-	b.WriteString(spendTable("Agent", r.Spend.ByAgent, o))
-	b.WriteString("\n")
-	b.WriteString(spendTable("Model", r.Spend.ByModel, o))
+	if len(r.Spend.ByAgent) > 0 || len(r.Spend.ByModel) > 0 {
+		b.WriteString("\n" + heading("Spend by agent and model"))
+		b.WriteString(spendTable("Agent", r.Spend.ByAgent, o))
+		b.WriteString("\n")
+		b.WriteString(spendTable("Model", r.Spend.ByModel, o))
+	}
+	if r.History != nil && len(r.History.ByModel) > 0 {
+		b.WriteString("\n" + heading("History usage by model (API-equivalent value, not a bill)"))
+		b.WriteString(spendTable("Model", r.History.ByModel, o))
+	}
 
 	b.WriteString("\n" + heading("Biggest leaks (estimated, overlapping, not additive)"))
 	if len(r.Leaks) == 0 {
@@ -97,7 +109,11 @@ func Render(r Report, o Options) string {
 	}
 
 	b.WriteString("\n" + heading("Optimizers"))
-	renderOptimizers(&b, r.Optimizers, o)
+	if r.History != nil && !r.History.GatewaySeen {
+		b.WriteString(wrap("Optimizers act on live requests, so they need the gateway. Your history above is read-only. Run `trove setup` to route your agent through Trove.", o.width(), "  ", "  ") + "\n")
+	} else {
+		renderOptimizers(&b, r.Optimizers, o)
+	}
 
 	b.WriteString("\n" + heading("Recommendations (suggestions only; Trove changes nothing on its own)"))
 	if len(r.Recommendations) == 0 {
@@ -119,6 +135,9 @@ func Render(r Report, o Options) string {
 func heading(s string) string { return strings.ToUpper(s[:1]) + s[1:] + "\n" }
 
 func spendText(h Headline) string {
+	if h.APIEquivalent != nil && h.Spend.N == 0 && h.Spend.Unpriced == 0 {
+		return fmt.Sprintf("not shown. Trove could not tell that this usage is billed per token. %s tokens (measured)", FormatTokens(h.Tokens.Value))
+	}
 	s := fmt.Sprintf("%s (estimated at list prices, not an invoice); %s tokens (measured)", Est(h.Spend), FormatTokens(h.Tokens.Value))
 	if h.Spend.Unpriced > 0 {
 		s += fmt.Sprintf(". %d requests could not be priced, so spend is at least this", h.Spend.Unpriced)

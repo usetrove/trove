@@ -1,0 +1,144 @@
+{
+  "period": {
+    "name": "month",
+    "label": "this month (since Oct 1)",
+    "from": "2026-10-01",
+    "to": "2026-10-29"
+  },
+  "state": "ok",
+  "requests": 24,
+  "headline": {
+    "spend_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "tokens": {
+      "value": 1022400,
+      "label": "measured",
+      "n": 24
+    },
+    "waste_usd": {
+      "value": 0.96,
+      "label": "estimated",
+      "n": 8
+    },
+    "waste_percent": {
+      "value": 8,
+      "label": "estimated",
+      "n": 8
+    },
+    "savings_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "api_equivalent_usd": {
+      "value": 12,
+      "label": "estimated",
+      "n": 24
+    },
+    "measured_note": "not enough data yet to compare sessions with and without an optimizer. The dollar savings above are estimates."
+  },
+  "spend": {
+    "by_agent": [],
+    "by_model": []
+  },
+  "leaks": [
+    {
+      "category": "oversized_tool_output",
+      "title": "Oversized tool output",
+      "usd": {
+        "value": 0.96,
+        "label": "estimated",
+        "n": 8
+      },
+      "tokens": {
+        "value": 64000,
+        "label": "estimated",
+        "n": 8
+      },
+      "command": "trove optimize status",
+      "advice": "Estimate only for now: the trimmer needs the MCP fetch tool, which does not exist yet."
+    }
+  ],
+  "optimizers": {
+    "baseline": {
+      "active": true,
+      "days_elapsed": 60,
+      "days_needed": 7,
+      "sessions_seen": 0,
+      "sessions_needed": 20
+    },
+    "kill_switch": false,
+    "rows": [
+      {
+        "name": "volatile_prefix_mover",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "noise_normalizer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "output_trimmer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "duplicate_result_collapser",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "cache_breakpoints",
+        "configured": "off",
+        "effective": "off"
+      }
+    ],
+    "guardrail_events": []
+  },
+  "recommendations": [],
+  "history": {
+    "requests": 24,
+    "sessions": 4,
+    "excluded_sessions": 0,
+    "files": 1,
+    "skipped_lines": 3,
+    "plan": "unknown",
+    "plan_evidence": [
+      "env:ANTHROPIC_API_KEY"
+    ],
+    "value_usd": {
+      "value": 12,
+      "label": "estimated",
+      "n": 24
+    },
+    "basis": "api_equivalent_value",
+    "by_model": [
+      {
+        "key": "claude-a",
+        "requests": 24,
+        "input_uncached_tokens": 2400,
+        "cache_write_tokens": 48000,
+        "cache_read_tokens": 960000,
+        "output_tokens": 12000,
+        "cost_usd": {
+          "value": 12,
+          "label": "estimated",
+          "n": 24
+        }
+      }
+    ],
+    "gateway_seen": false,
+    "not_available": {
+      "cache_miss": "needs consecutive request bodies to compare prefixes",
+      "context_file_weight": "needs the prompt text",
+      "long_session_drift": "not yet implemented for history",
+      "noisy_output": "needs tool output text, which is not stored",
+      "unused_tool_schemas": "needs the tool definitions sent with each request"
+    }
+  }
+}
