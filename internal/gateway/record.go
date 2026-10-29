@@ -15,6 +15,7 @@ import (
 	"github.com/usetrove/trove/internal/gateway/agent"
 	"github.com/usetrove/trove/internal/gateway/session"
 	"github.com/usetrove/trove/internal/gateway/usage"
+	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -155,7 +156,7 @@ func (s *Server) buildRow(f *flight, res usage.Result, status int, streamed bool
 	}
 	row := store.Request{
 		TS:                  f.start,
-		SessionKey:          s.sessions.Key(session.DeriveKey(f.reqHeader, f.reqBody), f.start),
+		SessionKey:          s.sessionKey(f),
 		Agent:               label,
 		AgentVersion:        ver,
 		Provider:            f.provider,
@@ -180,10 +181,48 @@ func (s *Server) buildRow(f *flight, res usage.Result, status int, streamed bool
 	if row.ErrorClass == "" && status >= 400 {
 		row.ErrorClass = fmt.Sprintf("http_%d", status)
 	}
+	if f.opt != nil {
+		row.OptimizationsApplied = optimize.AppliedJSON(f.opt.Applied, f.opt.Failures)
+		row.TokensRemoved = f.opt.TokensRemoved()
+	}
 	if res.Reported {
 		s.price(&row, f, res)
+		s.costDiff(&row, f, res)
 	}
 	return row
+}
+
+// sessionKey returns the session key the optimizer used if it ran, so the row
+// and the pinned optimizer settings agree; otherwise it derives one.
+func (s *Server) sessionKey(f *flight) string {
+	if f.keyed {
+		return f.sessionKey
+	}
+	return s.sessions.Key(session.DeriveKey(f.reqHeader, f.reqBody), f.start)
+}
+
+// costDiff estimates what the optimizers saved on this request: the cost of the
+// request had the removed tokens still been sent, minus what was billed. It is
+// an estimate (see pricing.CostWithAdded) and stays unset when the request could
+// not be priced exactly.
+func (s *Server) costDiff(row *store.Request, f *flight, res usage.Result) {
+	if s.opts.Pricing == nil || row.TokensRemoved <= 0 || row.CostUSD == nil {
+		return
+	}
+	tier, batch := pricingTier(res.ServiceTier)
+	cf, err := s.opts.Pricing.CostWithAdded(pricing.Request{
+		Provider: f.provider, Model: row.Model, Time: f.start, Batch: batch, ServiceTier: tier,
+		ToolCalls: res.ToolCalls,
+		Usage: pricing.Usage{
+			UncachedInput: res.UncachedInput, CacheWrite: res.CacheWriteByTTL,
+			CacheRead: res.CacheRead, Output: res.Output, Reasoning: res.Reasoning,
+		},
+	}, row.TokensRemoved)
+	if err != nil || !cf.Valid {
+		return
+	}
+	v := cf.Savings.Float64()
+	row.CostDiffUSD = &v
 }
 
 // price fills cost_usd only when every part could be priced exactly.

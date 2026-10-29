@@ -67,7 +67,10 @@ func fixture(t *testing.T, name string) []byte {
 	return b
 }
 
-func newRig(t *testing.T, upstream http.Handler) *rig {
+func newRig(t *testing.T, upstream http.Handler) *rig { return newRigWith(t, upstream, nil) }
+
+// newRigWith is newRig with a hook to adjust the gateway options.
+func newRigWith(t *testing.T, upstream http.Handler, tweak func(*Options)) *rig {
 	t.Helper()
 	up := httptest.NewServer(upstream)
 	t.Cleanup(up.Close)
@@ -79,7 +82,11 @@ func newRig(t *testing.T, upstream http.Handler) *rig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := New(Options{Config: cfg, Recorder: rec, Pricing: tbl, Analyzer: analyze.New(analyze.Options{Pricing: tbl}), Logger: redact.NewLogger(logs, true), Version: "test"})
+	opts := Options{Config: cfg, Recorder: rec, Pricing: tbl, Analyzer: analyze.New(analyze.Options{Pricing: tbl}), Logger: redact.NewLogger(logs, true), Version: "test"}
+	if tweak != nil {
+		tweak(&opts)
+	}
+	s, err := New(opts)
 	if err != nil {
 		t.Fatal(err)
 	}

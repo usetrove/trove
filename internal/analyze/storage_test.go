@@ -123,9 +123,9 @@ func TestRollupsPerSessionAndDay(t *testing.T) {
 		sess string
 		json string
 	}{
-		{day1, "A", `{"label":"estimated","optimizers":{"dedupe_tool_results":{"tokens":1000,"usd":0.005},"strip_noise":{"tokens":200,"usd":0.001}}}`},
-		{day2, "A", `{"label":"estimated","optimizers":{"dedupe_tool_results":{"tokens":500,"usd":0.0025}}}`},
-		{day2, "B", `{"label":"estimated","optimizers":{"dedupe_tool_results":{"tokens":300,"usd":null}}}`},
+		{day1, "A", `{"label":"estimated","optimizers":{"duplicate_result_collapser":{"tokens":1000,"usd":0.005},"noise_normalizer":{"tokens":200,"usd":0.001}}}`},
+		{day2, "A", `{"label":"estimated","optimizers":{"duplicate_result_collapser":{"tokens":500,"usd":0.0025}}}`},
+		{day2, "B", `{"label":"estimated","optimizers":{"duplicate_result_collapser":{"tokens":300,"usd":null}}}`},
 	}
 	for _, r := range rows {
 		w.Enqueue(store.Request{TS: r.ts, SessionKey: r.sess, Provider: "anthropic", ShadowSavings: []byte(r.json)})

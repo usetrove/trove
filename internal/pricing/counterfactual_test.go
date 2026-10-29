@@ -194,3 +194,51 @@ func TestCostWithoutAllMatchesSequentialRemovals(t *testing.T) {
 		t.Error("unknown category accepted")
 	}
 }
+
+func TestCostWithAdded(t *testing.T) {
+	tb := mustDefault(t)
+	// Sonnet 5.5: input $2, 5m write $2.50, cache read $0.10, output $10 per MTok.
+	sonnet := Request{Provider: Anthropic, Model: "claude-sonnet-5-5", Time: at("2026-10-15"),
+		Usage: Usage{UncachedInput: 10_000, CacheWrite: map[string]int64{"5m": 20_000}, CacheRead: 100_000, Output: 2_000}}
+
+	// 13,000 added back on a 130,000-token prompt splits 1,000 / 2,000 / 10,000
+	// across input, 5m write and cache read: 1,000x2 + 2,000x2.5 + 10,000x0.10 = $0.008.
+	cf, err := tb.CostWithAdded(sonnet, 13_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cf.Valid || cf.Removed != 13_000 || cf.Savings.Cmp(MoneyFromString("0.008")) != 0 {
+		t.Errorf("savings = %s valid=%v removed=%d, want 0.008", cf.Savings, cf.Valid, cf.Removed)
+	}
+	if sonnet.Usage.CacheRead != 100_000 || sonnet.Usage.CacheWrite["5m"] != 20_000 {
+		t.Error("the request was mutated")
+	}
+
+	t.Run("savings are never negative", func(t *testing.T) {
+		rng := rand.New(rand.NewSource(3))
+		for i := 0; i < 200; i++ {
+			r := Request{Provider: Anthropic, Model: "claude-sonnet-5-5", Time: at("2026-10-15"),
+				Usage: Usage{UncachedInput: rng.Int63n(5000), CacheRead: rng.Int63n(5000), CacheWrite: map[string]int64{"5m": rng.Int63n(5000), "1h": rng.Int63n(5000)}}}
+			added := rng.Int63n(3000)
+			cf, err := tb.CostWithAdded(r, added)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cf.Savings.Cmp(zeroMoney()) < 0 {
+				t.Fatalf("adding tokens back cannot make the optimizer cost money: %s", cf.Savings)
+			}
+		}
+	})
+
+	t.Run("empty prompt is priced as plain input", func(t *testing.T) {
+		cf, err := tb.CostWithAdded(Request{Provider: Anthropic, Model: "claude-sonnet-5-5", Time: at("2026-10-15"), Usage: Usage{Output: 10}}, 5_000)
+		if err != nil || cf.Savings.Cmp(MoneyFromString("0.01")) != 0 { // 5,000 x $2
+			t.Errorf("savings = %s err=%v", cf.Savings, err)
+		}
+	})
+	t.Run("negative is an error", func(t *testing.T) {
+		if _, err := tb.CostWithAdded(sonnet, -1); err == nil {
+			t.Error("expected an error")
+		}
+	})
+}

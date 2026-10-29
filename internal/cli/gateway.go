@@ -20,6 +20,7 @@ import (
 	"github.com/usetrove/trove/internal/analyze"
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/gateway"
+	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/service"
 	"github.com/usetrove/trove/internal/store"
@@ -137,7 +138,10 @@ func runGateway(a *App, listen string) error {
 		log.Warn("pricing data could not be loaded; costs will be recorded as unknown", "err", err)
 		tbl = nil
 	}
-	srv, err := gateway.New(gateway.Options{Config: cfg, Recorder: writer, Pricing: tbl, Analyzer: analyze.New(analyze.Options{Pricing: tbl, Logger: log}), Logger: log, Version: Version})
+	engine := optimize.New(optimize.Options{
+		Config: cfg, Pins: db.Pins(), KillFile: optimize.KillFile(dir), Getenv: a.Getenv, Log: log,
+	})
+	srv, err := gateway.New(gateway.Options{Config: cfg, Recorder: writer, Pricing: tbl, Analyzer: analyze.New(analyze.Options{Pricing: tbl, Logger: log}), Optimizer: engine, Logger: log, Version: Version})
 	if err != nil {
 		return err
 	}
