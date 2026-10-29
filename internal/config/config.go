@@ -30,6 +30,7 @@ type Config struct {
 	Gateway       Gateway           `toml:"gateway"`
 	Upstreams     Upstreams         `toml:"upstreams"`
 	Optimizers    map[string]string `toml:"optimizers"`
+	Optimize      Optimize          `toml:"optimize"`
 	Budget        Budget            `toml:"budget"`
 	RetentionDays int               `toml:"retention_days"`
 }
@@ -39,6 +40,28 @@ type Gateway struct {
 	Port        int `toml:"port"`
 	IdleMinutes int `toml:"idle_minutes"`
 }
+
+// Optimize holds settings shared by all optimizers. Per-optimizer states live
+// in Optimizers.
+type Optimize struct {
+	// CustomAgents lists the agent labels (see gateway/agent) the user has
+	// explicitly marked as custom agents that Trove may give a cache layout.
+	CustomAgents []string `toml:"custom_agents"`
+	// BudgetMS is the time the whole optimizer pipeline may take per request
+	// before Trove forwards the original request unmodified.
+	BudgetMS int `toml:"budget_ms"`
+}
+
+// Optimizers that are built but must not be turned on yet.
+const (
+	// OptimizerOutputTrimmer needs the MCP fetch tool (Prompt 11) so the agent
+	// can retrieve what was trimmed. It may run in shadow mode only.
+	OptimizerOutputTrimmer = "output_trimmer"
+)
+
+// EnvOptimize is the kill-switch environment variable. Set to "off", it
+// disables every transformation immediately.
+const EnvOptimize = "TROVE_OPTIMIZE"
 
 // Upstreams are the provider origins the gateway forwards to.
 type Upstreams struct {
@@ -59,6 +82,7 @@ func Default() Config {
 		Gateway:       Gateway{Port: 8787, IdleMinutes: 30},
 		Upstreams:     Upstreams{Anthropic: "https://api.anthropic.com", OpenAI: "https://api.openai.com"},
 		Optimizers:    map[string]string{},
+		Optimize:      Optimize{CustomAgents: []string{}, BudgetMS: 25},
 		Budget:        Budget{Period: "monthly", CapUSD: 0, WarnAtPercent: 80},
 		RetentionDays: 90,
 	}
@@ -95,6 +119,15 @@ openai = "https://api.openai.com"
 # Each optimizer is "off", "shadow" (estimate only, change nothing) or "on".
 # Optimizers not listed here are off. Changes take effect at the next session.
 # example = "shadow"
+
+[optimize]
+# Agent labels you explicitly mark as custom agents, for optimizers that give a
+# custom agent a better cache layout (cache_breakpoints, volatile_prefix_mover).
+# Allowed labels: "sdk", "other". Claude Code and Codex are never allowed.
+custom_agents = []
+# If the optimizers take longer than this many milliseconds (1 to 1000), Trove
+# forwards your original request unmodified.
+budget_ms = 25
 
 [budget]
 # Budget period: "daily", "weekly" or "monthly".
@@ -137,6 +170,17 @@ func (c Config) Validate() error {
 		default:
 			add("optimizers.%s is %q; use \"off\", \"shadow\" or \"on\".", n, c.Optimizers[n])
 		}
+	}
+	if c.Optimizers[OptimizerOutputTrimmer] == StateOn {
+		add("optimizers.%s cannot be \"on\" yet: it needs the MCP fetch tool so your agent can retrieve trimmed output. Use \"shadow\" to see estimates.", OptimizerOutputTrimmer)
+	}
+	for _, a := range c.Optimize.CustomAgents {
+		if a != "sdk" && a != "other" {
+			add("optimize.custom_agents contains %q; only \"sdk\" and \"other\" can be marked custom. Claude Code and Codex manage their own prompts and caching.", a)
+		}
+	}
+	if c.Optimize.BudgetMS < 1 || c.Optimize.BudgetMS > 1000 {
+		add("optimize.budget_ms is %d; use a number of milliseconds from 1 to 1000 (default 25).", c.Optimize.BudgetMS)
 	}
 	switch c.Budget.Period {
 	case "daily", "weekly", "monthly":
