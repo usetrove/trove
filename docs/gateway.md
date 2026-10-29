@@ -23,6 +23,8 @@ response is modified in this mode; Trove only records metadata.
 - Refusals are HTTP 401 in the provider's own error shape with a plain message. Credentials are only
   compared in memory, never logged, stored or echoed.
 
+See [legal-and-credentials.md](legal-and-credentials.md) for the provider terms behind these rules.
+
 ## What is recorded (metadata only)
 One row per response: provider, model, endpoint (no query string), streamed, status, latency, time to
 first byte (`ttft_ms`; for streams, the first SSE bytes, not the first generated token), token buckets,
