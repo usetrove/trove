@@ -3,6 +3,7 @@ package analyze
 import (
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/usetrove/trove/internal/pricing"
 )
@@ -155,11 +156,21 @@ func toolLabel(name string) string {
 // with a small input and a small output. It is a suggestion with low
 // confidence: Trove cannot know whether the cheaper model would have coped.
 func (a *Analyzer) expensiveSmall(p *Parsed, e *Estimate, b billing, in Input) (Finding, bool) {
-	tbl := a.opts.Pricing
-	if tbl == nil || !b.ok || !e.Calibrated || e.TotalTokens > a.opts.SmallInputTokens || in.Usage.Output > a.opts.SmallOutputTokens || in.Usage.Output == 0 {
+	if !b.ok || !e.Calibrated {
 		return Finding{}, false
 	}
-	cur, _ := tbl.Lookup(p.Provider, b.req.Model, in.Start)
+	return a.expensiveModel(p.Provider, b.req, in.Start, e.TotalTokens, in.Usage.Output)
+}
+
+// expensiveModel is the model-choice check on plain numbers, shared by the
+// gateway analyzer and the history audit: totalIn is all input tokens of the
+// request (cached or not) and req is the priced request.
+func (a *Analyzer) expensiveModel(provider string, req pricing.Request, start time.Time, totalIn, output int64) (Finding, bool) {
+	tbl := a.opts.Pricing
+	if tbl == nil || totalIn > a.opts.SmallInputTokens || output > a.opts.SmallOutputTokens || output == 0 {
+		return Finding{}, false
+	}
+	cur, _ := tbl.Lookup(provider, req.Model, start)
 	if cur == nil {
 		return Finding{}, false
 	}
@@ -171,7 +182,7 @@ func (a *Analyzer) expensiveSmall(p *Parsed, e *Estimate, b billing, in Input) (
 	var alt *pricing.Entry
 	var altIn float64
 	for _, en := range tbl.Entries() {
-		if en.Provider != p.Provider || en.EffectiveFrom == nil || en.EffectiveFrom.After(in.Start) {
+		if en.Provider != provider || en.EffectiveFrom == nil || en.EffectiveFrom.After(start) {
 			continue
 		}
 		if v := decFloat(en.Standard.Input); v*3 <= curIn && v > altIn {
@@ -181,8 +192,8 @@ func (a *Analyzer) expensiveSmall(p *Parsed, e *Estimate, b billing, in Input) (
 	if alt == nil {
 		return Finding{}, false
 	}
-	before := tbl.Cost(b.req)
-	r2 := b.req
+	before := tbl.Cost(req)
+	r2 := req
 	r2.Model = alt.Model
 	after := tbl.Cost(r2)
 	if before.Status != pricing.Priced || after.Status != pricing.Priced {
@@ -190,9 +201,9 @@ func (a *Analyzer) expensiveSmall(p *Parsed, e *Estimate, b billing, in Input) (
 	}
 	usd := before.Total.Sub(after.Total).Float64()
 	return Finding{
-		Detector: DetExpensive, Tokens: e.TotalTokens + in.Usage.Output, USD: &usd, Confidence: "low", Label: "estimated",
+		Detector: DetExpensive, Tokens: totalIn + output, USD: &usd, Confidence: "low", Label: "estimated",
 		Detail: map[string]any{
-			"input_tokens": e.TotalTokens, "output_tokens": in.Usage.Output, "alternative": alt.Model,
+			"input_tokens": totalIn, "output_tokens": output, "alternative": alt.Model,
 			"note": "suggestion only; assumes the cheaper model could do this task, which Trove cannot check",
 		},
 	}, true
