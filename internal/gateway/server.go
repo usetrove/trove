@@ -28,6 +28,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/usetrove/trove/internal/analyze"
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/gateway/session"
 	"github.com/usetrove/trove/internal/pricing"
@@ -49,9 +50,10 @@ type Recorder interface {
 // Options configures a Server.
 type Options struct {
 	Config    config.Config
-	Recorder  Recorder       // required
-	Pricing   *pricing.Table // nil: costs are recorded as unknown
-	Logger    *slog.Logger   // must already redact; nil discards
+	Recorder  Recorder          // required
+	Pricing   *pricing.Table    // nil: costs are recorded as unknown
+	Analyzer  *analyze.Analyzer // nil: no structure analysis; runs after the response, never on the request path
+	Logger    *slog.Logger      // must already redact; nil discards
 	Version   string
 	Now       func() time.Time  // tests only
 	Transport http.RoundTripper // tests only; nil uses a pass-through transport

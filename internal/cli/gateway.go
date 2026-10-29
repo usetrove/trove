@@ -17,6 +17,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/usetrove/trove/internal/analyze"
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/gateway"
 	"github.com/usetrove/trove/internal/pricing"
@@ -136,7 +137,7 @@ func runGateway(a *App, listen string) error {
 		log.Warn("pricing data could not be loaded; costs will be recorded as unknown", "err", err)
 		tbl = nil
 	}
-	srv, err := gateway.New(gateway.Options{Config: cfg, Recorder: writer, Pricing: tbl, Logger: log, Version: Version})
+	srv, err := gateway.New(gateway.Options{Config: cfg, Recorder: writer, Pricing: tbl, Analyzer: analyze.New(analyze.Options{Pricing: tbl, Logger: log}), Logger: log, Version: Version})
 	if err != nil {
 		return err
 	}

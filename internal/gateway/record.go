@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/usetrove/trove/internal/analyze"
 	"github.com/usetrove/trove/internal/gateway/agent"
 	"github.com/usetrove/trove/internal/gateway/session"
 	"github.com/usetrove/trove/internal/gateway/usage"
@@ -41,12 +42,38 @@ func (s *Server) record(f *flight, captured []byte, over, cleanEnd, clientGone b
 		res = extract(x, captured, enc, cleanEnd)
 	}
 	row := s.buildRow(f, res, status, streamed, first, end)
+	if status < 400 && !clientGone {
+		s.analyze(&row, f, res)
+	}
 	if clientGone {
 		row.ErrorClass = "client_disconnected"
 	}
 	if !s.opts.Recorder.Enqueue(row) {
 		s.log.Warn("usage row was dropped because the recorder is busy or closed; the request was not affected")
 	}
+}
+
+// analyze fills the structure estimates, findings and shadow savings on the
+// row. It runs in the recording goroutine, after the response has been sent.
+// Any failure leaves the row without analysis; the usage numbers are unaffected.
+func (s *Server) analyze(row *store.Request, f *flight, res usage.Result) {
+	if s.opts.Analyzer == nil {
+		return
+	}
+	tier, batch := pricingTier(res.ServiceTier)
+	out := s.opts.Analyzer.Analyze(analyze.Input{
+		Provider: f.provider, Path: f.path, Body: f.reqBody, SessionKey: row.SessionKey, Start: f.start,
+		Model: res.Model, ServiceTier: tier, Batch: batch, Reported: res.Reported,
+		CacheWriteTotal: res.CacheWriteTotal,
+		Usage: pricing.Usage{
+			UncachedInput: res.UncachedInput, CacheWrite: res.CacheWriteByTTL,
+			CacheRead: res.CacheRead, Output: res.Output, Reasoning: res.Reasoning,
+		},
+	})
+	if out == nil {
+		return
+	}
+	row.SegmentTokenEstimate, row.Findings, row.ShadowSavings = out.Estimates, out.Findings, out.Shadow
 }
 
 func (s *Server) recordFailure(f *flight, class string, end time.Time) {

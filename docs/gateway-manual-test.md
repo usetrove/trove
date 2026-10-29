@@ -61,3 +61,23 @@ or ask Claude Code/the assistant to read `trove.db` for you. The file holds meta
 ## Not covered here
 - Codex CLI (needs an OpenAI API key; `trove setup` configures it only if Codex is installed).
 - `trove gateway start --background` (macOS/Linux only; untested on Windows).
+
+## Part C: request analysis (estimates, findings, shadow savings)
+Not yet run against real traffic; the automated tests use synthetic sessions only. Design and limits: `docs/analyze.md`.
+
+1. Do Part B with a few turns of real work. Use tools, re-read a file, run a noisy command (a build or test run) and keep
+   going for 6+ turns so the session-level detectors can fire. A longer session is more useful than a short one.
+2. Read the three analysis columns of the newest rows (read-only):
+   `sqlite3 C:\tmp\trove-test\trove.db "select id, segment_token_estimates, findings, shadow_savings from requests order by id desc limit 5"`
+   (or the same `go run` helper as above; any SQLite viewer works).
+3. Check:
+   - `segment_token_estimates.categories` add up to the request's input tokens (uncached + cache write + cache read),
+     and `calibrated` is `true`.
+   - `findings` entries all say `"label":"estimated"`. Look for `cache_miss` with a `reason`, `duplicate_tool_result`,
+     `noisy_output`, `context_file_weight` (if you have a CLAUDE.md), `unused_tool_schemas` (after 5 requests).
+   - A `cache_miss` with `volatile_content` shows only a category (`date`, `path`, `id`) and a position, never the text.
+   - `shadow_savings` lists optimizer names with tokens and usd. Nothing was changed; this is what they would have saved.
+4. Privacy spot check: search the database for a distinctive phrase you typed or a file path from your project.
+   `findstr /m "your-phrase" C:\tmp\trove-test\trove.db*` must find nothing.
+5. Tell us about anything that looks wrong: a miss reason that does not match what happened, a detector that fires
+   on clean output, or categories that look far off (for example context files that are not context files).
