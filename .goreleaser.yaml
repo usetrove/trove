@@ -11,13 +11,18 @@ builds:
       - CGO_ENABLED=0
     goos: [darwin, linux]
     goarch: [amd64, arm64]
+    # A fixed file time (the commit time) and no build-time clock in the binary:
+    # the same commit and Go toolchain give the same bytes. The Go version used is
+    # recorded in each binary (`go version -m trove`) so a rebuild can match it.
+    mod_timestamp: "{{ .CommitTimestamp }}"
     flags:
       - -trimpath
+      - -buildvcs=false
     ldflags:
       - -s -w
       - -X github.com/usetrove/trove/internal/cli.Version={{ .Version }}
       - -X github.com/usetrove/trove/internal/cli.Commit={{ .Commit }}
-      - -X github.com/usetrove/trove/internal/cli.Date={{ .Date }}
+      - -X github.com/usetrove/trove/internal/cli.Date={{ .CommitDate }}
 
 archives:
   - id: trove
