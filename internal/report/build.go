@@ -85,6 +85,10 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 		r.State = StateOK
 	}
 
+	if r.Hooks, err = measure.HookTotals(ctx, db, p.From); err != nil {
+		return r, err
+	}
+
 	// Budget pacing is shown even when this period is quiet.
 	pace, err := BuildPacing(ctx, db, in.Config, in.Now)
 	if err != nil {

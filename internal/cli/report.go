@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/hooks"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/report"
@@ -108,6 +109,13 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 		return report.EmptyReport(p), nil
 	}
 	defer func() { _ = db.Close() }()
+	if _, serr := os.Stat(filepath.Join(dir, "hooks")); serr == nil {
+		// Bring the hooks' counters and guardrail up to date first. Best effort:
+		// a problem here must not stop the report.
+		if merr := hooks.Maintain(context.Background(), db, dir, cfg, a.Getenv, now); merr != nil {
+			_, _ = fmt.Fprintf(a.Err, "Could not refresh the hook counts (%v). Run `trove hooks sync` for details.\n", merr)
+		}
+	}
 	on, _ := optimize.Disabled(optimize.KillFile(dir), a.Getenv)
 	tbl, perr := pricing.Default()
 	if perr != nil {

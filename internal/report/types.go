@@ -46,6 +46,10 @@ type Report struct {
 	// Tools is how the Trove MCP tools are doing. Nil when the server is not
 	// registered and no agent has used them.
 	Tools *Tools `json:"trove_tools,omitempty"`
+	// Hooks is what the agent hooks did in this period (blocked and advised
+	// calls, re-reads that followed a block). Empty when no hook has recorded
+	// anything.
+	Hooks []measure.HookStats `json:"hooks,omitempty"`
 }
 
 // Tools reports on the Trove MCP server: what its definitions cost, whether

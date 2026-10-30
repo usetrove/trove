@@ -130,6 +130,13 @@ func Render(r Report, o Options) string {
 		}
 	}
 
+	if len(r.Hooks) > 0 {
+		b.WriteString("\n" + heading("Agent hooks"))
+		for _, l := range hooksLines(r.Hooks) {
+			b.WriteString(wrap(l, o.width(), "  ", "    ") + "\n")
+		}
+	}
+
 	b.WriteString("\n" + heading("Recommendations (suggestions only; Trove changes nothing on its own)"))
 	if len(r.Recommendations) == 0 {
 		b.WriteString("  None yet. These need more recorded usage.\n")
@@ -505,6 +512,31 @@ func toolsLines(t *Tools) []string {
 		out = append(out, l)
 	case a.Trimmed > 0:
 		out = append(out, fmt.Sprintf("Fetch-back (measured): %s (%d trimmed outputs so far, %d needed).", measure.TextNotEnough, a.Trimmed, measure.MinFetchBackSample))
+	}
+	return out
+}
+
+// hooksLines describes what each hook did. Counts are what the hook itself saw
+// (measured); token figures come from file sizes (estimated).
+func hooksLines(stats []measure.HookStats) []string {
+	var out []string
+	for _, s := range stats {
+		l := s.Hook + ": "
+		switch {
+		case s.Blocked+s.WouldBlock > 0:
+			l += fmt.Sprintf("%d repeat reads blocked, %d more would have been blocked in shadow mode (measured counts)", s.Blocked, s.WouldBlock)
+		case s.Advised+s.WouldAdvise > 0:
+			l += fmt.Sprintf("%d hints added, %d more would have been added in shadow mode (measured counts)", s.Advised, s.WouldAdvise)
+		default:
+			l += "no activity"
+		}
+		if s.Blocked > 0 {
+			l += fmt.Sprintf("; about %s tokens kept out of the context (estimated)", FormatTokens(s.TokensSaved.Value))
+			if s.RereadRate != nil {
+				l += fmt.Sprintf("; the agent read the file again anyway after %s of blocks (measured)", FormatPercent(s.RereadRate.Value))
+			}
+		}
+		out = append(out, l+".")
 	}
 	return out
 }
