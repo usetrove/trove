@@ -36,6 +36,26 @@ jobs:
       # -race needs cgo for the test binary only; the shipped binary is built with CGO_ENABLED=0.
       - run: go test -race ./...
 
+  # Privacy gates (CLAUDE.md rules 1, 2 and 7). These also run inside `test`; this
+  # job exists so they are named in the checks list and cannot be skipped: it
+  # installs strace and fails, rather than skips, if the harness cannot run.
+  privacy:
+    runs-on: ubuntu-latest
+    env:
+      TROVE_REQUIRE_STRACE: "1"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: stable
+      - run: sudo apt-get update && sudo apt-get install -y strace
+      - name: No outbound network except the configured upstream (static allowlist + strace)
+        run: go test -count=1 -v ./internal/egress
+      - name: No credential or prompt text in logs, responses or on disk
+        run: go test -count=1 -v -run 'TestNoCredentialOrPromptReachesLogsResponsesOrDisk|TestNonAPIKeyAuthIsRejected' ./internal/gateway
+      - name: Redaction and metadata-only schema
+        run: go test -count=1 ./internal/redact ./internal/store ./internal/hooks ./internal/logs/...
+
   npm-wrapper:
     runs-on: ubuntu-latest
     steps:
