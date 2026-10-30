@@ -35,6 +35,8 @@ jobs:
           go-version-file: go.mod
       # -race needs cgo for the test binary only; the shipped binary is built with CGO_ENABLED=0.
       - run: go test -race ./...
+      # Launch drafts may hold unresolved slots, but never a bare figure or a slot with a missing source.
+      - run: go run ./scripts/checkclaims
 
   # Privacy gates (CLAUDE.md rules 1, 2 and 7). These also run inside `test`; this
   # job exists so they are named in the checks list and cannot be skipped: it
