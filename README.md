@@ -1,54 +1,141 @@
 # Trove
 
-The efficiency layer for AI coding agents. Trove is a local, open-source tool (a single Go binary) that cuts the tokens your coding agents waste and shows that results did not suffer.
+**The efficiency layer for AI coding agents.**
 
-> Status: pre-release. The gateway, analysis, optimizers, measurement, reports, fixes, MCP server, hooks and `trove uninstall` are implemented. Only `trove config get|set` still prints "not implemented yet". Nothing has been released yet.
+Trove cuts the tokens your coding agents waste, and checks that your results did not suffer. One small program, no account, nothing to sign up for.
 
-## Principles
-Local-first (everything lives in `~/.trove`, no telemetry), API keys are never stored or logged, every optimization is opt-in with a shadow mode, and every number is labeled measured or estimated. See [CLAUDE.md](CLAUDE.md).
+> **Runs locally. Sends nothing. Open source.**
 
-Security and privacy: [PRIVACY.md](PRIVACY.md) (exactly what is stored and where), [docs/threat-model.md](docs/threat-model.md), [docs/security-findings.md](docs/security-findings.md) and [docs/compliance.md](docs/compliance.md). To remove everything Trove changed, run `trove uninstall` (add `--purge-data` to delete what it stored).
+<!-- DEMO GIF: record from docs/launch/demo-script.md, save as docs/assets/demo.gif, then replace this comment with: ![Trove demo](docs/assets/demo.gif) -->
+*(Demo GIF coming with the first release.)*
 
-## Install (once a release exists)
+> **Status: pre-release.** Version 0.1.0 has not been published yet, so the install commands below will not work until it is. Until then, [build from source](#build-from-source).
+
+## Install
+
+Pick one. Every path checks the download against the release's SHA-256 checksums before it runs anything.
+
 ```sh
-curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | sh   # checks the archive's SHA-256 against checksums.txt (not the signature)
-npx trove-cli doctor                                                                     # same checksum check before it runs the binary
-brew install usetrove/trove/trove
+brew install usetrove/trove/trove                                                  # Homebrew
+npx trove-cli doctor                                                               # no install; runs a checked copy
+curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | sh   # install script
 ```
-Releases also carry a cosign signature over `checksums.txt` and an SBOM per archive. To verify the signature:
+
+Or download the archive for your system from the GitHub release page and check it yourself:
+
 ```sh
+sha256sum -c --ignore-missing checksums.txt
 cosign verify-blob \
   --certificate-identity 'https://github.com/usetrove/trove/.github/workflows/release.yml@refs/tags/vX.Y.Z' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
   --bundle checksums.txt.sigstore.json checksums.txt
 ```
 
-## Build and test
-Requires Go 1.27.3 or newer (`go.mod` says so; older patch releases of the standard library have known vulnerabilities that govulncheck flags).
+Replace `vX.Y.Z` with the version you downloaded. The cosign step is optional but is the only one that proves the checksums came from this project's release workflow. The install script and the npm wrapper check the SHA-256 only, not the signature.
+
+Supported: macOS and Linux (amd64, arm64). Windows builds are not part of 0.1.0.
+
+## Quickstart
+
+```sh
+trove          # reads the history your agent already keeps on disk and shows your report
+trove fix      # lists evidence-based fixes with their estimated savings; changes nothing
+```
+
+You do not need the gateway for this, and it works if you use a subscription plan. Every number is labeled **measured** (counted from usage the provider reported) or **estimated** (derived from list prices or an assumption). Dollar figures are estimates, not invoices.
+
+To apply a fix (you see the exact diff and are asked first):
+
+```sh
+trove fix <id> --apply
+```
+
+To see spend in Claude Code's status line (opt-in, separate step):
+
+```sh
+trove setup --status-line
+```
+
+We aim for the first report to take under two minutes from install. That target has not been measured yet; the beta will record it ([docs/beta-checklist.md](docs/beta-checklist.md)).
+
+## How it works
+
+There are two layers, and you can use the first without the second.
+
+1. **For everyone, no proxy.** Trove reads the session history your agent already stores locally, finds waste (repeated reads, bloated context, cache breakers, unused tool definitions), proposes fixes to your agent's config files, and can add hooks and an MCP tool server. Nothing sits between your agent and the provider.
+2. **Optional local gateway, for people who pay with their own API keys.** `trove setup` points Claude Code or Codex CLI at a gateway on `127.0.0.1` using the agent's documented custom-endpoint setting. The gateway records metadata for each request (token counts, sizes, hashes, model names, timings) and can apply optimizations that are switched on one at a time. It forwards your own requests to the provider you configured, and nothing else leaves your machine. It does not handle subscription or OAuth credentials and rejects them with an explanation.
+
+Principles that hold everywhere:
+
+- **Local-first.** Everything lives in `~/.trove`. No telemetry, no analytics.
+- **Keys pass through.** API keys are never logged, stored or printed.
+- **Metadata only.** Prompt text, code, file paths and tool output are never written to the database. [PRIVACY.md](PRIVACY.md) lists exactly what is stored.
+- **Fails open.** If Trove hits an internal error, your request goes through unchanged.
+- **Prove before acting.** Every optimization is opt-in, has a shadow mode that only estimates, is measured once on, and rolls back if guardrails trip. See [docs/measurement.md](docs/measurement.md).
+
+## What Trove changes, and how to undo it
+
+Trove changes nothing until you approve it. Each change is shown first, the original file is backed up, and one command reverses it.
+
+| Command | What it changes | Undo |
+|---|---|---|
+| `trove setup` | Claude Code `settings.json` (gateway address) or Codex `~/.codex/config.toml` | `trove undo` |
+| `trove setup --status-line` | Claude Code `settings.json` (`statusLine`); never replaces one you already have | `trove undo` |
+| `trove fix <id> --apply` | The agent config file named in the diff | `trove undo <id>` |
+| `trove hooks install` | Hooks in Claude Code and Codex CLI settings | `trove hooks uninstall` |
+| `trove mcp install` | Registers the Trove MCP server with your agents | `trove mcp uninstall` |
+| `trove gateway start --background` | Installs a user background service | `trove gateway stop`, or `trove uninstall` |
+| Normal use | Creates `~/.trove` (database, backups, settings) | `trove uninstall --purge-data` |
+
+Shell rc files are never touched. Trove never reads or writes your API keys.
+
+## FAQ
+
+**Does it send my code or prompts anywhere?** No. Trove makes no network calls of its own. In gateway mode it forwards your own API requests to the provider you configured, as your agent would have. See [PRIVACY.md](PRIVACY.md).
+
+**Does it work with a subscription (Claude Pro/Max, ChatGPT)?** The history report, fixes, hooks and MCP server do. The gateway is for API-key use only; Trove will not touch subscription or OAuth traffic.
+
+**Which agents and versions?** Claude Code and Codex CLI. See [docs/supported-agents.md](docs/supported-agents.md) for what has and has not been tested.
+
+**How accurate are the dollar figures?** They are list-price estimates from usage counts. During the beta, `trove reconcile` compares them with real invoices; results are published in the docs. See [docs/measurement-method.md](docs/measurement-method.md) and [docs/pricing.md](docs/pricing.md).
+
+**Can an optimization make my agent worse?** Optimizers are off by default, run in shadow mode first, and are measured. If guardrails trip, Trove rolls them back and tells you. `trove optimize off` stops all of them at once.
+
+**How do I report a problem?** `trove feedback` builds a GitHub issue with versions, agent names, counts and error classes, shows you the full text, and opens it only if you say yes. It never includes prompts, code, paths or keys.
+
+**How do I check Trove's numbers against my bill?** `trove reconcile --provider anthropic --from 2026-10-01 --to 2026-10-31 --invoice 123.45`. A difference within 2% is reported as a match.
+
+## Uninstall
+
+```sh
+trove uninstall --dry-run      # shows what would happen
+trove uninstall                # stops the gateway, restores every agent file, removes the MCP server
+trove uninstall --purge-data   # also deletes what Trove stored in ~/.trove
+```
+
+Then remove the program itself: `brew uninstall trove`, or delete the binary the install script placed on your `PATH`. If you ran it with `npx`, delete `~/.cache/trove-cli`. Trove never deletes data if an agent file could not be restored, because the backups are then still needed.
+
+## Documentation
+
+[Measurement method](docs/measurement-method.md) · [Privacy](PRIVACY.md) · [Security](SECURITY.md) · [Threat model](docs/threat-model.md) · [Compliance](docs/compliance.md) · [Pricing and updates](docs/pricing.md) · [Supported agents](docs/supported-agents.md) · [Reports](docs/report.md) · [Gateway](docs/gateway.md) · [Beta checklist](docs/beta-checklist.md)
+
+## Build from source
+
+Requires Go 1.27.3 or newer.
 
 ```sh
 go build -o trove ./cmd/trove   # one static binary, no cgo
-go test ./...                   # unit tests
-go test -race ./...             # race detector (needs cgo; CI runs it on Linux and macOS)
-golangci-lint run               # lint (v2 config in .golangci.yml)
-govulncheck ./...               # known-vulnerability scan
-node --test "npm/test/*.test.js"  # npm wrapper tests (Node 22+)
-sh install_test.sh              # install script tests (no network)
+go test ./...
 ./trove version
 ./trove doctor
-./trove doctor --json
 ```
 
-Use `--data-dir <path>` (or `TROVE_DATA_DIR`) to keep experiments out of `~/.trove`.
+Use `--data-dir <path>` (or `TROVE_DATA_DIR`) to keep experiments out of `~/.trove`. More: [CONTRIBUTING.md](CONTRIBUTING.md), [docs/release-checklist.md](docs/release-checklist.md).
 
 ## Configuration
-`~/.trove/config.toml` is optional; defaults are documented in `internal/config` (`DefaultTOML`). Any setting can be overridden with `TROVE_` variables, for example `TROVE_GATEWAY_PORT=9000`.
 
-## Release dry run
-```sh
-goreleaser release --snapshot --clean --skip=sign          # add ,sbom if syft is not installed
-```
-Real releases run in GitHub Actions on a `v*` tag (`.github/workflows/release.yml`) and need a `HOMEBREW_TAP_GITHUB_TOKEN` secret with write access to `usetrove/homebrew-trove`. The `trove-cli` npm package version is set to the release version at publish time.
+`~/.trove/config.toml` is optional; defaults are in `internal/config` (`DefaultTOML`). Any setting can be overridden with `TROVE_` variables, for example `TROVE_GATEWAY_PORT=9000`.
 
 ## License
+
 Apache-2.0
