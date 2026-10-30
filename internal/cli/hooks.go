@@ -81,28 +81,20 @@ func newHooksInstall(a *App) *cobra.Command {
 
 // hookCommands returns the command prefix that identifies Trove's hooks and a
 // function that builds the full command for an event.
-func hookCommands(a *App, dir string, agentFlag string) (base string, build func(event string) string) {
-	bin := "trove"
-	if a.Executable != nil {
-		if p, err := a.Executable(); err == nil && p != "" {
-			bin = p
-		}
+func hookCommands(a *App, dir string, agentFlag string) (base string, build func(event string) string, err error) {
+	bin, err := troveBinary(a)
+	if err != nil {
+		return "", nil, err
 	}
-	quote := func(s string) string {
-		if strings.ContainsAny(s, " \t") {
-			return `"` + s + `"`
-		}
-		return s
-	}
-	base = quote(bin) + " hook "
+	base = shellQuote(bin) + " hook "
 	suffix := ""
 	if a.DataDir != "" || a.Getenv("TROVE_DATA_DIR") != "" {
-		suffix += " --data-dir " + quote(dir)
+		suffix += " --data-dir " + shellQuote(dir)
 	}
 	if agentFlag != "" {
 		suffix += " --agent " + agentFlag
 	}
-	return base, func(event string) string { return base + event + suffix }
+	return base, func(event string) string { return base + event + suffix }, nil
 }
 
 func claudeSpecs(build func(string) string, largeOutput bool) []setup.HookSpec {
@@ -159,12 +151,20 @@ func planHooksInstall(a *App, dir, home string, fl hooksInstallFlags) ([]hooksPl
 		case isCodex && fl.scope == "project":
 			p.Problem = "Codex CLI only reads project hooks for trusted projects, so Trove does not edit them. Run `trove hooks install --agent codex` to install at user level."
 		case isCodex:
-			base, build := hookCommands(a, dir, "codex")
+			base, build, cerr := hookCommands(a, dir, "codex")
+			if cerr != nil {
+				p.Problem = cerr.Error()
+				break
+			}
 			specs := codexSpecs(build, fl.largeOutput)
 			p.Hooks = hookNames(specs)
 			e, err = setup.PlanCodexHooks(cfgDir, specs, base)
 		default:
-			base, build := hookCommands(a, dir, "")
+			base, build, cerr := hookCommands(a, dir, "")
+			if cerr != nil {
+				p.Problem = cerr.Error()
+				break
+			}
 			specs := claudeSpecs(build, fl.largeOutput)
 			p.Hooks = hookNames(specs)
 			path := filepath.Join(cfgDir, "settings.json")

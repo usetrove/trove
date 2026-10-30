@@ -165,24 +165,16 @@ func explainSteps(dir string, cfg config.Config) []string {
 // statusLineCommand is what Claude Code will run for its status line. It uses the
 // absolute path of this binary so it works without trove on PATH, and passes the
 // data directory only if the user chose a non-default one.
-func statusLineCommand(a *App, dir string) string {
-	bin := "trove"
-	if a.Executable != nil {
-		if p, err := a.Executable(); err == nil && p != "" {
-			bin = p
-		}
+func statusLineCommand(a *App, dir string) (string, error) {
+	bin, err := troveBinary(a)
+	if err != nil {
+		return "", err
 	}
-	quote := func(s string) string {
-		if strings.ContainsAny(s, " \t") {
-			return `"` + s + `"`
-		}
-		return s
-	}
-	cmd := quote(bin) + " status-line --format claude"
+	cmd := shellQuote(bin) + " status-line --format claude"
 	if a.DataDir != "" || a.Getenv("TROVE_DATA_DIR") != "" {
-		cmd += " --data-dir " + quote(dir)
+		cmd += " --data-dir " + shellQuote(dir)
 	}
-	return cmd
+	return cmd, nil
 }
 
 // statusLineStep offers to add Trove to Claude Code's status line. It runs after
@@ -193,7 +185,11 @@ func statusLineStep(a *App, rep *setupReport, dir, claudeDir string, flag bool) 
 	if claudeDir == "" {
 		return "", nil
 	}
-	e, err := setup.PlanStatusLine(claudeDir, statusLineCommand(a, dir))
+	cmdLine, err := statusLineCommand(a, dir)
+	if err != nil {
+		return "", err
+	}
+	e, err := setup.PlanStatusLine(claudeDir, cmdLine)
 	var exists *setup.StatusLineExistsError
 	switch {
 	case errors.As(err, &exists):

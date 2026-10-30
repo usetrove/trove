@@ -38,7 +38,7 @@ func TestSetupOffersStatusLineAsASeparateStepAndUndoRemovesBoth(t *testing.T) {
 		t.Fatalf("%v: %s", err, got)
 	}
 	// The harness chose a data directory, so the command carries it.
-	wantCmd := `"/opt/trove bin/trove" status-line --format claude --data-dir ` + h.app.Getenv("TROVE_DATA_DIR")
+	wantCmd := `'/opt/trove bin/trove' status-line --format claude --data-dir ` + shellQuote(h.app.Getenv("TROVE_DATA_DIR"))
 	if doc.StatusLine.Type != "command" || doc.StatusLine.Command != wantCmd {
 		t.Errorf("statusLine = %+v, want command %q", doc.StatusLine, wantCmd)
 	}
