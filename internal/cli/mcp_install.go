@@ -277,6 +277,30 @@ type mcpUninstallReport struct {
 	Failed  []string           `json:"failed,omitempty"`
 }
 
+// removeCLIRegistrations runs the agent commands that undo registrations Trove
+// made through an agent's own CLI (for example `claude mcp add`). Records of
+// commands that failed are kept so they can be retried.
+func removeCLIRegistrations(a *App, dir string) (removed, failed []string, err error) {
+	recs, err := install.LoadCLI(dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	var keep []install.CLIInstall
+	for _, r := range recs {
+		if len(r.Remove) == 0 || a.Run == nil {
+			keep = append(keep, r)
+			continue
+		}
+		if err := a.Run(r.Remove[0], r.Remove[1:]...); err != nil {
+			failed = append(failed, fmt.Sprintf("%s: %v. Run it yourself: %s", r.Agent, err, strings.Join(r.Remove, " ")))
+			keep = append(keep, r)
+			continue
+		}
+		removed = append(removed, r.Agent+" ("+r.Scope+" scope)")
+	}
+	return removed, failed, install.SaveCLI(dir, keep)
+}
+
 func newMCPUninstall(a *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "uninstall",
@@ -301,24 +325,7 @@ func newMCPUninstall(a *App) *cobra.Command {
 					return err
 				}
 			}
-			recs, err := install.LoadCLI(dir)
-			if err != nil {
-				return err
-			}
-			var keep []install.CLIInstall
-			for _, r := range recs {
-				if len(r.Remove) == 0 || a.Run == nil {
-					keep = append(keep, r)
-					continue
-				}
-				if err := a.Run(r.Remove[0], r.Remove[1:]...); err != nil {
-					rep.Failed = append(rep.Failed, fmt.Sprintf("%s: %v. Run it yourself: %s", r.Agent, err, strings.Join(r.Remove, " ")))
-					keep = append(keep, r)
-					continue
-				}
-				rep.Removed = append(rep.Removed, r.Agent+" ("+r.Scope+" scope)")
-			}
-			if err := install.SaveCLI(dir, keep); err != nil {
+			if rep.Removed, rep.Failed, err = removeCLIRegistrations(a, dir); err != nil {
 				return err
 			}
 			if len(rep.Undone) == 0 && len(rep.Removed) == 0 && len(rep.Failed) == 0 {

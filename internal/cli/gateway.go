@@ -301,35 +301,58 @@ func newGatewayStop(a *App) *cobra.Command {
 				return err
 			}
 			notes := stopService(a, removeService)
-			p, ok := readPID(dir)
-			if !ok {
-				return a.emit(map[string]any{"stopped": false, "notes": notes}, joinLines(append([]string{"The gateway is not running."}, notes...)))
+			state, err := stopGatewayProcess(dir)
+			if err != nil {
+				return err
 			}
-			if _, up := probe(p.Addr); !up {
-				_ = os.Remove(filepath.Join(dir, pidFileName))
+			switch state {
+			case gwNotRunning:
+				return a.emit(map[string]any{"stopped": false, "notes": notes}, joinLines(append([]string{"The gateway is not running."}, notes...)))
+			case gwStale:
 				return a.emit(map[string]any{"stopped": false, "notes": notes}, joinLines(append([]string{"The gateway was not running (stale record cleaned up)."}, notes...)))
 			}
-			proc, err := os.FindProcess(p.PID)
-			if err != nil {
-				return fmt.Errorf("cannot find the gateway process %d: %v", p.PID, err)
-			}
-			if err := proc.Signal(syscall.SIGTERM); err != nil {
-				if err := proc.Kill(); err != nil { // Windows has no SIGTERM
-					return fmt.Errorf("cannot stop pid %d: %v. Close the terminal running `trove gateway start`", p.PID, err)
-				}
-			}
-			for i := 0; i < 50; i++ {
-				if _, up := probe(p.Addr); !up {
-					_ = os.Remove(filepath.Join(dir, pidFileName))
-					return a.emit(map[string]any{"stopped": true, "notes": notes}, joinLines(append([]string{"The gateway has stopped."}, notes...)))
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
-			return errors.New("the gateway did not stop within 5 seconds; close the terminal running it, or end pid " + fmt.Sprint(p.PID))
+			return a.emit(map[string]any{"stopped": true, "notes": notes}, joinLines(append([]string{"The gateway has stopped."}, notes...)))
 		},
 	}
 	c.Flags().BoolVar(&removeService, "remove-service", false, "also remove the background service definition")
 	return c
+}
+
+// What stopGatewayProcess found.
+const (
+	gwNotRunning = "not_running"
+	gwStale      = "stale"
+	gwStopped    = "stopped"
+)
+
+// stopGatewayProcess stops the gateway recorded in the data directory, if one
+// is running, and removes its record.
+func stopGatewayProcess(dir string) (string, error) {
+	p, ok := readPID(dir)
+	if !ok {
+		return gwNotRunning, nil
+	}
+	if _, up := probe(p.Addr); !up {
+		_ = os.Remove(filepath.Join(dir, pidFileName))
+		return gwStale, nil
+	}
+	proc, err := os.FindProcess(p.PID)
+	if err != nil {
+		return "", fmt.Errorf("cannot find the gateway process %d: %v", p.PID, err)
+	}
+	if err := proc.Signal(syscall.SIGTERM); err != nil {
+		if err := proc.Kill(); err != nil { // Windows has no SIGTERM
+			return "", fmt.Errorf("cannot stop pid %d: %v. Close the terminal running `trove gateway start`", p.PID, err)
+		}
+	}
+	for i := 0; i < 50; i++ {
+		if _, up := probe(p.Addr); !up {
+			_ = os.Remove(filepath.Join(dir, pidFileName))
+			return gwStopped, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return "", errors.New("the gateway did not stop within 5 seconds; close the terminal running it, or end pid " + fmt.Sprint(p.PID))
 }
 
 func joinLines(l []string) string {

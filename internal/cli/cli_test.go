@@ -73,7 +73,7 @@ func TestVersion(t *testing.T) {
 func TestStubsPrintNotImplemented(t *testing.T) {
 	cmds := [][]string{
 		{"config", "get"}, {"config", "get", "gateway.port"},
-		{"config", "set", "gateway.port", "9000"}, {"uninstall"},
+		{"config", "set", "gateway.port", "9000"},
 	}
 	for _, c := range cmds {
 		h := newHarness(t, nil)
