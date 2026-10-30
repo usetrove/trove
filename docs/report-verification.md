@@ -8,9 +8,10 @@ upstream.
 
 ## 0. Read this first: never run Trove against your real `~/.trove`
 
-`~/.trove` is in use by an older Trove product (a ~2 GB `trove.db` with a different
-schema). On 2026-10-29 a test run opened it by accident: it switched the file to WAL mode and added an
-empty `schema_migrations` table. No other table was changed, but do not repeat it. For every manual step
+`~/.trove` may already be in use on your machine by a different tool with the same folder name (for
+example, a large `trove.db` with a different schema). On 2026-10-29 a test run opened such a file by
+accident: it switched the file to WAL mode and added an empty `schema_migrations` table. No other table
+was changed, but do not repeat it. For every manual step
 below, point Trove at a throwaway directory first:
 
 ```bash
@@ -30,7 +31,7 @@ $env:TROVE_UPSTREAMS_ANTHROPIC = "http://127.0.0.1:9911"
 Delete the directory between runs for a clean start. Automated tests are safe: the CLI test harness
 sets `TROVE_DATA_DIR` into a temp folder.
 
-- [ ] Optional: check your older Trove tool still works. `~/.trove/trove.db` also has `trove.db-wal`
+- [ ] Optional: check the other tool that uses `~/.trove` still works. `~/.trove/trove.db` also has `trove.db-wal`
   and `trove.db-shm` files left by a read-only inspection. They are harmless. The empty
   `schema_migrations` table can be dropped with nothing else using the file:
   `sqlite3 ~/.trove/trove.db "DROP TABLE schema_migrations"`. Only do that if you want it gone.

@@ -219,7 +219,7 @@ func serviceUnit(a *App) string {
 }
 
 // dataBaseIsTroves reports whether trove.db in dir has this program's schema
-// history. The data folder name is shared with an older Trove product whose
+// history. The data folder name may be shared with another tool whose
 // database must never be deleted by this command.
 func dataBaseIsTroves(dir string) bool {
 	db, err := store.OpenReadOnly(dir)

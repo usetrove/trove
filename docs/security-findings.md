@@ -65,7 +65,7 @@ Status: **Fixed** (commit), **Open**. "Evidence" is where to look; "Fix" is what
 - Fix: stops the gateway and removes its service, restores every edited agent file (byte for byte when
   unedited), removes the MCP server registered through the agent's own CLI, and with `--purge-data` deletes only
   the files Trove created. It never deletes data if a step failed, leaves any file it did not create (the data
-  folder name is shared with an older Trove product on the reviewer's machine), and deletes `trove.db` only if it
+  folder name may be shared with another tool on the user's machine), and deletes `trove.db` only if it
   has this program's migration history. Plan shown first; `--yes`, `--dry-run`, `--json`.
 - Tests: `TestUninstallRestoresEveryAgentFileAndPurgesData`, `TestUninstallKeepsDataByDefault`,
   `TestUninstallWithoutYesOrTerminalChangesNothing`, `TestPurgeLeavesForeignFilesAndForeignDatabase`,
