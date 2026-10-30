@@ -393,7 +393,8 @@ func saveChanges(dataDir string, cs []Change) error {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return err
 	}
-	return writeAtomic(p, b)
+	// The manifest lists agent file paths and backup locations: private to the user.
+	return writeAtomicMode(p, b, 0o600)
 }
 
 // UndoResult describes what happened to one recorded change.
@@ -449,6 +450,15 @@ func UndoSelected(dataDir string, ids []string) ([]UndoResult, error) {
 		out = append(out, r)
 		if !keep {
 			cs = append(cs[:i], cs[i+1:]...)
+			// A backup is a full copy of the user's settings, which can hold
+			// API keys, so it does not outlive the change it protected. If the
+			// undo could not finish (left_alone), it stays.
+			switch r.Action {
+			case "restored", "removed_file", "removed_our_lines", "already_gone":
+				if c.Backup != "" {
+					_ = os.Remove(c.Backup)
+				}
+			}
 		}
 		if err := saveChanges(dataDir, cs); err != nil {
 			return out, err
@@ -503,11 +513,11 @@ func undoChange(c Change, res UndoResult) (UndoResult, bool, error) {
 	case ClaudeCode:
 		next, err = stripClaude(cur, c.Value, c.Previous)
 	case Codex:
-		next = stripMarked(cur)
+		next, err = stripMarked(cur)
 	case ClaudeStatusLine:
 		next, err = stripStatusLine(cur, c.Value)
 	case CodexMCP:
-		next = stripBetween(cur, mcpMarkerOpen, mcpMarkerClose)
+		next, err = stripBetween(cur, mcpMarkerOpen, mcpMarkerClose)
 	case ProjectMCP:
 		next, err = stripMCPJSON(cur)
 	case ClaudeHooks, CodexHooks:
@@ -574,8 +584,10 @@ func stripStatusLine(cur []byte, command string) ([]byte, error) {
 	return marshalIndent(doc)
 }
 
-// stripMarked removes every block between Trove's marker lines.
-func stripMarked(cur []byte) []byte {
+// stripMarked removes every block between Trove's marker lines. A block that is
+// opened but never closed is an error, not a reason to delete the rest of the
+// file: the user may have damaged the markers, and what follows is theirs.
+func stripMarked(cur []byte) ([]byte, error) {
 	var out []string
 	skip := false
 	for _, l := range strings.SplitAfter(string(cur), "\n") {
@@ -589,9 +601,12 @@ func stripMarked(cur []byte) []byte {
 			out = append(out, l)
 		}
 	}
+	if skip {
+		return nil, errors.New("Trove's block in this file has an opening marker but no closing one, so Trove left the file alone rather than risk deleting your own lines. Remove the lines from '" + markerOpen + "' by hand")
+	}
 	s := strings.Join(out, "")
 	s = strings.TrimLeft(s, "\r\n") // the blank line we added after the top block
-	return []byte(strings.TrimRight(s, "\r\n") + trailingNewline(s))
+	return []byte(strings.TrimRight(s, "\r\n") + trailingNewline(s)), nil
 }
 
 func trailingNewline(s string) string {
@@ -615,8 +630,12 @@ func readOptional(path string) ([]byte, error) {
 	return b, nil
 }
 
-func writeAtomic(path string, data []byte) error {
-	mode := os.FileMode(0o644)
+func writeAtomic(path string, data []byte) error { return writeAtomicMode(path, data, 0o644) }
+
+// writeAtomicMode writes through a temporary file and a rename. An existing
+// file keeps its permissions; a new one gets newMode.
+func writeAtomicMode(path string, data []byte, newMode os.FileMode) error {
+	mode := newMode
 	if fi, err := os.Stat(path); err == nil {
 		mode = fi.Mode().Perm()
 	}
@@ -626,6 +645,10 @@ func writeAtomic(path string, data []byte) error {
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }()
 	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil { // so a crash cannot leave a renamed but empty file
 		_ = tmp.Close()
 		return err
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -212,6 +213,81 @@ func TestCodexEditedSinceStripsOnlyMarkedBlocks(t *testing.T) {
 	var v map[string]any
 	if err := toml.Unmarshal([]byte(got), &v); err != nil {
 		t.Errorf("still valid TOML expected: %v", err)
+	}
+}
+
+// A user who deletes the closing marker must not lose everything after the
+// opening one when Trove later cleans up.
+func TestUndoWithMissingCloseMarkerLeavesTheFileAlone(t *testing.T) {
+	data, codex := t.TempDir(), t.TempDir()
+	path := filepath.Join(codex, "config.toml")
+	write(t, path, codexOriginal)
+	e, _ := PlanCodex(codex, 8787)
+	if _, err := Apply(data, []*Edit{e}, t0); err != nil {
+		t.Fatal(err)
+	}
+	damaged := strings.ReplaceAll(read(t, path), markerClose+"\n", "") + "\n[mcp_servers.mine]\ncommand = \"keep-me\"\n"
+	write(t, path, damaged)
+	res, err := Undo(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := read(t, path); got != damaged {
+		t.Errorf("file was modified.\nwant:\n%s\ngot:\n%s", damaged, got)
+	}
+	if len(res) == 0 || res[0].Action != "left_alone" || !strings.Contains(res[0].Detail, "closing one") {
+		t.Errorf("unhelpful result: %+v", res)
+	}
+}
+
+func TestManifestIsPrivateAndBackupsDoNotOutliveAnUndo(t *testing.T) {
+	data, codex := t.TempDir(), t.TempDir()
+	path := filepath.Join(codex, "config.toml")
+	write(t, path, codexOriginal)
+	e, _ := PlanCodex(codex, 8787)
+	cs, err := Apply(data, []*Edit{e}, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" {
+		if fi, err := os.Stat(filepath.Join(data, manifestFile)); err != nil || fi.Mode().Perm() != 0o600 {
+			t.Errorf("manifest mode = %v, %v; want 0600", fi.Mode().Perm(), err)
+		}
+	}
+	backup := cs[0].Backup
+	if _, err := os.Stat(backup); err != nil {
+		t.Fatalf("no backup to begin with: %v", err)
+	}
+	if _, err := Undo(data); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(backup); !os.IsNotExist(err) {
+		t.Errorf("backup (a full copy of the user's settings) survived a successful undo: %v", err)
+	}
+}
+
+func TestBackupIsKeptWhenUndoCouldNotFinish(t *testing.T) {
+	data, codex := t.TempDir(), t.TempDir()
+	path := filepath.Join(codex, "config.toml")
+	write(t, path, codexOriginal)
+	e, _ := PlanCodex(codex, 8787)
+	cs, err := Apply(data, []*Edit{e}, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, path, strings.ReplaceAll(read(t, path), markerClose+"\n", "")) // damaged markers: undo must give up
+	if _, err := Undo(data); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(cs[0].Backup); err != nil {
+		t.Errorf("backup deleted although the file was not restored: %v", err)
+	}
+}
+
+func TestStripBetweenRefusesUnclosedBlock(t *testing.T) {
+	in := "a = 1\n" + mcpMarkerOpen + "\n[mcp_servers.trove]\n\n[mine]\nx = 1\n"
+	if out, err := stripBetween([]byte(in), mcpMarkerOpen, mcpMarkerClose); err == nil {
+		t.Errorf("stripped an unclosed block:\n%s", out)
 	}
 }
 

@@ -3,6 +3,7 @@ package setup
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -161,7 +162,7 @@ func stripMCPJSON(cur []byte) ([]byte, error) {
 
 // stripBetween removes the lines from open through close, the way stripMarked
 // does for the gateway block.
-func stripBetween(cur []byte, open, close string) []byte {
+func stripBetween(cur []byte, open, close string) ([]byte, error) {
 	var out []string
 	skip := false
 	for _, l := range strings.SplitAfter(string(cur), "\n") {
@@ -175,9 +176,12 @@ func stripBetween(cur []byte, open, close string) []byte {
 			out = append(out, l)
 		}
 	}
+	if skip {
+		return nil, errors.New("Trove's block in this file has an opening marker but no closing one, so Trove left the file alone rather than risk deleting your own lines. Remove the lines from '" + open + "' by hand")
+	}
 	s := strings.TrimRight(strings.Join(out, ""), "\r\n")
 	if strings.TrimSpace(s) == "" {
-		return []byte{}
+		return []byte{}, nil
 	}
-	return []byte(s + "\n")
+	return []byte(s + "\n"), nil
 }

@@ -47,7 +47,30 @@ func Open(dataDir string) (*DB, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	tightenPermissions(dataDir)
 	return db, nil
+}
+
+// tightenPermissions closes the gap MkdirAll and OpenFile leave: they only set a
+// mode on something they create, so a data folder or database that already
+// existed with looser permissions (an earlier version, a restored backup, a
+// manual mkdir) stayed readable by other users. Only group and other access
+// is removed; nothing is ever widened. Errors are ignored because `trove doctor`
+// reports whatever is left (OpenNoMigrate deliberately does not call this, so
+// doctor still sees the real state).
+func tightenPermissions(dataDir string) {
+	if runtime.GOOS == "windows" {
+		return
+	}
+	narrow := func(path string, want fs.FileMode) {
+		if fi, err := os.Stat(path); err == nil && fi.Mode().Perm()&^want != 0 {
+			_ = os.Chmod(path, fi.Mode().Perm()&want)
+		}
+	}
+	narrow(dataDir, 0o700)
+	for _, f := range []string{DBFileName, DBFileName + "-wal", DBFileName + "-shm", "config.toml"} {
+		narrow(filepath.Join(dataDir, f), 0o600)
+	}
 }
 
 // OpenNoMigrate is like Open but leaves the schema untouched (used by doctor).

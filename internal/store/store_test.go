@@ -312,3 +312,42 @@ func TestRunRetentionPurgesOnStartAndStops(t *testing.T) {
 		t.Fatal("RunRetention did not stop")
 	}
 }
+
+// A data folder that already exists with loose permissions (made by hand, or by
+// an earlier version) must be tightened when Trove opens it, but OpenNoMigrate
+// must leave it as found so `trove doctor` can still report it.
+func TestOpenTightensLoosePermissionsButDoctorPathDoesNot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX permission bits are not meaningful on Windows")
+	}
+	dir := filepath.Join(t.TempDir(), "old")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	db, err := OpenNoMigrate(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+	if err := os.Chmod(filepath.Join(dir, DBFileName), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if len(PermissionProblems(dir)) == 0 {
+		t.Fatal("doctor path should still see the loose permissions")
+	}
+
+	db, err = Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if p := PermissionProblems(dir); len(p) != 0 {
+		t.Errorf("still loose after Open: %v", p)
+	}
+	if fi, _ := os.Stat(dir); fi.Mode().Perm() != 0o700 {
+		t.Errorf("data dir mode %o, want 700", fi.Mode().Perm())
+	}
+}
