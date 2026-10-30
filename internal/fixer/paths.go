@@ -2,6 +2,7 @@ package fixer
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -101,6 +102,11 @@ func (e *Env) Allowed(path string) error {
 	}
 	if !filepath.IsAbs(path) {
 		return fmt.Errorf("%q is not an absolute path", path)
+	}
+	// Resolving both sides below would make a symlinked CLAUDE.md match itself, and an edit would
+	// then write through the link to a file outside the allowed set. Refuse a link outright.
+	if fi, err := os.Lstat(path); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%s is a symbolic link. Trove does not edit through links; edit the file it points to yourself, or replace the link with a regular file", path)
 	}
 	rp := norm(resolve(path))
 	for _, f := range e.allowedFiles() {
