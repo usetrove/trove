@@ -10,10 +10,13 @@ import (
 var ErrSensitive = errors.New("this file usually holds credentials or keys, so Trove's tools will not read it. " +
 	"If the agent really needs it, the agent's own file tools, with their permission prompts, are the right way to open it")
 
-// Why this exists: an agent's own permission rules (for example a deny rule on
-// reading .env) apply to the agent's built-in tools, not to an MCP server. So
-// without a check here, trove_read and trove_search would be a way around them,
-// and a prompt-injected agent could use them to pull secrets into its context.
+// Why this exists: Claude Code documents that its Read deny rules (for example
+// on .env) are applied, best effort, to its built-in file-reading tools
+// (code.claude.com/docs/en/permissions, checked 2026-10-30). It documents MCP
+// tools only as matched by name (mcp__server__tool) and says nothing about
+// files an MCP server reads. Trove does not rely on a rule it cannot verify:
+// trove_read and trove_search refuse secret-bearing files themselves, so a
+// prompt-injected agent cannot use them to pull secrets into its context.
 
 var sensitiveBases = map[string]bool{
 	".netrc": true, "_netrc": true, ".npmrc": true, ".pypirc": true, ".git-credentials": true,

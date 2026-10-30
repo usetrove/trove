@@ -13,6 +13,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/usetrove/trove/internal/analyze"
 	"github.com/usetrove/trove/internal/config"
@@ -509,5 +510,27 @@ func TestWithoutCredentialsKeepsOnlyWhatLaterCodeNeeds(t *testing.T) {
 	}
 	if h.Get("X-Api-Key") == "" {
 		t.Error("the original request headers must stay intact for forwarding")
+	}
+}
+
+// Text that a client controls must not be stored without a bound.
+func TestClientControlledFieldsAreCappedInTheRecord(t *testing.T) {
+	g := newRig(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(fixture(t, "anthropic_body.json"))
+	}))
+	longModel := strings.Repeat("m", 5000)
+	longPath := "/anthropic/v1/messages/" + strings.Repeat("é", 3000)
+	body := []byte(`{"model":"` + longModel + `","max_tokens":5}`)
+	do(t, "POST", g.gw.URL+longPath, anthropicHdr, body)
+	row := g.rec.wait(t)
+	if len(row.Endpoint) > maxEndpointLen || !utf8.ValidString(row.Endpoint) {
+		t.Errorf("endpoint stored with %d bytes, valid utf8 = %v", len(row.Endpoint), utf8.ValidString(row.Endpoint))
+	}
+	if len(row.Model) > maxModelLen {
+		t.Errorf("model stored with %d bytes", len(row.Model))
+	}
+	if got := clip("ab€", 4); got != "ab" { // 4 would cut the 3-byte € in the middle
+		t.Errorf("clip split a character: %q", got)
 	}
 }

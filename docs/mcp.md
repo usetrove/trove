@@ -48,9 +48,11 @@ Their definitions are sent with every request, so they are short. `trove mcp sch
   Binary files and files over 2 MB are refused with a message saying so.
 - They also refuse files that usually hold secrets (`.env` and `.env.*` except `.env.example`-style
   templates, `*.pem`, `*.key`, `id_rsa`, `.npmrc`, `.netrc`, `.git/config`, anything under `.ssh/` or `.aws/`,
-  and similar), and `trove_search` skips them. The reason: an agent's own deny rules apply to its built-in
-  tools, not to an MCP server, so without this check these tools would sidestep them. It matches on names
-  only, so a secret in a file with an ordinary name is not caught.
+  and similar), and `trove_search` skips them. The reason: Claude Code documents its `Read` deny rules as
+  applying, best effort, to its built-in file-reading tools; it does not document them covering files an MCP
+  server reads (checked 2026-10-30 at code.claude.com/docs/en/permissions), so Trove does not rely on them.
+  It matches on names only, so a secret in a file with an ordinary name is not caught. You can also deny
+  the tools themselves by name (`mcp__trove__trove_read`) in your agent's permission settings.
 - `trove_run` runs only the names in the allowlist, directly (no shell), in the project folder, with
   variables that look like credentials (`*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*COOKIE*`, `*_PAT`,
   `*_DSN`, `ANTHROPIC_*`, `OPENAI_*`, `AWS_*`, `AZURE_*`, `SSH_AUTH_SOCK`, `DATABASE_URL`) removed. This is a

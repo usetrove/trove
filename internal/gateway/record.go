@@ -10,6 +10,7 @@ import (
 	"io"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/usetrove/trove/internal/analyze"
 	"github.com/usetrove/trove/internal/gateway/agent"
@@ -167,13 +168,13 @@ func (s *Server) buildRow(f *flight, res usage.Result, status int, streamed bool
 		Agent:               label,
 		AgentVersion:        ver,
 		Provider:            f.provider,
-		Model:               model,
-		Endpoint:            f.path,
+		Model:               clip(model, maxModelLen),
+		Endpoint:            clip(f.path, maxEndpointLen),
 		Streamed:            streamed,
 		StatusCode:          status,
 		LatencyMS:           end.Sub(f.start).Milliseconds(),
 		ServiceTier:         res.ServiceTier,
-		ErrorClass:          res.ErrorClass,
+		ErrorClass:          clip(res.ErrorClass, maxErrorLen),
 		InputUncachedTokens: res.UncachedInput,
 		CacheWriteTokens:    res.CacheWriteTotal,
 		CacheReadTokens:     res.CacheRead,
@@ -276,4 +277,25 @@ func requestModel(body []byte) string {
 	}
 	_ = json.Unmarshal(body, &m)
 	return m.Model
+}
+
+// Longest values stored for fields whose text comes from the client or the
+// provider rather than from Trove. Real model names, routes and error types are
+// far shorter; the cap stops a hostile local client from using the metadata
+// store as a place to put arbitrary text (CLAUDE.md rule 7).
+const (
+	maxModelLen    = 100
+	maxEndpointLen = 200
+	maxErrorLen    = 64
+)
+
+// clip shortens s to at most n bytes without cutting a UTF-8 character.
+func clip(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }

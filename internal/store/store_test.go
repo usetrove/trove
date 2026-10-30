@@ -134,7 +134,33 @@ func TestSchemaIsMetadataOnly(t *testing.T) {
 		"session_pins":  {"session_key", "states", "custom_agents", "bytes_per_token", "pinned_at"},
 		"guardrail_events": {"id", "ts", "optimizer", "rule", "observed", "threshold", "sample_on", "sample_ref",
 			"reference", "reason", "cleared_at"},
+		"usage_daily": {"day", "requests", "unpriced", "spend_usd", "saved_usd"},
+		"receipts": {"session_key", "agent", "ended_at", "model", "models", "calls", "cost_usd", "unpriced",
+			"cache_hit_rate", "saved_usd"},
+		"history_files": {"file_key", "source", "size", "mtime", "offset", "parser_version", "format_version",
+			"lines", "turns", "skipped_lines", "updated_at"},
+		"history_requests": {"request_key", "source", "session_key", "ts", "model", "input_tokens", "cache_write_5m",
+			"cache_write_1h", "cache_write_other", "cache_read", "output_tokens", "cost_usd", "pricing_status", "plan",
+			"sidechain", "tool_names", "tool_result_bytes", "errors", "findings", "shadow_savings"},
+		"fixes": {"change_id", "fix_id", "kind", "agent", "path_hash", "applied_at", "reverted_at", "est_tokens",
+			"est_usd", "label"},
+		"hook_events":       {"id", "ts", "session_key", "hook", "kind", "bytes", "tokens"},
+		"schema_migrations": {"version", "applied_at"},
 	}
+	// Every table must be listed above. A new table is a privacy decision: list its
+	// columns here and describe it in PRIVACY.md.
+	trs, err := db.Query(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for trs.Next() {
+		var n string
+		_ = trs.Scan(&n)
+		if _, ok := want[n]; !ok {
+			t.Errorf("table %q is not in the metadata-only list; add its columns here and to PRIVACY.md", n)
+		}
+	}
+	_ = trs.Close()
 	banned := []string{"prompt", "content", "body", "path", "message", "text", "code", "output_text", "tool"}
 	for table, cols := range want {
 		rows, err := db.Query(`SELECT name FROM pragma_table_info(?)`, table)
