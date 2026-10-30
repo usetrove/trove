@@ -510,6 +510,8 @@ func undoChange(c Change, res UndoResult) (UndoResult, bool, error) {
 		next = stripBetween(cur, mcpMarkerOpen, mcpMarkerClose)
 	case ProjectMCP:
 		next, err = stripMCPJSON(cur)
+	case ClaudeHooks, CodexHooks:
+		next, err = stripHookGroups(cur, c.Value)
 	default:
 		res.Action, res.Detail = "left_alone", "unknown agent in the manifest"
 		return res, false, nil
