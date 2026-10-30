@@ -84,6 +84,12 @@ modelled at all.
 
 The release workflow runs `go run ./scripts/pricingage`, which prints a GitHub warning for
 every entry whose `verified_at` is more than 30 days old. It never fails the release.
+`trove doctor` shows the same check to users as a warning.
+
+For a version release, run it strictly: `go run ./scripts/pricingage --strict --max-age-days 7`.
+It exits 1 if any price was verified more than 7 days ago, so redo the checklist above first
+(see [release-checklist.md](release-checklist.md)). Entries with no `verified_at` are not
+checked by this script; the review in step 2 of the checklist covers them.
 
 ## Known gaps
 

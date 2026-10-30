@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/redact"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -87,8 +89,26 @@ func runDoctor(a *App) doctorReport {
 	cs = append(cs, checkDataDir(dir)...)
 	cs = append(cs, checkDatabase(dir))
 	cs = append(cs, checkConfig(a, dir))
+	cs = append(cs, checkPricing(time.Now()))
 	cs = append(cs, checkAgents(a)...)
 	return finish(cs)
+}
+
+// checkPricing warns when the built-in prices were last verified long ago, so
+// dollar estimates may be out of date. It never fails: old prices still work.
+func checkPricing(now time.Time) check {
+	const name = "pricing data"
+	tbl, err := pricing.Default()
+	if err != nil {
+		return check{name, statusFail, "the built-in price list could not be read: " + err.Error(), "reinstall Trove"}
+	}
+	stale := tbl.Stale(now, pricing.MaxAge)
+	if len(stale) == 0 {
+		return check{name, statusOK, "version " + pricing.DataVersion + ", all prices verified within 30 days", ""}
+	}
+	return check{name, statusWarn,
+		fmt.Sprintf("version %s: %d price(s) were last verified more than 30 days ago, so dollar figures may be out of date", pricing.DataVersion, len(stale)),
+		"upgrade Trove to get newer prices; run `trove pricing show` to see each price's verified date"}
 }
 
 func finish(cs []check) doctorReport {
