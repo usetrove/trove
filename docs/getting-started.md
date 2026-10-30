@@ -16,15 +16,16 @@ export TROVE_DATA_DIR="$(mktemp -d)"   # throwaway data folder for this shell
 ./trove fix                            # evidence-based fixes with estimated savings; changes nothing
 ```
 
-Windows (PowerShell):
+Windows (PowerShell), from the repo folder. The first line builds Trove, puts it first on PATH for this window only, and sets a throwaway data folder, so `trove` below is this build and not any other program with that name:
 
 ```powershell
-go build -o trove.exe ./cmd/trove
-$env:TROVE_DATA_DIR = Join-Path $env:TEMP "trove-demo"
-.\trove.exe doctor
-.\trove.exe
-.\trove.exe fix
+. .\scripts\dev-shell.ps1
+trove doctor
+trove
+trove fix
 ```
+
+Close the window and everything is back as it was. If it prints a warning that `trove` still resolves to a different file, do not run it.
 
 Setting `TROVE_DATA_DIR` (or passing `--data-dir <path>`) matters: without it Trove uses `~/.trove`, and if that folder already holds data from another tool, Trove may open or modify its database. Add `--no-history` to any command to stop it reading your agent's session history for that run, and `--json` for machine-readable output.
 

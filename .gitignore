@@ -1,6 +1,7 @@
 /trove
 /trove.exe
 /dist/
+/.dev/
 /coverage.out
 *.db
 *.db-wal
