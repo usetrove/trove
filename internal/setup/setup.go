@@ -439,7 +439,7 @@ func UndoSelected(dataDir string, ids []string) ([]UndoResult, error) {
 	var out []UndoResult
 	for i := len(cs) - 1; i >= 0; i-- {
 		c := cs[i]
-		if len(want) > 0 && !want[c.ID] && !(c.FixID != "" && want[c.FixID]) {
+		if len(want) > 0 && !want[c.ID] && (c.FixID == "" || !want[c.FixID]) {
 			continue
 		}
 		r, keep, err := undoOne(c)

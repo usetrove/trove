@@ -154,7 +154,7 @@ func keepLines(lines []string) []bool {
 		// A trace continues through indented lines and frames.
 		for j, n := i+1, 0; j < len(lines) && n < maxStackLines; j, n = j+1, n+1 {
 			c := lines[j]
-			if !(strings.HasPrefix(c, " ") || strings.HasPrefix(c, "\t") || frameRe.MatchString(c)) {
+			if !strings.HasPrefix(c, " ") && !strings.HasPrefix(c, "\t") && !frameRe.MatchString(c) {
 				break
 			}
 			keep[j] = true

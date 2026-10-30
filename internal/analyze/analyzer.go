@@ -254,7 +254,7 @@ func (a *Analyzer) stateful(in Input, p *Parsed, e *Estimate, b billing, claimed
 
 // missFinding prices a cache miss as the extra cost of billing the missed
 // tokens at the write or input price instead of the cache-read price.
-func (a *Analyzer) missFinding(b billing, ca *CacheAnalysis, e *Estimate) Finding {
+func (a *Analyzer) missFinding(b billing, ca *CacheAnalysis, _ *Estimate) Finding {
 	m := ca.Miss
 	detail := map[string]any{"reason": m.Reason, "expected_read_tokens": ca.ExpectedRead, "reported_read_tokens": ca.ReportedRead}
 	for k, v := range m.Detail {

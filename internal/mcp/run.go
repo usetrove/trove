@@ -73,14 +73,14 @@ func LoadCommands(r *root.Root) (map[string]Command, error) {
 // bytes it parsed, so approval and execution refer to the same content. The
 // hash is empty when there is no file.
 func PendingCommands(r *root.Root) (map[string]Command, string, error) {
-	real, err := r.Resolve(commandsFile)
+	target, err := r.Resolve(commandsFile)
 	if err != nil {
 		if errors.Is(err, root.ErrOutside) {
 			return nil, "", fmt.Errorf("%s leads outside the project, so it was ignored", commandsFile)
 		}
 		return nil, "", nil
 	}
-	b, err := os.ReadFile(real)
+	b, err := os.ReadFile(target) //nolint:gosec // path was resolved and checked to be inside the jail
 	if err != nil {
 		return nil, "", fmt.Errorf("cannot read %s: %w", commandsFile, err)
 	}
@@ -237,7 +237,7 @@ func (w *capWriter) Write(p []byte) (int, error) {
 func execute(ctx context.Context, dir string, argv []string, timeout time.Duration) (out []byte, exit int, dur time.Duration, err error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) //nolint:gosec // argv comes from the commands.toml the user approved with trove mcp trust; the model only picks a name
 	cmd.Dir = dir
 	cmd.Env = filteredEnv(os.Environ())
 	w := &capWriter{}

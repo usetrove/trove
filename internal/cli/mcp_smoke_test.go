@@ -40,7 +40,7 @@ func TestMCPStdioSubprocess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cs.Close()
+	defer func() { _ = cs.Close() }()
 	res, err := cs.CallTool(ctx, &sdk.CallToolParams{Name: "trove_read", Arguments: map[string]any{"path": "a.txt"}})
 	if err != nil || res.IsError {
 		t.Fatalf("%v %+v", err, res)

@@ -42,7 +42,7 @@ func TestFetchAndSummarize(t *testing.T) {
 }
 
 func TestFetchErrorsArePlain(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(404) }))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(404) }))
 	defer srv.Close()
 	_, err := fetch(srv.URL, "o/r", "")
 	if err == nil || !strings.Contains(err.Error(), "GITHUB_TOKEN") {

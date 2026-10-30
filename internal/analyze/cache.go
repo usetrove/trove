@@ -2,6 +2,7 @@ package analyze
 
 import (
 	"hash/fnv"
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -50,14 +51,14 @@ func lineHashes(text string) []lineInfo {
 		if len(out) >= maxLinesPerSeg {
 			break
 		}
-		out = append(out, lineInfo{hashLine(l), int32(len(l) + 1)})
+		out = append(out, lineInfo{hashLine(l), int32(min(len(l)+1, math.MaxInt32))}) //nolint:gosec // clamped to the int32 range on this line
 	}
 	return out
 }
 
 func hashLine(l string) uint64 {
 	h := fnv.New64a()
-	h.Write([]byte(strings.TrimSpace(l)))
+	_, _ = h.Write([]byte(strings.TrimSpace(l)))
 	return h.Sum64()
 }
 

@@ -94,12 +94,12 @@ func TestOpenReadAndRel(t *testing.T) {
 	r, _ := New(proj)
 	f, fi, err := r.OpenRead("sub/b.txt")
 	must(t, err)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if fi.Size() != 2 {
 		t.Fatal("wrong size")
 	}
-	real, _ := r.Resolve("sub/b.txt")
-	if got := r.Rel(real); got != "sub/b.txt" {
+	target, _ := r.Resolve("sub/b.txt")
+	if got := r.Rel(target); got != "sub/b.txt" {
 		t.Fatalf("rel %q", got)
 	}
 }

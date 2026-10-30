@@ -110,11 +110,11 @@ func runAgent(args []string) int {
 		body, _ := json.Marshal(map[string]any{
 			"model": *model, "max_tokens": 1024, "system": "You are a coding agent.", "messages": msgs,
 		})
-		req, _ := http.NewRequest(http.MethodPost, base+"/v1/messages", bytes.NewReader(body))
+		req, _ := http.NewRequest(http.MethodPost, base+"/v1/messages", bytes.NewReader(body)) //nolint:gosec // base is the local fake gateway this bench tool was told to use
 		req.Header.Set("x-api-key", key)
 		req.Header.Set("anthropic-version", "2023-06-01")
 		req.Header.Set("content-type", "application/json")
-		resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
+		resp, err := (&http.Client{Timeout: 60 * time.Second}).Do(req) //nolint:gosec // same local fake gateway
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "agent: request failed:", err)
 			return 1
@@ -138,7 +138,7 @@ func runAgent(args []string) int {
 		)
 	}
 	if *solution != "" {
-		if err := exec.Command("bash", *solution).Run(); err != nil {
+		if err := exec.Command("bash", *solution).Run(); err != nil { //nolint:gosec // runs the benchmark task solution script the operator chose
 			fmt.Fprintln(os.Stderr, "agent: solution script failed:", err)
 		}
 	}

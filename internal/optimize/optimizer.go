@@ -28,11 +28,11 @@ import (
 type Tier string
 
 const (
-	// TierLossless: the model receives the same information.
+	// TierLossless means the model receives the same information.
 	TierLossless Tier = "lossless"
-	// TierRecoverable: information is removed but can be fetched back.
+	// TierRecoverable means information is removed but can be fetched back.
 	TierRecoverable Tier = "recoverable"
-	// TierLossy: information is removed for good.
+	// TierLossy means information is removed for good.
 	TierLossy Tier = "lossy"
 )
 

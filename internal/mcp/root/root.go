@@ -19,11 +19,11 @@ func New(dir string) (*Root, error) {
 	if err != nil {
 		return nil, err
 	}
-	real, err := filepath.EvalSymlinks(abs)
+	target, err := filepath.EvalSymlinks(abs)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open the project folder %s: %w. Start the agent from inside the project", dir, err)
 	}
-	return &Root{real: real}, nil
+	return &Root{real: target}, nil
 }
 
 // Dir is the resolved project directory.
@@ -32,7 +32,7 @@ func (r *Root) Dir() string { return r.real }
 // ErrOutside is returned when a path leaves the project.
 var ErrOutside = errors.New("path is outside the project folder; only files inside the project can be read")
 
-// Resolve turns a project-relative path into a real path inside the project. It
+// Resolve turns a project-relative path into a target path inside the project. It
 // refuses absolute paths, "..", and any path (or symlink along it) that leads
 // outside. The path need not exist yet only when mustExist is false.
 func (r *Root) Resolve(rel string) (string, error) {
@@ -49,22 +49,22 @@ func (r *Root) Resolve(rel string) (string, error) {
 	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return "", ErrOutside
 	}
-	real, err := filepath.EvalSymlinks(filepath.Join(r.real, clean))
+	target, err := filepath.EvalSymlinks(filepath.Join(r.real, clean))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", fmt.Errorf("%s does not exist in the project", rel)
 		}
 		return "", fmt.Errorf("cannot read %s: %w", rel, err)
 	}
-	if !r.Contains(real) {
+	if !r.Contains(target) {
 		return "", ErrOutside
 	}
-	return real, nil
+	return target, nil
 }
 
 // Contains reports whether an already-resolved path is inside the project.
-func (r *Root) Contains(real string) bool {
-	rel, err := filepath.Rel(r.real, real)
+func (r *Root) Contains(target string) bool {
+	rel, err := filepath.Rel(r.real, target)
 	if err != nil {
 		return false
 	}
@@ -72,10 +72,10 @@ func (r *Root) Contains(real string) bool {
 }
 
 // Rel returns the project-relative, slash-separated form of a resolved path.
-func (r *Root) Rel(real string) string {
-	rel, err := filepath.Rel(r.real, real)
+func (r *Root) Rel(target string) string {
+	rel, err := filepath.Rel(r.real, target)
 	if err != nil {
-		return real
+		return target
 	}
 	return filepath.ToSlash(rel)
 }
@@ -84,16 +84,16 @@ func (r *Root) Rel(real string) string {
 // the one that was resolved, which narrows the window for a symlink swapped in
 // between the check and the open.
 func (r *Root) OpenRead(rel string) (*os.File, os.FileInfo, error) {
-	real, err := r.Resolve(rel)
+	target, err := r.Resolve(rel)
 	if err != nil {
 		return nil, nil, err
 	}
-	// Check the name asked for and the real name behind any symlink, so a link
+	// Check the name asked for and the target name behind any symlink, so a link
 	// called notes.txt that points at .env is refused too.
-	if Sensitive(rel) || Sensitive(r.Rel(real)) {
+	if Sensitive(rel) || Sensitive(r.Rel(target)) {
 		return nil, nil, ErrSensitive
 	}
-	f, err := os.Open(real)
+	f, err := os.Open(target) //nolint:gosec // path was resolved and checked to be inside the jail by Resolve
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot read %s: %w", rel, err)
 	}
@@ -103,11 +103,11 @@ func (r *Root) OpenRead(rel string) (*os.File, os.FileInfo, error) {
 		return nil, nil, err
 	}
 	again, err := r.Resolve(rel)
-	if err != nil || again != real {
+	if err != nil || again != target {
 		_ = f.Close()
 		return nil, nil, ErrOutside
 	}
-	if st, err := os.Stat(real); err != nil || !os.SameFile(fi, st) {
+	if st, err := os.Stat(target); err != nil || !os.SameFile(fi, st) {
 		_ = f.Close()
 		return nil, nil, ErrOutside
 	}

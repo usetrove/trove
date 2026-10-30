@@ -160,9 +160,9 @@ func stripMCPJSON(cur []byte) ([]byte, error) {
 	return marshalIndent(doc)
 }
 
-// stripBetween removes the lines from open through close, the way stripMarked
+// stripBetween removes the lines from open through end, the way stripMarked
 // does for the gateway block.
-func stripBetween(cur []byte, open, close string) ([]byte, error) {
+func stripBetween(cur []byte, open, end string) ([]byte, error) {
 	var out []string
 	skip := false
 	for _, l := range strings.SplitAfter(string(cur), "\n") {
@@ -170,7 +170,7 @@ func stripBetween(cur []byte, open, close string) ([]byte, error) {
 		switch {
 		case t == open:
 			skip = true
-		case skip && t == close:
+		case skip && t == end:
 			skip = false
 		case !skip:
 			out = append(out, l)

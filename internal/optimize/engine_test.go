@@ -180,7 +180,7 @@ func TestEngineFailOpen(t *testing.T) {
 	}{
 		{"panic in Transform", stub{name: "noise_normalizer", applies: true, transform: func(context.Context, *Request) (*Request, Report) { panic("boom") }}, "panic"},
 		{"panic in Applies", panicApplies{stub{name: "noise_normalizer"}}, "panic"},
-		{"slow", stub{name: "noise_normalizer", applies: true, transform: func(ctx context.Context, r *Request) (*Request, Report) {
+		{"slow", stub{name: "noise_normalizer", applies: true, transform: func(_ context.Context, r *Request) (*Request, Report) {
 			time.Sleep(300 * time.Millisecond)
 			return r, Report{}
 		}}, "timeout"},

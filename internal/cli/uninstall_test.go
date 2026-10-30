@@ -165,7 +165,7 @@ func TestPurgeLeavesForeignFilesAndForeignDatabase(t *testing.T) {
 func TestPurgeIsRefusedWhenAStepFails(t *testing.T) {
 	h, _, _, _ := installEverything(t)
 	dir, _ := h.app.ResolveDataDir()
-	h.app.Run = func(name string, args ...string) error {
+	h.app.Run = func(_ string, args ...string) error {
 		if len(args) > 1 && args[1] == "remove" {
 			return errors.New("claude: command failed")
 		}

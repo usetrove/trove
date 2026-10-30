@@ -16,7 +16,7 @@ import (
 
 // TestHelperProcess is not a test: the run tests execute this test binary as the
 // "project command", so they need no tools installed and work on every OS.
-func TestHelperProcess(t *testing.T) {
+func TestHelperProcess(_ *testing.T) {
 	if os.Getenv("TROVE_HELPER") != "1" {
 		return
 	}

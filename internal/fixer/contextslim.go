@@ -58,10 +58,10 @@ func sections(ls []string) []section {
 		t := strings.TrimSpace(l)
 		if strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
 			mark := t[:3]
-			switch {
-			case fence == "":
+			switch fence {
+			case "":
 				fence = mark
-			case fence == mark:
+			case mark:
 				fence = ""
 			}
 			continue

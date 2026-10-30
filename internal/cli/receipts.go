@@ -27,7 +27,7 @@ func newReceipts(a *App) *cobra.Command {
 			"optimizers saved. The gateway cannot print into your agent's terminal, so receipts show up here and\n" +
 			"in `trove status-line`. Turn on desktop notifications with notifications.desktop in config.toml.",
 		Args: cobra.NoArgs,
-		RunE: func(c *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			if limit < 1 || limit > 1000 {
 				return fmt.Errorf("--limit is %d; use a number from 1 to 1000", limit)
 			}

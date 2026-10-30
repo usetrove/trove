@@ -293,8 +293,8 @@ func TestCacheMissReasons(t *testing.T) {
 	second := func(first []message) []message {
 		return append(append([]message{}, first...), assistant(text("hi")), user(text("and now?")))
 	}
-	replaceTail := func(s []string, old, new string) []string {
-		return []string{s[0], strings.Replace(s[1], old, new, 1)}
+	replaceTail := func(s []string, old, repl string) []string {
+		return []string{s[0], strings.Replace(s[1], old, repl, 1)}
 	}
 	cases := []struct {
 		name  string

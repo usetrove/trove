@@ -32,7 +32,7 @@ type palette struct {
 }
 
 func rgb(hex uint32) color.RGBA {
-	return color.RGBA{R: uint8(hex >> 16), G: uint8(hex >> 8), B: uint8(hex), A: 255}
+	return color.RGBA{R: uint8(hex >> 16), G: uint8(hex >> 8), B: uint8(hex), A: 255} //nolint:gosec // truncation to one byte per channel is intended
 }
 
 // Colors carry meaning: amber is waste, green is savings. Every text color is
@@ -126,13 +126,13 @@ func textWidth(s string, size float64, isBold bool) float64 {
 
 // fit returns the largest size, from max down to min, at which s fits in width
 // with 8% to spare (viewers draw SVG text with their own fonts).
-func fit(s string, max, min, width float64, isBold bool) float64 {
-	for size := max; size > min; size -= 2 {
+func fit(s string, hi, lo, width float64, isBold bool) float64 {
+	for size := hi; size > lo; size -= 2 {
 		if textWidth(s, size, isBold)*1.08 <= width {
 			return size
 		}
 	}
-	return min
+	return lo
 }
 
 // build lays out the card. Both renderers draw exactly this scene.

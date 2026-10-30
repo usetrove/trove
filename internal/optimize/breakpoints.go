@@ -32,12 +32,12 @@ var dateSuffix = regexp.MustCompile(`^[-@](\d{8}|latest)$`)
 // "claude-opus-4-9" is not mistaken for "claude-opus-4".
 func cacheMinimum(model string) (int, bool) {
 	best, n := "", 0
-	for id, min := range minCacheTokens {
+	for id, floor := range minCacheTokens {
 		if !strings.HasPrefix(model, id) || len(id) <= len(best) {
 			continue
 		}
 		if rest := model[len(id):]; rest == "" || dateSuffix.MatchString(rest) {
-			best, n = id, min
+			best, n = id, floor
 		}
 	}
 	return n, best != ""
@@ -80,8 +80,8 @@ func (CacheBreakpoints) Applies(r *Request, s Session) bool {
 	if !s.Custom || r.RootEmpty || len(r.Messages) == 0 {
 		return false
 	}
-	min, ok := cacheMinimum(r.Model)
-	return ok && len(r.Raw)/approxBytesPerToken >= min && !r.HasCacheControl()
+	floor, ok := cacheMinimum(r.Model)
+	return ok && len(r.Raw)/approxBytesPerToken >= floor && !r.HasCacheControl()
 }
 
 // Transform implements Optimizer.

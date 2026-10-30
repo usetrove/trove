@@ -59,7 +59,7 @@ func fetch(api, repo, token string) ([]release, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not reach GitHub: %v. Check your connection and try again", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	switch {
 	case resp.StatusCode == http.StatusNotFound:
@@ -107,22 +107,22 @@ func summarize(rels []release) []relSummary {
 func printReport(w io.Writer, rels []release) {
 	sums := summarize(rels)
 	if len(sums) == 0 {
-		fmt.Fprintln(w, "No published releases yet, so there are no download counts.")
+		_, _ = fmt.Fprintln(w, "No published releases yet, so there are no download counts.")
 		return
 	}
 	grand := 0
 	for _, s := range sums {
 		grand += s.Total
-		fmt.Fprintf(w, "%s: %d archive downloads\n", s.Tag, s.Total)
+		_, _ = fmt.Fprintf(w, "%s: %d archive downloads\n", s.Tag, s.Total)
 		names := make([]string, 0, len(s.ByFile))
 		for n := range s.ByFile {
 			names = append(names, n)
 		}
 		sort.Strings(names)
 		for _, n := range names {
-			fmt.Fprintf(w, "  %-50s %d\n", n, s.ByFile[n])
+			_, _ = fmt.Fprintf(w, "  %-50s %d\n", n, s.ByFile[n])
 		}
 	}
-	fmt.Fprintf(w, "\nTotal: %d archive downloads (measured by GitHub).\n", grand)
-	fmt.Fprintln(w, "These are downloads, not installs or users: CI, mirrors and repeat downloads count, and uninstalls cannot be counted.")
+	_, _ = fmt.Fprintf(w, "\nTotal: %d archive downloads (measured by GitHub).\n", grand)
+	_, _ = fmt.Fprintln(w, "These are downloads, not installs or users: CI, mirrors and repeat downloads count, and uninstalls cannot be counted.")
 }

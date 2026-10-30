@@ -166,7 +166,7 @@ func scanFile(p, rel, ql string, wordRe *regexp.Regexp, pathBonus int) []hit {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 64<<10), 256<<10)
 	var out []hit

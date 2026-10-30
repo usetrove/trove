@@ -186,7 +186,7 @@ func (h *handler) largeOutput(in Input, key string) ([]byte, error) {
 // sessionEnd is session_end_receipt: it moves the hook counters into the
 // database, runs the hook guardrail, writes this session's receipt, refreshes
 // the snapshot the other hooks read, and forgets the session's ledger.
-func (h *handler) sessionEnd(in Input, key string) error {
+func (h *handler) sessionEnd(_ Input, key string) error {
 	defer func() { _ = os.Remove(sessionPath(h.dir, key)) }()
 	h.sweepOldSessions()
 	ctx, cancel := context.WithTimeout(context.Background(), endDeadline-250*time.Millisecond)
@@ -216,7 +216,7 @@ func (h *handler) sessionEnd(in Input, key string) error {
 // Maintain brings the hook bookkeeping up to date: it ingests the spool, applies
 // the hook guardrail and rewrites the snapshot the hooks read. It is safe to run
 // at any time and as often as wanted.
-func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, getenv func(string) string, now time.Time) error {
+func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, _ func(string) string, now time.Time) error {
 	if _, err := IngestSpool(ctx, db, dir); err != nil {
 		return fmt.Errorf("cannot ingest hook counts: %v", err)
 	}

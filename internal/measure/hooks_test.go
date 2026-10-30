@@ -62,7 +62,7 @@ func TestEndSessionWritesOnlyThatSessionsReceiptNow(t *testing.T) {
 	}
 }
 
-func hookEvent(t *testing.T, ctx context.Context, execer func(string, ...any) error, ts time.Time, session, hook, kind string, bytes, tokens int) {
+func hookEvent(t *testing.T, _ context.Context, execer func(string, ...any) error, ts time.Time, session, hook, kind string, bytes, tokens int) {
 	t.Helper()
 	if err := execer(`INSERT INTO hook_events(ts, session_key, hook, kind, bytes, tokens) VALUES(?,?,?,?,?,?)`, ts.UnixMilli(), session, hook, kind, bytes, tokens); err != nil {
 		t.Fatal(err)

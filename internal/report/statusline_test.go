@@ -100,9 +100,9 @@ func TestRenderStatusGoldens(t *testing.T) {
 	db := openDB(t)
 	seedStatus(t, db)
 	ctx := context.Background()
-	build := func(cap float64, id string, at time.Time) Status {
+	build := func(limit float64, id string, at time.Time) Status {
 		cfg := config.Default()
-		cfg.Budget.CapUSD = cap
+		cfg.Budget.CapUSD = limit
 		st, err := BuildStatus(ctx, db, cfg, at, id)
 		if err != nil {
 			t.Fatal(err)
@@ -111,7 +111,7 @@ func TestRenderStatusGoldens(t *testing.T) {
 	}
 	var out strings.Builder
 	line := func(label string, st Status, format string, color bool) {
-		out.WriteString(fmt.Sprintf("%-26s %s\n", label, strings.ReplaceAll(RenderStatus(st, format, color), "\x1b", "<ESC>")))
+		fmt.Fprintf(&out, "%-26s %s\n", label, strings.ReplaceAll(RenderStatus(st, format, color), "\x1b", "<ESC>"))
 	}
 	line("no budget", build(0, "", nowLocal), FormatShell, false)
 	line("no budget, session", build(0, "sess-123", nowLocal), FormatClaude, false)

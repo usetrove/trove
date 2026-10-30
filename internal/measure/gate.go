@@ -17,9 +17,9 @@ import (
 type Phase string
 
 const (
-	// PhaseBaseline: everything runs in shadow mode only.
+	// PhaseBaseline means everything runs in shadow mode only.
 	PhaseBaseline Phase = "baseline"
-	// PhaseActive: baseline is done; optimizers run as the user configured them.
+	// PhaseActive means baseline is done; optimizers run as the user configured them.
 	PhaseActive Phase = "active"
 )
 
@@ -86,7 +86,7 @@ func NewGate(db *store.DB, cfg config.Measure, now func() time.Time) *Gate {
 }
 
 // State implements optimize.StateGate.
-func (g *Gate) State(sessionKey, optimizer, configured string, at time.Time) string {
+func (g *Gate) State(sessionKey, optimizer, configured string, _ time.Time) string {
 	if configured != config.StateOn {
 		return configured
 	}

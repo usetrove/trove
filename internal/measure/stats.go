@@ -6,13 +6,13 @@ import "math"
 type Verdict string
 
 const (
-	// NotEnoughData: one side has fewer sessions than the minimum. No conclusion
+	// NotEnoughData means one side has fewer sessions than the minimum. No conclusion
 	// of any kind may be drawn or shown.
 	NotEnoughData Verdict = "not_enough_data"
-	// NoRegression: nothing worse was detected. It does NOT mean quality is
+	// NoRegression means nothing worse was detected. It does NOT mean quality is
 	// unchanged; with a small sample, real harm can hide.
 	NoRegression Verdict = "no_regression_detected"
-	// Regression: the treatment is worse by more than the threshold and more
+	// Regression means the treatment is worse by more than the threshold and more
 	// than chance alone would explain at roughly 95% one-sided confidence.
 	Regression Verdict = "regression"
 )
@@ -100,25 +100,6 @@ func compareRateToLimit(k, n, minN int, limit float64) Comparison {
 	c.Treated = float64(k) / float64(n)
 	c.Verdict = NoRegression
 	if wilsonLower(k, n) > limit {
-		c.Verdict = Regression
-	}
-	return c
-}
-
-// compareRates flags treated when its rate is at least minRise (absolute,
-// 0.20 = 20 points) above ref's and the rise is beyond chance (two-proportion
-// z test, one-sided 95%).
-func compareRates(k1, n1, k2, n2, minN int, minRise float64) Comparison {
-	c := Comparison{Verdict: NotEnoughData, NTreated: n1, NRef: n2}
-	if n1 < minN || n2 < minN {
-		return c
-	}
-	p1, p2 := float64(k1)/float64(n1), float64(k2)/float64(n2)
-	c.Treated, c.Ref, c.Change = p1, p2, p1-p2
-	c.Verdict = NoRegression
-	pool := float64(k1+k2) / float64(n1+n2)
-	se := math.Sqrt(pool * (1 - pool) * (1/float64(n1) + 1/float64(n2)))
-	if c.Change >= minRise && c.Change > z95*se {
 		c.Verdict = Regression
 	}
 	return c

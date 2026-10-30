@@ -7,10 +7,10 @@ import "time"
 type Label string
 
 const (
-	// Measured: read straight from provider-reported usage or counted from
+	// Measured means read straight from provider-reported usage or counted from
 	// recorded requests.
 	Measured Label = "measured"
-	// Estimated: derived with a model, an assumption or a counterfactual.
+	// Estimated means derived with a model, an assumption or a counterfactual.
 	Estimated Label = "estimated"
 )
 

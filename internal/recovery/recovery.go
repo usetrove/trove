@@ -68,7 +68,7 @@ func Open(dir string, o Options) (*Store, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("cannot create the recovery folder %s: %w. Check that you can write to your Trove data folder", dir, err)
 	}
-	_ = os.Chmod(dir, 0o700)
+	_ = os.Chmod(dir, 0o700) //nolint:gosec // a directory needs the execute bit; 0700 is owner-only
 	s := &Store{dir: dir, max: o.MaxBytes, ttl: o.TTL, now: o.Now}
 	if _, err := s.Sweep(); err != nil {
 		return nil, err
@@ -145,7 +145,7 @@ func (s *Store) Get(id string, start, end int) (string, int, error) {
 		_ = os.Remove(p)
 		return "", 0, ErrNotFound
 	}
-	b, err := os.ReadFile(p)
+	b, err := os.ReadFile(p) //nolint:gosec // p is built from a ValidID-checked id under the recovery directory
 	if err != nil {
 		return "", 0, ErrNotFound
 	}

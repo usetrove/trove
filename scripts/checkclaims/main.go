@@ -59,7 +59,7 @@ func check(file, text, root string, publish bool) []problem {
 				ps = append(ps, problem{file, n, "unresolved source in publish mode: " + m[0]})
 			case unresolved:
 			default:
-				if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(src))); err != nil {
+				if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(src))); err != nil { //nolint:gosec // developer tool reading paths cited in the repo's own launch drafts
 					ps = append(ps, problem{file, n, "source file does not exist: " + src})
 				}
 			}

@@ -210,7 +210,7 @@ func TestChangedFilesAreNeverBlocked(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{"new size", func(t *testing.T, r *rig, p string) { r.file("a.go", "package a // more\n") }},
+		{"new size", func(_ *testing.T, r *rig, p string) { r.file("a.go", "package a // more\n") }},
 		{"same size and mtime, different bytes", func(t *testing.T, r *rig, p string) {
 			fi, _ := os.Stat(p)
 			r.file("a.go", "package b\n")
@@ -218,7 +218,7 @@ func TestChangedFilesAreNeverBlocked(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{"deleted", func(t *testing.T, r *rig, p string) { _ = os.Remove(p) }},
+		{"deleted", func(_ *testing.T, r *rig, p string) { _ = os.Remove(p) }},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -620,15 +620,6 @@ func TestNothingSensitiveIsStored(t *testing.T) {
 	scan("before session end")
 	r.run(EventSessionEnd, r.input("claude_session_end.json"))
 	scan("after session end")
-}
-
-func fileMode(t *testing.T, p string) os.FileMode {
-	t.Helper()
-	fi, err := os.Stat(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return fi.Mode().Perm()
 }
 
 // --- session end ---

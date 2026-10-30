@@ -35,7 +35,7 @@ func Read(r *root.Root, a ReadArgs) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if fi.IsDir() {
 		return "", fmt.Errorf("%s is a folder. Give a file path, or use trove_search to find files", a.Path)
 	}
@@ -168,7 +168,7 @@ func isBinary(data []byte) bool {
 	for i := 0; i < len(head); {
 		r, sz := utf8.DecodeRune(head[i:])
 		// a rune cut off by the 8 KB limit is not evidence of binary
-		if r == utf8.RuneError && sz == 1 && !(len(head) < len(data) && len(head)-i < utf8.UTFMax) {
+		if r == utf8.RuneError && sz == 1 && (len(head) >= len(data) || len(head)-i >= utf8.UTFMax) {
 			bad++
 		}
 		total++
