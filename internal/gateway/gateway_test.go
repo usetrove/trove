@@ -487,3 +487,27 @@ func TestShortErrRedactsBeforeTruncating(t *testing.T) {
 		t.Errorf("not truncated: %d", len(got))
 	}
 }
+
+func TestWithoutCredentialsKeepsOnlyWhatLaterCodeNeeds(t *testing.T) {
+	h := http.Header{}
+	h.Set("X-Api-Key", fakeKey)
+	h.Set("Authorization", "Bearer "+fakeKey)
+	h.Set("Cookie", "session="+fakeKey)
+	h.Set("Proxy-Authorization", "Basic "+fakeKey)
+	h.Set("Openai-Organization", "org-secret")
+	h.Set("User-Agent", "claude-cli/2.1.300")
+	h.Set("X-Claude-Code-Session-Id", "abc")
+	h.Set("Content-Encoding", "gzip")
+	got := withoutCredentials(h)
+	for k, v := range got {
+		if strings.Contains(strings.Join(v, ","), fakeKey) || strings.Contains(strings.ToLower(k), "auth") || strings.EqualFold(k, "Cookie") {
+			t.Errorf("credential-bearing header kept: %s", k)
+		}
+	}
+	if got.Get("User-Agent") == "" || got.Get("X-Claude-Code-Session-Id") != "abc" || got.Get("Content-Encoding") != "gzip" {
+		t.Errorf("needed headers lost: %v", got)
+	}
+	if h.Get("X-Api-Key") == "" {
+		t.Error("the original request headers must stay intact for forwarding")
+	}
+}

@@ -91,7 +91,7 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, provider, prefi
 	if r.URL.RawPath != "" {
 		rawPath = strings.TrimPrefix(r.URL.RawPath, prefix)
 	}
-	f := &flight{provider: provider, path: path, start: start, ctx: r.Context(), reqHeader: r.Header.Clone()}
+	f := &flight{provider: provider, path: path, start: start, ctx: r.Context(), reqHeader: withoutCredentials(r.Header)}
 	body = s.optimizeBody(r, f, body)
 	f.reqBody = body
 
@@ -260,7 +260,7 @@ func (s *Server) optimizeBody(r *http.Request, f *flight, body []byte) []byte {
 	label, _ := agent.Label(r.Header)
 	f.sessionKey, f.keyed = s.sessions.Key(session.DeriveKey(r.Header, body), f.start), true
 	res := eng.Run(r.Context(), optimize.Input{
-		Provider: f.provider, Path: f.path, Header: r.Header, Body: body,
+		Provider: f.provider, Path: f.path, Header: withoutCredentials(r.Header), Body: body,
 		SessionKey: f.sessionKey, Agent: label,
 	})
 	f.opt = &res
@@ -268,4 +268,20 @@ func (s *Server) optimizeBody(r *http.Request, f *flight, body []byte) []byte {
 		s.log.Warn("an optimizer could not finish, so the original request was forwarded unchanged", "optimizer", fl.Optimizer, "reason", fl.Class)
 	}
 	return res.Body
+}
+
+// headersKept are the only request headers anything after the credential check
+// may read: labelling the agent, keying the session, and (for the optimizer)
+// the encoding. Credentials are not among them, so no later code, including a
+// future optimizer, can log, store or return a key by accident.
+var headersKept = []string{"User-Agent", "X-Claude-Code-Session-Id", "Content-Encoding", "Content-Type", "Anthropic-Version"}
+
+func withoutCredentials(h http.Header) http.Header {
+	out := make(http.Header, len(headersKept))
+	for _, k := range headersKept {
+		if v := h.Values(k); len(v) > 0 {
+			out[http.CanonicalHeaderKey(k)] = append([]string(nil), v...)
+		}
+	}
+	return out
 }
