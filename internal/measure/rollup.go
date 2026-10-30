@@ -50,10 +50,17 @@ type SessionSignals struct {
 // and have no roll-up yet, writing sessions.outcome_signals. It is idempotent
 // and runs off the request path. Only counts are read or written.
 func RollupSessions(ctx context.Context, db *store.DB, m config.Measure, now time.Time, idle time.Duration) (int, error) {
+	return rollupSessions(ctx, db, m, now, idle, "")
+}
+
+// rollupSessions is RollupSessions limited to one session (and its idle-gap
+// successors, which share the key plus "~n") when baseKey is not empty.
+func rollupSessions(ctx context.Context, db *store.DB, m config.Measure, now time.Time, idle time.Duration, baseKey string) (int, error) {
 	cutoff := now.Add(-idle).UnixMilli()
 	rows, err := db.QueryContext(ctx, `SELECT session_key, started_at, COALESCE(ended_at, started_at), request_count,
 		total_input_uncached_tokens + total_cache_write_tokens + total_cache_read_tokens + total_output_tokens
-		FROM sessions WHERE outcome_signals IS NULL AND COALESCE(ended_at, started_at) < ?`, cutoff)
+		FROM sessions WHERE outcome_signals IS NULL AND COALESCE(ended_at, started_at) < ?
+		AND (? = '' OR session_key = ? OR session_key LIKE ?)`, cutoff, baseKey, baseKey, baseKey+"~%")
 	if err != nil {
 		return 0, err
 	}

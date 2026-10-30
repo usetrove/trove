@@ -121,6 +121,12 @@ const (
 	// (so it can call trove_fetch_full) and a working recovery store. Until then
 	// "on" runs as "shadow": the engine clamps it when it pins a session.
 	OptimizerOutputTrimmer = "output_trimmer"
+	// OptimizerHookRepeatRead denies a Read of a file the agent already read in
+	// this session and that has not changed (Claude Code hooks, see docs/hooks.md).
+	OptimizerHookRepeatRead = "hook_repeat_read"
+	// OptimizerHookLargeOutput adds a hint to run a known-noisy command through
+	// trove_run. It never blocks.
+	OptimizerHookLargeOutput = "hook_large_output"
 )
 
 // EnvOptimize is the kill-switch environment variable. Set to "off", it

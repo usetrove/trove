@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/store"
 )
 
@@ -41,10 +42,30 @@ const receiptHorizon = 7 * 24 * time.Hour
 // gateway has no end event, so a session ends when its idle gap has passed
 // (the same rule RollupSessions uses).
 func SweepReceipts(ctx context.Context, db *store.DB, idle time.Duration, now time.Time) ([]Receipt, error) {
+	return sweepReceipts(ctx, db, idle, now, "")
+}
+
+// EndSession is the session-end boundary for agents that announce it (a hook
+// fires when the session closes), so it does not wait out the idle gap. It rolls
+// up the session and writes its receipt, and returns the receipts it wrote. It
+// is idempotent, and a session the gateway never saw yields nothing. baseKey is
+// the session key; its idle-gap successors (key~n) are finished with it.
+func EndSession(ctx context.Context, db *store.DB, m config.Measure, baseKey string, now time.Time) ([]Receipt, error) {
+	if baseKey == "" {
+		return nil, nil
+	}
+	if _, err := rollupSessions(ctx, db, m, now, 0, baseKey); err != nil {
+		return nil, err
+	}
+	return sweepReceipts(ctx, db, 0, now, baseKey)
+}
+
+func sweepReceipts(ctx context.Context, db *store.DB, idle time.Duration, now time.Time, baseKey string) ([]Receipt, error) {
 	rows, err := db.QueryContext(ctx, `SELECT session_key, agent, ended_at FROM sessions
 		WHERE ended_at IS NOT NULL AND ended_at <= ? AND ended_at >= ?
-		AND session_key NOT IN (SELECT session_key FROM receipts) ORDER BY ended_at`,
-		now.Add(-idle).UnixMilli(), now.Add(-receiptHorizon).UnixMilli())
+		AND session_key NOT IN (SELECT session_key FROM receipts)
+		AND (? = '' OR session_key = ? OR session_key LIKE ?) ORDER BY ended_at`,
+		now.Add(-idle).UnixMilli(), now.Add(-receiptHorizon).UnixMilli(), baseKey, baseKey, baseKey+"~%")
 	if err != nil {
 		return nil, err
 	}
