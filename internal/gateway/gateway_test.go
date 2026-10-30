@@ -3,6 +3,7 @@ package gateway
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -452,5 +453,37 @@ func assertNoSecrets(t *testing.T, g *rig) {
 	time.Sleep(50 * time.Millisecond)
 	if strings.Contains(g.logs.String(), fakeKey) {
 		t.Errorf("a credential appeared in the logs:\n%s", g.logs.String())
+	}
+}
+
+// A server built directly (not through config.Load) must not accept an upstream
+// that config would refuse: the user's API key is sent there.
+func TestNewRefusesUnsafeUpstreams(t *testing.T) {
+	for name, up := range map[string]string{
+		"credentials in url": "https://user:pw@api.anthropic.com",
+		"query":              "https://api.anthropic.com?x=1",
+		"plain http remote":  "http://api.anthropic.com",
+		"path":               "https://api.anthropic.com/v1",
+		"empty":              "",
+	} {
+		cfg := config.Default()
+		cfg.Upstreams.Anthropic = up
+		if _, err := New(Options{Config: cfg}); err == nil {
+			t.Errorf("%s: New accepted %q", name, up)
+		}
+	}
+}
+
+// Transport errors can quote the URL or headers. What reaches the client must be
+// redacted, and redacted before truncation so a secret cannot be cut in half.
+func TestShortErrRedactsBeforeTruncating(t *testing.T) {
+	secret := "sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	err := errors.New(strings.Repeat("x", 100) + " Authorization: Bearer " + secret + " failed")
+	got := shortErr(err)
+	if strings.Contains(got, "sk-ant") || strings.Contains(got, "ABCDEFGH") {
+		t.Errorf("secret reached the client message: %q", got)
+	}
+	if len(got) > 120 {
+		t.Errorf("not truncated: %d", len(got))
 	}
 }

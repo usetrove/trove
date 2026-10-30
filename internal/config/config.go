@@ -386,8 +386,22 @@ func checkUpstream(v string) string {
 	if u.Path != "" && u.Path != "/" {
 		return fmt.Sprintf("is %q; give the origin only, without a path, because the gateway forwards each request's own path.", v)
 	}
+	// The gateway sends the user's API key to this host, so the URL must say
+	// exactly one thing: where. Credentials, a query or a fragment in it are
+	// either a mistake or an attempt to smuggle something along.
+	if u.User != nil {
+		return "contains a username or password; remove it. API keys come from your agent's own request, never from this setting."
+	}
+	if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return fmt.Sprintf("is %q; give the origin only, without a query or fragment.", v)
+	}
 	return ""
 }
+
+// ValidateUpstream returns "" if v is an acceptable upstream origin, otherwise a
+// plain-English reason. The gateway calls it too, so a server built without
+// going through Load cannot be pointed somewhere unchecked.
+func ValidateUpstream(v string) string { return checkUpstream(v) }
 
 // ResolveDataDir picks the data directory: flag, then TROVE_DATA_DIR, then ~/.trove.
 func ResolveDataDir(flag string, getenv func(string) string) (string, error) {

@@ -78,7 +78,7 @@ func Search(r *root.Root, a SearchArgs) (string, error) {
 			return nil
 		}
 		// Only regular files that are not symlinks: a link could lead outside.
-		if !d.Type().IsRegular() || ignore.match(rel, false) {
+		if !d.Type().IsRegular() || ignore.match(rel, false) || root.Sensitive(rel) {
 			return nil
 		}
 		if globRe != nil && !globMatches(globRe, a.Glob, rel) {

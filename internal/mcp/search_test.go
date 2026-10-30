@@ -132,3 +132,17 @@ func TestSearchDoesNotFollowSymlinks(t *testing.T) {
 		t.Fatalf("search followed a symlink out of the project:\n%s", got)
 	}
 }
+
+func TestSearchSkipsSecretFiles(t *testing.T) {
+	r, dir := searchProject(t)
+	write(t, dir, ".env", "Login=hunter2\n")
+	write(t, dir, "deploy/key.pem", "Login private\n")
+	got, _ := Search(r, SearchArgs{Query: "hunter2"})
+	if strings.Contains(got, "Login=hunter2") || strings.Contains(got, ".env:") {
+		t.Errorf("search returned a secret file:\n%s", got)
+	}
+	got, _ = Search(r, SearchArgs{Query: "private"})
+	if strings.Contains(got, "key.pem") {
+		t.Errorf("search returned a key file:\n%s", got)
+	}
+}

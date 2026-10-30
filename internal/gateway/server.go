@@ -85,6 +85,11 @@ func New(opts Options) (*Server, error) {
 	if opts.Logger == nil {
 		opts.Logger = slog.New(slog.DiscardHandler)
 	}
+	for name, v := range map[string]string{"anthropic": opts.Config.Upstreams.Anthropic, "openai": opts.Config.Upstreams.OpenAI} {
+		if why := config.ValidateUpstream(v); why != "" {
+			return nil, fmt.Errorf("upstreams.%s %s", name, why)
+		}
+	}
 	ua, err := url.Parse(opts.Config.Upstreams.Anthropic)
 	if err != nil {
 		return nil, fmt.Errorf("upstreams.anthropic is not a valid URL: %w", err)

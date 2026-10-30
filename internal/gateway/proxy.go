@@ -18,6 +18,7 @@ import (
 	"github.com/usetrove/trove/internal/gateway/auth"
 	"github.com/usetrove/trove/internal/gateway/session"
 	"github.com/usetrove/trove/internal/optimize"
+	"github.com/usetrove/trove/internal/redact"
 )
 
 // maxRequestBody bounds how much of a request body is held in memory. It is
@@ -209,7 +210,10 @@ func shortErr(err error) string {
 	if errors.As(err, &ue) {
 		err = ue.Err
 	}
-	msg := err.Error()
+	// Redact before truncating: cutting first could split a secret and hide it
+	// from the patterns. This text goes to the client and so must be as clean
+	// as the logs.
+	msg := redact.String(err.Error())
 	if len(msg) > 120 {
 		msg = msg[:120]
 	}

@@ -107,3 +107,28 @@ func TestDamagedTrustFileApprovesNothing(t *testing.T) {
 		t.Error("a damaged trust file must fail closed")
 	}
 }
+
+func TestFilteredEnvDropsCredentialsAndKeepsToolchain(t *testing.T) {
+	in := []string{
+		"PATH=/usr/bin", "HOME=/h", "GOPATH=/g", "GOFLAGS=-mod=mod", "LANG=C", "TMPDIR=/t", "CI=true", "PYTHONPATH=/p", "PATHEXT=.EXE",
+		"ANTHROPIC_API_KEY=a", "OPENAI_API_KEY=o", "GITHUB_TOKEN=g", "AWS_PROFILE=p", "AZURE_CLIENT_ID=x",
+		"SSH_AUTH_SOCK=/s", "GPG_AGENT_INFO=g", "DATABASE_URL=postgres://u:p@h/db", "SENTRY_DSN=d",
+		"DEPLOY_PAT=p", "NPM_CONFIG__AUTH=x", "MY_PRIVATE_KEY=k", "SESSION_COOKIE=c", "HTTP_BEARER=b",
+	}
+	got := map[string]bool{}
+	for _, kv := range filteredEnv(in) {
+		k, _, _ := strings.Cut(kv, "=")
+		got[k] = true
+	}
+	for _, keep := range []string{"PATH", "HOME", "GOPATH", "GOFLAGS", "LANG", "TMPDIR", "CI", "PYTHONPATH", "PATHEXT"} {
+		if !got[keep] {
+			t.Errorf("%s was dropped but toolchains need it", keep)
+		}
+	}
+	for _, drop := range []string{"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GITHUB_TOKEN", "AWS_PROFILE", "AZURE_CLIENT_ID", "SSH_AUTH_SOCK",
+		"GPG_AGENT_INFO", "DATABASE_URL", "SENTRY_DSN", "DEPLOY_PAT", "NPM_CONFIG__AUTH", "MY_PRIVATE_KEY", "SESSION_COOKIE", "HTTP_BEARER"} {
+		if got[drop] {
+			t.Errorf("%s reached the project command", drop)
+		}
+	}
+}

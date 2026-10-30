@@ -181,3 +181,31 @@ func TestReadSymlinkEscapeRefused(t *testing.T) {
 		t.Fatalf("symlink escape must be refused, got %q %v", got, err)
 	}
 }
+
+// An agent's own deny rules (say, on .env) do not apply to MCP tools, so the
+// tools must refuse secret-bearing files themselves, including through a link.
+func TestReadRefusesSecretFiles(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, ".env", "API_KEY=hunter2\n")
+	write(t, dir, "deploy/server.pem", "-----BEGIN PRIVATE KEY-----\n")
+	write(t, dir, ".env.example", "API_KEY=changeme\n")
+	if err := os.Symlink(filepath.Join(dir, ".env"), filepath.Join(dir, "notes.txt")); err != nil {
+		t.Logf("no symlinks here (%v); skipping the link case", err)
+	}
+	r, err := root.New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{".env", "deploy/server.pem", "notes.txt"} {
+		if _, err := os.Lstat(filepath.Join(dir, p)); err != nil {
+			continue
+		}
+		got, err := Read(r, ReadArgs{Path: p})
+		if err == nil || strings.Contains(got, "hunter2") || strings.Contains(got, "PRIVATE KEY") {
+			t.Errorf("%s: read a secret file: %q, %v", p, got, err)
+		}
+	}
+	if got, err := Read(r, ReadArgs{Path: ".env.example"}); err != nil || !strings.Contains(got, "changeme") {
+		t.Errorf("templates should stay readable: %q, %v", got, err)
+	}
+}

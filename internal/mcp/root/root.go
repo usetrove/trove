@@ -88,6 +88,11 @@ func (r *Root) OpenRead(rel string) (*os.File, os.FileInfo, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	// Check the name asked for and the real name behind any symlink, so a link
+	// called notes.txt that points at .env is refused too.
+	if Sensitive(rel) || Sensitive(r.Rel(real)) {
+		return nil, nil, ErrSensitive
+	}
 	f, err := os.Open(real)
 	if err != nil {
 		return nil, nil, fmt.Errorf("cannot read %s: %w", rel, err)

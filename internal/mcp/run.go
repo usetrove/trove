@@ -20,14 +20,19 @@ import (
 
 // Limits for trove_run.
 const (
-	commandsFile       = ".trove/commands.toml"
-	maxCommandsFile    = 64 << 10
-	defaultTimeout     = 300 * time.Second
-	maxTimeout         = 3600 * time.Second
-	maxCaptureBytes    = 8 << 20
-	maxInlineBytes     = 12 << 10
-	maxFailingListed   = 20
-	envDropPatternText = `(?i)(api[_-]?key|token|secret|password|passwd|credential|^anthropic_|^openai_|^aws_|^authorization)`
+	commandsFile     = ".trove/commands.toml"
+	maxCommandsFile  = 64 << 10
+	defaultTimeout   = 300 * time.Second
+	maxTimeout       = 3600 * time.Second
+	maxCaptureBytes  = 8 << 20
+	maxInlineBytes   = 12 << 10
+	maxFailingListed = 20
+	// Names that carry credentials or give access to them. A project command
+	// should not inherit the agent's keys, cloud logins, the ssh/gpg agents or
+	// database URLs. This is a denylist, so it can miss unusual names; it is
+	// documented as a mitigation, not a guarantee.
+	envDropPatternText = `(?i)(api[_-]?key|token|secret|password|passwd|credential|private[_-]?key|bearer|cookie|` +
+		`^anthropic_|^openai_|^aws_|^azure_|^authorization|^ssh_auth_sock$|^gpg_agent_info$|^database_url$|_dsn$|(^|_)pat$|^npm_config__auth)`
 )
 
 var (

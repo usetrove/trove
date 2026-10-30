@@ -46,9 +46,16 @@ Their definitions are sent with every request, so they are short. `trove mcp sch
 - `trove_read` and `trove_search` are read-only and confined to the project folder (the folder the agent
   starts the server in, or `--root`). Absolute paths, `..`, and symlinks that lead outside are refused.
   Binary files and files over 2 MB are refused with a message saying so.
+- They also refuse files that usually hold secrets (`.env` and `.env.*` except `.env.example`-style
+  templates, `*.pem`, `*.key`, `id_rsa`, `.npmrc`, `.netrc`, `.git/config`, anything under `.ssh/` or `.aws/`,
+  and similar), and `trove_search` skips them. The reason: an agent's own deny rules apply to its built-in
+  tools, not to an MCP server, so without this check these tools would sidestep them. It matches on names
+  only, so a secret in a file with an ordinary name is not caught.
 - `trove_run` runs only the names in the allowlist, directly (no shell), in the project folder, with
-  variables that look like credentials (`*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `ANTHROPIC_*`,
-  `OPENAI_*`, `AWS_*`) removed. A command that exceeds `timeout_sec` is killed.
+  variables that look like credentials (`*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*COOKIE*`, `*_PAT`,
+  `*_DSN`, `ANTHROPIC_*`, `OPENAI_*`, `AWS_*`, `AZURE_*`, `SSH_AUTH_SOCK`, `DATABASE_URL`) removed. This is a
+  name-based denylist, so an unusually named secret can still get through. A command that exceeds
+  `timeout_sec` is killed.
 - **The allowlist lives in the project, so it needs your approval.** A repository you clone could ship a
   `.trove/commands.toml` naming any program. `trove_run` therefore refuses the file until you run
   `trove mcp trust` in the project folder, which shows every command and asks. Approval is stored as
