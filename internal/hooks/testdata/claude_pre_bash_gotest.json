@@ -1,0 +1,1 @@
+{"session_id":"{{SESSION}}","prompt_id":"{{PROMPT}}","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"go test ./...","description":"Run tests","timeout":120000,"run_in_background":false},"tool_use_id":"toolu_01XYZ"}

@@ -1,0 +1,1 @@
+{"session_id":"{{SESSION}}","prompt_id":"{{PROMPT}}","transcript_path":"/home/u/.claude/projects/x/s.jsonl","cwd":"/home/u/proj","permission_mode":"default","hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":"{{FILE}}"},"tool_response":{"type":"text"},"tool_use_id":"toolu_01ABC"}

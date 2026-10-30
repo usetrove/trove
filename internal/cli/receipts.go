@@ -61,6 +61,16 @@ func newReceipts(a *App) *cobra.Command {
 // notifier returns a function that shows a desktop notification, or nil where
 // Trove has no way to. It never blocks the gateway and ignores failures.
 func notifier() func(measure.Receipt) {
+	show := notifierSync()
+	if show == nil {
+		return nil
+	}
+	return func(r measure.Receipt) { go show(r) }
+}
+
+// notifierSync is notifier without the goroutine, for a short-lived process
+// (the session-end hook) that would exit before a background one finished.
+func notifierSync() func(measure.Receipt) {
 	var name string
 	var args func(title, body string) []string
 	switch runtime.GOOS {
@@ -80,6 +90,6 @@ func notifier() func(measure.Receipt) {
 	}
 	return func(r measure.Receipt) {
 		body := strings.NewReplacer("\"", "", "\\", "").Replace("Session finished: " + report.ReceiptLine(r))
-		go func() { _ = exec.Command(name, args("Trove", body)...).Run() }() //nolint:gosec // fixed program, text built from numbers and model names
+		_ = exec.Command(name, args("Trove", body)...).Run() //nolint:gosec // fixed program, text built from numbers and model names
 	}
 }
