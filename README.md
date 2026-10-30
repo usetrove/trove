@@ -174,6 +174,12 @@ See [Try it now](#try-it-now-from-source-nothing-installed) to build and run saf
 go test ./...
 ```
 
+If you have Go and just want the program on your `PATH` (this builds from source, so it skips the checksum check the install paths above do):
+
+```sh
+go install github.com/usetrove/trove/cmd/trove@latest
+```
+
 More: [CONTRIBUTING.md](CONTRIBUTING.md), [docs/release-checklist.md](docs/release-checklist.md).
 
 ## Configuration

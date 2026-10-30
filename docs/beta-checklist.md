@@ -54,6 +54,7 @@ Record each with its source. A metric with fewer than the number of responses yo
 | 30-day retention | Day-30 answer: still has Trove installed and used it in the last 7 days | Self-reported; say so |
 | Reconciliation accuracy | `trove reconcile --export` files | Per tester: diff %, unpriced count, models involved. Summarize as the share within 2% and the spread of the rest |
 | Rollback events | `guardrail_trips` and `fixes_reverted` from `trove feedback`, plus interviews | Separate automatic rollbacks (guardrails) from user reverts |
+| Archive downloads | `go run ./scripts/downloads` (GitHub release counters; needs `GITHUB_TOKEN` while the repo is private) | Downloads, not installs or users. Covers the install script, Homebrew and npx. `go install` builds from source and is not counted, so ask about it in the day-0 install-path question. Uninstalls cannot be counted. |
 | Install failures | Issues labeled `beta-feedback` | By install path and OS |
 
 ## 5. Reconciliation process
