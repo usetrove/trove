@@ -86,7 +86,9 @@ func (e *Env) Allowed(path string) error {
 		return fmt.Errorf("no path given")
 	}
 	for _, p := range []string{path, resolve(path)} {
-		n := norm(p)
+		// The refusal lists must not depend on the host OS: lower-case and treat backslashes as
+		// separators everywhere, so a macOS or Windows managed path is refused on Linux too.
+		n := strings.ToLower(strings.ReplaceAll(norm(p), `\`, "/"))
 		base := n[strings.LastIndex(n, "/")+1:]
 		for _, m := range managedMarkers {
 			if strings.Contains(n+"/", m) {
