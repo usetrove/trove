@@ -9,7 +9,54 @@ Trove cuts the tokens your coding agents waste, and checks that your results did
 <!-- DEMO GIF: record from docs/launch/demo-script.md, save as docs/assets/demo.gif, then replace this comment with: ![Trove demo](docs/assets/demo.gif) -->
 *(Demo GIF coming with the first release.)*
 
-> **Status: pre-release.** Version 0.1.0 has not been published yet, so the install commands below will not work until it is. Until then, [build from source](#build-from-source).
+> **Status: pre-release.** Version 0.1.0 has not been published yet, so the install commands below will not work until it is. Until then, [try it from source](#try-it-now-from-source-nothing-installed).
+
+## Try it now (from source, nothing installed)
+
+Use this until 0.1.0 is published. It builds one binary in the repo folder and keeps all of Trove's data in a throwaway folder, so it cannot touch an existing `~/.trove` or any agent config. Requires [Go 1.27.3 or newer](https://go.dev/dl/).
+
+macOS / Linux:
+
+```sh
+go build -o trove ./cmd/trove
+export TROVE_DATA_DIR="$(mktemp -d)"   # throwaway data folder for this shell
+./trove doctor                         # checks your setup; changes nothing
+./trove                                # report from your agent's local history
+./trove fix                            # evidence-based fixes with estimated savings; changes nothing
+```
+
+Windows (PowerShell; Windows is not a supported release platform yet, so treat it as experimental):
+
+```powershell
+go build -o trove.exe ./cmd/trove
+$env:TROVE_DATA_DIR = Join-Path $env:TEMP "trove-demo"
+.\trove.exe doctor
+.\trove.exe
+.\trove.exe fix
+```
+
+Setting `TROVE_DATA_DIR` (or passing `--data-dir <path>`) matters: without it Trove uses `~/.trove`, and if that folder already holds data from another tool, Trove may open or modify its database. Add `--no-history` to any command to stop it reading your agent's session history for that run, and `--json` for machine-readable output.
+
+What you should see: `doctor` lists which agents it found and whether prices are fresh; the report shows token use and waste by session, each number labeled **measured** or **estimated**; `fix` lists proposals with an id each. If a report is empty, your agent has probably not written history yet, or lives somewhere `doctor` did not list. That is worth a [bug report](#faq).
+
+`trove fix` looks at the project in your current folder, so run it from a project you use with your agent. Run from a folder with no agent history it says "No fixes to suggest", which is normal. The first report reads the last 30 days of history once; it only reads, and stores counts.
+
+### Optional: route Claude Code through the gateway (API key only)
+
+Skip this if you use a Claude Pro/Max subscription. The gateway refuses subscription traffic on purpose. It is the only part that edits your real agent config (`~/.claude/settings.json`, backed up first), so it is the one place the throwaway data folder does not protect you. Only the curl part of this path has been verified end to end; the Claude Code part has not been completed yet. Step-by-step with expected results and troubleshooting: [docs/gateway-manual-test.md](docs/gateway-manual-test.md).
+
+On Windows, read `./trove` below as `.\trove.exe`.
+
+1. Have `ANTHROPIC_API_KEY` set in the terminal you will start `claude` from. Trove never reads or stores it.
+2. Terminal A: `./trove gateway start` (stays running; Ctrl-C stops it). Default address is `127.0.0.1:8787`.
+3. Terminal B: `./trove setup`. It shows the exact change, asks, and backs up the file.
+4. Start `claude` from the terminal with the key. If it offers to use the API key, say yes. Run `/status` and check the base URL is `http://127.0.0.1:8787/anthropic`.
+5. Use your agent, then `./trove gateway status` (request count should rise) and `./trove` (the report now includes gateway-measured numbers).
+6. To go back: `./trove undo`, then Ctrl-C the gateway. Background service mode (`--background`) works on macOS and Linux only.
+
+If you get a 401 "API-key authentication only", Claude Code is still using your claude.ai login; see the troubleshooting section of the doc above.
+
+Everything past this point (`fix --apply`, `setup`, `hooks install`, `mcp install`, `gateway start`) edits agent config files or starts a service. Read the diff it shows, and see [What Trove changes](#what-trove-changes-and-how-to-undo-it) for the undo for each.
 
 ## Install
 
@@ -121,16 +168,13 @@ Then remove the program itself: `brew uninstall trove`, or delete the binary the
 
 ## Build from source
 
-Requires Go 1.27.3 or newer.
+See [Try it now](#try-it-now-from-source-nothing-installed) to build and run safely. To run the tests:
 
 ```sh
-go build -o trove ./cmd/trove   # one static binary, no cgo
 go test ./...
-./trove version
-./trove doctor
 ```
 
-Use `--data-dir <path>` (or `TROVE_DATA_DIR`) to keep experiments out of `~/.trove`. More: [CONTRIBUTING.md](CONTRIBUTING.md), [docs/release-checklist.md](docs/release-checklist.md).
+More: [CONTRIBUTING.md](CONTRIBUTING.md), [docs/release-checklist.md](docs/release-checklist.md).
 
 ## Configuration
 
