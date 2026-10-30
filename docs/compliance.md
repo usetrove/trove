@@ -153,12 +153,34 @@ read these four pages in a browser and add the result here.
   and trust the new hooks inside Codex before they run;** Trove's docs should say so (open item).
 - *Contradiction found:* none in the text read.
 
+## Second pass (2026-10-30, later the same day)
+
+Re-read with a page-fetch tool that returns a summary of each page, so the quotes below are the tool's
+extracts and **should be spot-checked in a browser before anyone relies on them legally.** Nothing here
+changes the first pass's conclusion: **no contradiction found in the text read.**
+
+| Source | Result |
+|---|---|
+| Claude Code, Legal and compliance | Re-read in full. Differences from the first pass: subscription plans now listed as "Free, Pro, Max, Ultra, Team, and Enterprise" and the restriction names "Free, Pro, Max, or Ultra plan credentials"; new sentence that advertised plan limits "assume ordinary, individual usage"; new statement that under the HIPAA configuration, Claude Code "routed through a third-party cloud provider or a gateway" is not covered; the name-and-logo paragraph is as before. |
+| Claude Code, Connect to an LLM gateway | Re-read in full. Consistent with the first pass. New detail: "A gateway credential variable takes precedence over a saved claude.ai login", and `ANTHROPIC_API_KEY` needs a one-time approval in interactive sessions; a previously declined key is "ignored without asking again" (fix: `/config`, `Use custom API key`). Trove's walkthrough already tells users to say yes to that prompt. |
+| Commercial Terms | Effective date still **Jun 17, 2025**. D.4(a), D.5 and B confirmed as quoted above. |
+| Usage Policy | Page still shows **Nov 12, 2026** (after today). The fetch returned this wording, which differs from the first pass's quote, so treat the first pass's quotation marks there as a paraphrase: "Resell, proxy, or otherwise provide access to Claude through unauthorized means" ... "including services that route requests through consumer subscriptions or misrepresent the product or client being used"; and "Users are responsible for ensuring that agents they build or deploy ... comply with this Usage Policy." |
+| Consumer Terms | **Now read.** Effective **Oct 8, 2025**. Section 3 prohibits accessing the Services "through automated or non-human means, whether through a bot, script, or otherwise" *except* "when you are accessing our Services via an Anthropic API Key or where we otherwise explicitly permit it"; Section 2: "You may not share your Account login information, Anthropic API key, or Account credentials with anyone else"; Section 3 also prohibits reselling. The page does not mention Claude Code. Trove is API-key only, local and single-user. Which terms govern a given user's usage (Consumer or Commercial) is a lawyer's question. |
+| Claude Code, Hooks | Read characters 0 to about 200,000 of 284,258, plus a keyword scan of the rest (which includes the Security considerations section). Trove's hook output matches the documented form: `hookSpecificOutput.permissionDecision` (top-level `decision` is deprecated for `PreToolUse`), and `additionalContext`. New since the first pass: an exec form (`args`, no shell), `onFailure: "block"` (a timed-out hook otherwise "doesn't block the tool call"), Git Bash or PowerShell on Windows, and default timeouts of 600 s (30 s for `UserPromptSubmit`). **Workspace trust:** in interactive sessions Claude Code "holds back hooks from every settings file, including your own `~/.claude/settings.json`, until you accept the workspace trust dialog"; in `-p` and SDK sessions the folder is treated as trusted. So Trove's hooks will not run until the user has accepted trust in that folder (open item 1). |
+| Claude Code, MCP | Read characters 0 to 100,000 of 154,700, plus a keyword scan of the rest. Scopes, storage (`~/.claude.json` for local and user, `.mcp.json` for project), the interactive approval prompt and the `claude -p` loads-without-asking behavior are as in the first pass. New: a warning above 10,000 tokens of MCP output, and a successful result over 50,000 characters is saved to a file by Claude Code (unless the tool declares `anthropic/maxResultSizeChars`); tools whose full name exceeds 128 characters are left out. |
+| Codex: Authentication, Advanced configuration, Hooks | Re-read. Consistent with the first pass. `~/.codex/sessions` is still **not documented** (only `history.jsonl` is). |
+| Codex: MCP page | Not re-checked. |
+| OpenAI Terms of use | **Still NOT VERIFIED.** HTTP 403 again. The other three OpenAI pages were not retried. |
+| Data Processing Addendum | **NOT READ.** |
+
 ## Open items found while doing this
 
 1. Trove's setup output should mention Anthropic's documented side effects of a custom base URL (Remote Control,
-   voice, fast-mode check) and that Codex needs to trust new hooks. Documentation only; not done.
+   voice, fast-mode check) and that Codex needs to trust new hooks; the second pass adds that Claude Code also
+   withholds hooks until workspace trust is accepted. Documentation only; not done.
 2. Read the four OpenAI policy pages by hand and fill in the OpenAI section.
-3. Read the remaining parts of the Claude Code hooks and MCP pages, and the Consumer Terms, and the DPA.
+3. Read the last part of the Claude Code hooks page and the MCP page's remaining text in a browser (the second
+   pass covered them only by summary and keyword scan), and the Data Processing Addendum.
 
 ## Questions for a lawyer
 

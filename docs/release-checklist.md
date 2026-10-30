@@ -1,6 +1,6 @@
 # Release checklist: 0.1.0
 
-Do not tag until every box is ticked, with a date and initials. Nothing here is automatic: tagging triggers publication to Homebrew, npm and GitHub.
+Do not tag until every box is ticked, with a date and initials. Nothing here is automatic: tagging triggers `release.yml`, which publishes the GitHub release and the Homebrew formula. **It does not publish to npm** (see "Status" below), so the npm steps are manual until a publish job exists.
 
 ## 1. Evidence
 
@@ -48,3 +48,20 @@ Requires the user's explicit go-ahead, and the secrets `HOMEBREW_TAP_GITHUB_TOKE
 - [ ] Launch posts finalized from `docs/launch/` after the claims check passes in publish mode (the user reviews and edits them)
 - [ ] Watch `beta-feedback` and new issues for the first week
 - [ ] Add a pricing review reminder at 7-day intervals while launch traffic is high
+
+## Status as of 2026-10-30 (notes only; no box above is ticked or initialed)
+
+Verified today, by command (not a substitute for the dated, initialed boxes above):
+
+- `go run ./scripts/pricingage --strict --max-age-days 7` passes (54 prices, data version 2026-10-28.3). This checks the recorded dates only; the prices were not re-verified against the official pages today.
+- `goreleaser release --snapshot --clean --skip=sign` builds darwin and linux for amd64 and arm64, and produces one SPDX 2.3 SBOM per archive (syft). Two builds of one commit gave byte-identical archives.
+- `sh install_test.sh` passes, including the refusals for a checksum mismatch and a missing checksum entry. These use test fixtures, not the snapshot archives.
+- CI is green on `main` at `4dc4a77` (lint, tests on macOS and Ubuntu, privacy, vulncheck, bench, install-script, npm-wrapper, builds).
+- Compliance sources were re-read once; see "Second pass" in [compliance.md](compliance.md). The OpenAI policy pages are still unread (HTTP 403), so section 2's compliance box stays open.
+
+Open, and not something code can close:
+
+- **npm has no publish job.** `release.yml` has no npm step and no npm secret; `npm/package.json` is at version `0.0.0`. Decide how to publish (a token in repo secrets, or npm trusted publishing using the workflow's existing `id-token: write`), and set the version from the tag when publishing. `npm view trove-cli` reports "Unpublished on 2025-04-04": the name was published and removed by someone before, so check on npmjs.com that it can be claimed before relying on it.
+- **Evidence:** the `bench/` run, the beta, and the `docs/launch/*` slots all need real measurements (`go run ./scripts/checkclaims --publish` currently reports 13 unresolved slots). Nothing here should be filled in with estimates.
+- **Changelog date:** move 0.1.0 out of "not yet released" only when the tag is cut.
+- **Local tooling:** on this Windows machine `go install` of syft and `go test -race` fail in cgo; syft installs with `CGO_ENABLED=0`. Two npm wrapper tests fail locally because Git Bash's `tar` cannot read `C:\` paths; they pass in CI.
