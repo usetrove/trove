@@ -74,7 +74,7 @@ func TestNoCredentialOrPromptReachesLogsResponsesOrDisk(t *testing.T) {
 
 	cfg := config.Default()
 	cfg.Upstreams.Anthropic, cfg.Upstreams.OpenAI = up.URL, up.URL
-	logs := &bytes.Buffer{}
+	logs := &syncBuffer{}
 	tbl, err := pricing.Default()
 	if err != nil {
 		t.Fatal(err)

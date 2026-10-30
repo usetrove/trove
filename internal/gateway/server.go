@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -72,6 +73,10 @@ type Server struct {
 	upAnthro  *url.URL
 	upOpenAI  *url.URL
 	transport http.RoundTripper
+
+	// recording counts the goroutines that turn finished responses into rows, so shutdown
+	// can let them reach the recorder before the recorder is closed.
+	recording sync.WaitGroup
 }
 
 // New builds a Server. The upstream origins come from opts.Config.
@@ -228,6 +233,27 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 		defer cancel()
 		_ = srv.Shutdown(sctx)
 		_ = srv.Close()
+		s.waitForRecording(2 * time.Second)
 		return nil
 	}
+}
+
+// waitForRecording gives rows from just-finished responses up to d to be queued, so a
+// request that completes right before shutdown is not dropped by the recorder closing.
+func (s *Server) waitForRecording(d time.Duration) {
+	done := make(chan struct{})
+	go func() { s.recording.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(d):
+	}
+}
+
+// goRecord runs fn in the background and counts it for waitForRecording.
+func (s *Server) goRecord(fn func()) {
+	s.recording.Add(1)
+	go func() {
+		defer s.recording.Done()
+		fn()
+	}()
 }

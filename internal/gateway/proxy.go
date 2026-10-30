@@ -185,8 +185,8 @@ func (t *tee) end(clean bool) {
 		t.buf = nil
 		t.mu.Unlock()
 		end := t.s.opts.Now()
-		gone := t.f.ctx != nil && t.f.ctx.Err() != nil  // read now: the context is always cancelled once the handler returns
-		go t.s.record(t.f, buf, over, clean, gone, end) // never on the client's path
+		gone := t.f.ctx != nil && t.f.ctx.Err() != nil                        // read now: the context is always cancelled once the handler returns
+		t.s.goRecord(func() { t.s.record(t.f, buf, over, clean, gone, end) }) // never on the client's path
 	})
 }
 
@@ -203,7 +203,8 @@ func (s *Server) upstreamFailed(w http.ResponseWriter, r *http.Request, f *fligh
 	f.mu.Lock()
 	f.status = 0
 	f.mu.Unlock()
-	go s.recordFailure(f, class, s.opts.Now())
+	end := s.opts.Now()
+	s.goRecord(func() { s.recordFailure(f, class, end) })
 }
 
 func shortErr(err error) string {

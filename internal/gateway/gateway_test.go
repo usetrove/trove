@@ -56,7 +56,7 @@ type rig struct {
 	up      *httptest.Server
 	gw      *httptest.Server
 	rec     *memRecorder
-	logs    *bytes.Buffer
+	logs    *syncBuffer
 	handler http.Handler
 }
 
@@ -79,7 +79,7 @@ func newRigWith(t *testing.T, upstream http.Handler, tweak func(*Options)) *rig 
 	cfg := config.Default()
 	cfg.Upstreams.Anthropic, cfg.Upstreams.OpenAI = up.URL, up.URL
 	rec := newMemRecorder()
-	logs := &bytes.Buffer{}
+	logs := &syncBuffer{}
 	tbl, err := pricing.Default()
 	if err != nil {
 		t.Fatal(err)
@@ -401,7 +401,7 @@ func TestRecordingFailureNeverAffectsTheRequest(t *testing.T) {
 	defer up.Close()
 	cfg := config.Default()
 	cfg.Upstreams.Anthropic = up.URL
-	logs := &bytes.Buffer{}
+	logs := &syncBuffer{}
 	s, _ := New(Options{Config: cfg, Recorder: panicRecorder{}, Logger: redact.NewLogger(logs, true)})
 	gw := httptest.NewServer(s.Handler())
 	defer gw.Close()
@@ -533,4 +533,29 @@ func TestClientControlledFieldsAreCappedInTheRecord(t *testing.T) {
 	if got := clip("ab€", 4); got != "ab" { // 4 would cut the 3-byte € in the middle
 		t.Errorf("clip split a character: %q", got)
 	}
+}
+
+// syncBuffer is a bytes.Buffer that is safe to read while the gateway's background
+// goroutines are still logging into it.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (s *syncBuffer) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.Write(p)
+}
+
+func (s *syncBuffer) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.b.String()
+}
+
+func (s *syncBuffer) Bytes() []byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]byte(nil), s.b.Bytes()...)
 }
