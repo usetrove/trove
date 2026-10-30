@@ -210,7 +210,7 @@ func TestChangedFilesAreNeverBlocked(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{"new size", func(_ *testing.T, r *rig, p string) { r.file("a.go", "package a // more\n") }},
+		{"new size", func(_ *testing.T, r *rig, _ string) { r.file("a.go", "package a // more\n") }},
 		{"same size and mtime, different bytes", func(t *testing.T, r *rig, p string) {
 			fi, _ := os.Stat(p)
 			r.file("a.go", "package b\n")
@@ -218,7 +218,7 @@ func TestChangedFilesAreNeverBlocked(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
-		{"deleted", func(_ *testing.T, r *rig, p string) { _ = os.Remove(p) }},
+		{"deleted", func(_ *testing.T, _ *rig, p string) { _ = os.Remove(p) }},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

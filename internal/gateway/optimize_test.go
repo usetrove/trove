@@ -21,7 +21,7 @@ type capture struct {
 	length string
 }
 
-func (c *capture) handler(t *testing.T) http.Handler {
+func (c *capture) handler(_ *testing.T) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b := new(bytes.Buffer)
 		_, _ = b.ReadFrom(r.Body)

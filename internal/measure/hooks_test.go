@@ -62,7 +62,7 @@ func TestEndSessionWritesOnlyThatSessionsReceiptNow(t *testing.T) {
 	}
 }
 
-func hookEvent(t *testing.T, _ context.Context, execer func(string, ...any) error, ts time.Time, session, hook, kind string, bytes, tokens int) {
+func hookEvent(t *testing.T, execer func(string, ...any) error, ts time.Time, session, hook, kind string, bytes, tokens int) {
 	t.Helper()
 	if err := execer(`INSERT INTO hook_events(ts, session_key, hook, kind, bytes, tokens) VALUES(?,?,?,?,?,?)`, ts.UnixMilli(), session, hook, kind, bytes, tokens); err != nil {
 		t.Fatal(err)
@@ -79,10 +79,10 @@ func TestHookTotalsAndGuardrail(t *testing.T) {
 
 	// 19 blocks, 5 retried: under the minimum sample, so nothing happens however bad the rate looks.
 	for i := 0; i < 19; i++ {
-		hookEvent(t, ctx, ex, now, "c-s1", name, "blocked", 7000, 2000)
+		hookEvent(t, ex, now, "c-s1", name, "blocked", 7000, 2000)
 	}
 	for i := 0; i < 5; i++ {
-		hookEvent(t, ctx, ex, now, "c-s1", name, "reread_anyway", 7000, 2000)
+		hookEvent(t, ex, now, "c-s1", name, "reread_anyway", 7000, 2000)
 	}
 	if ev, err := EvaluateHooks(ctx, db, m, now); err != nil || len(ev) != 0 {
 		t.Fatalf("19 blocked reads is too few to judge: %+v %v", ev, err)
@@ -104,7 +104,7 @@ func TestHookTotalsAndGuardrail(t *testing.T) {
 	}
 
 	// One more block reaches the sample: 5/20 = 25%, which is the limit.
-	hookEvent(t, ctx, ex, now, "c-s2", name, "blocked", 7000, 2000)
+	hookEvent(t, ex, now, "c-s2", name, "blocked", 7000, 2000)
 	ev, err := EvaluateHooks(ctx, db, m, now)
 	if err != nil || len(ev) != 1 || ev[0].Rule != RuleHookReread || ev[0].SampleOn != 20 {
 		t.Fatalf("expected one rollback: %+v %v", ev, err)
@@ -132,9 +132,9 @@ func TestHookGuardrailLeavesAHealthyHookAlone(t *testing.T) {
 	now := t0.Add(24 * time.Hour)
 	ex := func(q string, a ...any) error { _, err := db.ExecContext(ctx, q, a...); return err }
 	for i := 0; i < 40; i++ {
-		hookEvent(t, ctx, ex, now, "c-s1", config.OptimizerHookRepeatRead, "blocked", 1000, 300)
+		hookEvent(t, ex, now, "c-s1", config.OptimizerHookRepeatRead, "blocked", 1000, 300)
 	}
-	hookEvent(t, ctx, ex, now, "c-s1", config.OptimizerHookRepeatRead, "reread_anyway", 1000, 300)
+	hookEvent(t, ex, now, "c-s1", config.OptimizerHookRepeatRead, "reread_anyway", 1000, 300)
 	if ev, err := EvaluateHooks(ctx, db, config.Default().Measure, now); err != nil || len(ev) != 0 {
 		t.Fatalf("2.5%% retried is fine: %+v %v", ev, err)
 	}

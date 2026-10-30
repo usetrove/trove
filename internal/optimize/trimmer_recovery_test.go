@@ -29,6 +29,7 @@ func (m *memRecovery) Put(b []byte) (string, error) {
 
 func trimmerOn() config.Config {
 	cfg := config.Default()
+	cfg.Optimize.BudgetMS = 1000 // these tests check trimming, not speed; CI runners under -race are slow
 	cfg.Optimizers[config.OptimizerOutputTrimmer] = config.StateOn
 	return cfg
 }

@@ -311,7 +311,7 @@ func newUndo(a *App) *cobra.Command {
 				return err
 			}
 			if err := fixer.MarkReverted(dir, res, time.Now()); err != nil {
-				fmt.Fprintf(a.Err, "Note: the files were restored, but Trove could not update its record of the fixes (%v).\n", err)
+				_, _ = fmt.Fprintf(a.Err, "Note: the files were restored, but Trove could not update its record of the fixes (%v).\n", err)
 			}
 			if len(res) == 0 {
 				return a.emit(map[string]any{"undone": []setup.UndoResult{}}, "Nothing to undo: Trove has not changed any agent settings.")

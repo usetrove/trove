@@ -162,7 +162,7 @@ func Search(r *root.Root, a SearchArgs) (string, error) {
 var defRe = regexp.MustCompile(`^\s*(?:export\s+|pub\s+|public\s+|private\s+|static\s+|async\s+)*(?:func|def|class|type|interface|struct|enum|fn|trait|impl|function|const|var|let)\b`)
 
 func scanFile(p, rel, ql string, wordRe *regexp.Regexp, pathBonus int) []hit {
-	f, err := os.Open(p)
+	f, err := os.Open(p) //nolint:gosec // p is a regular, non-symlink file found by walking the project root
 	if err != nil {
 		return nil
 	}
@@ -244,7 +244,7 @@ type ignorePat struct {
 }
 
 func loadIgnore(dir string) ignoreSet {
-	b, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	b, err := os.ReadFile(filepath.Join(dir, ".gitignore")) //nolint:gosec // dir is the project root and the name is fixed
 	if err != nil {
 		return ignoreSet{}
 	}

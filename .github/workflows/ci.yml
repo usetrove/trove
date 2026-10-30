@@ -34,7 +34,11 @@ jobs:
         with:
           go-version-file: go.mod
       # -race needs cgo for the test binary only; the shipped binary is built with CGO_ENABLED=0.
-      - run: go test -race ./...
+      # -short skips the latency budgets (5 ms gateway, 20 ms hooks): the race detector slows code
+      # several times over, so a budget measured under it says nothing about the shipped binary.
+      - run: go test -race -short ./...
+      # The same suite without the race detector, including the latency budgets and smoke tests.
+      - run: go test -count=1 ./...
       # Launch drafts may hold unresolved slots, but never a bare figure or a slot with a missing source.
       - run: go run ./scripts/checkclaims
 

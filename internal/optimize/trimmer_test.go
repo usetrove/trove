@@ -117,6 +117,7 @@ func TestOutputTrimmerCannotBeSwitchedOn(t *testing.T) {
 	body := req{msgs: []msg{user(toolResult("t1", goTestOutput(200)))}}.body()
 	for _, state := range []string{config.StateOn, config.StateShadow} {
 		cfg := config.Default()
+		cfg.Optimize.BudgetMS = 1000 // checks trimming, not speed
 		cfg.Optimizers[config.OptimizerOutputTrimmer] = state // bypasses config validation on purpose
 		e := New(Options{Config: cfg, Getenv: func(string) string { return "" }})
 		res := e.Run(context.Background(), input(body))
