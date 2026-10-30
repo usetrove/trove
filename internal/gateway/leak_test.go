@@ -41,6 +41,9 @@ var leakCredentials = []string{
 }
 
 func TestNoCredentialOrPromptReachesLogsResponsesOrDisk(t *testing.T) {
+	defer func(old int64) { maxRequestBody = old }(maxRequestBody)
+	maxRequestBody = 1 << 20
+
 	dataDir := filepath.Join(t.TempDir(), "data")
 	db, err := store.Open(dataDir)
 	if err != nil {
@@ -135,10 +138,10 @@ func TestNoCredentialOrPromptReachesLogsResponsesOrDisk(t *testing.T) {
 		t.Errorf("unreachable upstream: status %d", resp.StatusCode)
 	}
 
-	// A body over the limit is refused with a plain message; stream it so the test
-	// does not hold 256 MiB in memory.
-	if !testing.Short() {
-		big := io.MultiReader(strings.NewReader(`{"p":"`+leakPrompt), &zeroReader{n: maxRequestBody + 1024})
+	// A body over the limit is refused with a plain message. The limit is lowered
+	// for this test so it does not stream 256 MiB (slow under the race detector).
+	{
+		big := io.MultiReader(strings.NewReader(`{"p":"`+leakPrompt), &zeroReader{n: int(maxRequestBody) + 1024})
 		req, _ := http.NewRequest("POST", gw.URL+"/anthropic/v1/messages", big)
 		for k, v := range anth {
 			req.Header.Set(k, v)

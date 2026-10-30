@@ -2,15 +2,17 @@
 
 The efficiency layer for AI coding agents. Trove is a local, open-source tool (a single Go binary) that cuts the tokens your coding agents waste and shows that results did not suffer.
 
-> Status: foundation only. `trove version` and `trove doctor` work; the other commands print "not implemented yet".
+> Status: pre-release. The gateway, analysis, optimizers, measurement, reports, fixes, MCP server, hooks and `trove uninstall` are implemented. Only `trove config get|set` still prints "not implemented yet". Nothing has been released yet.
 
 ## Principles
 Local-first (everything lives in `~/.trove`, no telemetry), API keys are never stored or logged, every optimization is opt-in with a shadow mode, and every number is labeled measured or estimated. See [CLAUDE.md](CLAUDE.md).
 
+Security and privacy: [PRIVACY.md](PRIVACY.md) (exactly what is stored and where), [docs/threat-model.md](docs/threat-model.md), [docs/security-findings.md](docs/security-findings.md) and [docs/compliance.md](docs/compliance.md). To remove everything Trove changed, run `trove uninstall` (add `--purge-data` to delete what it stored).
+
 ## Install (once a release exists)
 ```sh
-curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | sh   # verifies the SHA-256 checksum
-npx trove-cli doctor                                                                     # downloads and verifies the binary
+curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | sh   # checks the archive's SHA-256 against checksums.txt (not the signature)
+npx trove-cli doctor                                                                     # same checksum check before it runs the binary
 brew install usetrove/trove/trove
 ```
 Releases also carry a cosign signature over `checksums.txt` and an SBOM per archive. To verify the signature:
@@ -22,7 +24,7 @@ cosign verify-blob \
 ```
 
 ## Build and test
-Requires the current stable Go (govulncheck flags older patch releases of the standard library).
+Requires Go 1.27.3 or newer (`go.mod` says so; older patch releases of the standard library have known vulnerabilities that govulncheck flags).
 
 ```sh
 go build -o trove ./cmd/trove   # one static binary, no cgo

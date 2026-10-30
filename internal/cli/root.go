@@ -92,10 +92,6 @@ func stub(a *App, name string) func(*cobra.Command, []string) error {
 	}
 }
 
-func stubCmd(a *App, use, short, name string) *cobra.Command {
-	return stubArgCmd(a, use, short, name, cobra.NoArgs)
-}
-
 func stubArgCmd(a *App, use, short, name string, args cobra.PositionalArgs) *cobra.Command {
 	return &cobra.Command{Use: use, Short: short, Args: args, RunE: stub(a, name)}
 }

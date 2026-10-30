@@ -23,7 +23,8 @@ import (
 
 // maxRequestBody bounds how much of a request body is held in memory. It is
 // above the largest documented provider limit (Anthropic Messages: 128 MB).
-const maxRequestBody = 256 << 20
+// It is a variable only so a test can lower it; nothing else changes it.
+var maxRequestBody int64 = 256 << 20
 
 // maxCapture bounds the side copy of a response kept for usage extraction. If
 // a response is larger, usage is recorded as unavailable; the client still

@@ -45,3 +45,10 @@ never read the value). Not implemented.
 - Anthropic Commercial Terms, Consumer Terms and Usage Policy in full (only the Claude Code page above).
 - OpenAI terms for Codex CLI and the API. Same question applies to ChatGPT-login traffic; Trove rejects
   JWT-shaped bearer tokens as a heuristic (`internal/gateway/auth`).
+
+## Update 2026-10-30
+
+The sources above were re-read and extended (Commercial Terms, Usage Policy, the hooks, MCP, permissions and
+gateway pages, and the Codex pages) in [compliance.md](compliance.md), which also lists what could not be read
+(OpenAI's policy pages) and the open questions for a lawyer. Keep that file current; this one is the original
+working note.
