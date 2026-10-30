@@ -49,7 +49,7 @@ func projectKey(project string) string {
 }
 
 func (t *TrustStore) load() (map[string]string, error) {
-	b, err := os.ReadFile(t.path)
+	b, err := os.ReadFile(t.path) //nolint:gosec // inside the data dir
 	if errors.Is(err, os.ErrNotExist) {
 		return map[string]string{}, nil
 	}

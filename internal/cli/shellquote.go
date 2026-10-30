@@ -40,7 +40,7 @@ func troveBinary(a *App) (string, error) {
 	p, err := a.Executable()
 	// The commands are POSIX shell commands, so a leading "/" counts as absolute
 	// even where filepath would say otherwise.
-	if err != nil || p == "" || !(filepath.IsAbs(p) || strings.HasPrefix(p, "/")) {
+	if err != nil || p == "" || (!filepath.IsAbs(p) && !strings.HasPrefix(p, "/")) {
 		return "", errors.New("cannot tell where the trove program is installed, so Trove will not write a command that depends on PATH. " +
 			"Run it by its full path, for example /usr/local/bin/trove")
 	}
