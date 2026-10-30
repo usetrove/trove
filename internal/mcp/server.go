@@ -25,6 +25,7 @@ const maxFetchBytes = 256 << 10
 type Options struct {
 	Root    *root.Root
 	Store   *recovery.Store
+	Trust   Trust // approvals for the project's commands file; nil approves nothing
 	Version string
 }
 
@@ -70,7 +71,7 @@ func NewServer(o Options) *sdk.Server {
 		})
 	sdk.AddTool(s, &sdk.Tool{Name: "trove_run", Description: "Run an allowlisted project command; returns a short result and output_id."},
 		func(ctx context.Context, _ *sdk.CallToolRequest, a RunArgs) (*sdk.CallToolResult, any, error) {
-			return reply(Run(ctx, o.Root, o.Store, a))
+			return reply(Run(ctx, o.Root, o.Store, o.Trust, a))
 		})
 	sdk.AddTool(s, &sdk.Tool{Name: "trove_fetch_full", Description: "Full text of output Trove shortened, by output_id.", Annotations: ro},
 		func(_ context.Context, _ *sdk.CallToolRequest, a FetchArgs) (*sdk.CallToolResult, any, error) {

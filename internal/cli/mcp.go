@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -37,7 +39,7 @@ func newMCP(a *App) *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&rootDir, "root", "", "project folder the tools may read (default: the current folder)")
-	c.AddCommand(newMCPInstall(a), newMCPUninstall(a), newMCPStatus(a), newMCPSchemaSize(a), newMCPSnippet(a))
+	c.AddCommand(newMCPInstall(a), newMCPUninstall(a), newMCPStatus(a), newMCPSchemaSize(a), newMCPSnippet(a), newMCPTrust(a))
 	return c
 }
 
@@ -63,7 +65,79 @@ func mcpOptions(a *App, rootDir string) (mcp.Options, error) {
 	if err != nil {
 		return mcp.Options{}, err
 	}
-	return mcp.Options{Root: r, Store: st, Version: Version}, nil
+	return mcp.Options{Root: r, Store: st, Trust: mcp.OpenTrust(dir), Version: Version}, nil
+}
+
+// stdinIsTerminal is a variable so tests can stand in for a person at a keyboard.
+func defaultStdinIsTerminal() bool { return term.IsTerminal(int(os.Stdin.Fd())) } //nolint:gosec // fd fits in int
+
+var stdinIsTerminal = defaultStdinIsTerminal
+
+func newMCPTrust(a *App) *cobra.Command {
+	var rootDir string
+	var revoke bool
+	c := &cobra.Command{
+		Use:   "trust",
+		Short: "Review and approve the project's .trove/commands.toml so trove_run may run it (needs a terminal)",
+		Long: "A repository can list any program in .trove/commands.toml, so `trove_run` refuses it until you have read it\n" +
+			"and approved this exact version. Approval ends when the file changes. This command only works at a real\n" +
+			"terminal, with no --yes, so an agent cannot approve a file on your behalf. Use --revoke to withdraw approval.",
+		Args: cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			dir, _, err := loadConfig(a)
+			if err != nil {
+				return err
+			}
+			if rootDir == "" {
+				if rootDir, err = os.Getwd(); err != nil {
+					return errors.New("cannot tell which folder you are in. Pass --root <folder>")
+				}
+			}
+			r, err := root.New(rootDir)
+			if err != nil {
+				return err
+			}
+			ts := mcp.OpenTrust(dir)
+			if revoke {
+				if err := ts.Revoke(r.Dir()); err != nil {
+					return err
+				}
+				return a.emit(map[string]any{"revoked": true}, "Approval withdrawn. trove_run will refuse this project's commands until you approve them again.")
+			}
+			cmds, hash, err := mcp.PendingCommands(r)
+			if err != nil {
+				return err
+			}
+			if hash == "" || len(cmds) == 0 {
+				return errors.New("this project has no .trove/commands.toml with commands in it, so there is nothing to approve")
+			}
+			names := make([]string, 0, len(cmds))
+			for n := range cmds {
+				names = append(names, n)
+			}
+			sort.Strings(names)
+			var b strings.Builder
+			fmt.Fprintf(&b, "These commands would be run with your permissions when an agent calls trove_run:\n\n")
+			for _, n := range names {
+				fmt.Fprintf(&b, "  %-12s %s\n", n, strings.Join(cmds[n].Run, " "))
+			}
+			if !stdinIsTerminal() {
+				_, _ = fmt.Fprint(a.Out, b.String())
+				return errors.New("approving commands needs a person at a terminal, so nothing was approved. Run `trove mcp trust` yourself in this project folder")
+			}
+			_, _ = fmt.Fprintf(a.Out, "%s\n", b.String())
+			if !a.confirm("Approve exactly these commands for this project?") {
+				return a.emit(map[string]any{"approved": false}, "Not approved. Nothing changed.")
+			}
+			if err := ts.Approve(r.Dir(), hash); err != nil {
+				return err
+			}
+			return a.emit(map[string]any{"approved": true, "commands": names}, "Approved. If .trove/commands.toml changes, you will need to approve it again.")
+		},
+	}
+	c.Flags().StringVar(&rootDir, "root", "", "project folder (default: the current folder)")
+	c.Flags().BoolVar(&revoke, "revoke", false, "withdraw approval for this project")
+	return c
 }
 
 func newMCPSchemaSize(a *App) *cobra.Command {

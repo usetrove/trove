@@ -49,9 +49,12 @@ Their definitions are sent with every request, so they are short. `trove mcp sch
 - `trove_run` runs only the names in the allowlist, directly (no shell), in the project folder, with
   variables that look like credentials (`*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `ANTHROPIC_*`,
   `OPENAI_*`, `AWS_*`) removed. A command that exceeds `timeout_sec` is killed.
-- **The allowlist lives in the project.** A repository you clone could ship a `.trove/commands.toml`.
-  `trove_run` would then run those commands when your agent asks, without the agent's own permission
-  prompt for Bash. Read the file before you let an agent use `trove_run` in a project you do not trust.
+- **The allowlist lives in the project, so it needs your approval.** A repository you clone could ship a
+  `.trove/commands.toml` naming any program. `trove_run` therefore refuses the file until you run
+  `trove mcp trust` in the project folder, which shows every command and asks. Approval is stored as
+  hashes in `~/.trove/mcp_trust.json` (no paths) and applies to that exact version of the file: any edit,
+  such as a `git pull`, withdraws it. `trove mcp trust` works only at a real terminal and has no `--yes`
+  flag, so an agent cannot approve a file through its own shell. `trove mcp trust --revoke` withdraws it.
 
 ### `.trove/commands.toml`
 

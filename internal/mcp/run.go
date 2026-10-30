@@ -60,50 +60,66 @@ type commandsDoc struct {
 // LoadCommands reads the project's allowlist. A missing file is an empty
 // allowlist, not an error.
 func LoadCommands(r *root.Root) (map[string]Command, error) {
+	cmds, _, err := PendingCommands(r)
+	return cmds, err
+}
+
+// PendingCommands parses the project's file and returns the hash of the exact
+// bytes it parsed, so approval and execution refer to the same content. The
+// hash is empty when there is no file.
+func PendingCommands(r *root.Root) (map[string]Command, string, error) {
 	real, err := r.Resolve(commandsFile)
 	if err != nil {
 		if errors.Is(err, root.ErrOutside) {
-			return nil, fmt.Errorf("%s leads outside the project, so it was ignored", commandsFile)
+			return nil, "", fmt.Errorf("%s leads outside the project, so it was ignored", commandsFile)
 		}
-		return nil, nil
+		return nil, "", nil
 	}
 	b, err := os.ReadFile(real)
 	if err != nil {
-		return nil, fmt.Errorf("cannot read %s: %w", commandsFile, err)
+		return nil, "", fmt.Errorf("cannot read %s: %w", commandsFile, err)
 	}
 	if len(b) > maxCommandsFile {
-		return nil, fmt.Errorf("%s is too large (over %d bytes)", commandsFile, maxCommandsFile)
+		return nil, "", fmt.Errorf("%s is too large (over %d bytes)", commandsFile, maxCommandsFile)
 	}
 	var doc commandsDoc
 	if err := toml.Unmarshal(b, &doc); err != nil {
-		return nil, fmt.Errorf("%s is not valid: %v. Fix the file; see docs/mcp.md for the format", commandsFile, err)
+		return nil, "", fmt.Errorf("%s is not valid: %v. Fix the file; see docs/mcp.md for the format", commandsFile, err)
 	}
 	for name, c := range doc.Commands {
 		if !nameRe.MatchString(name) {
-			return nil, fmt.Errorf("%s: command name %q is not allowed. Use letters, digits, - and _", commandsFile, name)
+			return nil, "", fmt.Errorf("%s: command name %q is not allowed. Use letters, digits, - and _", commandsFile, name)
 		}
 		if len(c.Run) == 0 || strings.TrimSpace(c.Run[0]) == "" {
-			return nil, fmt.Errorf("%s: command %q needs run = [\"program\", \"arg\", ...]", commandsFile, name)
+			return nil, "", fmt.Errorf("%s: command %q needs run = [\"program\", \"arg\", ...]", commandsFile, name)
 		}
 		if c.TimeoutSec < 0 || time.Duration(c.TimeoutSec)*time.Second > maxTimeout {
-			return nil, fmt.Errorf("%s: command %q has timeout_sec outside 0-%d", commandsFile, name, int(maxTimeout.Seconds()))
+			return nil, "", fmt.Errorf("%s: command %q has timeout_sec outside 0-%d", commandsFile, name, int(maxTimeout.Seconds()))
 		}
 	}
-	return doc.Commands, nil
+	return doc.Commands, FileHash(b), nil
 }
 
 // Run implements trove_run. It runs only commands named in the project's
 // allowlist, directly and not through a shell, and returns a condensed result.
 // The full output is stored first; if it cannot be stored, the output is not
 // shortened.
-func Run(ctx context.Context, r *root.Root, store Blob, a RunArgs) (string, error) {
-	cmds, err := LoadCommands(r)
+func Run(ctx context.Context, r *root.Root, store Blob, trust Trust, a RunArgs) (string, error) {
+	cmds, hash, err := PendingCommands(r)
 	if err != nil {
 		return "", err
 	}
 	c, ok := cmds[a.Name]
 	if !nameRe.MatchString(a.Name) || !ok {
 		return "", notAllowed(a.Name, cmds)
+	}
+	// The file comes from the repository, which may be hostile, so it only
+	// counts once the user has approved this exact version of it.
+	if trust == nil || !trust.Approved(r.Dir(), hash) {
+		return "", errors.New(commandsFile + " has not been approved on this machine, so nothing was run. " +
+			"Repositories can list any program there, so Trove asks you first. " +
+			"Ask the user to review the file and run `trove mcp trust` in a terminal in the project folder; " +
+			"approval ends if the file changes")
 	}
 	timeout := defaultTimeout
 	if c.TimeoutSec > 0 {

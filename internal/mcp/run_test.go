@@ -100,7 +100,7 @@ func runProject(t *testing.T, cmds map[string][]string, timeouts map[string]int)
 func TestRunPass(t *testing.T) {
 	r := runProject(t, map[string][]string{"test": {"pass"}}, nil)
 	blob := &memBlob{}
-	got, err := Run(context.Background(), r, blob, RunArgs{Name: "test"})
+	got, err := Run(context.Background(), r, blob, allowAll{}, RunArgs{Name: "test"})
 	if err != nil || !strings.HasPrefix(got, "test: PASS") || !strings.Contains(got, "output_id: ") {
 		t.Fatalf("%v\n%s", err, got)
 	}
@@ -109,7 +109,7 @@ func TestRunPass(t *testing.T) {
 func TestRunFailCondensesAndIsRecoverable(t *testing.T) {
 	r := runProject(t, map[string][]string{"test": {"fail"}}, nil)
 	blob := &memBlob{}
-	got, err := Run(context.Background(), r, blob, RunArgs{Name: "test"})
+	got, err := Run(context.Background(), r, blob, allowAll{}, RunArgs{Name: "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestRunFailCondensesAndIsRecoverable(t *testing.T) {
 
 func TestRunStoreFailureDoesNotTrim(t *testing.T) {
 	r := runProject(t, map[string][]string{"test": {"fail"}}, nil)
-	got, err := Run(context.Background(), r, &memBlob{fail: true}, RunArgs{Name: "test"})
+	got, err := Run(context.Background(), r, &memBlob{fail: true}, allowAll{}, RunArgs{Name: "test"})
 	if err != nil || strings.Contains(got, "lines trimmed") || !strings.Contains(got, "could not be stored") {
 		t.Fatalf("must not trim without a stored copy: %v\n%s", err, got)
 	}
@@ -143,12 +143,12 @@ func TestRunStoreFailureDoesNotTrim(t *testing.T) {
 func TestRunNotOnAllowlist(t *testing.T) {
 	r := runProject(t, map[string][]string{"test": {"pass"}, "lint": {"pass"}}, nil)
 	for _, name := range []string{"deploy", "", "test; echo pwned", "test && ls", "../test", "$(id)", "TEST", "test ", "rm -rf /"} {
-		got, err := Run(context.Background(), r, &memBlob{}, RunArgs{Name: name})
+		got, err := Run(context.Background(), r, &memBlob{}, allowAll{}, RunArgs{Name: name})
 		if err == nil || got != "" {
 			t.Errorf("%q must be refused, got %q", name, got)
 		}
 	}
-	_, err := Run(context.Background(), r, &memBlob{}, RunArgs{Name: "deploy"})
+	_, err := Run(context.Background(), r, &memBlob{}, allowAll{}, RunArgs{Name: "deploy"})
 	if !strings.Contains(err.Error(), "Allowed: lint, test") {
 		t.Errorf("error should list allowed names: %v", err)
 	}
@@ -156,7 +156,7 @@ func TestRunNotOnAllowlist(t *testing.T) {
 
 func TestRunNoAllowlistFile(t *testing.T) {
 	r, _ := root.New(t.TempDir())
-	_, err := Run(context.Background(), r, &memBlob{}, RunArgs{Name: "test"})
+	_, err := Run(context.Background(), r, &memBlob{}, allowAll{}, RunArgs{Name: "test"})
 	if err == nil || !strings.Contains(err.Error(), "commands.toml") {
 		t.Fatalf("want guidance to create the file, got %v", err)
 	}
@@ -165,7 +165,7 @@ func TestRunNoAllowlistFile(t *testing.T) {
 func TestRunArgumentsAreNotShellInterpreted(t *testing.T) {
 	r := runProject(t, map[string][]string{"echo": {"args", "a b", "; echo pwned", "$(id)", "&&"}}, nil)
 	blob := &memBlob{}
-	got, err := Run(context.Background(), r, blob, RunArgs{Name: "echo"})
+	got, err := Run(context.Background(), r, blob, allowAll{}, RunArgs{Name: "echo"})
 	if err != nil || !strings.Contains(got, "a b|; echo pwned|$(id)|&&") {
 		t.Fatalf("%v\n%s", err, got)
 	}
@@ -174,7 +174,7 @@ func TestRunArgumentsAreNotShellInterpreted(t *testing.T) {
 func TestRunTimeoutKills(t *testing.T) {
 	r := runProject(t, map[string][]string{"slow": {"sleep"}}, map[string]int{"slow": 1})
 	start := time.Now()
-	got, err := Run(context.Background(), r, &memBlob{}, RunArgs{Name: "slow"})
+	got, err := Run(context.Background(), r, &memBlob{}, allowAll{}, RunArgs{Name: "slow"})
 	if err != nil || !strings.Contains(got, "TIMEOUT after 1s") {
 		t.Fatalf("%v\n%s", err, got)
 	}
@@ -187,7 +187,7 @@ func TestRunDropsCredentialEnv(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-should-not-leak")
 	r := runProject(t, map[string][]string{"env": {"env"}}, nil)
 	blob := &memBlob{}
-	got, err := Run(context.Background(), r, blob, RunArgs{Name: "env"})
+	got, err := Run(context.Background(), r, blob, allowAll{}, RunArgs{Name: "env"})
 	if err != nil || strings.Contains(got, "sk-ant") || !strings.Contains(got, "anthropic key present: false") {
 		t.Fatalf("%v\n%s", err, got)
 	}
@@ -197,7 +197,7 @@ func TestRunMissingProgram(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, ".trove/commands.toml", "[commands.test]\nrun = [\"definitely-not-a-real-program-xyz\"]\n")
 	r, _ := root.New(dir)
-	_, err := Run(context.Background(), r, &memBlob{}, RunArgs{Name: "test"})
+	_, err := Run(context.Background(), r, &memBlob{}, allowAll{}, RunArgs{Name: "test"})
 	if err == nil || !strings.Contains(err.Error(), "could not start") {
 		t.Fatalf("got %v", err)
 	}
