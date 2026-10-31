@@ -46,6 +46,14 @@ never read the value). Not implemented.
 - OpenAI terms for Codex CLI and the API. Same question applies to ChatGPT-login traffic; Trove rejects
   JWT-shaped bearer tokens as a heuristic (`internal/gateway/auth`).
 
+## Update 2026-10-31 (OpenAI pages read)
+
+The OpenAI Terms of Use, Service terms, Services Agreement (business terms) and Usage policies were read from
+text copied out of a browser; findings are in [compliance.md](compliance.md). In short: nothing read forbids a
+local, single-user gateway on the user's own API key. The closest clause is the Usage policies' "model-access
+intermediary" approval requirement (effective 2026-11-20), which we read as not applying to a loopback-only tool;
+that is flagged for a lawyer. The DPA and Brand Guidelines are still unread.
+
 ## Update 2026-10-30 (second pass)
 
 The Claude Code legal page now lists "Free, Pro, Max, Ultra, Team, and Enterprise" as the OAuth plans (Ultra is

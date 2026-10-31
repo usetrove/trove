@@ -109,15 +109,65 @@ shows a future effective date.
 
 | Source | Read? |
 |---|---|
-| [Terms of use](https://openai.com/policies/terms-of-use/) | **NOT VERIFIED.** The fetch returned HTTP 403 |
-| [Service terms](https://openai.com/policies/service-terms/) | **NOT VERIFIED.** HTTP 403 |
-| [Business terms](https://openai.com/policies/business-terms) | **NOT VERIFIED.** HTTP 403 |
-| [Usage policies](https://openai.com/policies/usage-policies/) | **NOT VERIFIED.** HTTP 403 |
+| [Terms of use](https://openai.com/policies/terms-of-use/) | **Read 2026-10-31**, from text the maintainer copied out of a browser. The page header read "Effective: January 1, 2026 (Previous version)", so confirm it is the current version |
+| [Service terms](https://openai.com/policies/service-terms/) | **Read 2026-10-31** (copied from a browser). "Updated: October 16, 2026" |
+| [Business terms](https://openai.com/policies/business-terms) | **Read 2026-10-31** (copied from a browser). It is titled "OpenAI Services Agreement", "Updated: December 1, 2025", effective January 1, 2026 |
+| [Usage policies](https://openai.com/policies/usage-policies/) | **Read 2026-10-31** (copied from a browser). "Effective: November 20, 2026", **after the date read**; the changelog says it was announced 2026-10-21 |
 
-A web search suggested that OpenAI's terms contain clauses about sharing account credentials and reselling
-access, but those came from search-result summaries, some of them of archived versions. I did not read the source
-text, so **nothing is asserted** about OpenAI's terms. This is the largest gap in this checklist: a person needs to
-read these four pages in a browser and add the result here.
+Not read: the Data Processing Addendum, the Service Credit Terms, the Sharing and Publication Policy, the Brand
+Guidelines, and the API documentation the Service terms point to. **Nothing is asserted about those.**
+
+What the text says (quoted from the copied pages; section numbers are theirs):
+
+- *Which terms govern what.* The Terms of Use say "Our Business Terms govern use of ChatGPT Enterprise, our
+  APIs, and our other services for businesses and developers." So API-key traffic, which is all Trove forwards,
+  falls under the Services Agreement (3.1, 3.3 and 10 below), and the consumer Terms of Use are about ChatGPT.
+- *Account and key sharing (Services Agreement 3.1, 3.3(g)).* "Customer may not resell or lease access to its
+  Account or any End User Account." Customers may not "buy, sell, or transfer API keys from, to, or with a third
+  party." Trove runs locally for the person who owns the key, keeps the key in memory only, and does not transfer
+  it. The consumer Terms of Use similarly say "You may not share your account credentials"; Trove never touches
+  ChatGPT credentials and rejects JWT-shaped bearer tokens (heuristic, F-4 above).
+- *Limits and extraction (Services Agreement 3.3(f), (h), (i)).* Customers may not "circumvent any rate limits or
+  restrictions", "violate or circumvent Usage Limits or otherwise configure the Services to avoid Usage Limits",
+  or "extract data from the Services other than as permitted through the Services". Trove forwards the user's own
+  requests and trims or reorders only the user's own input. **Rule for future work:** no optimizer may be
+  designed to dodge a rate limit or a Usage Limit. The consumer Terms of Use also bar "Automatically or
+  programmatically extract[ing] data or Output"; that is why gateway mode must stay API-key only (rule 3).
+- *Content (Services Agreement 4.2).* OpenAI uses Customer Content only to provide the Services, comply with law,
+  enforce policies and prevent abuse, and "will not use Customer Content to develop or improve the Services,
+  unless Customer explicitly agrees". Nothing here concerns Trove, which sends nothing to OpenAI beyond the
+  user's own requests.
+- *Model-access intermediaries (Usage policies).* "If you operate a model-access intermediary platform or other
+  service that enables third parties to directly access OpenAI models, you must obtain our prior review and
+  approval. This requirement does not apply solely because an application integrates OpenAI models to power its
+  features or functionality." **This is the clause closest to Trove.** Trove is not a hosted platform: it
+  listens on loopback only, refuses other bind addresses, and serves the person who owns the key, so it does not
+  "enable third parties" to reach OpenAI models. That is our reading, not OpenAI's, and the phrase "other service"
+  is broad. It is in force from 2026-11-20. **Rule for future work:** the gateway must never listen on a
+  non-loopback address, share one key between people, or be offered as a hosted service; any such feature needs
+  OpenAI's review first (see lawyer question 7).
+- *Training clause (Usage policies).* Models and outputs must not be used to generate, select or supply training
+  material for models that are "alternatives to or substitutes for OpenAI models". The same section allows
+  "research, software development, model evaluation and benchmarking, and product development". Trove stores
+  metadata only (rule 7), never response text, and its benchmarks compare agent runs; neither builds a
+  competing model.
+- *API documentation (Service terms 1(a)).* "Customer will only ... use APIs in accordance with the applicable
+  documentation at https://platform.openai.com/docs." Trove's OpenAI behavior (endpoints, streaming, usage
+  fields) still has to be checked against that documentation under rule 8; this review did not do it.
+- *Codex (Service terms 4).* "Output generated by code generation features of our Services, including OpenAI
+  Codex, may be subject to third party licenses, including, without limitation, open source licenses." A note for
+  users, not a constraint on Trove.
+- *Publicity (Services Agreement 10).* "neither Party will: (i) include the other Party's name or logo on their
+  websites, media, or marketing materials; or (ii) make any public statement about its relationship with the
+  other Party". This binds OpenAI and each customer under that Agreement, not an open-source tool that merely
+  names a provider. Still, Trove's launch posts should describe compatibility in plain text, use no OpenAI
+  logo, and imply no partnership (lawyer question 6).
+- *Contradiction found:* none in the text read. Nothing read forbids a local, single-user gateway on the user's
+  own API key. The model-access-intermediary clause is the one place where the wording is broad enough that a
+  person should confirm.
+
+Caveat: the copied Terms of Use is labeled "(Previous version)" in its header and the Usage policies carry a
+future effective date, so OpenAI's pages may change again soon. Re-read before each release.
 
 ## Codex CLI
 
@@ -170,7 +220,7 @@ changes the first pass's conclusion: **no contradiction found in the text read.*
 | Claude Code, MCP | Read characters 0 to 100,000 of 154,700, plus a keyword scan of the rest. Scopes, storage (`~/.claude.json` for local and user, `.mcp.json` for project), the interactive approval prompt and the `claude -p` loads-without-asking behavior are as in the first pass. New: a warning above 10,000 tokens of MCP output, and a successful result over 50,000 characters is saved to a file by Claude Code (unless the tool declares `anthropic/maxResultSizeChars`); tools whose full name exceeds 128 characters are left out. |
 | Codex: Authentication, Advanced configuration, Hooks | Re-read. Consistent with the first pass. `~/.codex/sessions` is still **not documented** (only `history.jsonl` is). |
 | Codex: MCP page | Not re-checked. |
-| OpenAI Terms of use | **Still NOT VERIFIED.** HTTP 403 again. The other three OpenAI pages were not retried. |
+| OpenAI Terms of use, Service terms, Business terms, Usage policies | **Read on 2026-10-31** from text copied out of a browser; see the OpenAI section. (The fetch tool still gets HTTP 403.) |
 | Data Processing Addendum | **NOT READ.** |
 
 ## Open items found while doing this
@@ -178,7 +228,9 @@ changes the first pass's conclusion: **no contradiction found in the text read.*
 1. Trove's setup output should mention Anthropic's documented side effects of a custom base URL (Remote Control,
    voice, fast-mode check) and that Codex needs to trust new hooks; the second pass adds that Claude Code also
    withholds hooks until workspace trust is accepted. Documentation only; not done.
-2. Read the four OpenAI policy pages by hand and fill in the OpenAI section.
+2. ~~Read the four OpenAI policy pages by hand~~ Done 2026-10-31 (OpenAI section). Still unread: the OpenAI Data
+   Processing Addendum, Service Credit Terms, Sharing and Publication Policy and Brand Guidelines, and the
+   platform.openai.com API docs for the rule 8 check. Confirm the Terms of Use copy was the current version.
 3. Read the last part of the Claude Code hooks page and the MCP page's remaining text in a browser (the second
    pass covered them only by summary and keyword scan), and the Data Processing Addendum.
 
@@ -199,4 +251,9 @@ changes the first pass's conclusion: **no contradiction found in the text read.*
    applies today?
 6. Trove names Claude Code and Codex CLI in its docs and commands. Is that within each company's trademark
    guidance? (Anthropic's page says the Claude Code name may be used accurately in plain text and not as part of
-   a product name or logo.)
+   a product name or logo. OpenAI's Brand Guidelines were not read; its Services Agreement section 10 bars
+   customers from using OpenAI's name or logo in marketing without permission.)
+7. OpenAI's Usage policies (effective 2026-11-20) require prior approval for "a model-access intermediary
+   platform or other service that enables third parties to directly access OpenAI models". Does a local,
+   loopback-only gateway used by the key's owner count as such a service? Our reading is no; confirm, or ask
+   OpenAI.
