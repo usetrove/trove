@@ -1,6 +1,6 @@
 # Privacy
 
-Last checked against the code: 2026-10-30. Each statement below was checked against the source or a test,
+Last checked against the code: 2026-10-30 (the "Sharing a summary" section: 2026-11-01). Each statement below was checked against the source or a test,
 named in brackets. If the code changes and this file does not, that is a bug; please report it.
 
 ## In one paragraph
@@ -99,6 +99,20 @@ described in `history_requests` above. Pass `--no-history` or set `history.enabl
 It reads `~/.claude/settings.json` for two key names (`apiKeyHelper`, `forceLoginMethod`) to tell API-key from
 subscription use, and checks whether `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and `OPENAI_API_KEY` are set
 without reading their values.
+
+## Sharing a summary (optional, manual)
+
+`trove contribute` prints a small summary you may choose to share to help check Trove's savings claims, and
+`trove contribute --export file.json` writes the same text to a file (permissions `0600`). Trove never sends it:
+there is no upload, so nothing leaves your machine unless you send the file yourself.
+
+The summary holds: schema and Trove version, OS and architecture, the length of the period in days, a coarse
+request-count bucket (`0`, `1-19`, `20-99`, `100-999`, `1000+`), the agents seen from a fixed list (`claude-code`,
+`codex`, `other`), waste as a whole percent labeled "estimated", each optimizer's name, state and whether it was
+rolled back, its measured percent drop in prompt tokens when there was enough data, and the number of guardrail
+trips. It has no prompts, code, file paths, hashes, model names, dollar amounts, exact token counts, exact dates
+or identifiers. [`internal/contribute` `TestBuildIsCoarseAndDeterministic`; `TestPayloadFieldsAreReviewed` fails
+if a field is added without review]
 
 ## Your control
 

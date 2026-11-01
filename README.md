@@ -122,6 +122,8 @@ We welcome your feedback. Run `trove feedback`: it builds a GitHub issue with ve
 
 Trove collects nothing. It has no telemetry or analytics and makes no network calls of its own. In gateway mode it forwards your own API requests to the provider you configured, as your agent would have. What it stores locally (token counts, sizes, hashes, model names, timings, outcome signals) is listed in [PRIVACY.md](PRIVACY.md); you can delete all of it with `trove uninstall --purge-data`.
 
+If you want to help check Trove's savings claims, `trove contribute` shows a small anonymous summary (counts, whole-number percents and fixed labels; no prompts, paths, model names or dollar amounts), and `trove contribute --export file.json` saves it so you can share it yourself. Trove sends nothing automatically.
+
 ## More documentation
 
 [Getting started](docs/getting-started.md) · [Measurement method](docs/measurement-method.md) · [Privacy](PRIVACY.md) · [Security](SECURITY.md) · [Threat model](docs/threat-model.md) · [Compliance](docs/compliance.md) · [Pricing and updates](docs/pricing.md) · [Supported agents](docs/supported-agents.md) · [Reports](docs/report.md) · [Gateway](docs/gateway.md) · [Beta checklist](docs/beta-checklist.md) · [Contributing](CONTRIBUTING.md)
