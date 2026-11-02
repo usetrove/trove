@@ -15,10 +15,15 @@ server does with what it receives.
 
 ```
 cd server/worker
-npx wrangler d1 create trove-contribute          # copy the database id into wrangler.toml
+cp wrangler.toml wrangler.local.toml             # gitignored: keep your own ids out of the repo
+npx wrangler d1 create trove-contribute          # copy the database id into wrangler.local.toml
 npx wrangler d1 execute trove-contribute --remote --file=schema.sql
-npx wrangler deploy
+npx wrangler deploy --config wrangler.local.toml
 ```
+
+`wrangler.toml` is the template and keeps a placeholder id. Put your real database id only in
+`wrangler.local.toml`, which git ignores, and pass `--config wrangler.local.toml` to every wrangler
+command that needs the binding (`deploy`, `tail`, `d1 execute` by name works without it).
 
 Then set `endpoint = "https://<your worker>/v1/contribute"` under `[contribute]` in
 `config.toml` (or make that URL the built-in default in a release). Do not enable

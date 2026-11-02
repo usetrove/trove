@@ -20,3 +20,8 @@ bench/tasks/*/
 *.egg-info/
 .pytest_cache/
 bench/cache/
+
+# Cloudflare: local deploy config (holds your database id) and build cache
+server/worker/wrangler.local.toml
+.wrangler/
+server/worker/.dev.vars

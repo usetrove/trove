@@ -14,7 +14,11 @@ const MAX_BODY = 8192;
 const RETENTION_DAYS = 365;
 const ID = /^[0-9a-f]{32}$/;
 
-const reply = (status, text) => new Response(text + "\n", { status, headers: { "content-type": "text/plain" } });
+// A 204 must not have a body: Response throws if it does, which surfaces as error 1101.
+const reply = (status, text) =>
+  status === 204
+    ? new Response(null, { status })
+    : new Response(text + "\n", { status, headers: { "content-type": "text/plain" } });
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default {
