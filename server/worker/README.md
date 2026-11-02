@@ -37,6 +37,24 @@ points at the project's own receiver (`DefaultContributeEndpoint` in `internal/c
 Cloudflare request logging, Logpush or Web Analytics for this worker: the "no IP address
 stored" statement in PRIVACY.md depends on it.
 
+## Per-address rate limit (recommended, set in the dashboard)
+
+The Worker never sees client addresses, so a per-address limit belongs at the edge, in
+front of it. In the Cloudflare dashboard open **Security rules**, then **Create rule**,
+then **Rate limiting rules**, and set:
+
+- **Rule name:** `trove-contribute flood limit`
+- **If incoming requests match:** Field **Hostname**, operator **equals**,
+  value your receiver hostname (for example `contribute.troverelay.com`).
+- **With the same characteristics:** IP.
+- **When rate exceeds:** a low number, such as 10 requests, over the longest period the
+  plan offers. A real install sends one request a week, so even a shared office address
+  stays far below this.
+- **Then take action:** Block, with the longest **Duration** the plan offers.
+
+The daily cap in `index.js` stays as the backstop for anything this rule misses. Check the
+plan limits in the dashboard (rule count, periods, durations) because they depend on your plan.
+
 ## Test
 
 ```

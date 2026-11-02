@@ -1,0 +1,29 @@
+name: tap-token-check
+
+# Run by hand (Actions tab, then "tap-token-check", then "Run workflow") after replacing
+# the HOMEBREW_TAP_GITHUB_TOKEN secret. It makes no change: `git push --dry-run` only
+# asks GitHub whether this token would be allowed to push to the Homebrew tap, which
+# is exactly what a release does last. A token that can only read fails here.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the tap token can push to usetrove/homebrew-trove
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          set -eu
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "The HOMEBREW_TAP_GITHUB_TOKEN secret is empty or missing."
+            exit 1
+          fi
+          git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/usetrove/homebrew-trove.git" tap
+          cd tap
+          git push --dry-run origin HEAD:refs/heads/main
+          echo "OK: this token can push to usetrove/homebrew-trove."
