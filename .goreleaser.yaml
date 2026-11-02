@@ -64,6 +64,8 @@ brews:
       owner: usetrove
       name: homebrew-trove
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    # A tag such as v0.1.0-rc1 must not replace the formula people install from.
+    skip_upload: auto
     homepage: https://github.com/usetrove/trove
     description: The efficiency layer for AI coding agents
     license: Apache-2.0
@@ -74,6 +76,9 @@ release:
   github:
     owner: usetrove
     name: trove
+  # A tag with a suffix such as -rc1 is published as a pre-release, so it is
+  # never the "latest" release that install.sh and the release page point to.
+  prerelease: auto
 
 changelog:
   sort: asc
