@@ -21,6 +21,33 @@ func writeCfg(t *testing.T, body string) string {
 	return dir
 }
 
+// The generated file must not pin the upload endpoint. Every other default is
+// written out, so a later Trove cannot change it for existing users; the endpoint
+// is the one value a release may need to move, so it is left out and the built-in
+// default always applies.
+func TestGeneratedConfigDoesNotPinTheEndpoint(t *testing.T) {
+	for _, line := range strings.Split(DefaultTOML, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "endpoint") {
+			t.Errorf("DefaultTOML sets %q; leave it commented out so the built-in endpoint applies", line)
+		}
+	}
+	var got Config
+	if err := toml.Unmarshal([]byte(DefaultTOML), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Contribute.Endpoint != "" {
+		t.Errorf("a config made from DefaultTOML sets endpoint to %q", got.Contribute.Endpoint)
+	}
+	dir := writeCfg(t, DefaultTOML)
+	cfg, err := Load(dir, func(string) string { return "" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Contribute.Endpoint != Default().Contribute.Endpoint {
+		t.Errorf("loading the generated file gave endpoint %q, want the built-in %q", cfg.Contribute.Endpoint, Default().Contribute.Endpoint)
+	}
+}
+
 func TestDefaultTOMLMatchesDefault(t *testing.T) {
 	var got Config
 	if err := toml.Unmarshal([]byte(DefaultTOML), &got); err != nil {
@@ -29,6 +56,8 @@ func TestDefaultTOMLMatchesDefault(t *testing.T) {
 	if got.Optimizers == nil {
 		got.Optimizers = map[string]string{}
 	}
+	// The endpoint is deliberately not in the generated file; see the test above.
+	got.Contribute.Endpoint = Default().Contribute.Endpoint
 	if want := Default(); !reflect.DeepEqual(got, want) {
 		t.Errorf("DefaultTOML drifted from Default():\n got %+v\nwant %+v", got, want)
 	}

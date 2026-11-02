@@ -96,6 +96,9 @@ max_mb = 200
 ttl_days = 7
 
 [contribute]
-# Where "trove contribute enable" sends the anonymous summary you approved (an
-# https:// URL). Nothing is sent unless you run "trove contribute enable".
-endpoint = ""
+# Where "trove contribute enable" sends the anonymous summary you approved.
+# Nothing is sent unless you run "trove contribute enable", whatever this says.
+# Leave this line out to use Trove's built-in address, so a newer Trove can change
+# it for you. Uncomment it only to send somewhere else, or set it to "" to make
+# sending impossible.
+# endpoint = "https://example.com/v1/contribute"
