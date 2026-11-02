@@ -17,9 +17,10 @@ import (
 // privacy decision: it needs a matching change to PRIVACY.md and
 // docs/threat-model.md, and a reviewer should ask what data can reach it.
 var allowedSites = map[string]string{
-	"internal/gateway/proxy.go":  "ReverseProxy: forwards the user's own API request to the configured provider",
-	"internal/gateway/server.go": "clones http.DefaultTransport for that same upstream connection",
-	"internal/cli/gateway.go":    "2 s health probe of the local gateway; the address is checked to be loopback first",
+	"internal/gateway/proxy.go":     "ReverseProxy: forwards the user's own API request to the configured provider",
+	"internal/gateway/server.go":    "clones http.DefaultTransport for that same upstream connection",
+	"internal/cli/gateway.go":       "2 s health probe of the local gateway; the address is checked to be loopback first",
+	"internal/contribute/upload.go": "opt-in anonymous summary upload; runs only after `trove contribute enable` (contribute.json) and with contribute.endpoint set; sends exactly the text `trove contribute` shows",
 }
 
 // bannedSelectors are package-level names that dial, resolve or build a client.

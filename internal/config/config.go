@@ -37,7 +37,17 @@ type Config struct {
 	History       History           `toml:"history"`
 	Fixer         Fixer             `toml:"fixer"`
 	Recovery      Recovery          `toml:"recovery"`
+	Contribute    Contribute        `toml:"contribute"`
 	RetentionDays int               `toml:"retention_days"`
+}
+
+// Contribute holds the setting for the optional anonymous summary upload (see
+// PRIVACY.md). Whether upload is switched on is not here: it is a consent record
+// kept in contribute.json by `trove contribute enable`.
+type Contribute struct {
+	// Endpoint is the HTTPS URL that receives the summary. Empty means upload is
+	// not possible, whatever the consent record says.
+	Endpoint string `toml:"endpoint"`
 }
 
 // Fixer holds the settings for `trove fix` (see docs/fixer.md).
@@ -270,6 +280,11 @@ activity_minutes = 30
 max_mb = 200
 # Days an output is kept (1 to 365).
 ttl_days = 7
+
+[contribute]
+# Where "trove contribute enable" sends the anonymous summary you approved (an
+# https:// URL). Nothing is sent unless you run "trove contribute enable".
+endpoint = ""
 `
 
 var optimizerName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
@@ -367,6 +382,9 @@ func (c Config) Validate() error {
 	if m.RefetchRatePercent < 1 || m.RefetchRatePercent > 100 {
 		add("measure.refetch_rate_percent is %d; use a number from 1 to 100 (default 25).", m.RefetchRatePercent)
 	}
+	if problem := checkEndpoint(c.Contribute.Endpoint); problem != "" {
+		add("contribute.endpoint %s", problem)
+	}
 	if c.RetentionDays < 1 || c.RetentionDays > 3650 {
 		add("retention_days is %d; use a number of days from 1 to 3650.", c.RetentionDays)
 	}
@@ -397,6 +415,30 @@ func checkUpstream(v string) string {
 	}
 	return ""
 }
+
+// checkEndpoint returns a plain-English problem with the upload URL, or "" if it
+// is empty or fine. A path is allowed here, unlike an upstream origin.
+func checkEndpoint(v string) string {
+	if v == "" {
+		return ""
+	}
+	u, err := url.Parse(v)
+	if err != nil || u.Host == "" {
+		return fmt.Sprintf("is %q; use a full URL such as \"https://example.com/v1/contribute\".", v)
+	}
+	loopback := u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost" || u.Hostname() == "::1"
+	if u.Scheme != "https" && (u.Scheme != "http" || !loopback) {
+		return fmt.Sprintf("is %q; use https:// (plain http is only allowed for localhost).", v)
+	}
+	if u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+		return fmt.Sprintf("is %q; give a plain URL without a username, query or fragment.", v)
+	}
+	return ""
+}
+
+// ValidateEndpoint returns "" if v is an acceptable upload URL, otherwise a
+// plain-English reason. The uploader calls it too.
+func ValidateEndpoint(v string) string { return checkEndpoint(v) }
 
 // ValidateUpstream returns "" if v is an acceptable upstream origin, otherwise a
 // plain-English reason. The gateway calls it too, so a server built without

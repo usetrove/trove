@@ -1,0 +1,14 @@
+name = "trove-contribute"
+main = "index.js"
+compatibility_date = "2026-10-01"
+
+# Daily clean-up of rows older than 365 days.
+[triggers]
+crons = ["17 3 * * *"]
+
+# Create the database with `wrangler d1 create trove-contribute`, paste its id
+# below, then run `wrangler d1 execute trove-contribute --file=schema.sql`.
+[[d1_databases]]
+binding = "DB"
+database_name = "trove-contribute"
+database_id = "REPLACE_WITH_THE_ID_FROM_wrangler_d1_create"

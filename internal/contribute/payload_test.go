@@ -2,6 +2,8 @@ package contribute
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -18,7 +20,7 @@ func TestPayloadFieldsAreReviewed(t *testing.T) {
 	want := map[string]bool{
 		"Payload.schema_version": true, "Payload.trove_version": true, "Payload.os": true, "Payload.arch": true,
 		"Payload.period_days": true, "Payload.requests_bucket": true, "Payload.agents": true,
-		"Payload.waste_percent": true, "Payload.optimizers": true, "Payload.guardrail_trips": true,
+		"Payload.waste_percent": true, "Payload.optimizers": true, "Payload.guardrail_trips": true, "Payload.install_id": true,
 		"LabeledPercent.percent": true, "LabeledPercent.label": true,
 		"OptimizerSummary.name": true, "OptimizerSummary.effective": true,
 		"OptimizerSummary.rolled_back": true, "OptimizerSummary.percent_fewer_measured": true,
@@ -90,5 +92,32 @@ func TestEmptyReportHasNoWasteFigure(t *testing.T) {
 	p := Build(report.Report{}, Meta{})
 	if p.WastePercent != nil || p.RequestsBucket != "0" || p.Agents == nil || p.Optimizers == nil {
 		t.Errorf("empty payload = %+v", p)
+	}
+}
+
+// The golden file is also read by server/worker/validate.test.js, so the Go
+// payload and the server's validator cannot drift apart unnoticed.
+func TestEncodeGolden(t *testing.T) {
+	p := Build(sample(), Meta{TroveVersion: "1.2.3", OS: "linux", Arch: "amd64"})
+	p.InstallID = "0123456789abcdef0123456789abcdef"
+	got, err := Encode(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join("testdata", "payload.golden.json")
+	if os.Getenv("UPDATE_GOLDEN") != "" {
+		if err := os.MkdirAll("testdata", 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, got, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.ReplaceAll(string(want), "\r\n", "\n") != string(got) {
+		t.Errorf("payload changed; review it, update the server validator if needed, then run with UPDATE_GOLDEN=1\n got: %s", got)
 	}
 }

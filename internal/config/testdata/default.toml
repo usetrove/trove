@@ -94,3 +94,8 @@ activity_minutes = 30
 max_mb = 200
 # Days an output is kept (1 to 365).
 ttl_days = 7
+
+[contribute]
+# Where "trove contribute enable" sends the anonymous summary you approved (an
+# https:// URL). Nothing is sent unless you run "trove contribute enable".
+endpoint = ""

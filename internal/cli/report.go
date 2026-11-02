@@ -75,7 +75,13 @@ func runReport(a *App, pf periodFlags) error {
 	if err != nil {
 		return err
 	}
-	return a.emit(r, trimNL(report.Render(r, report.Options{Width: a.termWidth(), Color: a.Color()})))
+	err = a.emit(r, trimNL(report.Render(r, report.Options{Width: a.termWidth(), Color: a.Color()})))
+	// Only the default period is shared, so every upload covers the same span.
+	// This does nothing unless the user ran `trove contribute enable`.
+	if err == nil && pf == (periodFlags{}) {
+		autoContribute(a, r)
+	}
+	return err
 }
 
 // buildReport reads the data directory and builds the report for the chosen

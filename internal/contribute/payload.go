@@ -36,6 +36,10 @@ type Payload struct {
 	// Optimizers has one row per optimizer, from a fixed list of names.
 	Optimizers     []OptimizerSummary `json:"optimizers"`
 	GuardrailTrips int                `json:"guardrail_trips"`
+	// InstallID is a random id with no link to the person or machine. It is set
+	// only when the user has turned upload on; exports from `trove contribute`
+	// alone do not carry one.
+	InstallID string `json:"install_id,omitempty"`
 }
 
 // LabeledPercent is a whole-number percent with its measured/estimated label.
