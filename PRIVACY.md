@@ -6,9 +6,10 @@ named in brackets. If the code changes and this file does not, that is a bug; pl
 ## In one paragraph
 
 Trove runs on your machine and keeps its data in one folder, `~/.trove` (or the folder you choose with
-`--data-dir` / `TROVE_DATA_DIR`). It has no account, no server of its own, no telemetry and no update check.
+`--data-dir` / `TROVE_DATA_DIR`). It has no account, no update check and no telemetry that runs on its own.
 The only network traffic it creates is forwarding your own API requests, unchanged, to the provider you
-configured, when you choose to run the gateway. Your API keys pass through memory and are not written anywhere.
+configured, when you choose to run the gateway, and, only if you turn it on with `trove contribute enable`, a weekly
+anonymous summary (see "Sharing a summary" below). Your API keys pass through memory and are not written anywhere.
 Your prompts, code, file paths and tool output are not written to the database.
 
 ## What leaves your machine
@@ -16,11 +17,13 @@ Your prompts, code, file paths and tool output are not written to the database.
 | What | To where | When |
 |---|---|---|
 | Your agent's API request (including your API key, as your agent sent it) | The upstream in your config: `https://api.anthropic.com` and `https://api.openai.com` by default | Only while the gateway runs and your agent is pointed at it |
+| The anonymous summary shown by `trove contribute` (including a random install id) | The `[contribute] endpoint` in your config | Only after you run `trove contribute enable` and answer yes; at most once every 7 days, when you run `trove report` |
 
-Nothing else. Specifically, Trove does not send usage data, crash reports, version checks, or pricing lookups.
+Nothing else. Specifically, Trove does not send crash reports, version checks, or pricing lookups, and sends no
+usage data unless you turned on the summary above.
 Prices are embedded in the binary.
 
-How this is checked: a test fails if shipped code outside three files can open a connection or build an HTTP
+How this is checked: a test fails if shipped code outside four files can open a connection or build an HTTP
 client, or if a telemetry library appears in `go.mod` [`internal/egress` `TestOnlyApprovedCodeCanReachTheNetwork`,
 `TestNoUnexpectedNetworkDependencies`]; and a Linux CI test runs the built binary under `strace` through the gateway
 and a set of commands and fails on any connection or send to a non-loopback address [`internal/egress`
@@ -87,6 +90,7 @@ runs while the gateway is running (finding F-8 in [docs/security-findings.md](do
 | `recovery/` | The **full text** of command output, named by a hash. Written when `trove_run` runs a command you approved, and by the output trimmer if you turn it on | The one place raw tool output is written. Defaults: expires after 7 days, 200 MB cap. May contain secrets that appeared in that output, and is not scoped to a project (finding F-9). [`recovery` tests] |
 | `hooks/` | Per-session lists of file **content hashes** and sizes (so a repeated read can be spotted), a spool of counts, optimizer states | No paths, no contents, no raw session ids [`TestNothingSensitiveIsStored`] |
 | `hooks.log` (and `.1`) | One-line errors from hooks, with file names removed, redacted, capped at 256 KB | |
+| `contribute.json` | Whether you turned the summary upload on, your random install id, and the day of the last upload | Written only by `trove contribute enable/disable/reset`; absent means off |
 | `gateway.json` | The running gateway's process id and address | Removed on stop |
 | `gateway.log` | Only on macOS, only if you install the background service: the gateway's own log lines | Redacted logger; no headers or bodies. Path is `~/.trove/gateway.log` even if you chose another data folder (finding F-24) |
 | `mcp_installs.json` | The commands that undo MCP registrations Trove made | |
@@ -100,11 +104,25 @@ It reads `~/.claude/settings.json` for two key names (`apiKeyHelper`, `forceLogi
 subscription use, and checks whether `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and `OPENAI_API_KEY` are set
 without reading their values.
 
-## Sharing a summary (optional, manual)
+## Sharing a summary (optional, off by default)
 
 `trove contribute` prints a small summary you may choose to share to help check Trove's savings claims, and
-`trove contribute --export file.json` writes the same text to a file (permissions `0600`). Trove never sends it:
-there is no upload, so nothing leaves your machine unless you send the file yourself.
+`trove contribute --export file.json` writes the same text to a file (permissions `0600`). Those two commands send
+nothing.
+
+`trove contribute enable` shows the exact text, asks, and only on yes records your consent in `contribute.json`.
+From then on `trove report` (default period only, and never `trove gateway` or the agent hooks) sends that same text
+to your `[contribute] endpoint` at most once every 7 days, within a 4 second limit, with no cookies or credentials,
+following no redirects, and silently trying again later if it fails. Nothing is sent while `endpoint` is empty,
+which is the default. `trove contribute disable` stops it at once. [`internal/contribute`
+`TestAutoDoesNothingUnlessConsentedAndDue`, `TestAutoSendsExactlyTheEncodedPayloadWithNoCredentials`,
+`TestSendDoesNotFollowRedirects`; `internal/cli` `TestContributeSendsNothingUntilEnabled`]
+
+The upload also carries a random **install id** (128 bits, made on your machine, not derived from anything about you
+or your machine). It lets the receiver ignore repeats and delete your rows. `trove contribute reset` makes a new one.
+The receiver ([server/worker](server/worker/README.md)) validates against a fixed list of fields, stores the summary
+and the UTC day it arrived (no time, no IP address, no headers), and deletes rows after 365 days. To have your rows
+deleted sooner, send `DELETE <endpoint>/<install id>` (the id is shown by `trove contribute status`).
 
 The summary holds: schema and Trove version, OS and architecture, the length of the period in days, a coarse
 request-count bucket (`0`, `1-19`, `20-99`, `100-999`, `1000+`), the agents seen from a fixed list (`claude-code`,

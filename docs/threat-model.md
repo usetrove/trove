@@ -8,7 +8,7 @@ Every mitigation below names the code and the test that holds it in place. If a 
 A local program that (a) runs an optional HTTP gateway on `127.0.0.1` which forwards the user's own
 API requests to the provider they configured, (b) edits a few of the user's agent config files, with backups,
 (c) runs an MCP server and hooks that agents start, and (d) keeps metadata in `~/.trove`. It has no server,
-no account and no telemetry. A single user runs it on their own machine.
+no account, no update check, and no telemetry unless the user opts in to the anonymous summary upload. A single user runs it on their own machine.
 
 ## Assets
 
@@ -81,7 +81,7 @@ agent into calling Trove's tools or runs when a tool opens it.
 
 | Threat | Mitigation | Evidence |
 |---|---|---|
-| A dependency phones home or exfiltrates | Six direct dependencies, all pure Go, pinned in `go.sum`. A test fails if shipped code outside a three-file allowlist can dial or build an HTTP client, or imports a network-capable package; another fails on telemetry libraries in `go.mod`; a Linux test runs the real binary under `strace` and fails on any non-loopback `connect`/`send` | `internal/egress` tests; CI job `privacy` |
+| A dependency phones home or exfiltrates | Six direct dependencies, all pure Go, pinned in `go.sum`. A test fails if shipped code outside a four-file allowlist can dial or build an HTTP client, or imports a network-capable package; another fails on telemetry libraries in `go.mod`; a Linux test runs the real binary under `strace` and fails on any non-loopback `connect`/`send` | `internal/egress` tests; CI job `privacy` |
 | Known vulnerabilities | `govulncheck ./...` in CI (pinned to v1.9.0). It found 10 reachable standard-library issues on Go 1.27.0; `go.mod` now requires 1.27.3, and the scan is clean | CI job `vulncheck`; [finding F-12](security-findings.md) |
 | A tampered GitHub Action or tool in the build | Actions are pinned to commit SHAs; `govulncheck` is pinned; test and build jobs use the Go version from `go.mod` | `.github/workflows/*.yml` |
 | A tampered release archive | `checksums.txt` is signed with keyless cosign and every archive has an SPDX SBOM. `install.sh` and the npm wrapper check the archive's SHA-256 against `checksums.txt` from the same release before running anything. **They do not verify the cosign signature**, so they do not protect against a compromised release, only against corruption or a bad mirror. See R3 | `.goreleaser.yaml`; `npm/test`, `install_test.sh` |
