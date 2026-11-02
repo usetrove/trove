@@ -44,8 +44,11 @@ front of it. In the Cloudflare dashboard open **Security rules**, then **Create 
 then **Rate limiting rules**, and set:
 
 - **Rule name:** `trove-contribute flood limit`
-- **If incoming requests match:** Field **Hostname**, operator **equals**,
-  value your receiver hostname (for example `contribute.troverelay.com`).
+- **If incoming requests match:** Field **URI Path**, operator **equals**, value
+  `/v1/contribute`. (Some plans hide the Hostname field. If the builder has an
+  **Edit expression** link you can use
+  `(http.host eq "contribute.troverelay.com" and http.request.uri.path eq "/v1/contribute")`
+  instead, with your own hostname.)
 - **With the same characteristics:** IP.
 - **When rate exceeds:** a low number, such as 10 requests, over the longest period the
   plan offers. A real install sends one request a week, so even a shared office address
