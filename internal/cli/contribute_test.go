@@ -15,7 +15,7 @@ import (
 func contributeHarness(t *testing.T) (h *harness, dir string, hits *int32, last *string) {
 	t.Helper()
 	hits, last = new(int32), new(string)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		atomic.AddInt32(hits, 1)
 		b, _ := io.ReadAll(r.Body)
 		*last = string(b)
