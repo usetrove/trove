@@ -64,8 +64,11 @@ brews:
       owner: usetrove
       name: homebrew-trove
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    # A tag such as v0.1.0-rc1 must not replace the formula people install from.
-    skip_upload: auto
+    # Do not push the formula to the tap for now: the release of v0.1.0 failed here
+    # with 401 Bad credentials, and the tap is private. Set this back to "auto" (which
+    # still skips tags like v0.1.0-rc1) after replacing HOMEBREW_TAP_GITHUB_TOKEN.
+    # The formula is still generated into dist/homebrew.
+    skip_upload: true
     homepage: https://github.com/usetrove/trove
     description: The efficiency layer for AI coding agents
     license: Apache-2.0
