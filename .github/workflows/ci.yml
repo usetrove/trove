@@ -68,6 +68,15 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: node --test "npm/test/*.test.js"
 
+  # The optional summary receiver (server/worker). It also reads a Go golden file, so
+  # a payload change that its validator would reject fails here.
+  worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - run: node --test
+        working-directory: server/worker
+
   bench:
     runs-on: ubuntu-latest
     steps:

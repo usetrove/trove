@@ -9,7 +9,13 @@ server does with what it receives.
   the UTC day it arrived. Anything unknown is rejected.
 - `DELETE /v1/contribute/<install id>` removes every row stored under that id.
 - It never reads or stores the IP address, headers or cookies, and never logs a
-  request or a body. A daily cron deletes rows older than 365 days.
+  request or a body (a test fails if `index.js` mentions the client address or logs).
+  Workers Logs is switched off in `wrangler.toml` because Cloudflare turns it on by default
+  for new Workers.
+- It stores at most 5,000 summaries per UTC day and answers 429 after that, which bounds
+  storage if someone floods it with made-up install ids. Add a Cloudflare rate-limiting
+  rule in the dashboard if you want a per-address limit; the Worker itself never sees addresses.
+- A daily cron deletes rows older than 365 days.
 
 ## Deploy
 

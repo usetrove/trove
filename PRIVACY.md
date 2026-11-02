@@ -1,6 +1,6 @@
 # Privacy
 
-Last checked against the code: 2026-10-30 (the "Sharing a summary" section and its table row: 2026-11-02). Each statement below was checked against the source or a test,
+Last checked against the code: 2026-10-30 (the "Sharing a summary" section and its table row: 2026-11-02; the receiver paragraph: 2026-11-02). Each statement below was checked against the source or a test,
 named in brackets. If the code changes and this file does not, that is a bug; please report it.
 
 ## In one paragraph
@@ -122,7 +122,10 @@ sending impossible. `trove contribute disable` stops it at once. [`internal/cont
 The upload also carries a random **install id** (128 bits, made on your machine, not derived from anything about you
 or your machine). It lets the receiver ignore repeats and delete your rows. `trove contribute reset` makes a new one.
 The receiver ([server/worker](server/worker/README.md)) validates against a fixed list of fields, stores the summary
-and the UTC day it arrived (no time, no IP address, no headers), and deletes rows after 365 days. To have your rows
+and the UTC day it arrived (no time, no IP address, no headers), keeps its own request logging switched off, accepts at
+most 5,000 summaries a day, and deletes rows after 365 days. It runs on Cloudflare, which carries your connection
+and may keep its own operational records of it (such as your IP address) under its own policies; the project cannot
+see or delete those. If that matters to you, use `trove contribute --export` and send the file yourself. To have your rows
 deleted sooner, send `DELETE <endpoint>/<install id>` (the id is shown by `trove contribute status`).
 
 The summary holds: schema and Trove version, OS and architecture, the length of the period in days, a coarse

@@ -1,0 +1,6 @@
+{
+  "name": "trove-contribute-worker",
+  "private": true,
+  "type": "module",
+  "description": "Receiver for the optional anonymous summary from `trove contribute enable`."
+}

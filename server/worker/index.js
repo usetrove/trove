@@ -12,6 +12,10 @@ import { validate } from "./validate.js";
 
 const MAX_BODY = 8192;
 const RETENTION_DAYS = 365;
+// The most summaries stored in one UTC day. Install ids are random and free to make,
+// so this is what bounds storage if someone floods the endpoint. A real install sends
+// one a week; Trove treats the 429 as "try again later".
+export const MAX_PER_DAY = 5000;
 const ID = /^[0-9a-f]{32}$/;
 
 // A 204 must not have a body: Response throws if it does, which surfaces as error 1101.
@@ -39,10 +43,13 @@ export default {
       }
       const problem = validate(p);
       if (problem) return reply(400, problem);
+      const day = today();
+      const used = await env.DB.prepare("SELECT COUNT(*) AS n FROM submissions WHERE received_day = ?").bind(day).first();
+      if (used && used.n >= MAX_PER_DAY) return reply(429, "too many today, try again later");
       // One row per install per day: a repeat the same day replaces nothing.
       await env.DB.prepare(
         "INSERT OR IGNORE INTO submissions (received_day, install_id, payload) VALUES (?, ?, ?)",
-      ).bind(today(), p.install_id, JSON.stringify(p)).run();
+      ).bind(day, p.install_id, JSON.stringify(p)).run();
       return reply(204, "");
     }
 

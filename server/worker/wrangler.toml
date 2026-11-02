@@ -2,6 +2,11 @@ name = "trove-contribute"
 main = "index.js"
 compatibility_date = "2026-10-01"
 
+# Keep Workers Logs off. PRIVACY.md says the receiver does not log requests; Cloudflare
+# turns logs on for newly created Workers, so this must be stated, not left to a default.
+[observability]
+enabled = false
+
 # Daily clean-up of rows older than 365 days.
 [triggers]
 crons = ["17 3 * * *"]
