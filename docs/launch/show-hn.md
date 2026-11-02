@@ -5,7 +5,7 @@ Status: draft for your edit. Do not post until `go run ./scripts/checkclaims --p
 ## Title options
 
 - Show HN: Trove – find where your AI coding agent wastes tokens, and prove the fix didn't hurt
-- Show HN: Trove – a local tool that shows your coding agent's token waste (open source, no telemetry)
+- Show HN: Trove – a local tool that shows your coding agent's token waste (open source, sends nothing by default)
 
 ## Text
 
@@ -19,7 +19,7 @@ On our benchmark, the safe optimizers cut cost by [MEASURED: median cost reducti
 
 How it's built:
 
-- Single Go binary, no cgo. Everything is stored in `~/.trove` as metadata only (counts, sizes, hashes, never prompts or code). No telemetry; the only network traffic is your own API requests, if you opt into the local gateway.
+- Single Go binary, no cgo. Everything is stored in `~/.trove` as metadata only (counts, sizes, hashes, never prompts or code). Nothing is sent by default: the only network traffic is your own API requests, if you opt into the local gateway. There is one optional, off-by-default anonymous weekly summary (`trove contribute enable`); it shows you the exact text first, carries a random install id, and can be deleted on request. The receiver's code is in `server/worker`.
 - Without the gateway there's no proxy at all: history audit, config fixes, hooks, and an MCP server. This works on a subscription plan too.
 - The optional gateway (127.0.0.1) is for API-key users. It never touches subscription or OAuth traffic and fails open: if Trove errors, your request goes through unchanged.
 - Optimizations are off by default, have a shadow mode, and are switched only at session boundaries so prompt caches stay valid.

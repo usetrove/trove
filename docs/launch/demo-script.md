@@ -9,7 +9,7 @@ Record in a clean terminal with a large font, using a real history (not staged n
 | 0:15 to 0:22 | `trove fix` lists fixes with estimated savings, labeled "estimated". | "Specific fixes, each with the evidence." |
 | 0:22 to 0:30 | `trove fix <id> --apply` shows the exact diff and asks. Press yes. | "I see the exact change first. One command to undo." |
 | 0:30 to 0:40 | Claude Code with the status line showing spend and "saved". Work a few turns; the saved figure moves. | "And the status line keeps count. Measured, not guessed." |
-| 0:40 to 0:45 | Title card: "Trove. Runs locally. Sends nothing. Open source." plus the repo URL | |
+| 0:40 to 0:45 | Title card: "Trove. Runs locally. Sends nothing by default. Open source." plus the repo URL | |
 
 ## Rules for the recording
 

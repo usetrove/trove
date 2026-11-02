@@ -4,7 +4,7 @@ Status: draft for your edit. Each post stays under the platform limit; check bef
 
 1. I ran a tool on my own Claude Code history to see where my tokens went. [MEASURED: share of input tokens that were repeated or avoidable, author's own history — source: docs/launch/evidence/<date>/author-report.json]. Yours will be different. Here's how to find out. 🧵
 
-2. Trove is a local, open-source tool: "the efficiency layer for AI coding agents." Runs locally. Sends nothing. One binary. `trove` reads the session history your agent already keeps and shows the number.
+2. Trove is a local, open-source tool: "the efficiency layer for AI coding agents." Runs locally. Sends nothing by default. One binary. `trove` reads the session history your agent already keeps and shows the number.
 
 3. The part I care about most: it doesn't just tell you, it offers fixes. `trove fix` lists specific changes to your agent's config with the exact diff. You approve each one. `trove undo` reverses it.
 
@@ -14,7 +14,7 @@ Status: draft for your edit. Each post stays under the platform limit; check bef
 
 6. Status line: add it to Claude Code and watch savings count up as you work (`trove setup --status-line`, opt-in).
 
-7. Privacy: metadata only. No prompts, code or paths in the database. No telemetry. Optional local gateway for API-key users only; it never touches subscription traffic and fails open.
+7. Privacy: metadata only. No prompts, code or paths in the database. Sends nothing by default; an optional anonymous weekly summary stays off until you opt in, and you see the exact text first. The local gateway is API-key only and fails open.
 
 8. Limits: Claude Code and Codex CLI only, macOS and Linux, one benchmark so far. Codex is less tested. Full list in the README.
 

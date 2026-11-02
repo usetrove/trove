@@ -6,7 +6,7 @@ Status: draft for your edit. Check `scripts/checkclaims --publish` before submit
 
 **Tagline (60 characters max):** The efficiency layer for AI coding agents
 
-**Short description:** See where your coding agent wastes tokens, apply a one-click fix, and watch proven savings count up. Runs locally. Sends nothing. Open source.
+**Short description:** See where your coding agent wastes tokens, apply a one-click fix, and watch proven savings count up. Runs locally. Sends nothing by default. Open source.
 
 ## Description
 
@@ -16,7 +16,7 @@ Then it offers fixes you approve one at a time, each with the exact change shown
 
 - **One place across your agents.** Claude Code and Codex CLI today.
 - **Proven, not promised.** Every number is labeled measured or estimated. On our benchmark: [MEASURED: median cost reduction, all_safe vs direct — source: bench/results/<run>/summary.json] with success rate [MEASURED: success rate with vs without — source: bench/results/<run>/outcomes.json].
-- **Local and private.** One binary. Metadata only. No telemetry.
+- **Local and private.** One binary. Metadata only. Sends nothing by default; an optional anonymous weekly summary is off until you turn it on, and you see the exact text first.
 - **Works on a subscription too.** The optional local gateway is only for API-key users.
 
 ## Honest limits

@@ -76,7 +76,7 @@ Two layers; you can use the first without the second.
 1. **For everyone, no proxy.** Trove reads local session history, finds waste, proposes fixes to your agent's config files, and can add hooks and an MCP tool server. Nothing sits between your agent and the provider.
 2. **Optional local gateway, for people who pay with their own API keys.** `trove setup` points Claude Code or Codex CLI at a gateway on `127.0.0.1` using the agent's documented custom-endpoint setting. The gateway records metadata per request (token counts, sizes, hashes, model names, timings) and can apply optimizations switched on one at a time. It never handles subscription or OAuth credentials and rejects them with an explanation.
 
-Principles that hold everywhere: local-first (everything lives in `~/.trove`, no telemetry), API keys pass through and are never logged or stored, metadata only (no prompts, code, paths or tool output in the database), fail open (an internal error forwards your request unchanged), and prove before acting (every optimization is opt-in, estimated in shadow mode first, measured once on, and rolled back if guardrails trip; see [measurement](docs/measurement.md)).
+Principles that hold everywhere: local-first (everything lives in `~/.trove`; nothing is sent unless you opt in to the anonymous weekly summary), API keys pass through and are never logged or stored, metadata only (no prompts, code, paths or tool output in the database), fail open (an internal error forwards your request unchanged), and prove before acting (every optimization is opt-in, estimated in shadow mode first, measured once on, and rolled back if guardrails trip; see [measurement](docs/measurement.md)).
 
 ## What Trove changes, and how to undo it
 
