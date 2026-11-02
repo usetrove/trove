@@ -1,6 +1,6 @@
 # Privacy
 
-Last checked against the code: 2026-10-30 (the "Sharing a summary" section: 2026-11-01). Each statement below was checked against the source or a test,
+Last checked against the code: 2026-10-30 (the "Sharing a summary" section and its table row: 2026-11-02). Each statement below was checked against the source or a test,
 named in brackets. If the code changes and this file does not, that is a bug; please report it.
 
 ## In one paragraph
@@ -17,7 +17,7 @@ Your prompts, code, file paths and tool output are not written to the database.
 | What | To where | When |
 |---|---|---|
 | Your agent's API request (including your API key, as your agent sent it) | The upstream in your config: `https://api.anthropic.com` and `https://api.openai.com` by default | Only while the gateway runs and your agent is pointed at it |
-| The anonymous summary shown by `trove contribute` (including a random install id) | The `[contribute] endpoint` in your config | Only after you run `trove contribute enable` and answer yes; at most once every 7 days, when you run `trove report` |
+| The anonymous summary shown by `trove contribute` (including a random install id) | `https://contribute.troverelay.com/v1/contribute` (the `[contribute] endpoint` in your config; you can change it) | Only after you run `trove contribute enable` and answer yes; at most once every 7 days, when you run `trove report` |
 
 Nothing else. Specifically, Trove does not send crash reports, version checks, or pricing lookups, and sends no
 usage data unless you turned on the summary above.
@@ -113,9 +113,10 @@ nothing.
 `trove contribute enable` shows the exact text, asks, and only on yes records your consent in `contribute.json`.
 From then on `trove report` (default period only, and never `trove gateway` or the agent hooks) sends that same text
 to your `[contribute] endpoint` at most once every 7 days, within a 4 second limit, with no cookies or credentials,
-following no redirects, and silently trying again later if it fails. Nothing is sent while `endpoint` is empty,
-which is the default. `trove contribute disable` stops it at once. [`internal/contribute`
-`TestAutoDoesNothingUnlessConsentedAndDue`, `TestAutoSendsExactlyTheEncodedPayloadWithNoCredentials`,
+following no redirects, and silently trying again later if it fails. The endpoint has a built-in default, but that
+sends nothing by itself: without your yes there is no consent record, so no upload. Set `endpoint = ""` to make
+sending impossible. `trove contribute disable` stops it at once. [`internal/contribute`
+`TestAutoDoesNothingUnlessConsentedAndDue`, `internal/cli` `TestDefaultEndpointStillNeedsConsent`, `TestAutoSendsExactlyTheEncodedPayloadWithNoCredentials`,
 `TestSendDoesNotFollowRedirects`; `internal/cli` `TestContributeSendsNothingUntilEnabled`]
 
 The upload also carries a random **install id** (128 bits, made on your machine, not derived from anything about you

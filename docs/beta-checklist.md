@@ -4,7 +4,7 @@ Goal: learn whether a stranger can install Trove, see value and uninstall using 
 
 Trove sends nothing on its own by default, so every metric below comes from something the tester chooses to send: a `trove feedback` issue, a `trove reconcile --export` file, a `trove contribute --export` file, or an answer in the check-in. Say this to every tester up front. Do not collect anything else.
 
-The weekly anonymous upload (`trove contribute enable`) is off by default and cannot send anything until the `[contribute] endpoint` setting is filled in, so do not ask beta testers to turn it on unless you have set that up and told them exactly what it sends (they see the full text before agreeing). For the beta, ask for the export file instead.
+The weekly anonymous upload (`trove contribute enable`) is off by default and sends nothing until a tester runs `enable` and answers yes after seeing the exact text. It goes to the endpoint in `[contribute] endpoint` (built-in default: contribute.troverelay.com). Offer it as an option, never as a requirement, and tell testers what it holds and that their random install id lets you delete their rows on request. The export file stays the fallback for anyone who prefers to send it by hand.
 
 ## 1. Who to recruit
 

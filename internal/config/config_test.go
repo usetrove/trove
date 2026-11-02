@@ -183,3 +183,19 @@ func TestResolveDataDir(t *testing.T) {
 		t.Errorf("default: got %q, %v", got, err)
 	}
 }
+
+func TestContributeEndpoint(t *testing.T) {
+	if p := ValidateEndpoint(Default().Contribute.Endpoint); p != "" || Default().Contribute.Endpoint == "" {
+		t.Errorf("the built-in endpoint must be set and valid, got %q: %s", Default().Contribute.Endpoint, p)
+	}
+	for _, bad := range []string{"http://example.com/x", "https://u:p@example.com/x", "https://example.com/x?a=1", "not a url", "ftp://example.com"} {
+		if ValidateEndpoint(bad) == "" {
+			t.Errorf("%q should be refused", bad)
+		}
+	}
+	for _, ok := range []string{"", "https://example.com/v1/contribute", "http://127.0.0.1:9/x", "http://localhost/x"} {
+		if p := ValidateEndpoint(ok); p != "" {
+			t.Errorf("%q should be accepted: %s", ok, p)
+		}
+	}
+}

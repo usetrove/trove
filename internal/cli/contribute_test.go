@@ -118,10 +118,47 @@ func TestContributeEnableReportDisable(t *testing.T) {
 
 func TestContributeEnableNeedsAnEndpoint(t *testing.T) {
 	h := newHarness(t, nil)
+	dir := h.app.Getenv("TROVE_DATA_DIR")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("[contribute]\nendpoint = \"\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if code := h.run("contribute", "enable", "--yes", "--no-history"); code == 0 {
-		t.Fatal("enable without an endpoint should fail")
+		t.Fatal("enable with the endpoint blanked should fail")
 	}
 	if !strings.Contains(h.err.String(), "endpoint") {
 		t.Errorf("error should say what to do: %s", h.err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "contribute.json")); err == nil {
+		t.Error("consent record written although there is nowhere to send")
+	}
+}
+
+// Shipping a default endpoint must not send anything by itself: without a "yes"
+// there is no consent record, so nothing can be uploaded.
+func TestDefaultEndpointStillNeedsConsent(t *testing.T) {
+	h := newHarness(t, nil)
+	dir := h.app.Getenv("TROVE_DATA_DIR")
+	if code := h.run("contribute", "status", "--json"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	var st contributeStatus
+	if err := json.Unmarshal(h.out.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if st.Enabled || st.Endpoint != "https://contribute.troverelay.com/v1/contribute" {
+		t.Errorf("status = %+v, want off with the built-in endpoint", st)
+	}
+	h.reset()
+	if code := h.run("contribute", "enable", "--no-history"); code != 0 { // no --yes, no terminal input
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	if !strings.Contains(h.out.String(), "Nothing changed") {
+		t.Errorf("enable without a yes must change nothing:\n%s", h.out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "contribute.json")); err == nil {
+		t.Error("consent record written without a yes")
 	}
 }

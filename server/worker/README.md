@@ -25,8 +25,9 @@ npx wrangler deploy --config wrangler.local.toml
 `wrangler.local.toml`, which git ignores, and pass `--config wrangler.local.toml` to every wrangler
 command that needs the binding (`deploy`, `tail`, `d1 execute` by name works without it).
 
-Then set `endpoint = "https://<your worker>/v1/contribute"` under `[contribute]` in
-`config.toml` (or make that URL the built-in default in a release). Do not enable
+Attach your own domain with a `[[routes]]` entry (`custom_domain = true`) in `wrangler.local.toml`, then set
+`endpoint = "https://<your domain>/v1/contribute"` under `[contribute]` in `config.toml`. Trove's built-in default
+points at the project's own receiver (`DefaultContributeEndpoint` in `internal/config/config.go`). Do not enable
 Cloudflare request logging, Logpush or Web Analytics for this worker: the "no IP address
 stored" statement in PRIVACY.md depends on it.
 

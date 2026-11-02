@@ -46,9 +46,15 @@ type Config struct {
 // kept in contribute.json by `trove contribute enable`.
 type Contribute struct {
 	// Endpoint is the HTTPS URL that receives the summary. Empty means upload is
-	// not possible, whatever the consent record says.
+	// not possible, whatever the consent record says. Having a default here sends
+	// nothing: upload also needs the consent record that only
+	// `trove contribute enable` writes.
 	Endpoint string `toml:"endpoint"`
 }
+
+// DefaultContributeEndpoint is where the optional anonymous summary goes. The
+// receiver's code is in server/worker.
+const DefaultContributeEndpoint = "https://contribute.troverelay.com/v1/contribute"
 
 // Fixer holds the settings for `trove fix` (see docs/fixer.md).
 type Fixer struct {
@@ -172,6 +178,7 @@ func Default() Config {
 		History:       History{Enabled: true},
 		Fixer:         Fixer{MinSessions: 5, LookbackDays: 30, ContextMinTokens: 1500, ActivityMinutes: 30},
 		Recovery:      Recovery{MaxMB: 200, TTLDays: 7},
+		Contribute:    Contribute{Endpoint: DefaultContributeEndpoint},
 	}
 }
 
