@@ -9,7 +9,7 @@ builds:
     binary: trove
     env:
       - CGO_ENABLED=0
-    goos: [darwin, linux]
+    goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     # A fixed file time (the commit time) and no build-time clock in the binary:
     # the same commit and Go toolchain give the same bytes. The Go version used is
@@ -27,6 +27,10 @@ builds:
 archives:
   - id: trove
     formats: [tar.gz]
+    # Windows users get a .zip, which Explorer opens without extra tools.
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     name_template: "trove_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE
