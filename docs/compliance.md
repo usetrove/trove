@@ -1,6 +1,6 @@
 # Compliance checklist
 
-**Date checked: 2026-10-30.** Not legal advice, and no legal conclusions are drawn here. For each source this
+**Date checked: 2026-10-30; see "Update 2026-11-04" at the end.** Not legal advice, and no legal conclusions are drawn here. For each source this
 file says what the page says (short quotes), what Trove does, and whether Trove's behavior *contradicts any text
 I could read*. Whether it satisfies the terms is a question for a lawyer; those questions are collected at the
 end. Anything I could not read is marked **NOT VERIFIED** and nothing is asserted about it.
@@ -257,3 +257,136 @@ changes the first pass's conclusion: **no contradiction found in the text read.*
    platform or other service that enables third parties to directly access OpenAI models". Does a local,
    loopback-only gateway used by the key's owner count as such a service? Our reading is no; confirm, or ask
    OpenAI.
+
+## Update 2026-11-04: every claude.ai login, cloud backends, open-weight servers
+
+**Date checked: 2026-11-04.** Same caveats as above: not legal advice; what each page says, what Trove does, and what
+is not verified. Pages were read in full unless noted.
+
+### Sources read today
+
+| Source | What it settled |
+|---|---|
+| [Claude Code: Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance) | Which plans use OAuth; third-party restrictions; HIPAA scope |
+| [Authentication](https://code.claude.com/docs/en/authentication) | Credential types, precedence, `claude setup-token`, Console OAuth and profiles |
+| [LLM gateway overview](https://code.claude.com/docs/en/llm-gateway) and [gateway protocol](https://code.claude.com/docs/en/llm-gateway-protocol) | What a base URL without a credential variable does; headers; Bedrock and Vertex API formats. The protocol page (51 KB) was read through targeted search of the saved page, not line by line |
+| [Google Vertex AI](https://code.claude.com/docs/en/google-vertex-ai), [Microsoft Foundry](https://code.claude.com/docs/en/microsoft-foundry), [Amazon Bedrock](https://code.claude.com/docs/en/amazon-bedrock) | Per-backend credentials and gateway variables |
+| [API credits for Max, Ultra and Team](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) and support article [15036540](https://support.claude.com/articles/15036540) | What the credits cover. The support article was seen only as a search-result summary and was **NOT READ** |
+| [AWS SigV4: create a signed request](https://docs.aws.amazon.com/IAM/latest/UserGuide/create-signed-request.html) and [signing elements](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv-signing-elements.html) | What a signature covers |
+| [InvokeModelWithResponseStream](https://docs.aws.amazon.com/bedrock/latest/APIReference/API_runtime_InvokeModelWithResponseStream.html) | Bedrock streaming format |
+| [vLLM OpenAI-compatible server](https://docs.vllm.ai/en/latest/serving/online_serving/), [SGLang docs index](https://docs.sglang.io/) | Endpoints only. vLLM `--api-key` handling and `stream_options` usage behavior were **NOT VERIFIED** (the pages fetched did not cover them) |
+| DeepSeek, Moonshot (Kimi), Zhipu (GLM) | **NOT VERIFIED against official docs.** Only third-party summaries were found. Users supply their own `base_url`; Trove ships no defaults for these |
+
+### 1. Every claude.ai login is refused
+
+- *Says:* "OAuth authentication is intended exclusively for purchasers of Claude Free, Pro, Max, Ultra, Team, and
+  Enterprise subscription plans". "Anthropic does not permit third-party developers to offer Claude.ai login into
+  their own applications, or to route requests through Free, Pro, Max, or Ultra plan credentials on behalf of
+  their users. Moreover, developers may not collect, store, or intermediate Claude.ai credentials or session
+  tokens." (Legal and compliance.) The routing sentence names Free, Pro, Max and Ultra; Team and Enterprise are
+  named in the OAuth sentence only. Trove's rule 10 (reject all of them) is stricter than the text and does not
+  depend on that difference.
+- *Says:* all plans log in through claude.ai OAuth (`/login`), or `claude setup-token` for a one-year token used as
+  `CLAUDE_CODE_OAUTH_TOKEN` that "requires a Pro, Max, Ultra, Team, or Enterprise plan". Setting only
+  `ANTHROPIC_BASE_URL` leaves the saved login active and the request carries an OAuth value in `anthropic-beta`
+  (Authentication; LLM gateway). Console "keyless" sign-in and Workload Identity Federation profiles are also OAuth
+  bearer credentials.
+- *Trove:* every route refuses (HTTP 401, never forwarded) a request with an OAuth `anthropic-beta` value, a
+  credential beginning `sk-ant-oat` (that prefix is **an assumption**: not documented on the pages read, kept only
+  as a second signal beside the beta flag), or, on the Anthropic route, a bearer token with no `x-api-key`. The
+  Enterprise or Team plan itself is not a problem: an organization's Console API key is an ordinary key and is
+  accepted. The message says gateway mode needs an API key or cloud credential, and that to use a subscription the
+  user should remove the custom endpoint (`trove undo`) and use the Trove plugin.
+- *Side effect:* a Console OAuth sign-in or WIF profile (not a claude.ai login) is also bearer-only and is refused
+  with the same message. Use an API key for the gateway.
+- *Tests:* `auth_test.go` (`TestClaudeLoginsRefusedEverywhere`, `TestCloudRoutes`), `routes_test.go`
+  (`TestClaudeLoginIsRefusedOnEveryRoute`), `leak_test.go` (setup-token case: nothing reaches logs, responses or
+  disk).
+
+### 2. Other providers' subscription tokens (decision)
+
+- *Decision (2026-11-04):* a provider's subscription token is refused unless that provider's terms explicitly allow
+  third-party use. The OpenAI section above found no such permission, so a ChatGPT login is refused: a JWT-shaped
+  bearer token (heuristic, unchanged) or a `chatgpt-account-id` header on `/openai`, and the header on
+  compatible-server routes. Source: the OpenAI and Codex CLI sections above (checked 2026-10-30, not re-read
+  today).
+- *Not decided here:* any other provider with a subscription login (the gateway supports none).
+
+### 3. Max, Ultra and Team API credits
+
+- *Says:* Max $100, Ultra $200, Team $20 per Standard seat and $100 per Premium seat, pooled and capped at $500 a
+  month. Claim by linking a Console organization to the plan. Covers the Claude API, Claude Managed Agents, the
+  Claude Agent SDK and the playground; does not cover "Claude Code, extra usage in the Claude apps"; the credits
+  "apply only to the Claude API in the Claude Console. They can't be used on other platforms" (Bedrock, Vertex,
+  Foundry). Free, Pro and Enterprise are not eligible.
+- *Discrepancy with the brief:* the brief lists `claude -p` as covered. The credits page does not mention `claude -p`
+  and lists "Claude Code" as not covered. A search result summarizing support article 15036540 says Agent SDK and
+  `claude -p` usage still draws from subscription limits after a paused change. Trove therefore says only what the
+  page says, and `trove setup` tells users to confirm `claude -p` on their Console billing page.
+- *Trove:* `trove setup` explains the option. Sessions are labeled `interactive`, `automated` or `unknown` from the
+  `X-Trove-Kind` header the user sets. Trove does not guess from the User-Agent: no documented signal separates
+  `claude -p` from an interactive session (the documented `x-claude-code-request-class` header describes the role of
+  a request, not the session mode). The report shows kinds in a separate table and says it cannot see whether
+  credits were used. `X-Trove-Kind` is removed before the request is forwarded.
+
+### 4. Cloud backends
+
+| Backend | Credential | Body signed? | Gateway behavior |
+|---|---|---|---|
+| Vertex (`upstreams.vertex`, route `/vertex`) | Google OAuth bearer token (ADC) | No | Forwarded. Opt-in optimizers may change the body. No list price on file, so cost stays unknown |
+| Foundry (`upstreams.foundry`, route `/foundry`) | API key (`x-api-key` or `api-key`) or Entra ID bearer | No | Same as Vertex. The configured base URL keeps its `/anthropic` path |
+| Bedrock (`upstreams.bedrock`, route `/bedrock`), Bedrock API key | `Authorization: Bearer` | No | Forwarded. Streamed usage is read from the AWS event stream on a side copy; the stream is forwarded byte for byte |
+| Bedrock, AWS SigV4 | `Authorization: AWS4-HMAC-SHA256 ...` | **Yes** | Refused with an explanation. Not forwarded |
+
+- *Says (AWS):* the canonical request that SigV4 signs includes `HashedPayload` (`Hex(SHA256Hash(payload))`) and
+  the `host` header ("You must include the host header (HTTP/1.1) ... in the signature"). Any body change breaks
+  the signature. A client that signs for `127.0.0.1:8787` also produces a signature AWS will not accept for its own
+  host, so even an unmodified pass-through should fail.
+- *Decision:* no observe-only SigV4 mode, because by the reasoning above it cannot work, and Trove will not hold AWS
+  credentials to re-sign (the brief withholds that approval). This refines the earlier choice "observe-only for
+  SigV4". **Not verified live:** that AWS rejects a Host-rewritten pass-through of a SigV4 request. Confirm on a real
+  AWS account before treating it as settled.
+- *Says (Claude Code docs):* a Bedrock gateway must forward the response body and `Content-Type`
+  (`application/vnd.amazon.eventstream`) unmodified. Trove does.
+- *Not verified:* the binary framing of the event stream (12-byte prelude with CRC-32, headers, payload, CRC-32).
+  The AWS page for the streaming API describes `chunk` events carrying `bytes` and the content type, but not the
+  framing. `usage/eventstream.go` follows the widely documented encoding and is tested against hand-built frames
+  only. Capture a real response to confirm (`docs/gateway-manual-test.md`).
+- *Not live-tested:* the Vertex, Foundry and Bedrock routes were tested against fake servers and fixtures only.
+  Vertex bodies carry no `model` field, so optimizers that need the model skip those requests and they go through
+  unchanged.
+
+### 5. OpenAI-compatible servers (self-hosted and open-weight)
+
+- *Says (Claude Code docs):* Anthropic "doesn't support routing Claude Code to non-Claude models through any
+  gateway". The compatible-server route therefore serves OpenAI-format agents (Codex CLI, OpenCode, custom agents),
+  and the docs say Claude Code is not supported against it.
+- *Trove:* `[[upstreams.compat]]` entries, reached at `/compat/<name>/...`. The agent's own bearer key is forwarded
+  and never stored. `auth = "none"` accepts requests without a key, for open servers. Plain `http` is allowed only
+  for loopback and private-network hosts, with a warning in the log. Usage is read from Chat Completions
+  responses. A streamed reply carries usage only when the client asks for it (`stream_options.include_usage`);
+  otherwise the row records no tokens rather than an estimate.
+- *Pricing:* `input_per_mtok`, `output_per_mtok` and optional `cache_read_per_mtok` are the user's own numbers. Rows
+  say `custom:<hash>` and every dollar figure is labeled estimated. `gpu_hourly_usd` gives a GPU-hour estimate in the
+  report: hourly cost divided by measured tokens, once over busy time and once over the whole first-to-last request
+  span. It is estimated, depends on the user's hourly number and on which seconds are counted, and is not stored per
+  request.
+- *Not verified:* vLLM and SGLang usage fields under streaming, and any provider-specific field names.
+
+### 6. Healthcare (BAA)
+
+- *Says:* the BAA extends to Claude Code in a HIPAA configuration (Claude for Enterprise, CLI or Desktop Code tab)
+  or with Zero Data Retention. "Under the HIPAA configuration, cloud sessions, Remote Control, Claude Code in the
+  Claude mobile app, and Claude Code routed through a third-party cloud provider or a gateway aren't covered."
+- *Trove:* `trove setup` says organizations relying on a BAA should use the plugin only, not the gateway.
+
+### New open items
+
+1. Confirm with a real Amazon Bedrock account that SigV4 requests cannot pass through a proxy that changes Host.
+2. Capture one real Bedrock streamed response and run it through `usage/eventstream.go`.
+3. Check vLLM `--api-key` and streaming usage, and each open-weight provider's official docs, before documenting
+   per-provider setup.
+4. Confirm the `sk-ant-oat` prefix against a redacted real token, or remove that signal (the OAuth beta flag and
+   the bearer-only rule already cover the documented cases).
+5. Decide whether `x-claude-code-*` headers can ever support an honest interactive vs automated label (none is
+   documented today).

@@ -80,6 +80,18 @@ modelled at all.
     `go test ./internal/cli -run PricingShowGolden -update`.
 11. Commit with the pages and dates you used in the message.
 
+## Your own rates and GPU-hour cost (OpenAI-compatible servers)
+`pricing.json` has no entries for self-hosted or open-weight servers. Set your own under
+`[[upstreams.compat]]` (see `docs/gateway.md`): `input_per_mtok`, `output_per_mtok`, optional
+`cache_read_per_mtok`, as exact decimals in USD per million tokens (`internal/pricing/custom.go`).
+- Rows priced this way carry `pricing_version = custom:<hash of the rates>`, so a later change of rates is
+  visible, and every figure is "estimated: your configured rates". A request with cache reads but no cache-read
+  rate is left unpriced, not priced as free; cache writes have no custom rate and are never priced.
+- No batch, service tier or counterfactual (`cost_diff_usd`) is computed for custom rates.
+- `gpu_hourly_usd` is a report-time estimate, not a per-request cost: hourly cost x seconds counted / tokens served.
+  Tokens are input plus output. Busy seconds are the union of request intervals (overlapping requests share
+  seconds); the span figure uses first request to last response and so includes idle time. Both are estimated.
+
 ## Freshness check
 
 The release workflow runs `go run ./scripts/pricingage`, which prints a GitHub warning for

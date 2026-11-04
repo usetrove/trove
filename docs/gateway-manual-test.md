@@ -37,8 +37,8 @@ Use a throwaway data directory so your real `~/.trove` is untouched. These examp
 ## What to check
 - Agent label is `claude_code` with a version; session key is the same across the turns.
 - Token counts match what Claude Code used; cache fields become non-zero on later turns.
-- `cost_usd` is filled for requests with no cache writes (cache writes stay unpriced until the TTL split
-  is implemented).
+- `cost_usd` is filled for every request, including ones that wrote to the prompt cache (priced from the
+  `cache_creation` 5-minute / 1-hour split). A blank `cost_usd` means the split was missing or inconsistent.
 - `trove gateway status` request count goes up; refused count stays 0 once the API key is active.
 
 ## If you get 401 "API-key authentication only"
@@ -49,9 +49,8 @@ The gateway logs a reason per refusal in Window A (no credentials in it):
 Press Esc or Ctrl-C to stop Claude Code's retries.
 
 ## Reading the rows
-No report command exists yet. Query the database read-only, for example with the helper used on
-2026-10-29 (a small Go program run from the repo: `go run <path>\main.go C:/tmp/trove-test/trove.db`),
-or ask Claude Code/the assistant to read `trove.db` for you. The file holds metadata only, no prompt text.
+Run `trove report --data-dir C:\tmp\trove-test` for the summary. To inspect raw rows, query the database
+read-only (`sqlite3 C:\tmp\trove-test\trove.db`). The file holds metadata only, no prompt text.
 
 ## Turn it off
 1. `trove undo --data-dir C:\tmp\trove-test` (restores `~/.claude/settings.json`).
@@ -81,3 +80,27 @@ Not yet run against real traffic; the automated tests use synthetic sessions onl
    `findstr /m "your-phrase" C:\tmp\trove-test\trove.db*` must find nothing.
 5. Tell us about anything that looks wrong: a miss reason that does not match what happened, a detector that fires
    on clean output, or categories that look far off (for example context files that are not context files).
+
+## Part D: cloud backends and OpenAI-compatible servers (not yet run)
+These routes are tested only against fake servers. Each step needs your own credentials and costs real (small) money.
+Use a throwaway data directory and set `TROVE_DATA_DIR` for every command.
+
+1. **Refusals first (free).** With the gateway running, send a request with `anthropic-beta: oauth-2025-04-20` to
+   `/anthropic/v1/messages`, to `/vertex/...`, `/foundry/v1/messages`, `/bedrock/model/x/invoke` and
+   `/compat/<name>/chat/completions`. Each must return 401 with "API-key authentication only" and "Trove plugin".
+2. **Vertex.** Set `upstreams.vertex`, start Claude Code with `CLAUDE_CODE_USE_VERTEX=1` and
+   `ANTHROPIC_VERTEX_BASE_URL=http://127.0.0.1:8787/vertex`. Check rows have `provider = vertex`, real token counts,
+   and an empty `cost_usd`. Check streaming still streams.
+3. **Foundry.** Same with `upstreams.foundry = https://<resource>.services.ai.azure.com/anthropic`,
+   `CLAUDE_CODE_USE_FOUNDRY=1`, `ANTHROPIC_FOUNDRY_BASE_URL=http://127.0.0.1:8787/foundry`.
+4. **Bedrock with an API key.** `AWS_BEARER_TOKEN_BEDROCK` set, `upstreams.bedrock` to your regional runtime origin,
+   `ANTHROPIC_BEDROCK_BASE_URL=http://127.0.0.1:8787/bedrock`. Streamed rows must show output tokens. If they show
+   `stream_incomplete`, the event stream framing assumption in `usage/eventstream.go` is wrong: save a redacted
+   capture and tell us.
+5. **Bedrock with AWS credentials (SigV4).** Expect a 401 with the SigV4 explanation. If you want to settle the open
+   question in `docs/compliance.md`, also send the same request straight to AWS with its Host rewritten and note
+   whether AWS rejects it.
+6. **Compatible server.** Add a `[[upstreams.compat]]` entry (see `docs/gateway.md`), point Codex CLI or `curl`
+   at `/compat/<name>/...`, send a streamed request with `"stream_options":{"include_usage":true}`, then run
+   `trove report`. Check latency, time to first byte, tokens per second, and, if configured, the custom-rate cost
+   and the GPU-hour estimate against a hand calculation.
