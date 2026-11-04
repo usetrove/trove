@@ -124,7 +124,7 @@ func TestSchemaIsMetadataOnly(t *testing.T) {
 			"status_code", "latency_ms", "ttft_ms", "input_uncached_tokens", "cache_write_tokens", "cache_read_tokens",
 			"output_tokens", "reasoning_tokens", "cost_usd", "pricing_version", "segment_token_estimates", "findings",
 			"optimizations_applied", "shadow_savings", "error_class", "usage_raw", "service_tier",
-			"tokens_removed", "cost_diff_usd", "signals"},
+			"tokens_removed", "cost_diff_usd", "signals", "kind", "upstream"},
 		"sessions": {"session_key", "agent", "started_at", "ended_at", "request_count", "total_input_uncached_tokens",
 			"total_cache_write_tokens", "total_cache_read_tokens", "total_output_tokens", "total_cost_usd", "outcome_signals"},
 		"optimizations": {"name", "tier", "state", "changed_at", "reason"},

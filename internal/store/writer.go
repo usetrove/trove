@@ -44,7 +44,18 @@ type Request struct {
 	CostDiffUSD *float64
 	// Signals is a JSON object of integer outcome counts (see internal/measure).
 	Signals []byte
+	// Kind is KindInteractive, KindAutomated or KindUnknown (empty is stored as unknown).
+	Kind string
+	// Upstream is the configured name of an OpenAI-compatible server; empty for built-in providers.
+	Upstream string
 }
+
+// Session kinds.
+const (
+	KindInteractive = "interactive"
+	KindAutomated   = "automated"
+	KindUnknown     = "unknown"
+)
 
 // WriterOptions tunes the Writer. Zero values pick sensible defaults.
 type WriterOptions struct {
@@ -185,8 +196,8 @@ const insertRequestSQL = `INSERT INTO requests (
 	latency_ms, ttft_ms, input_uncached_tokens, cache_write_tokens, cache_read_tokens,
 	output_tokens, reasoning_tokens, cost_usd, pricing_version, segment_token_estimates,
 	findings, optimizations_applied, shadow_savings, error_class, usage_raw, service_tier,
-	tokens_removed, cost_diff_usd, signals
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+	tokens_removed, cost_diff_usd, signals, kind, upstream
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 
 const upsertSessionSQL = `INSERT INTO sessions (
 	session_key, agent, started_at, ended_at, request_count,
@@ -215,6 +226,14 @@ ON CONFLICT(day) DO UPDATE SET
 
 // DayKey is the local calendar date usage_daily files a request under.
 func DayKey(t time.Time) string { return t.Local().Format("2006-01-02") }
+
+func kindOrUnknown(k string) string {
+	switch k {
+	case KindInteractive, KindAutomated:
+		return k
+	}
+	return KindUnknown
+}
 
 func jsonOrNil(b []byte) any {
 	if len(b) == 0 {
@@ -265,7 +284,7 @@ func (d *DB) insertRequests(ctx context.Context, rows []Request) error {
 			r.Streamed, r.StatusCode, r.LatencyMS, ttft, r.InputUncachedTokens, r.CacheWriteTokens, r.CacheReadTokens,
 			r.OutputTokens, r.ReasoningTokens, cost, r.PricingVersion, jsonOrNil(r.SegmentTokenEstimate),
 			jsonOrNil(r.Findings), jsonOrNil(r.OptimizationsApplied), jsonOrNil(r.ShadowSavings), r.ErrorClass, jsonOrNil(r.UsageRaw), r.ServiceTier,
-			r.TokensRemoved, costDiff, jsonOrNil(r.Signals)); err != nil {
+			r.TokensRemoved, costDiff, jsonOrNil(r.Signals), kindOrUnknown(r.Kind), r.Upstream); err != nil {
 			return err
 		}
 		if r.StatusCode > 0 && r.StatusCode < 400 {
