@@ -523,6 +523,15 @@ func undoChange(c Change, res UndoResult) (UndoResult, bool, error) {
 	case ClaudeHooks, CodexHooks:
 		next, err = stripHookGroups(cur, c.Value)
 	default:
+		if IsExternal(c.Agent) {
+			var ok bool
+			next, ok = stripExternal(cur, strings.TrimPrefix(c.Agent, ExternalPrefix), c.Value)
+			if !ok {
+				res.Action, res.Detail = "left_alone", "the file was edited after the tool was enabled and Trove cannot tell which lines are its own, so it did not touch it. Your original is in "+c.Backup+"; remove the tool's entry by hand"
+				return res, true, nil
+			}
+			break
+		}
 		res.Action, res.Detail = "left_alone", "unknown agent in the manifest"
 		return res, false, nil
 	}

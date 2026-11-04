@@ -45,6 +45,12 @@ type Command struct {
 	Requires []string `toml:"requires" json:"requires,omitempty"` // binaries that must be on PATH first
 }
 
+// Verify is run after install to confirm the pinned version is what landed.
+type Verify struct {
+	Argv     []string `toml:"argv" json:"argv"`
+	Contains string   `toml:"contains" json:"contains"` // must appear in the output
+}
+
 // Overhead is what the tool adds to every request while on (rule 15).
 type Overhead struct {
 	ToolDefTokens  int `toml:"tool_def_tokens" json:"tool_def_tokens"`
@@ -78,8 +84,11 @@ type Manifest struct {
 	ShadowNote     string   `toml:"shadow_note" json:"shadow_note,omitempty"`
 	Install        Command  `toml:"install" json:"install"`
 	Remove         Command  `toml:"remove" json:"remove"`
-	Overhead       Overhead `toml:"overhead" json:"overhead"`
-	Claimed        Claim    `toml:"claimed" json:"claimed"`
+	Verify         Verify   `toml:"verify" json:"verify"`
+	// Rules is the text added to the agent's rules file (acts_as = rules_file only).
+	Rules    string   `toml:"rules" json:"rules,omitempty"`
+	Overhead Overhead `toml:"overhead" json:"overhead"`
+	Claimed  Claim    `toml:"claimed" json:"claimed"`
 }
 
 // OptimizerName is the name used in config, measurement and reports.
@@ -118,6 +127,10 @@ func (m Manifest) Validate() error {
 	if m.Remove.Argv != nil {
 		need(len(m.Remove.Argv) > 0 && m.Remove.Argv[0] != "", "remove.argv must name a program")
 	}
+	if len(m.Verify.Argv) > 0 {
+		need(m.Verify.Contains != "", "verify.contains is required when verify.argv is set")
+	}
+	need((m.ActsAs == ActsRulesFile) == (strings.TrimSpace(m.Rules) != ""), "rules text is required for rules_file tools and not allowed for others")
 	need(m.Overhead.ToolDefTokens >= 0 && m.Overhead.InjectedTokens >= 0 && m.Overhead.ExtraTurnsEstimate >= 0, "overhead must not be negative")
 	need(m.Claimed.Text != "" && strings.HasPrefix(m.Claimed.SourceURL, "https://"), "claimed needs text and an https source_url")
 	var out []string
