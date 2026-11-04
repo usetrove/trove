@@ -53,6 +53,9 @@ type Report struct {
 	// Upstreams is capacity and cost per OpenAI-compatible server (self-hosted or
 	// open-weight). Empty when no such traffic was recorded.
 	Upstreams []measure.UpstreamRow `json:"upstreams,omitempty"`
+	// ExternalTools are installed third-party tools, each with the tool's own
+	// claim next to what Trove measured. Empty when none is installed.
+	ExternalTools []ExternalTool `json:"external_tools,omitempty"`
 }
 
 // Tools reports on the Trove MCP server: what its definitions cost, whether

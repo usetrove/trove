@@ -9,6 +9,7 @@ import (
 
 	"github.com/usetrove/trove/internal/analyze"
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/external"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/optimize/suggest"
@@ -33,6 +34,9 @@ type Inputs struct {
 	// Recoverable is true when the Trove MCP server is registered, so trimmed
 	// output can be fetched back and output_trimmer may be on.
 	Recoverable bool
+	// ExternalManifests describes installed third-party tools; nil means the
+	// manifests built into this binary.
+	ExternalManifests []external.Manifest
 }
 
 // Build assembles the report for p. It reads only through the measurement layer.
@@ -146,6 +150,10 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	r.Leaks = buildLeaks(cats, in.Config, offers, r.Optimizers.Baseline != nil)
 
 	r.Budget = pace
+
+	if r.ExternalTools, err = buildExternal(ctx, db, in); err != nil {
+		return r, err
+	}
 
 	sugg, err := suggest.Generate(ctx, db, in.Prices, p.From, p.To)
 	if err != nil {

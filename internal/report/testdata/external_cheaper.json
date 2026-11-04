@@ -1,0 +1,44 @@
+[
+  {
+    "name": "rtk",
+    "version": "1.1.0",
+    "state": "on",
+    "license": "Apache-2.0",
+    "license_class": "permissive",
+    "claimed": {
+      "text": "reduces LLM token consumption by 60-90% on common dev commands",
+      "source_url": "https://github.com/rtk-ai/rtk",
+      "label": "claimed"
+    },
+    "overhead": {
+      "tool_def_tokens": 0,
+      "injected_tokens": 0,
+      "per_request_tokens": 0,
+      "extra_turns_estimate": 0,
+      "source": "declared",
+      "label": "estimated"
+    },
+    "prompt_tokens": {
+      "verdict": "no_regression_detected",
+      "reduced": true,
+      "on_prompt_tokens_per_request": 40200,
+      "off_prompt_tokens_per_request": 50200,
+      "n_on_sessions": 25,
+      "n_off_sessions": 25,
+      "label": "measured",
+      "text": "sessions with the optimizer on sent fewer prompt tokens per request than sessions with it off; sessions differ, so this supports but does not prove the saving"
+    },
+    "cost": {
+      "on_cost_per_session_usd": 0.8200000000000002,
+      "off_cost_per_session_usd": 1.02,
+      "n_on_sessions": 25,
+      "n_off_sessions": 25,
+      "costlier": false,
+      "cheaper": true,
+      "enough_data": true,
+      "label": "measured",
+      "text": "sessions with the tool on cost less than sessions with it off, beyond what chance explains; sessions differ, so this supports but does not prove the saving"
+    },
+    "evidence": "Sessions with the tool on are compared with later sessions without it. Sessions differ in size and task, so this supports a conclusion but does not prove it."
+  }
+]

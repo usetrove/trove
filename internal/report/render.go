@@ -132,6 +132,19 @@ func Render(r Report, o Options) string {
 		}
 	}
 
+	if len(r.ExternalTools) > 0 {
+		b.WriteString("\n" + heading("Third-party tools (each tool's own claim next to what Trove measured)"))
+		for _, t := range r.ExternalTools {
+			for i, l := range externalLines(t) {
+				if i == 0 {
+					b.WriteString(wrap(l, o.width(), "  ", "    ") + "\n")
+				} else {
+					b.WriteString(wrap(strings.TrimLeft(l, " "), o.width(), "    ", "    ") + "\n")
+				}
+			}
+		}
+	}
+
 	if r.Tools != nil {
 		b.WriteString("\n" + heading("Trove tools (MCP)"))
 		for _, l := range toolsLines(r.Tools) {

@@ -26,10 +26,12 @@ type NetCost struct {
 	NOn        int     `json:"n_on_sessions"`
 	NOff       int     `json:"n_off_sessions"`
 	// Costlier is true only when the on sessions cost more and the gap is beyond chance.
-	Costlier bool   `json:"costlier"`
-	Enough   bool   `json:"enough_data"`
-	Label    Label  `json:"label"`
-	Text     string `json:"text"`
+	Costlier bool `json:"costlier"`
+	// Cheaper is true only when the on sessions cost less and the gap is beyond chance.
+	Cheaper bool   `json:"cheaper"`
+	Enough  bool   `json:"enough_data"`
+	Label   Label  `json:"label"`
+	Text    string `json:"text"`
 }
 
 // NetCostFor returns nil when there are no off sessions to compare with.
@@ -88,9 +90,13 @@ func NetCostFor(ctx context.Context, db *store.DB, optimizer string, m config.Me
 	c.OnMeanUSD, c.OffMeanUSD = mean(on), mean(off)
 	se := math.Sqrt(sampleVar(on)/float64(len(on)) + sampleVar(off)/float64(len(off)))
 	c.Costlier = c.OnMeanUSD-c.OffMeanUSD > z95*se && c.OnMeanUSD > c.OffMeanUSD
-	if c.Costlier {
+	c.Cheaper = c.OffMeanUSD-c.OnMeanUSD > z95*se && c.OffMeanUSD > c.OnMeanUSD
+	switch {
+	case c.Costlier:
 		c.Text = "sessions with the tool on cost more than sessions with it off, beyond what chance explains; sessions differ, so review before concluding"
-	} else {
+	case c.Cheaper:
+		c.Text = "sessions with the tool on cost less than sessions with it off, beyond what chance explains; sessions differ, so this supports but does not prove the saving"
+	default:
 		c.Text = "no clear cost increase between on and off sessions"
 	}
 	return c, nil

@@ -1,0 +1,24 @@
+[
+  {
+    "name": "squeeze",
+    "version": "2.0.0",
+    "state": "on",
+    "license": "Elastic-2.0",
+    "license_class": "restricted",
+    "license_warning": "WARNING: Elastic-2.0 restricts commercial or company use. Check that your use is allowed before installing. Trove cannot tell whether it is.",
+    "claimed": {
+      "text": "cuts shell output by 70%",
+      "source_url": "https://example.com/squeeze",
+      "label": "claimed"
+    },
+    "overhead": {
+      "tool_def_tokens": 300,
+      "injected_tokens": 0,
+      "per_request_tokens": 300,
+      "extra_turns_estimate": 0,
+      "source": "declared",
+      "label": "estimated"
+    },
+    "evidence": "Sessions with the tool on are compared with later sessions without it. Sessions differ in size and task, so this supports a conclusion but does not prove it."
+  }
+]

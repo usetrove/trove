@@ -59,7 +59,7 @@ func TestNetCostRollsBackOnlyWhenToolCostsMore(t *testing.T) {
 	})
 	t.Run("cheaper is kept", func(t *testing.T) {
 		c, ev := run(t, 0.80, 1.00)
-		if c == nil || c.Costlier || len(ev) != 0 {
+		if c == nil || c.Costlier || !c.Cheaper || len(ev) != 0 {
 			t.Fatalf("c=%+v ev=%+v", c, ev)
 		}
 	})
