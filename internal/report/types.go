@@ -9,6 +9,7 @@ package report
 import (
 	"time"
 
+	"github.com/usetrove/trove/internal/experiment"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/optimize/suggest"
 )
@@ -56,6 +57,10 @@ type Report struct {
 	// ExternalTools are installed third-party tools, each with the tool's own
 	// claim next to what Trove measured. Empty when none is installed.
 	ExternalTools []ExternalTool `json:"external_tools,omitempty"`
+	// Experiments are the session-level A/B results ("measured"), kept apart from
+	// the shadow estimates in Optimizers ("estimated"). Empty when no optimizer
+	// has been in an experiment.
+	Experiments []experiment.Result `json:"experiments,omitempty"`
 }
 
 // Tools reports on the Trove MCP server: what its definitions cost, whether

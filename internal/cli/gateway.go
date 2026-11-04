@@ -20,6 +20,7 @@ import (
 
 	"github.com/usetrove/trove/internal/analyze"
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/experiment"
 	"github.com/usetrove/trove/internal/external"
 	"github.com/usetrove/trove/internal/gateway"
 	"github.com/usetrove/trove/internal/measure"
@@ -141,9 +142,15 @@ func runGateway(a *App, listen string) error {
 		log.Warn("pricing data could not be loaded; costs will be recorded as unknown", "err", err)
 		tbl = nil
 	}
+	gate := measure.NewGate(db, cfg.Measure, nil)
+	if cfg.Experiment.Enabled {
+		// Whole sessions alternate between on and shadow, recorded once per
+		// session, so caching is never broken by a mid-session switch.
+		gate.SetAssigner(experiment.NewAssigner(db, cfg.Experiment, nil, nil))
+	}
 	opts := optimize.Options{
 		Config: cfg, Pins: db.Pins(), KillFile: optimize.KillFile(dir), Getenv: a.Getenv, Log: log,
-		Gate: measure.NewGate(db, cfg.Measure, nil).State,
+		Gate: gate.State,
 		ExtraStates: func() map[string]string {
 			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 			defer cancel()
@@ -191,6 +198,27 @@ func runGateway(a *App, listen string) error {
 			}
 		}
 	}()
+	if cfg.Experiment.Enabled {
+		go func() {
+			t := time.NewTicker(5 * time.Minute)
+			defer t.Stop()
+			priors := experiment.DefaultPriors()
+			for {
+				if _, evs, err := experiment.Step(ctx, db, cfg.Experiment, priors, time.Now()); err != nil && ctx.Err() == nil {
+					log.Warn("could not update A/B results; requests are unaffected", "err", err)
+				} else {
+					for _, ev := range evs {
+						log.Warn("an optimizer was set back to shadow after an A/B comparison; see `trove report`", "optimizer", ev.Optimizer)
+					}
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+				}
+			}
+		}()
+	}
 	go db.RunRetention(ctx, func() int { return cfg.RetentionDays }, 24*time.Hour, func(err error) { log.Warn("could not delete old usage rows", "err", err) })
 
 	pid, _ := json.Marshal(pidFile{PID: os.Getpid(), Addr: ln.Addr().String()})

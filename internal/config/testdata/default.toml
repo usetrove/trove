@@ -60,6 +60,21 @@ min_sessions = 20
 retry_increase_percent = 30
 refetch_rate_percent = 25
 
+[experiment]
+# Whole sessions alternate between an optimizer you set to "on" and shadow mode,
+# so Trove can compare your real bill and outcomes. Sessions are never switched
+# mid-way. Set to false to opt out: you then get shadow estimates only.
+enabled = true
+# Makes the alternation reproducible. Any number.
+seed = 20261104
+# Fewest sessions in each arm before a measured result is shown (5 to 10000).
+min_sessions_per_arm = 20
+# Roll an optimizer back to shadow when measured cost per session is this percent
+# higher with it on (1 to 1000), or when turns, tool errors or abandoned sessions
+# are this percent higher (1 to 1000), and the whole confidence range agrees.
+cost_increase_percent = 5
+outcome_worsen_percent = 20
+
 [notifications]
 # Show a desktop notification with the receipt when a session ends.
 desktop = false

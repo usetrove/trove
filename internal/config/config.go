@@ -33,6 +33,7 @@ type Config struct {
 	Optimize      Optimize          `toml:"optimize"`
 	Budget        Budget            `toml:"budget"`
 	Measure       Measure           `toml:"measure"`
+	Experiment    Experiment        `toml:"experiment"`
 	Notifications Notifications     `toml:"notifications"`
 	History       History           `toml:"history"`
 	Fixer         Fixer             `toml:"fixer"`
@@ -114,6 +115,24 @@ type Measure struct {
 	RefetchRatePercent int `toml:"refetch_rate_percent"`
 }
 
+// Experiment holds the settings for session-level A/B comparison of optimizers.
+type Experiment struct {
+	// Enabled alternates whole sessions between an optimizer on and in shadow
+	// (only for optimizers the user set to "on"). Off means shadow estimates only.
+	Enabled bool `toml:"enabled"`
+	// Seed makes assignment reproducible. Any number.
+	Seed int64 `toml:"seed"`
+	// MinSessionsPerArm is the fewest sessions in each arm before a measured
+	// claim is made. Below it Trove says "not enough data yet".
+	MinSessionsPerArm int `toml:"min_sessions_per_arm"`
+	// CostIncreasePercent rolls an optimizer back when the measured cost per
+	// session is this much higher with it on (and the whole range is above zero).
+	CostIncreasePercent int `toml:"cost_increase_percent"`
+	// OutcomeWorsenPercent rolls an optimizer back when turns, tool errors or
+	// abandoned sessions rise by this much (and the whole range is above zero).
+	OutcomeWorsenPercent int `toml:"outcome_worsen_percent"`
+}
+
 // Gateway holds local gateway settings. It always binds to 127.0.0.1.
 type Gateway struct {
 	Port        int `toml:"port"`
@@ -178,6 +197,10 @@ func Default() Config {
 		Measure: Measure{
 			BaselineDays: 7, BaselineSessions: 20, MinSessions: 20,
 			RetryIncreasePercent: 30, RefetchRatePercent: 25,
+		},
+		Experiment: Experiment{
+			Enabled: true, Seed: 20261104, MinSessionsPerArm: 20,
+			CostIncreasePercent: 5, OutcomeWorsenPercent: 20,
 		},
 		RetentionDays: 90,
 		History:       History{Enabled: true},
@@ -257,6 +280,21 @@ min_sessions = 20
 # re-fetch what it removed (1 to 100).
 retry_increase_percent = 30
 refetch_rate_percent = 25
+
+[experiment]
+# Whole sessions alternate between an optimizer you set to "on" and shadow mode,
+# so Trove can compare your real bill and outcomes. Sessions are never switched
+# mid-way. Set to false to opt out: you then get shadow estimates only.
+enabled = true
+# Makes the alternation reproducible. Any number.
+seed = 20261104
+# Fewest sessions in each arm before a measured result is shown (5 to 10000).
+min_sessions_per_arm = 20
+# Roll an optimizer back to shadow when measured cost per session is this percent
+# higher with it on (1 to 1000), or when turns, tool errors or abandoned sessions
+# are this percent higher (1 to 1000), and the whole confidence range agrees.
+cost_increase_percent = 5
+outcome_worsen_percent = 20
 
 [notifications]
 # Show a desktop notification with the receipt when a session ends.
@@ -419,6 +457,16 @@ func (c Config) Validate() error {
 	}
 	if m.RefetchRatePercent < 1 || m.RefetchRatePercent > 100 {
 		add("measure.refetch_rate_percent is %d; use a number from 1 to 100 (default 25).", m.RefetchRatePercent)
+	}
+	x := c.Experiment
+	if x.MinSessionsPerArm < 5 || x.MinSessionsPerArm > 10000 {
+		add("experiment.min_sessions_per_arm is %d; use a number from 5 to 10000 (default 20). Fewer than 5 cannot support any comparison.", x.MinSessionsPerArm)
+	}
+	if x.CostIncreasePercent < 1 || x.CostIncreasePercent > 1000 {
+		add("experiment.cost_increase_percent is %d; use a number from 1 to 1000 (default 5).", x.CostIncreasePercent)
+	}
+	if x.OutcomeWorsenPercent < 1 || x.OutcomeWorsenPercent > 1000 {
+		add("experiment.outcome_worsen_percent is %d; use a number from 1 to 1000 (default 20).", x.OutcomeWorsenPercent)
 	}
 	if problem := checkEndpoint(c.Contribute.Endpoint); problem != "" {
 		add("contribute.endpoint %s", problem)

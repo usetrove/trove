@@ -135,6 +135,83 @@ is: *"no regression detected locally; output quality was verified on benchmarks
 (Prompt 8), not on your data."* "No regression detected" means these specific
 signals did not get worse by more than the limits, with this much data.
 
+## 4a. A/B experiments: judging an optimizer by your real bill
+
+This is the second kind of evidence. Keep the two kinds apart:
+
+| Evidence | Label | What it is | What it cannot see |
+| --- | --- | --- | --- |
+| **Shadow estimate** | *estimated* | Tokens an optimizer would have removed, priced with caching effects. Nothing is changed. | **Behaviour changes**: retries, extra turns, re-reads. Shadow mode forwards your original request, so the agent never reacts to the change. |
+| **A/B result** | *measured* | Whole sessions with the optimizer **on** compared with whole sessions with it in **shadow**, on the cost the provider reported and on outcome signals. | Anything not in those numbers. One person's sessions are noisy, so every figure comes with a range. |
+
+**How sessions are assigned.** For an optimizer you set to `on`, each new session
+is given an arm once, when it starts: *on*, or *off* (shadow). The arm is stored
+and never changes, so a session's cached prefix is never disturbed by a switch.
+Assignment is randomised in blocks of four (two on, two off, in a seeded random
+order), so the two arms stay balanced. Sessions can be grouped by repo and task
+type where Trove knows them, and are then balanced within each group. The
+gateway cannot see repos, so today there is one group. If you would rather not
+take part, set `enabled = false` under `[experiment]`; you then get shadow
+estimates only. The control sessions forgo the optimizer's savings, which is the
+price of an honest comparison.
+
+**Where cost comes from.** Provider-reported usage (gateway), or the usage fields
+in your agent's session logs, priced from the pricing table. Never from Trove's
+own count of bytes it removed. A session with a request Trove cannot price
+exactly is left out of cost, not guessed. Sessions that were not really run the
+way they were assigned (held at shadow by the baseline or a rollback) are also
+left out, and the count is shown. Each optimizer's own overhead (tool
+definitions, injected text) is part of what the agent was billed, so it is
+already inside the measured cost; the report shows it as a line item and does not
+subtract it again.
+
+**If the agent already trims.** Many agents truncate large tool output
+themselves. Saving tokens on output the agent would have cut anyway saves nothing,
+so a shadow estimate only counts what would actually have been sent: the agent's
+size minus the optimizer's size, both limited by the agent's own cap. Trove ships
+no built-in caps, because an agent's limit has to be checked against its current
+documentation; until one is set, estimates assume the agent sends output in full.
+A/B results need no such adjustment, because they use the real bill.
+
+**Ranges, confidence and sample sizes.** Every A/B figure shows its label, a 95%
+range (a seeded bootstrap, so the same data always gives the same range), the
+number of sessions on each side, and a plain confidence word: *high*, *medium* or
+*low*, from how narrow the range is and how many sessions stand behind it. Below
+`min_sessions_per_arm` (default 20) on either side, the report says **"not enough
+data yet"** and shows no number.
+
+**Benchmark priors.** The benchmark lab's results can be combined with your
+sessions, which pulls a noisy estimate toward the lab result and leaves a
+precise one nearly alone. The combined range is shown next to your own and is
+marked as including benchmark evidence. Rollback always uses your own data, so a
+prior can never hide a loss. No benchmark results are committed yet, so the
+shipped priors file is empty: for now only your own sessions count, and Trove
+will not suggest turning an optimizer on from benchmark evidence.
+
+**Promotion and rollback.**
+- *Promotion*: an optimizer moves from shadow to **suggested on** only when
+  benchmark evidence clears the lab's ship rule (enough paired runs, cost down by
+  at least 5% across the whole range, success no more than 5 points worse).
+  Trove only suggests; it never turns an optimizer on by itself.
+- *Rollback*: an optimizer goes back to shadow for new sessions when, in your A/B
+  sessions, cost per session is up by at least `cost_increase_percent` (default
+  5%) with the whole range above zero, or turns or tool errors are up by at least
+  `outcome_worsen_percent` (default 20%) in the same way, or abandoned sessions
+  are up by 10 points or more. The reason is recorded and shown in the report,
+  including that shadow mode could not have seen it. Running sessions keep their
+  state, and `config.toml` is never edited.
+
+**Why Trove's numbers may be lower than other tools' claims.** Many tools report
+the tokens they removed, compared with a raw, untrimmed output nobody was going to
+pay for. Trove compares real bills: it counts only what would have been sent, it
+includes the optimizer's own overhead, and it includes the extra turns and retries
+an optimization can cause. When an optimization makes the agent work harder, the
+claim and the bill can point in opposite directions; Trove reports the bill.
+
+Look at the results with `trove report` or `trove experiment status` (both support
+`--json`). They are recomputed from stored metadata (arms, per-session cost and
+signals), so a re-run gives the same answer.
+
 ## 5. Limits you should know about
 
 - **Sessions are inferred.** Without a Claude Code session id, a session is a
