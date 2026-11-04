@@ -65,6 +65,7 @@ All numbers, hashes, names and timings. "Kept" is how long Trove keeps it on its
 | `requests` | One row per gateway request: time, hashed session key, agent label and version (derived, not the raw User-Agent), provider, model name, route, streamed or not, HTTP status, latency, token counts, cost, findings and shadow-savings counts, optimizer names applied, error class, the provider's usage object (numbers) | `retention_days` (default 90) |
 | `sessions` | Per-session totals of the above, hashed key | `retention_days` after the session ends |
 | `session_pins` | Which optimizers were on for a session (names and states) | `retention_days` |
+| `external_tools` | Third-party tools you approved: name, pinned version, license, on/off, timestamps, IDs of config changes to undo on removal | removed by `trove external remove` |
 | `history_requests` | One row per request found in your agent's local session logs: hashed keys, model, token counts, cost, tool **names** with counts, sizes, error counts | `retention_days` |
 | `history_files` | Which log files were read: hash of the path, size, modified time, parser offsets, line counts | until uninstall |
 | `usage_daily` | Per-day request count and spend | until uninstall |

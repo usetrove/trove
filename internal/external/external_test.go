@@ -132,3 +132,37 @@ func TestCheckEnable(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateStates(t *testing.T) {
+	a := Manifest{Name: "a", Category: CategoryShellCompressor}
+	b := Manifest{Name: "b", Category: CategoryShellCompressor}
+	n := Manifest{Name: "n", Category: CategoryCodeNav, SupportsShadow: true}
+	ms := []Manifest{a, b, n}
+	cases := []struct {
+		name     string
+		states   map[string]string
+		builtins []string
+		want     int
+		contains string
+	}{
+		{"empty", nil, nil, 0, ""},
+		{"unknown tool", map[string]string{"ext_zzz": "on"}, nil, 1, "Trove knows"},
+		{"shadow refused", map[string]string{"ext_a": "shadow"}, nil, 1, "cannot run in shadow"},
+		{"shadow allowed", map[string]string{"ext_n": "shadow"}, nil, 0, ""},
+		{"two compressors on", map[string]string{"ext_a": "on", "ext_b": "on"}, nil, 1, "disable"},
+		{"one on one off", map[string]string{"ext_a": "on", "ext_b": "off"}, nil, 0, ""},
+		{"builtin overlap", map[string]string{"ext_a": "on"}, []string{"noise_normalizer"}, 1, "built-in"},
+		{"non-external ignored", map[string]string{"output_trimmer": "shadow"}, nil, 0, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			errs := ValidateStates(c.states, ms, c.builtins)
+			if len(errs) != c.want {
+				t.Fatalf("want %d errors, got %v", c.want, errs)
+			}
+			if c.want > 0 && !strings.Contains(errs[0].Error(), c.contains) {
+				t.Errorf("error %q lacks %q", errs[0], c.contains)
+			}
+		})
+	}
+}
