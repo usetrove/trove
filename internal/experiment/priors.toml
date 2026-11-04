@@ -1,0 +1,20 @@
+# Benchmark-lab priors, one table per optimizer. Version 1.
+#
+# A prior says what the benchmark lab found for an optimizer on its task set, as
+# a relative change in cost per task (-0.08 = 8% cheaper) with a 95% interval
+# from the lab's paired bootstrap, and the success-rate difference in points.
+#
+#   [optimizers.optimizer_name]
+#   cost_change      = -0.08
+#   cost_ci_low      = -0.12
+#   cost_ci_high     = -0.04
+#   success_diff     = 0.0
+#   success_ci_low   = -0.02
+#   pairs            = 30
+#   source           = "bench run id or doc"
+#
+# No benchmark results are committed yet, so this file ships empty on purpose.
+# With no prior, Trove reports only your own sessions and never suggests
+# turning an optimizer on from benchmark evidence. Add an entry only from a
+# real, reproducible bench run.
+version = 1

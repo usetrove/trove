@@ -154,6 +154,9 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	if r.ExternalTools, err = buildExternal(ctx, db, in); err != nil {
 		return r, err
 	}
+	if r.Experiments, err = buildExperiments(ctx, db, in); err != nil {
+		return r, err
+	}
 
 	sugg, err := suggest.Generate(ctx, db, in.Prices, p.From, p.To)
 	if err != nil {

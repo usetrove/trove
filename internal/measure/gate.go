@@ -70,6 +70,8 @@ type Gate struct {
 	now func() time.Time
 	ttl time.Duration
 
+	assigner Assigner
+
 	mu       sync.Mutex
 	loadedAt time.Time
 	baseline BaselineStatus
@@ -97,11 +99,29 @@ func (g *Gate) State(sessionKey, optimizer, configured string, _ time.Time) stri
 	if _, back := rolled[optimizer]; back {
 		return config.StateShadow
 	}
+	if g.assigner != nil {
+		// The experiment owns assignment (balanced, recorded, never changed
+		// mid-session). It can only lower "on" to shadow for the control arm.
+		if g.assigner.Arm(sessionKey, optimizer) != config.StateOn {
+			return config.StateShadow
+		}
+		return config.StateOn
+	}
 	if g.cfg.Interleave && Arm(sessionKey, optimizer) == config.StateOff {
 		return config.StateShadow
 	}
 	return config.StateOn
 }
+
+// Assigner decides the arm ("on" or "off") of a session for an optimizer. It
+// must return the same answer for the same session every time.
+type Assigner interface {
+	Arm(sessionKey, optimizer string) string
+}
+
+// SetAssigner makes a (nil to remove) decide the A/B arms instead of the
+// built-in hash. Call it before the gateway starts serving.
+func (g *Gate) SetAssigner(a Assigner) { g.assigner = a }
 
 // snapshot reads (at most every ttl) the install time, session count and active rollbacks.
 func (g *Gate) snapshot() (BaselineStatus, map[string]string, error) {

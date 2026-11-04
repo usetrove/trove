@@ -279,6 +279,13 @@ func Evaluate(ctx context.Context, db *store.DB, m config.Measure, now time.Time
 	return checks, events, nil
 }
 
+// RecordRollback writes a rollback decided outside this package (the A/B
+// experiment): one guardrail_events row and the optimizer set back to shadow
+// for new sessions, in one transaction.
+func RecordRollback(ctx context.Context, db *store.DB, ev Event) error {
+	return recordRollback(ctx, db, ev)
+}
+
 func recordRollback(ctx context.Context, db *store.DB, ev Event) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {

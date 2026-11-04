@@ -80,6 +80,7 @@ func NewRoot(a *App) *cobra.Command {
 		newMCP(a),
 		newEngine(a),
 		newExternal(a),
+		newExperiment(a),
 		newHooks(a),
 		newHookCmd(a),
 		newVersion(a),

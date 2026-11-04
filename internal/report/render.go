@@ -6,6 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/usetrove/trove/internal/experiment"
 	"github.com/usetrove/trove/internal/measure"
 )
 
@@ -140,6 +141,20 @@ func Render(r Report, o Options) string {
 					b.WriteString(wrap(l, o.width(), "  ", "    ") + "\n")
 				} else {
 					b.WriteString(wrap(strings.TrimLeft(l, " "), o.width(), "    ", "    ") + "\n")
+				}
+			}
+		}
+	}
+
+	if len(r.Experiments) > 0 {
+		b.WriteString("\n" + heading("A/B results (measured: whole sessions with an optimizer on versus in shadow)"))
+		b.WriteString(wrap("Shadow estimates above are "+experiment.ShadowCaveat+". These A/B figures compare real cost and outcomes, so they can be lower than a shadow estimate or than other tools' claims.", o.width(), "  ", "  ") + "\n")
+		for _, x := range r.Experiments {
+			for i, l := range experimentLines(x) {
+				if i == 0 {
+					b.WriteString(wrap(l, o.width(), "  ", "    ") + "\n")
+				} else {
+					b.WriteString(wrap(l[2:], o.width(), "    ", "      ") + "\n")
 				}
 			}
 		}
