@@ -89,6 +89,15 @@ func Render(r Report, o Options) string {
 		b.WriteString("\n")
 		b.WriteString(spendTable("Model", r.Spend.ByModel, o))
 	}
+	if len(r.Spend.ByKind) > 0 {
+		b.WriteString("\n" + heading("Spend by session kind"))
+		b.WriteString(spendTable("Kind", r.Spend.ByKind, o))
+		b.WriteString(wrap("Kinds are what you declared with the X-Trove-Kind header; Trove never guesses them. Automated work is where included API credits (Max, Ultra, Team plans) may apply; this report cannot see whether they were used.", o.width(), "  ", "  ") + "\n")
+	}
+	if len(r.Upstreams) > 0 {
+		b.WriteString("\n" + heading("Self-hosted and open-weight servers"))
+		renderUpstreams(&b, r.Upstreams, o)
+	}
 	if r.History != nil && len(r.History.ByModel) > 0 {
 		b.WriteString("\n" + heading("History usage by model (API-equivalent value, not a bill)"))
 		b.WriteString(spendTable("Model", r.History.ByModel, o))

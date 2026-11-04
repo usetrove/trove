@@ -50,6 +50,9 @@ type Report struct {
 	// calls, re-reads that followed a block). Empty when no hook has recorded
 	// anything.
 	Hooks []measure.HookStats `json:"hooks,omitempty"`
+	// Upstreams is capacity and cost per OpenAI-compatible server (self-hosted or
+	// open-weight). Empty when no such traffic was recorded.
+	Upstreams []measure.UpstreamRow `json:"upstreams,omitempty"`
 }
 
 // Tools reports on the Trove MCP server: what its definitions cost, whether
@@ -97,6 +100,12 @@ type Headline struct {
 type Spend struct {
 	ByAgent []measure.TotalsRow `json:"by_agent"`
 	ByModel []measure.TotalsRow `json:"by_model"`
+	// ByKind splits gateway spend into interactive, automated and unknown sessions,
+	// from what the user declared with X-Trove-Kind. Empty until at least one request
+	// declares a kind, so reports without it are unchanged. Automated is shown on its
+	// own because that is where included API credits (Max, Ultra, Team) may apply;
+	// the label does not say whether credits were actually used.
+	ByKind []measure.TotalsRow `json:"by_kind,omitempty"`
 }
 
 // Leak is one kind of waste with the way to act on it.

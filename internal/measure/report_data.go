@@ -18,6 +18,7 @@ const (
 	ByAgent = "agent"
 	ByModel = "model"
 	ByDay   = "day"
+	ByKind  = "kind" // interactive, automated or unknown, as the user declared
 )
 
 // groupExpr maps a grouping to a fixed SQL expression; user input never reaches SQL.
@@ -25,6 +26,7 @@ var groupExpr = map[string]string{
 	ByAgent: `agent`,
 	ByModel: `model`,
 	ByDay:   `strftime('%Y-%m-%d', ts / 1000, 'unixepoch')`,
+	ByKind:  `kind`,
 }
 
 // TotalsRow is usage for one agent, model or day.
@@ -45,7 +47,7 @@ type TotalsRow struct {
 func TotalsBy(ctx context.Context, db *store.DB, w Window, by string) ([]TotalsRow, error) {
 	expr, ok := groupExpr[by]
 	if !ok {
-		return nil, fmt.Errorf("cannot group by %q; use agent, model or day", by)
+		return nil, fmt.Errorf("cannot group by %q; use agent, model, day or kind", by)
 	}
 	rows, err := db.QueryContext(ctx, `SELECT `+expr+` AS k, COUNT(*), SUM(input_uncached_tokens), SUM(cache_write_tokens),
 		SUM(cache_read_tokens), SUM(output_tokens), COALESCE(SUM(cost_usd), 0), SUM(CASE WHEN cost_usd IS NULL THEN 1 ELSE 0 END)

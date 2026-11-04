@@ -56,6 +56,12 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	}
 	byAgent, byModel = hist.mergeSpend(byAgent, byModel)
 	r.Spend = Spend{ByAgent: byAgent, ByModel: byModel}
+	if r.Spend.ByKind, err = kindSpend(ctx, db, w); err != nil {
+		return r, err
+	}
+	if r.Upstreams, err = measure.UpstreamStats(ctx, db, w, in.Config); err != nil {
+		return r, err
+	}
 	r.Headline.Spend, r.Headline.Tokens, r.Requests = sumTotals(byAgent)
 	if hist != nil {
 		r.History = &hist.h
