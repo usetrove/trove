@@ -34,6 +34,8 @@ type Options struct {
 	// Recovery stores the full text of output an optimizer shortens. Without it
 	// the output trimmer cannot be "on": it stays in shadow, estimating only.
 	Recovery RecoveryStore
+	// Tools overrides the tool-level optimizer list; tests use it. Default: ToolPipeline().
+	Tools []Base
 }
 
 // RecoveryStore keeps full tool output so the agent can fetch it back with
@@ -56,6 +58,7 @@ type Engine struct {
 	budget   time.Duration
 	gate     StateGate
 	recovery RecoveryStore
+	tools    []Base
 }
 
 // New returns an Engine.
@@ -65,6 +68,10 @@ func New(o Options) *Engine {
 		killFile: o.KillFile, getenv: o.Getenv, now: o.Now, log: o.Log, bpt: o.BytesPerToken, gate: o.Gate, recovery: o.Recovery,
 	}
 	e.pins.recoverable = o.Recovery != nil
+	e.tools = o.Tools
+	if e.tools == nil {
+		e.tools = ToolPipeline()
+	}
 	if e.pipeline == nil {
 		e.pipeline = Pipeline()
 	}
@@ -136,9 +143,17 @@ func (r Result) TokensRemoved() int64 {
 	return n
 }
 
-// Run applies the pipeline. It never returns an error and never panics: on any
-// problem it returns the original body (fail open, CLAUDE.md rule 4).
-func (e *Engine) Run(ctx context.Context, in Input) (res Result) {
+// Run is TransformRequest for callers that still use Input.
+func (e *Engine) Run(ctx context.Context, in Input) Result {
+	return e.TransformRequest(ctx, RequestIn{Provider: in.Provider, Path: in.Path, Header: in.Header, Body: in.Body},
+		Session{Key: in.SessionKey, Agent: in.Agent})
+}
+
+// TransformRequest applies the request-level pipeline. It never returns an
+// error and never panics: on any problem it returns the original body (fail
+// open, CLAUDE.md rule 4). s.Key must be derived from the original body.
+func (e *Engine) TransformRequest(ctx context.Context, rq RequestIn, s Session) (res Result) {
+	in := Input{Provider: rq.Provider, Path: rq.Path, Header: rq.Header, Body: rq.Body, SessionKey: s.Key, Agent: s.Agent}
 	res = Result{Body: in.Body}
 	defer func() {
 		if p := recover(); p != nil {

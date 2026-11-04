@@ -44,6 +44,10 @@ type Session struct {
 	// Custom is true only if the user explicitly marked this agent label as a
 	// custom agent in config. Optimizers that change prompt layout require it.
 	Custom bool
+	// State resolves an optimizer's state (off, shadow, on) for the tool-level
+	// entry points. The adapter supplies it because pins, guardrail rollbacks
+	// and the kill switch are resolved differently per adapter. Nil means off.
+	State func(optimizer string) string
 }
 
 // Report says what one optimizer did to one request.
@@ -60,11 +64,20 @@ type Report struct {
 	// Err is set when the optimizer could not finish; the engine then forwards
 	// the original request.
 	Err string `json:"error,omitempty"`
+	// OverheadTokens is what the optimizer itself costs the model per request
+	// while on (see Capable). Net savings are TokensRemoved - OverheadTokens.
+	OverheadTokens int `json:"overhead_tokens,omitempty"`
+	// Decision is set by tool-input optimizers that ask the adapter to deny a
+	// call or add advice.
+	Decision *Decision `json:"decision,omitempty"`
 	// Originals holds the full text of every output the optimizer shortened, so
 	// the engine can store it before the shortened request is forwarded. It is
 	// never recorded or serialized.
 	Originals []string `json:"-"`
 }
+
+// NetTokens is the estimated saving after the optimizer's own overhead.
+func (r Report) NetTokens() int64 { return r.TokensRemoved - int64(r.OverheadTokens) }
 
 // Optimizer is one request transformation.
 type Optimizer interface {
@@ -89,11 +102,12 @@ type Failure struct {
 
 // Applied is the per-request record stored in optimizations_applied.
 type Applied struct {
-	Name          string `json:"name"`
-	State         string `json:"state"`
-	BytesRemoved  int    `json:"bytes_removed"`
-	TokensRemoved int64  `json:"tokens_removed"`
-	Failed        string `json:"failed,omitempty"`
+	Name           string `json:"name"`
+	State          string `json:"state"`
+	BytesRemoved   int    `json:"bytes_removed"`
+	TokensRemoved  int64  `json:"tokens_removed"`
+	OverheadTokens int    `json:"overhead_tokens,omitempty"`
+	Failed         string `json:"failed,omitempty"`
 }
 
 // AppliedJSON encodes the applied list for the optimizations_applied column.
@@ -104,7 +118,7 @@ func AppliedJSON(reports []Report, failures []Failure) []byte {
 	}
 	out := make([]Applied, 0, len(reports)+len(failures))
 	for _, r := range reports {
-		out = append(out, Applied{Name: r.Name, State: r.State, BytesRemoved: r.BytesRemoved, TokensRemoved: r.TokensRemoved})
+		out = append(out, Applied{Name: r.Name, State: r.State, BytesRemoved: r.BytesRemoved, TokensRemoved: r.TokensRemoved, OverheadTokens: r.OverheadTokens})
 	}
 	for _, f := range failures {
 		out = append(out, Applied{Name: f.Optimizer, State: "failed", Failed: f.Class})
