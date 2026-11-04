@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/optimize"
@@ -14,12 +15,21 @@ import (
 // turn the engine's decision into what the agent expects. No optimization
 // decision is made here.
 
+// engineMargin is what the engine's budget leaves of callDeadline for starting
+// up, reading the journal and printing.
+const engineMargin = 30 * time.Millisecond
+
 // engine returns the engine hooks call, built once per hook process. Hooks
 // resolve states themselves (pins, rollbacks, the kill switch), so the engine's
-// own config only supplies the per-call time budget.
+// own config only supplies the per-call time budget. That budget is the hook's
+// deadline less a margin, not the gateway's 25 ms: these optimizers read files
+// and the journal, which the hook deadline has always allowed time for, and a
+// budget shorter than that would silently skip work on a slow disk.
 func (h *handler) engine() *optimize.Engine {
 	if h.eng == nil {
-		h.eng = optimize.New(optimize.Options{Config: config.Default(), Getenv: h.getenv, Now: h.now, KillFile: optimize.KillFile(h.dir)})
+		cfg := config.Default()
+		cfg.Optimize.BudgetMS = int((callDeadline - engineMargin) / time.Millisecond)
+		h.eng = optimize.New(optimize.Options{Config: cfg, Getenv: h.getenv, Now: h.now, KillFile: optimize.KillFile(h.dir)})
 	}
 	return h.eng
 }

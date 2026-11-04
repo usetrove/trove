@@ -18,7 +18,9 @@ import (
 )
 
 func newServer() *Server {
-	return New(optimize.New(optimize.Options{Config: config.Default(), Getenv: func(string) string { return "" }}))
+	cfg := config.Default()
+	cfg.Optimize.BudgetMS = 1000 // tests must not depend on machine load; the budget itself is tested in package optimize
+	return New(optimize.New(optimize.Options{Config: cfg, Getenv: func(string) string { return "" }}))
 }
 
 func call(t testing.TB, s *Server, m any) Reply {
@@ -69,8 +71,8 @@ func TestRepeatReadKeepsLedgerAcrossCalls(t *testing.T) {
 	st := Session{Key: "k", Prompts: 1, States: map[string]string{"hook_repeat_read": "on"}}
 	in, _ := json.Marshal(map[string]any{"file_path": path})
 	c := &optimize.ToolCall{Name: "Read", Input: in}
-	if r := call(t, s, Message{Method: "tool_output", Session: st, Call: c, Output: &optimize.ToolOutput{Parts: []optimize.Part{{Text: "package a"}}}}); !r.OK {
-		t.Fatalf("%+v", r)
+	if r := call(t, s, Message{Method: "tool_output", Session: st, Call: c, Output: &optimize.ToolOutput{Parts: []optimize.Part{{Text: "package a"}}}}); !r.OK || len(r.Reports) != 1 || r.Reports[0].Err != "" {
+		t.Fatalf("the read was not recorded: %+v", r)
 	}
 	r := call(t, s, Message{Method: "tool_input", Session: st, Call: c})
 	if !r.OK || len(r.Reports) != 1 || r.Reports[0].Decision == nil || r.Reports[0].Decision.Kind != optimize.KindBlocked {

@@ -67,6 +67,7 @@ func TestToolLevelMatchesRequestLevel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := config.Default()
 			cfg.Optimizers[tc.optimizer] = config.StateOn
+			cfg.Optimize.BudgetMS = 1000 // load must not turn a correctness test into a timeout
 			e := New(Options{Config: cfg, Getenv: func(string) string { return "" }, Recovery: &memRecovery{}})
 			body := req{msgs: []msg{user(text("go")), assistant(toolUse("t1", "Bash")), user(toolResult("t1", tc.text))}}.body()
 			res := e.TransformRequest(context.Background(), RequestIn{Provider: "anthropic", Path: "/v1/messages", Body: body}, Session{Key: "s", Agent: "sdk"})
