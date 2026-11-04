@@ -25,9 +25,24 @@ import (
 
 // Message is what the client is told when a request is refused.
 const Message = "Trove's gateway is for API-key authentication only. " +
-	"To use a Claude or ChatGPT subscription, remove the custom endpoint setting " +
+	"Gateway mode needs an API key or a cloud credential (Console key, Vertex, Foundry or Bedrock key). " +
+	"A claude.ai login on any plan (Free, Pro, Max, Ultra, Team or Enterprise) is not supported, and neither is a ChatGPT login. " +
+	"To use a subscription, remove the custom endpoint setting " +
 	"(ANTHROPIC_BASE_URL for Claude Code, or the trove provider in ~/.codex/config.toml) " +
-	"or run `trove undo`. Trove never handles subscription credentials."
+	"or run `trove undo`, and use the Trove plugin instead. Trove never handles subscription credentials."
+
+// SigV4Message is what a Bedrock client is told when it signs with AWS
+// credentials. SigV4 signs the request body hash and the Host header, so a
+// request signed for 127.0.0.1 cannot be accepted by AWS, and Trove does not
+// hold AWS credentials to re-sign it.
+const SigV4Message = "Trove's gateway cannot forward AWS SigV4-signed requests: the signature covers the " +
+	"request body and the Host header, and Trove never holds AWS credentials to re-sign. " +
+	"Use an Amazon Bedrock API key (AWS_BEARER_TOKEN_BEDROCK), or remove ANTHROPIC_BEDROCK_BASE_URL " +
+	"(or run `trove undo`) and use the Trove plugin instead."
+
+// oauthTokenPrefix starts Claude.ai OAuth tokens (login and `claude setup-token`).
+// Compared as a prefix only; used as a second signal beside the OAuth beta flag.
+const oauthTokenPrefix = "sk-ant-oat"
 
 // Decision is the verdict for one request.
 type Decision struct {
@@ -43,12 +58,8 @@ func reject(reason string) Decision { return Decision{Reason: reason} }
 func Anthropic(h http.Header) Decision {
 	key := strings.TrimSpace(h.Get("X-Api-Key"))
 	authz := strings.TrimSpace(h.Get("Authorization"))
-	for _, beta := range h.Values("Anthropic-Beta") {
-		for _, v := range strings.Split(beta, ",") {
-			if strings.Contains(strings.ToLower(v), "oauth") {
-				return reject("oauth_beta")
-			}
-		}
+	if d, bad := claudeLogin(h); bad {
+		return d
 	}
 	if key == "" {
 		if authz != "" {
@@ -75,10 +86,103 @@ func OpenAI(h http.Header) Decision {
 	if !isBearer || tok == "" {
 		return reject("unknown_scheme")
 	}
-	if looksLikeJWT(tok) {
+	if looksLikeJWT(tok) || h.Get("Chatgpt-Account-Id") != "" {
 		return reject("session_token")
 	}
 	return ok
+}
+
+// Vertex classifies a request bound for Google Cloud's Agent Platform
+// (Vertex AI). The credential is a Google OAuth access token in Authorization,
+// which is a cloud credential and not a claude.ai login. Tokens may be JWTs, so
+// the JWT heuristic does not apply here.
+func Vertex(h http.Header) Decision {
+	if d, bad := claudeLogin(h); bad {
+		return d
+	}
+	tok, isBearer := bearer(strings.TrimSpace(h.Get("Authorization")))
+	if !isBearer || tok == "" {
+		return reject("no_credential")
+	}
+	return ok
+}
+
+// Foundry classifies a request bound for Microsoft Foundry: an API key in
+// x-api-key or api-key, or an Entra ID bearer token (a JWT, which is normal).
+func Foundry(h http.Header) Decision {
+	if d, bad := claudeLogin(h); bad {
+		return d
+	}
+	if strings.TrimSpace(h.Get("X-Api-Key")) != "" || strings.TrimSpace(h.Get("Api-Key")) != "" {
+		return ok
+	}
+	if tok, isBearer := bearer(strings.TrimSpace(h.Get("Authorization"))); isBearer && tok != "" {
+		return ok
+	}
+	return reject("no_credential")
+}
+
+// Bedrock classifies a request bound for Amazon Bedrock. Only a Bedrock API
+// key (a bearer token) is accepted; SigV4 requests are refused with SigV4Message.
+func Bedrock(h http.Header) Decision {
+	authz := strings.TrimSpace(h.Get("Authorization"))
+	if strings.HasPrefix(authz, "AWS4-") {
+		return reject("sigv4")
+	}
+	if d, bad := claudeLogin(h); bad {
+		return d
+	}
+	tok, isBearer := bearer(authz)
+	if !isBearer || tok == "" {
+		return reject("no_credential")
+	}
+	return ok
+}
+
+// Compat classifies a request bound for an OpenAI-compatible server (vLLM,
+// SGLang, or a provider serving open-weight models). Keys there are opaque
+// and may be JWTs, so only explicit ChatGPT or claude.ai signals are refused.
+// With allowNone, a request without any credential is accepted (open servers).
+func Compat(h http.Header, allowNone bool) Decision {
+	if h.Get("Chatgpt-Account-Id") != "" {
+		return reject("session_token")
+	}
+	if d, bad := claudeLogin(h); bad {
+		return d
+	}
+	authz := strings.TrimSpace(h.Get("Authorization"))
+	if authz == "" {
+		if allowNone {
+			return ok
+		}
+		return reject("no_credential")
+	}
+	if tok, isBearer := bearer(authz); !isBearer || tok == "" {
+		return reject("unknown_scheme")
+	}
+	return ok
+}
+
+// claudeLogin reports whether the headers carry a claude.ai login, on any
+// plan: the OAuth value in anthropic-beta (set whenever a claude.ai login is
+// the active credential) or a token with the OAuth prefix in a credential header.
+func claudeLogin(h http.Header) (Decision, bool) {
+	for _, beta := range h.Values("Anthropic-Beta") {
+		for _, v := range strings.Split(beta, ",") {
+			if strings.Contains(strings.ToLower(v), "oauth") {
+				return reject("oauth_beta"), true
+			}
+		}
+	}
+	for _, v := range []string{h.Get("X-Api-Key"), h.Get("Api-Key")} {
+		if strings.HasPrefix(strings.TrimSpace(v), oauthTokenPrefix) {
+			return reject("oauth_token"), true
+		}
+	}
+	if tok, isBearer := bearer(strings.TrimSpace(h.Get("Authorization"))); isBearer && strings.HasPrefix(tok, oauthTokenPrefix) {
+		return reject("oauth_token"), true
+	}
+	return Decision{}, false
 }
 
 func bearer(v string) (string, bool) {
