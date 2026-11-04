@@ -35,8 +35,10 @@ type flightKey struct{}
 
 // flight is the state of one proxied request.
 type flight struct {
-	provider  string
+	provider  string // the response dialect and list-price provider: "anthropic" or "openai"
+	rt        *route
 	path      string // route without the provider prefix, no query
+	usagePath string // path as the usage extractor and optimizer understand it
 	start     time.Time
 	ctx       context.Context // the client request context; ends when the client disconnects
 	reqHeader http.Header
@@ -56,20 +58,19 @@ type flight struct {
 	recorded  bool
 }
 
-func (s *Server) forward(w http.ResponseWriter, r *http.Request, provider, prefix string, upstream *url.URL) {
+func (s *Server) forward(w http.ResponseWriter, r *http.Request, rt *route) {
 	start := s.opts.Now()
 	s.requests.Add(1)
+	provider, prefix, upstream := rt.dialect, rt.prefix, rt.upstream
 
-	var d auth.Decision
-	if provider == "anthropic" {
-		d = auth.Anthropic(r.Header)
-	} else {
-		d = auth.OpenAI(r.Header)
-	}
-	if !d.OK {
+	if d := rt.decide(r.Header); !d.OK {
 		s.rejected.Add(1)
-		s.log.Info("rejected a request that does not use API-key authentication", "provider", provider, "reason", d.Reason)
-		authError(w, provider)
+		s.log.Info("rejected a request that does not use API-key authentication", "provider", rt.label, "reason", d.Reason)
+		msg := auth.Message
+		if rt.message != nil {
+			msg = rt.message(d)
+		}
+		providerError(w, rt.shape, http.StatusUnauthorized, msg)
 		return
 	}
 
@@ -92,9 +93,15 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, provider, prefi
 	if r.URL.RawPath != "" {
 		rawPath = strings.TrimPrefix(r.URL.RawPath, prefix)
 	}
-	f := &flight{provider: provider, path: path, start: start, ctx: r.Context(), reqHeader: withoutCredentials(r.Header)}
+	usagePath := path
+	if rt.optPath != nil {
+		usagePath = rt.optPath(path)
+	}
+	f := &flight{provider: provider, rt: rt, path: path, usagePath: usagePath, start: start, ctx: r.Context(), reqHeader: withoutCredentials(r.Header)}
 	body = s.optimizeBody(r, f, body)
 	f.reqBody = body
+	basePath := strings.TrimSuffix(upstream.Path, "/")
+	rawBase := strings.TrimSuffix(upstream.EscapedPath(), "/")
 
 	proxy := &httputil.ReverseProxy{
 		Transport:     s.transport,
@@ -103,8 +110,13 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, provider, prefi
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			out := pr.Out
 			out.URL.Scheme, out.URL.Host = upstream.Scheme, upstream.Host
-			out.URL.Path, out.URL.RawPath = path, rawPath
+			out.URL.Path = basePath + path
+			out.URL.RawPath = ""
+			if rawPath != "" {
+				out.URL.RawPath = rawBase + rawPath
+			}
 			out.URL.RawQuery = pr.In.URL.RawQuery
+			out.Header.Del("X-Trove-Kind") // Trove's own label; the provider never sees it
 			out.Host = upstream.Host
 			out.Body = io.NopCloser(bytes.NewReader(body))
 			out.ContentLength = int64(len(body))
@@ -126,7 +138,8 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, provider, prefi
 func (s *Server) watchResponse(f *flight, resp *http.Response) {
 	f.mu.Lock()
 	f.status = resp.StatusCode
-	f.streamed = strings.HasPrefix(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream")
+	ct := strings.ToLower(resp.Header.Get("Content-Type"))
+	f.streamed = strings.HasPrefix(ct, "text/event-stream") || (f.rt.eventstream && strings.HasPrefix(ct, "application/vnd.amazon.eventstream"))
 	f.encoding = strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding")))
 	f.mu.Unlock()
 	resp.Body = &tee{rc: resp.Body, f: f, s: s}
@@ -196,9 +209,9 @@ func (s *Server) upstreamFailed(w http.ResponseWriter, r *http.Request, f *fligh
 	if r.Context().Err() != nil {
 		class = "client_disconnected" // the client left; nothing to send
 	} else {
-		s.log.Warn("could not reach the provider", "provider", f.provider, "err", err)
-		providerError(w, f.provider, http.StatusBadGateway,
-			"Trove could not reach "+f.provider+" ("+shortErr(err)+"). Check your internet connection and the upstreams settings in ~/.trove/config.toml.")
+		s.log.Warn("could not reach the provider", "provider", f.rt.label, "err", err)
+		providerError(w, f.rt.shape, http.StatusBadGateway,
+			"Trove could not reach "+f.rt.label+" ("+shortErr(err)+"). Check your internet connection and the upstreams settings in ~/.trove/config.toml.")
 	}
 	f.mu.Lock()
 	f.status = 0
@@ -228,12 +241,6 @@ func plainError(w http.ResponseWriter, code int, msg string) {
 	_, _ = io.WriteString(w, msg+"\n")
 }
 
-// authError tells the agent, in the provider's own error shape so it shows
-// the message, that only API keys are accepted.
-func authError(w http.ResponseWriter, provider string) {
-	providerError(w, provider, http.StatusUnauthorized, auth.Message)
-}
-
 func providerError(w http.ResponseWriter, provider string, code int, msg string) {
 	var v any
 	if provider == "anthropic" {
@@ -256,13 +263,13 @@ func providerError(w http.ResponseWriter, provider string, code int, msg string)
 // so a transform can never change which session a request belongs to.
 func (s *Server) optimizeBody(r *http.Request, f *flight, body []byte) []byte {
 	eng := s.opts.Optimizer
-	if eng == nil || f.provider != "anthropic" || !eng.Enabled() {
+	if eng == nil || !f.rt.optimize || !eng.Enabled() {
 		return body
 	}
 	label, _ := agent.Label(r.Header)
 	f.sessionKey, f.keyed = s.sessions.Key(session.DeriveKey(r.Header, body), f.start), true
 	res := eng.Run(r.Context(), optimize.Input{
-		Provider: f.provider, Path: f.path, Header: withoutCredentials(r.Header), Body: body,
+		Provider: f.provider, Path: f.usagePath, Header: withoutCredentials(r.Header), Body: body,
 		SessionKey: f.sessionKey, Agent: label,
 	})
 	f.opt = &res
@@ -276,7 +283,7 @@ func (s *Server) optimizeBody(r *http.Request, f *flight, body []byte) []byte {
 // may read: labelling the agent, keying the session, and (for the optimizer)
 // the encoding. Credentials are not among them, so no later code, including a
 // future optimizer, can log, store or return a key by accident.
-var headersKept = []string{"User-Agent", "X-Claude-Code-Session-Id", "Content-Encoding", "Content-Type", "Anthropic-Version"}
+var headersKept = []string{"X-Trove-Kind", "User-Agent", "X-Claude-Code-Session-Id", "Content-Encoding", "Content-Type", "Anthropic-Version"}
 
 func withoutCredentials(h http.Header) http.Header {
 	out := make(http.Header, len(headersKept))

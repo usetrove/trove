@@ -115,6 +115,8 @@ func TestNoCredentialOrPromptReachesLogsResponsesOrDisk(t *testing.T) {
 	// Refused: nothing may be forwarded, and the tokens must not be echoed.
 	send("oauth bearer only", "POST", "/anthropic/v1/messages",
 		map[string]string{"Authorization": "Bearer " + leakOAuthToken, "anthropic-beta": "oauth-2025-04-20", "Content-Type": "application/json"}, body, 401)
+	send("setup-token in x-api-key", "POST", "/anthropic/v1/messages",
+		map[string]string{"x-api-key": "sk-ant-oat01-" + leakOAuthToken, "Content-Type": "application/json"}, body, 401)
 	send("openai jwt session token", "POST", "/openai/v1/responses",
 		map[string]string{"Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI" + leakJWTSecret + "In0.c2lnbmF0dXJl", "Content-Type": "application/json"}, body, 401)
 	if calls != forwarded {

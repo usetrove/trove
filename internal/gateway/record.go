@@ -36,7 +36,7 @@ func (s *Server) record(f *flight, captured []byte, over, cleanEnd, clientGone b
 	f.mu.Unlock()
 
 	var res usage.Result
-	switch x := usage.New(f.provider, f.path, streamed); {
+	switch x := s.extractor(f, streamed); {
 	case x == nil:
 		// An endpoint without usage we can read (for example /v1/models).
 	case over:
@@ -47,7 +47,7 @@ func (s *Server) record(f *flight, captured []byte, over, cleanEnd, clientGone b
 	row := s.buildRow(f, res, status, streamed, first, end)
 	if status < 400 && !clientGone {
 		s.analyze(&row, f, res)
-		if f.provider == "anthropic" && f.path == "/v1/messages" {
+		if f.provider == "anthropic" && f.usagePath == "/v1/messages" {
 			// Counts only: tool calls, errors, repeats. See internal/measure.
 			if sig, ok := measure.Extract(f.reqBody); ok {
 				row.Signals = sig.JSON()
@@ -62,6 +62,14 @@ func (s *Server) record(f *flight, captured []byte, over, cleanEnd, clientGone b
 	}
 }
 
+// extractor picks the usage reader for this response.
+func (s *Server) extractor(f *flight, streamed bool) usage.Extractor {
+	if streamed && f.rt.eventstream && f.usagePath == "/v1/messages" {
+		return usage.NewBedrockStream()
+	}
+	return usage.New(f.provider, f.usagePath, streamed)
+}
+
 // analyze fills the structure estimates, findings and shadow savings on the
 // row. It runs in the recording goroutine, after the response has been sent.
 // Any failure leaves the row without analysis; the usage numbers are unaffected.
@@ -71,7 +79,7 @@ func (s *Server) analyze(row *store.Request, f *flight, res usage.Result) {
 	}
 	tier, batch := pricingTier(res.ServiceTier)
 	out := s.opts.Analyzer.Analyze(analyze.Input{
-		Provider: f.provider, Path: f.path, Body: f.reqBody, SessionKey: row.SessionKey, Start: f.start,
+		Provider: f.provider, Path: f.usagePath, Body: f.reqBody, SessionKey: row.SessionKey, Start: f.start,
 		Model: res.Model, ServiceTier: tier, Batch: batch, Reported: res.Reported,
 		CacheWriteTotal: res.CacheWriteTotal,
 		Usage: pricing.Usage{
@@ -167,7 +175,9 @@ func (s *Server) buildRow(f *flight, res usage.Result, status int, streamed bool
 		SessionKey:          s.sessionKey(f),
 		Agent:               label,
 		AgentVersion:        ver,
-		Provider:            f.provider,
+		Provider:            f.rt.label,
+		Upstream:            f.rt.name,
+		Kind:                kindOf(f.reqHeader),
 		Model:               clip(model, maxModelLen),
 		Endpoint:            clip(f.path, maxEndpointLen),
 		Streamed:            streamed,
@@ -214,8 +224,8 @@ func (s *Server) sessionKey(f *flight) string {
 // an estimate (see pricing.CostWithAdded) and stays unset when the request could
 // not be priced exactly.
 func (s *Server) costDiff(row *store.Request, f *flight, res usage.Result) {
-	if s.opts.Pricing == nil || row.TokensRemoved <= 0 || row.CostUSD == nil {
-		return
+	if s.opts.Pricing == nil || row.TokensRemoved <= 0 || row.CostUSD == nil || !f.rt.priced {
+		return // custom rates have no counterfactual: only list prices are modelled
 	}
 	tier, batch := pricingTier(res.ServiceTier)
 	cf, err := s.opts.Pricing.CostWithAdded(pricing.Request{
@@ -235,8 +245,17 @@ func (s *Server) costDiff(row *store.Request, f *flight, res usage.Result) {
 
 // price fills cost_usd only when every part could be priced exactly.
 func (s *Server) price(row *store.Request, f *flight, res usage.Result) {
-	if s.opts.Pricing == nil {
+	if rates := f.rt.rates; rates != nil {
+		c := rates.Cost(pricing.Usage{UncachedInput: res.UncachedInput, CacheRead: res.CacheRead, Output: res.Output})
+		row.PricingVersion = c.PricingVersion
+		if c.Status == pricing.Priced {
+			v := c.Total.Float64()
+			row.CostUSD = &v
+		}
 		return
+	}
+	if s.opts.Pricing == nil || !f.rt.priced {
+		return // cloud backends: no list price on file, so the cost stays unknown
 	}
 	if res.CacheWriteTotal > 0 && res.CacheWriteByTTL == nil {
 		return // cannot price cache writes without their TTL split

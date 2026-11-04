@@ -23,7 +23,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -70,8 +69,7 @@ type Server struct {
 	started   time.Time
 	requests  atomic.Uint64
 	rejected  atomic.Uint64
-	upAnthro  *url.URL
-	upOpenAI  *url.URL
+	routes    []*route
 	transport http.RoundTripper
 
 	// recording counts the goroutines that turn finished responses into rows, so shutdown
@@ -90,25 +88,21 @@ func New(opts Options) (*Server, error) {
 	if opts.Logger == nil {
 		opts.Logger = slog.New(slog.DiscardHandler)
 	}
-	for name, v := range map[string]string{"anthropic": opts.Config.Upstreams.Anthropic, "openai": opts.Config.Upstreams.OpenAI} {
-		if why := config.ValidateUpstream(v); why != "" {
-			return nil, fmt.Errorf("upstreams.%s %s", name, why)
+	routes, err := buildRoutes(opts.Config)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range opts.Config.Upstreams.Compat {
+		if config.PlainHTTPUpstream(c.BaseURL) {
+			opts.Logger.Warn("an OpenAI-compatible upstream uses plain http, so requests to it cross your network unencrypted", "upstream", c.Name)
 		}
-	}
-	ua, err := url.Parse(opts.Config.Upstreams.Anthropic)
-	if err != nil {
-		return nil, fmt.Errorf("upstreams.anthropic is not a valid URL: %w", err)
-	}
-	uo, err := url.Parse(opts.Config.Upstreams.OpenAI)
-	if err != nil {
-		return nil, fmt.Errorf("upstreams.openai is not a valid URL: %w", err)
 	}
 	tr := opts.Transport
 	if tr == nil {
 		tr = passThroughTransport()
 	}
 	return &Server{
-		opts: opts, log: opts.Logger, started: opts.Now(), upAnthro: ua, upOpenAI: uo, transport: tr,
+		opts: opts, log: opts.Logger, started: opts.Now(), routes: routes, transport: tr,
 		sessions: session.NewTracker(time.Duration(opts.Config.Gateway.IdleMinutes) * time.Minute),
 	}, nil
 }
@@ -146,16 +140,16 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request) {
 		plainError(w, http.StatusForbidden, "Trove refuses requests from web pages (an Origin header was present). Use your coding agent or an API client instead.")
 		return
 	}
-	switch {
-	case r.URL.Path == HealthPath:
+	if r.URL.Path == HealthPath {
 		s.health(w)
-	case hasPrefix(r.URL.Path, PrefixAnthropic):
-		s.forward(w, r, "anthropic", PrefixAnthropic, s.upAnthro)
-	case hasPrefix(r.URL.Path, PrefixOpenAI):
-		s.forward(w, r, "openai", PrefixOpenAI, s.upOpenAI)
-	default:
-		plainError(w, http.StatusNotFound, "Unknown path. Use /anthropic/... or /openai/... to reach a provider, or /trove/health.")
+		return
 	}
+	rt := s.match(r.URL.Path)
+	if rt == nil {
+		plainError(w, http.StatusNotFound, "Unknown path. Use /anthropic/... or /openai/... (or a configured /vertex, /foundry, /bedrock or /compat/<name> route) to reach a provider, or /trove/health.")
+		return
+	}
+	s.forward(w, r, rt)
 }
 
 func hasPrefix(path, prefix string) bool {
