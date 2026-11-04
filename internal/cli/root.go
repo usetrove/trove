@@ -78,6 +78,7 @@ func NewRoot(a *App) *cobra.Command {
 		newPricing(a),
 		newOptimize(a),
 		newMCP(a),
+		newEngine(a),
 		newHooks(a),
 		newHookCmd(a),
 		newVersion(a),

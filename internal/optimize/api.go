@@ -88,7 +88,7 @@ type RequestIn struct {
 type Decision struct {
 	// Kind is one of the Kind* values below.
 	Kind    string `json:"kind"`
-	Message string `json:"-"`
+	Message string `json:"message,omitempty"`
 	// Bytes and Tokens are estimates of what the decision saves.
 	Bytes  int64 `json:"bytes,omitempty"`
 	Tokens int64 `json:"tokens,omitempty"`

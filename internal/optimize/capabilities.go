@@ -33,7 +33,7 @@ var abilities = map[Adapter]map[Point]Support{
 	},
 	AdapterHooks: {
 		PointToolInput:  {LevelSupported, "PreToolUse can deny a call, add context or rewrite its input (code.claude.com/docs/en/hooks, " + VerifiedOn + ")"},
-		PointToolOutput: {LevelPartial, "PostToolUse documents updatedToolOutput, but the value must match each tool's output shape; the adapter computes the result and does not emit it yet"},
+		PointToolOutput: {LevelPartial, "PostToolUse documents updatedToolOutput, but the value must match each tool's output shape; the adapter computes the result and does not emit it yet, and whether later requests keep the replaced output is unanswered (docs/non-gateway-optimization.md, Q2)"},
 		PointRequest:    {LevelImpossible, "no hook receives the model request (none documented as of " + VerifiedOn + ")"},
 	},
 	AdapterPlugin: {
