@@ -100,3 +100,9 @@ func duplicateNote(f firstSeen) string {
 	}
 	return CollapsedPrefix + ref + "; it is not repeated here.]"
 }
+
+// Points implements Capable: request-level only.
+func (DuplicateCollapser) Points() []Point { return []Point{PointRequest} }
+
+// OverheadTokens implements Capable: nothing is injected on every request.
+func (DuplicateCollapser) OverheadTokens() int { return 0 }

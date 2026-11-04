@@ -21,6 +21,22 @@ func (NoiseNormalizer) Name() string { return "noise_normalizer" }
 // Tier implements Optimizer.
 func (NoiseNormalizer) Tier() Tier { return TierLossless }
 
+// Points implements Capable.
+func (NoiseNormalizer) Points() []Point { return []Point{PointRequest, PointToolOutput} }
+
+// OverheadTokens implements Capable: nothing is injected.
+func (NoiseNormalizer) OverheadTokens() int { return 0 }
+
+// TransformOutput implements ToolOutputOptimizer. It runs the same cleaning
+// function as the request-level Transform, so every adapter gets the same text.
+func (NoiseNormalizer) TransformOutput(_ context.Context, _ ToolCall, out ToolOutput, _ Session) (ToolOutput, Report) {
+	res := ToolOutput{Parts: make([]Part, len(out.Parts)), IsError: out.IsError}
+	for i, p := range out.Parts {
+		res.Parts[i] = Part{Text: noise.Clean(p.Text)}
+	}
+	return res, Report{Name: "noise_normalizer"}
+}
+
 // Applies implements Optimizer: any request with tool-result text.
 func (NoiseNormalizer) Applies(r *Request, _ Session) bool {
 	for _, m := range r.Messages {

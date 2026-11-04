@@ -219,3 +219,9 @@ func IsVolatileLine(l string) bool { return isVolatileLine(l) }
 // HasVolatilePhrase reports whether a line says it holds the current date or
 // time ("today's date", "current time"). It is exported for `trove fix`.
 func HasVolatilePhrase(l string) bool { return hasVolatilePhrase(l) }
+
+// Points implements Capable: request-level only.
+func (VolatilePrefixMover) Points() []Point { return []Point{PointRequest} }
+
+// OverheadTokens implements Capable: nothing is injected on every request.
+func (VolatilePrefixMover) OverheadTokens() int { return 0 }

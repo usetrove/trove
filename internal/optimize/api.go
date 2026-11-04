@@ -146,7 +146,7 @@ type ToolOutputOptimizer interface {
 // ToolPipeline returns the tool-level optimizers in run order. The request-level
 // Pipeline is separate because its order is a byte-level cache contract.
 func ToolPipeline() []Base {
-	return nil // filled in as optimizers move onto the tool-level API
+	return []Base{NoiseNormalizer{}, OutputTrimmer{}}
 }
 
 // TransformToolInput runs the tool-input optimizers on one call. It never
@@ -219,6 +219,15 @@ func (e *Engine) TransformToolOutput(ctx context.Context, call ToolCall, out Too
 			rep.BytesRemoved = n
 			rep.TokensRemoved = int64(float64(n)/e.bpt + 0.5)
 		}
+		if state == config.StateOn && rep.Changed && len(rep.Originals) > 0 {
+			// Same rule as the request level: store every original before the
+			// shortened text can leave.
+			if f := e.store(ctx, o.Name(), rep.Originals); f != nil {
+				reps = append(reps, failedReport(o, state, f.Class))
+				continue
+			}
+		}
+		rep.Originals = nil
 		if state == config.StateOn && rep.Changed {
 			cur = res
 		}
@@ -237,7 +246,7 @@ func (e *Engine) toolState(o Base, s Session) string {
 	if s.State == nil {
 		return config.StateOff
 	}
-	switch st := s.State(o.Name()); st {
+	switch st := effectiveStateFor(o.Name(), s.State(o.Name()), e.recovery != nil); st {
 	case config.StateShadow, config.StateOn:
 		return st
 	}

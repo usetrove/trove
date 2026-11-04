@@ -156,3 +156,9 @@ func markSystem(r *Request) (Edit, bool) {
 	}
 	return Edit{}, false
 }
+
+// Points implements Capable: request-level only.
+func (CacheBreakpoints) Points() []Point { return []Point{PointRequest} }
+
+// OverheadTokens implements Capable: nothing is injected on every request.
+func (CacheBreakpoints) OverheadTokens() int { return 0 }

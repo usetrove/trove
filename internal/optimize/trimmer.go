@@ -55,6 +55,37 @@ func (OutputTrimmer) Name() string { return "output_trimmer" }
 // Tier implements Optimizer.
 func (OutputTrimmer) Tier() Tier { return TierRecoverable }
 
+// Points implements Capable.
+func (OutputTrimmer) Points() []Point { return []Point{PointRequest, PointToolOutput} }
+
+// OverheadTokens implements Capable. The trimmer's marker line is netted out of
+// BytesRemoved; the cost that is always present is the MCP tool definitions the
+// agent needs to fetch trimmed output back (trove_fetch_full, trove_run).
+// TODO(measure): fill this from `trove mcp schema-size` once it is wired in.
+func (OutputTrimmer) OverheadTokens() int { return 0 }
+
+// TransformOutput implements ToolOutputOptimizer, using the same trimOutput as
+// the request-level Transform. The full text of anything shortened goes in
+// Report.Originals; the engine stores it before the shortened text is returned.
+func (OutputTrimmer) TransformOutput(ctx context.Context, _ ToolCall, out ToolOutput, _ Session) (ToolOutput, Report) {
+	res := ToolOutput{Parts: make([]Part, len(out.Parts)), IsError: out.IsError}
+	var originals []string
+	for i, p := range out.Parts {
+		res.Parts[i] = p
+		if len(p.Text) < minTrimBytes {
+			continue
+		}
+		if ctx.Err() != nil {
+			return out, Report{Err: "time budget exceeded"}
+		}
+		if trimmed, changed := trimOutput(p.Text); changed {
+			res.Parts[i] = Part{Text: trimmed}
+			originals = append(originals, p.Text)
+		}
+	}
+	return res, Report{Name: "output_trimmer", Originals: originals}
+}
+
 // Applies implements Optimizer: any large tool result.
 func (OutputTrimmer) Applies(r *Request, _ Session) bool {
 	for _, m := range r.Messages {
