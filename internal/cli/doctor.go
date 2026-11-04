@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/usetrove/trove/internal/optimize"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,11 +63,21 @@ var supportedAgents = []agentSpec{
 }
 
 func newDoctor(a *App) *cobra.Command {
-	return &cobra.Command{
+	var capabilities bool
+	cmd := &cobra.Command{
 		Use:   "doctor",
 		Short: "Check Trove's data directory, database, config and detected agents",
-		Args:  cobra.NoArgs,
+		Long: "Check Trove's data directory, database, config and detected agents.\n\n" +
+			"With --capabilities, show instead which optimizers each adapter (gateway, hooks, plugin) can run, and why.",
+		Args: cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
+			if capabilities {
+				rows := optimize.Matrix()
+				return a.emit(struct {
+					VerifiedOn string         `json:"harness_facts_verified_on"`
+					Optimizers []optimize.Row `json:"optimizers"`
+				}{optimize.VerifiedOn, rows}, "Optimizer support by adapter (harness facts checked "+optimize.VerifiedOn+"):\n\n"+optimize.RenderText(rows))
+			}
 			rep := runDoctor(a)
 			if err := a.emit(rep, rep.text(a)); err != nil {
 				return err
@@ -77,6 +88,8 @@ func newDoctor(a *App) *cobra.Command {
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&capabilities, "capabilities", false, "show which optimizers each adapter can run")
+	return cmd
 }
 
 func runDoctor(a *App) doctorReport {

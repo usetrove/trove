@@ -268,10 +268,9 @@ func (s *Server) optimizeBody(r *http.Request, f *flight, body []byte) []byte {
 	}
 	label, _ := agent.Label(r.Header)
 	f.sessionKey, f.keyed = s.sessions.Key(session.DeriveKey(r.Header, body), f.start), true
-	res := eng.Run(r.Context(), optimize.Input{
-		Provider: f.provider, Path: f.usagePath, Header: withoutCredentials(r.Header), Body: body,
-		SessionKey: f.sessionKey, Agent: label,
-	})
+	res := eng.TransformRequest(r.Context(),
+		optimize.RequestIn{Provider: f.provider, Path: f.usagePath, Header: withoutCredentials(r.Header), Body: body},
+		optimize.Session{Key: f.sessionKey, Agent: label})
 	f.opt = &res
 	for _, fl := range res.Failures {
 		s.log.Warn("an optimizer could not finish, so the original request was forwarded unchanged", "optimizer", fl.Optimizer, "reason", fl.Class)
