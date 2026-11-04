@@ -20,6 +20,7 @@ package optimize
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/usetrove/trove/internal/config"
 )
@@ -48,6 +49,16 @@ type Session struct {
 	// entry points. The adapter supplies it because pins, guardrail rollbacks
 	// and the kill switch are resolved differently per adapter. Nil means off.
 	State func(optimizer string) string
+	// Mode is the state (shadow or on) the engine is running the current
+	// optimizer in. The engine sets it; adapters leave it empty.
+	Mode string
+	// Now is the call's time; the engine fills it in when zero.
+	Now time.Time
+	// Ledger is the session's read memory, for repeat_read. Nil disables it.
+	Ledger ReadLedger
+	// TroveRun is true when Trove's MCP server is registered with the agent, so
+	// trove_run exists to be suggested.
+	TroveRun bool
 }
 
 // Report says what one optimizer did to one request.

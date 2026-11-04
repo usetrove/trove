@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"io"
+	"github.com/usetrove/trove/internal/optimize"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,19 +21,8 @@ const (
 	compactAt = 4 * maxReads
 )
 
-// readEntry is what Trove remembers about one successful read: hashes, sizes and
-// times. Never the path, the contents or the raw session id.
-type readEntry struct {
-	Sum   string // first 16 hex chars of the content's sha256
-	MTime int64  // modification time, ns since the epoch
-	Size  int64
-	// Prompt is how many distinct prompts the session had seen when the file was read.
-	Prompt int
-	At     int64 // unix seconds
-	// BlockedSum is the content hash of a version we denied. The next read of that
-	// same version goes through (see preRead), so a block can never loop.
-	BlockedSum string
-}
+// readEntry is the engine's ReadEntry; hooks only stores it.
+type readEntry = optimize.ReadEntry
 
 // op is one line of a session's journal.
 type op struct {
@@ -297,31 +286,6 @@ func (st *sessionState) seePrompt(id string) {
 func shortHash(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(h[:])[:8]
-}
-
-// readKey identifies one read by a hash of the path and the requested range.
-func readKey(path string, offset, limit int) string {
-	h := sha256.Sum256([]byte(path))
-	return fmt.Sprintf("%s:%d:%d", hex.EncodeToString(h[:])[:16], offset, limit)
-}
-
-// fileSum hashes a file's contents with a cap on how much it will read: false
-// means "do not use the content hash" (too large, or unreadable).
-func fileSum(path string, size, maxBytes int64) (string, bool) {
-	if size > maxBytes {
-		return "", false
-	}
-	f, err := os.Open(path) //nolint:gosec // the file the agent is reading
-	if err != nil {
-		return "", false
-	}
-	defer func() { _ = f.Close() }()
-	h := sha256.New()
-	n, err := io.Copy(h, io.LimitReader(f, maxBytes+1))
-	if err != nil || n > maxBytes {
-		return "", false
-	}
-	return hex.EncodeToString(h.Sum(nil))[:16], true
 }
 
 // writeFileAtomic writes via a temp file in the same folder and renames, with

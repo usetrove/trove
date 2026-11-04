@@ -146,7 +146,7 @@ type ToolOutputOptimizer interface {
 // ToolPipeline returns the tool-level optimizers in run order. The request-level
 // Pipeline is separate because its order is a byte-level cache contract.
 func ToolPipeline() []Base {
-	return []Base{NoiseNormalizer{}, OutputTrimmer{}}
+	return []Base{NoiseNormalizer{}, OutputTrimmer{}, RepeatRead{}, LargeOutputAdvice{}}
 }
 
 // TransformToolInput runs the tool-input optimizers on one call. It never
@@ -167,7 +167,8 @@ func (e *Engine) TransformToolInput(ctx context.Context, call ToolCall, s Sessio
 		if state != config.StateShadow && state != config.StateOn {
 			continue
 		}
-		out, rep, failed := guardTool(ctx, o.Name(), func() (ToolCall, Report) { return o.TransformInput(ctx, cur, s) })
+		so := e.forOptimizer(s, state)
+		out, rep, failed := guardTool(ctx, o.Name(), func() (ToolCall, Report) { return o.TransformInput(ctx, cur, so) })
 		if failed != "" {
 			reps = append(reps, failedReport(o, state, failed))
 			continue
@@ -201,7 +202,8 @@ func (e *Engine) TransformToolOutput(ctx context.Context, call ToolCall, out Too
 		if state != config.StateShadow && state != config.StateOn {
 			continue
 		}
-		res, rep, failed := guardTool(ctx, o.Name(), func() (ToolOutput, Report) { return o.TransformOutput(ctx, call, cur, s) })
+		so := e.forOptimizer(s, state)
+		res, rep, failed := guardTool(ctx, o.Name(), func() (ToolOutput, Report) { return o.TransformOutput(ctx, call, cur, so) })
 		if failed != "" {
 			reps = append(reps, failedReport(o, state, failed))
 			continue
@@ -251,6 +253,15 @@ func (e *Engine) toolState(o Base, s Session) string {
 		return st
 	}
 	return config.StateOff
+}
+
+// forOptimizer is the session as one optimizer should see it.
+func (e *Engine) forOptimizer(s Session, state string) Session {
+	s.Mode = state
+	if s.Now.IsZero() {
+		s.Now = e.now()
+	}
+	return s
 }
 
 func overheadFor(o Capable, state string) int {

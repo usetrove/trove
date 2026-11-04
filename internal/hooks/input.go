@@ -1,10 +1,9 @@
 package hooks
 
 import (
-	"bytes"
 	"encoding/json"
+	"github.com/usetrove/trove/internal/optimize"
 	"io"
-	"strconv"
 )
 
 // maxInput caps how much of stdin is read. Hook input is small; this only stops
@@ -23,7 +22,9 @@ type Input struct {
 	ToolName  string `json:"tool_name"`
 	Reason    string `json:"reason"`
 	Source    string `json:"source"`
-	ToolInput struct {
+	// ToolResponse is the tool's output in PostToolUse events.
+	ToolResponse json.RawMessage `json:"tool_response"`
+	ToolInput    struct {
 		FilePath string  `json:"file_path"`
 		Offset   lenient `json:"offset"`
 		Limit    lenient `json:"limit"`
@@ -40,18 +41,7 @@ func (in Input) Prompt() string {
 	return in.TurnID
 }
 
-// lenient reads a JSON number, or a string holding one, and is zero for anything
-// else. A model can pass "10" where 10 was meant, and the hook must not fail on it.
-type lenient int
-
-func (l *lenient) UnmarshalJSON(b []byte) error {
-	*l = 0
-	s := string(bytes.Trim(bytes.TrimSpace(b), `"`))
-	if f, err := strconv.ParseFloat(s, 64); err == nil && f >= 0 && f < 1<<31 {
-		*l = lenient(f)
-	}
-	return nil
-}
+type lenient = optimize.LenientInt
 
 // ParseInput reads one hook input from r.
 func ParseInput(r io.Reader) (Input, error) {

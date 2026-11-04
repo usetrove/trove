@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/usetrove/trove/internal/optimize"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -471,34 +472,6 @@ func assertCodexSafe(t *testing.T, out string) {
 	}
 }
 
-func TestIsNoisy(t *testing.T) {
-	for cmd, want := range map[string]bool{
-		"go test ./...":              true,
-		"go test -v ./...":           true,
-		"cd /repo && go test ./...":  true,
-		"npm test":                   true,
-		"pnpm run test":              true,
-		"pytest":                     true,
-		"python -m pytest -v":        true,
-		"cargo build --verbose":      true,
-		"mvn clean install":          true,
-		"make":                       true,
-		"go test ./internal/hooks":   false,
-		"go test ./... | tail -20":   false,
-		"go test ./... > out.txt":    false,
-		"pytest tests/test_one.py":   false,
-		"npm test && rm -rf build":   false,
-		"cd /repo; go test ./...":    false,
-		"echo $(go test ./...)":      false,
-		"":                           false,
-		strings.Repeat("make ", 100): false,
-	} {
-		if got := IsNoisy(cmd); got != want {
-			t.Errorf("IsNoisy(%q) = %v, want %v", cmd, got, want)
-		}
-	}
-}
-
 func TestCodexOutputIsMinimal(t *testing.T) {
 	r := newRig(t, on)
 	p := r.file("a.go", "package a\n")
@@ -769,10 +742,8 @@ func TestHandlerTiming(t *testing.T) {
 	for i := 0; i < maxReads; i++ { // fill the ledger directly: going through the hooks takes minutes under antivirus
 		p := r.file("t"+string(rune('a'+i%26))+string(rune('a'+i/26))+".txt", strings.Repeat("line of code\n", 200))
 		paths = append(paths, p)
-		var in Input
-		in.ToolInput.FilePath = p
-		rs, _ := statRead(in, true)
-		st.do(op{T: "read", K: readKey(p, 0, 0), E: &readEntry{Sum: rs.sum, MTime: rs.mtime, Size: rs.size, Prompt: 1, At: r.now.Unix()}})
+		fs, _ := optimize.StatFile(p, 0, true)
+		st.do(op{T: "read", K: optimize.ReadKey(p, 0, 0), E: &readEntry{Sum: fs.Sum, MTime: fs.MTime, Size: fs.Size, Prompt: 1, At: r.now.Unix()}})
 	}
 	if err := st.save(r.dir, r.key()); err != nil {
 		t.Fatal(err)

@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/usetrove/trove/internal/optimize"
 	"io"
 	"os"
 	"strings"
@@ -46,7 +47,7 @@ var Events = []string{EventPreRead, EventPostRead, EventReset, EventSessionEnd, 
 const (
 	// maxHashBytes is the largest file the repeat-read hook will hash. Bigger
 	// files are always allowed, which keeps the hook fast.
-	maxHashBytes = 2 << 20
+	maxHashBytes = optimize.MaxHashBytes
 	// callDeadline is the safety net for the per-call hooks. They normally take a
 	// few milliseconds; past this the agent is let through.
 	callDeadline = 150 * time.Millisecond
@@ -141,6 +142,7 @@ type handler struct {
 	now    func() time.Time
 	notify func(measure.Receipt)
 	snap   Snapshot
+	eng    *optimize.Engine
 }
 
 func run(dir, event, agent string, e Env) []byte {
