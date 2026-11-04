@@ -109,9 +109,10 @@ func rollupSessions(ctx context.Context, db *store.DB, m config.Measure, now tim
 
 type appliedJSON struct {
 	Optimizers []struct {
-		Name          string `json:"name"`
-		State         string `json:"state"`
-		TokensRemoved int64  `json:"tokens_removed"`
+		Name           string `json:"name"`
+		State          string `json:"state"`
+		TokensRemoved  int64  `json:"tokens_removed"`
+		OverheadTokens int    `json:"overhead_tokens"`
 	} `json:"optimizers"`
 }
 

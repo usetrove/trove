@@ -20,6 +20,7 @@ import (
 
 	"github.com/usetrove/trove/internal/analyze"
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/external"
 	"github.com/usetrove/trove/internal/gateway"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/optimize"
@@ -143,6 +144,11 @@ func runGateway(a *App, listen string) error {
 	opts := optimize.Options{
 		Config: cfg, Pins: db.Pins(), KillFile: optimize.KillFile(dir), Getenv: a.Getenv, Log: log,
 		Gate: measure.NewGate(db, cfg.Measure, nil).State,
+		ExtraStates: func() map[string]string {
+			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+			defer cancel()
+			return external.ActiveStates(ctx, db.ExternalTools())
+		},
 	}
 	if install.Registered(dir) {
 		// The output trimmer may be on only if trimmed output can be stored and
@@ -171,6 +177,20 @@ func runGateway(a *App, listen string) error {
 	defer stop()
 	go measure.Run(ctx, db, func() config.Config { return cfg }, time.Duration(cfg.Gateway.IdleMinutes)*time.Minute, 5*time.Minute,
 		func(err error) { log.Warn("could not update measurements; requests are unaffected", "err", err) }, notifier())
+	go func() {
+		t := time.NewTicker(5 * time.Minute)
+		defer t.Stop()
+		for {
+			if _, err := external.GuardAll(ctx, db, dir, cfg.Measure, time.Now()); err != nil && ctx.Err() == nil {
+				log.Warn("could not check third-party tools; requests are unaffected", "err", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	}()
 	go db.RunRetention(ctx, func() int { return cfg.RetentionDays }, 24*time.Hour, func(err error) { log.Warn("could not delete old usage rows", "err", err) })
 
 	pid, _ := json.Marshal(pidFile{PID: os.Getpid(), Addr: ln.Addr().String()})

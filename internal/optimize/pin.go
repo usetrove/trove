@@ -41,6 +41,10 @@ type pinBook struct {
 	// recoverable is true when trimmed output can be stored and fetched back, so
 	// the output trimmer may be "on". It is fixed when the engine is built.
 	recoverable bool
+	// extras supplies the states of third-party tools (internal/external) when a
+	// session starts. Nil means there are none. Their names are pinned with the
+	// session like built-ins, so measurement can tell on sessions from off ones.
+	extras func() map[string]string
 }
 
 func newPinBook(store PinStore) *pinBook {
@@ -65,7 +69,22 @@ func (b *pinBook) get(ctx context.Context, key string, cfg config.Config, bpt fl
 			return p, nil
 		}
 	}
-	p := newPinFor(key, cfg, bpt, now, gate, b.recoverable)
+	var extraNames []string
+	if b.extras != nil {
+		if ex := b.extras(); len(ex) > 0 {
+			merged := make(map[string]string, len(cfg.Optimizers)+len(ex))
+			for k, v := range cfg.Optimizers {
+				merged[k] = v
+			}
+			for k, v := range ex {
+				merged[k] = v
+				extraNames = append(extraNames, k)
+			}
+			sort.Strings(extraNames)
+			cfg.Optimizers = merged
+		}
+	}
+	p := newPinFor(key, cfg, bpt, now, gate, b.recoverable, extraNames...)
 	b.put(p)
 	if b.store != nil && storeErr == nil {
 		storeErr = b.store.Save(ctx, p)
@@ -102,11 +121,18 @@ func newPin(key string, cfg config.Config, bpt float64, now time.Time, gate Stat
 	return newPinFor(key, cfg, bpt, now, gate, false)
 }
 
-func newPinFor(key string, cfg config.Config, bpt float64, now time.Time, gate StateGate, recoverable bool) Pin {
-	states := make(map[string]string, len(PipelineNames))
-	for _, n := range PipelineNames {
+func newPinFor(key string, cfg config.Config, bpt float64, now time.Time, gate StateGate, recoverable bool, extra ...string) Pin {
+	states := make(map[string]string, len(PipelineNames)+len(extra))
+	isExtra := map[string]bool{}
+	for _, n := range extra {
+		isExtra[n] = true
+	}
+	for _, n := range append(append([]string{}, PipelineNames...), extra...) {
 		s := effectiveStateFor(n, cfg.OptimizerState(n), recoverable)
-		if gate != nil {
+		// A third-party tool acts inside the agent's own config, where the gate
+		// cannot reach it, so its pin records what is really there. Pinning a
+		// lowered state would label sessions that ran the tool as "off".
+		if gate != nil && !isExtra[n] {
 			s = lowerOf(s, effectiveStateFor(n, gate(key, n, s, now), recoverable))
 		}
 		states[n] = s

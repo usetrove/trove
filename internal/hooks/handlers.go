@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/external"
 	"github.com/usetrove/trove/internal/mcp/install"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/store"
@@ -111,6 +112,9 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	}
 	if _, err := measure.EvaluateHooks(ctx, db, cfg.Measure, now); err != nil {
 		return fmt.Errorf("cannot check the hook guardrail: %v", err)
+	}
+	if _, err := external.GuardAll(ctx, db, dir, cfg.Measure, now); err != nil {
+		return fmt.Errorf("cannot check third-party tools: %v", err)
 	}
 	rolled, err := measure.Overrides(ctx, db)
 	if err != nil {

@@ -36,6 +36,9 @@ type Options struct {
 	Recovery RecoveryStore
 	// Tools overrides the tool-level optimizer list; tests use it. Default: ToolPipeline().
 	Tools []Base
+	// ExtraStates returns the current states ("off" or "on") of third-party
+	// tools, keyed by optimizer name, each time a session starts. Nil means none.
+	ExtraStates func() map[string]string
 }
 
 // RecoveryStore keeps full tool output so the agent can fetch it back with
@@ -68,6 +71,7 @@ func New(o Options) *Engine {
 		killFile: o.KillFile, getenv: o.Getenv, now: o.Now, log: o.Log, bpt: o.BytesPerToken, gate: o.Gate, recovery: o.Recovery,
 	}
 	e.pins.recoverable = o.Recovery != nil
+	e.pins.extras = o.ExtraStates
 	e.tools = o.Tools
 	if e.tools == nil {
 		e.tools = ToolPipeline()

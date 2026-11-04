@@ -83,7 +83,7 @@ func (e Env) PlanInstall(ctx context.Context, name string) (InstallPlan, error) 
 	if err != nil {
 		return InstallPlan{}, err
 	}
-	p := InstallPlan{Manifest: m, License: NoticeFor(m), InstallArgv: m.Install.Argv, OverheadTokens: m.Overhead.PerRequest()}
+	p := InstallPlan{Manifest: m, License: NoticeFor(m), InstallArgv: m.Install.Argv, OverheadTokens: ChargeFor(m).PerRequest}
 	for _, r := range m.Install.Requires {
 		if _, err := e.Runner.LookPath(r); err != nil {
 			p.MissingRequires = append(p.MissingRequires, r)

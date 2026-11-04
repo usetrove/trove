@@ -421,3 +421,21 @@ func TestGateOnlyLowersStatesAndOnlyForNewSessions(t *testing.T) {
 		t.Errorf("the gate changed a running session: %v then %v", first.States, second.States)
 	}
 }
+
+func TestPinIncludesExtraToolsUngated(t *testing.T) {
+	book := newPinBook(nil)
+	book.extras = func() map[string]string { return map[string]string{"ext_rules": "on"} }
+	lowerAll := func(_, _, _ string, _ time.Time) string { return config.StateOff }
+	p, err := book.get(context.Background(), "s1", config.Config{}, 3.5, time.Now(), lowerAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.States["ext_rules"] != config.StateOn {
+		t.Errorf("external tool state = %q, want the real state \"on\" (the gate cannot switch it)", p.States["ext_rules"])
+	}
+	for _, n := range PipelineNames {
+		if p.States[n] != config.StateOff {
+			t.Errorf("built-in %s = %q, want gate to apply", n, p.States[n])
+		}
+	}
+}

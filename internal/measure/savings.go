@@ -98,11 +98,13 @@ func SavingsByOptimizer(ctx context.Context, db *store.DB, w Window, m config.Me
 				x = &acc{sessions: map[string]bool{}}
 				by[o.Name] = x
 			}
+			// Savings are net of what the optimizer itself adds (rule 15).
+			net := o.TokensRemoved - int64(o.OverheadTokens)
 			x.n++
-			x.tokens += o.TokensRemoved
+			x.tokens += net
 			x.sessions[key] = true
 			if diff.Valid && removed > 0 {
-				x.usd += diff.Float64 * float64(o.TokensRemoved) / float64(removed)
+				x.usd += diff.Float64 * float64(net) / float64(removed)
 			} else {
 				x.unpriced++
 			}

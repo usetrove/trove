@@ -96,8 +96,8 @@ func externalRows(ctx context.Context, env external.Env) ([]externalRow, error) 
 	var rows []externalRow
 	for _, m := range env.Manifests {
 		r := externalRow{Name: m.Name, Version: m.Version, License: m.License, LicenseClass: string(external.ClassifyLicense(m.License)),
-			ActsAs: string(m.ActsAs), Category: string(m.Category), State: "not installed", OverheadTokens: m.Overhead.PerRequest(),
-			Label: "declared", Claimed: m.Claimed.Text, SupportsShadow: m.SupportsShadow}
+			ActsAs: string(m.ActsAs), Category: string(m.Category), State: "not installed", OverheadTokens: external.ChargeFor(m).PerRequest,
+			Label: "estimated", Claimed: m.Claimed.Text, SupportsShadow: m.SupportsShadow}
 		if t, ok := have[m.Name]; ok {
 			r.Installed, r.State = true, t.State
 		}
@@ -162,7 +162,7 @@ func planText(p external.InstallPlan) string {
 	if len(p.MissingRequires) > 0 {
 		fmt.Fprintf(&b, "  Missing:  %s (must be on your PATH first)\n", strings.Join(p.MissingRequires, ", "))
 	}
-	fmt.Fprintf(&b, "  Overhead: %d tokens on every request while on (declared by the tool's manifest; Trove measures the real figure once it is on)\n", p.OverheadTokens)
+	fmt.Fprintf(&b, "  Overhead: %d tokens on every request while on (estimated; the cost of sessions with it on is compared with sessions with it off, and it is switched off if it costs more)\n", p.OverheadTokens)
 	fmt.Fprintf(&b, "  Claims:   %s (the tool's own claim, %s)\n", m.Claimed.Text, m.Claimed.SourceURL)
 	if p.ShadowNote != "" {
 		fmt.Fprintf(&b, "  Shadow:   %s\n", p.ShadowNote)
@@ -338,7 +338,7 @@ func newExternalStatus(a *App) *cobra.Command {
 			for _, r := range rows {
 				if r.Installed {
 					n++
-					fmt.Fprintf(&b, "%-14s %-4s overhead %d tokens/request (declared)\n", r.Name, r.State, r.OverheadTokens)
+					fmt.Fprintf(&b, "%-14s %-4s overhead %d tokens/request (estimated)\n", r.Name, r.State, r.OverheadTokens)
 				}
 			}
 			if n == 0 {
