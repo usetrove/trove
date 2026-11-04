@@ -122,6 +122,19 @@ func TestLoad(t *testing.T) {
 					t.Errorf("got %+v", c.Upstreams)
 				}
 			}},
+		{name: "compat upstream and cloud routes", file: "[upstreams]\nvertex = \"https://aiplatform.googleapis.com\"\nfoundry = \"https://r.services.ai.azure.com/anthropic\"\n" +
+			"[[upstreams.compat]]\nname = \"vllm\"\nbase_url = \"http://10.0.0.5:8000/v1\"\nauth = \"none\"\ninput_per_mtok = \"0.60\"\noutput_per_mtok = \"2.40\"\ngpu_hourly_usd = \"2.5\"\n",
+			check: func(t *testing.T, c Config) {
+				if len(c.Upstreams.Compat) != 1 || c.Upstreams.Compat[0].Name != "vllm" || c.Upstreams.Compat[0].GPUHourlyUSD != "2.5" ||
+					c.Upstreams.Vertex == "" || c.Upstreams.Foundry == "" || c.Upstreams.Bedrock != "" {
+					t.Errorf("got %+v", c.Upstreams)
+				}
+			}},
+		{name: "compat public http refused", file: "[[upstreams.compat]]\nname = \"a\"\nbase_url = \"http://gpu.example.com:8000\"\n", wantErr: []string{"upstreams.compat \"a\"", "https://"}},
+		{name: "compat bad name", file: "[[upstreams.compat]]\nname = \"Bad Name\"\nbase_url = \"https://x.example.com\"\n", wantErr: []string{"lowercase"}},
+		{name: "compat bad rate", file: "[[upstreams.compat]]\nname = \"a\"\nbase_url = \"https://x.example.com\"\ninput_per_mtok = \"1\"\noutput_per_mtok = \"cheap\"\n", wantErr: []string{"output_per_mtok", "decimal"}},
+		{name: "compat one rate only", file: "[[upstreams.compat]]\nname = \"a\"\nbase_url = \"https://x.example.com\"\ninput_per_mtok = \"1\"\n", wantErr: []string{"both"}},
+		{name: "compat duplicate names", file: "[[upstreams.compat]]\nname = \"a\"\nbase_url = \"https://x.example.com\"\n[[upstreams.compat]]\nname = \"a\"\nbase_url = \"https://y.example.com\"\n", wantErr: []string{"unique"}},
 		{name: "bad port", file: "[gateway]\nport = 70000\n", wantErr: []string{"gateway.port is 70000", "1 to 65535"}},
 		{name: "bad env int", env: map[string]string{"TROVE_GATEWAY_PORT": "abc"}, wantErr: []string{"TROVE_GATEWAY_PORT", "whole number"}},
 		{name: "bad env float", env: map[string]string{"TROVE_BUDGET_CAP_USD": "lots"}, wantErr: []string{"TROVE_BUDGET_CAP_USD"}},

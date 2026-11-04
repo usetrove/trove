@@ -153,6 +153,11 @@ const EnvOptimize = "TROVE_OPTIMIZE"
 type Upstreams struct {
 	Anthropic string `toml:"anthropic"`
 	OpenAI    string `toml:"openai"`
+	// Cloud backends and OpenAI-compatible servers are off until configured.
+	Vertex  string           `toml:"vertex"`  // origin, e.g. https://aiplatform.googleapis.com
+	Foundry string           `toml:"foundry"` // base URL incl. /anthropic
+	Bedrock string           `toml:"bedrock"` // origin, e.g. https://bedrock-runtime.us-east-1.amazonaws.com
+	Compat  []CompatUpstream `toml:"compat"`
 }
 
 // Budget holds spending-cap settings. A CapUSD of 0 means no cap.
@@ -314,6 +319,29 @@ func (c Config) Validate() error {
 		if problem := checkUpstream(v); problem != "" {
 			add("%s %s", name, problem)
 		}
+	}
+	for name, v := range map[string]string{"upstreams.vertex": c.Upstreams.Vertex, "upstreams.bedrock": c.Upstreams.Bedrock} {
+		if v == "" {
+			continue
+		}
+		if problem := checkUpstream(v); problem != "" {
+			add("%s %s", name, problem)
+		}
+	}
+	if v := c.Upstreams.Foundry; v != "" {
+		if problem := ValidateUpstreamBase(v); problem != "" {
+			add("upstreams.foundry %s", problem)
+		}
+	}
+	seenCompat := map[string]bool{}
+	for _, cu := range c.Upstreams.Compat {
+		if problem := ValidateCompat(cu); problem != "" {
+			add("upstreams.compat %q %s", cu.Name, problem)
+		}
+		if seenCompat[cu.Name] {
+			add("upstreams.compat has two entries named %q; names must be unique.", cu.Name)
+		}
+		seenCompat[cu.Name] = true
 	}
 	names := make([]string, 0, len(c.Optimizers))
 	for n := range c.Optimizers {
@@ -538,6 +566,9 @@ func applyEnv(c *Config, getenv func(string) string) error {
 	}
 	strVar("TROVE_UPSTREAMS_ANTHROPIC", &c.Upstreams.Anthropic)
 	strVar("TROVE_UPSTREAMS_OPENAI", &c.Upstreams.OpenAI)
+	strVar("TROVE_UPSTREAMS_VERTEX", &c.Upstreams.Vertex)
+	strVar("TROVE_UPSTREAMS_FOUNDRY", &c.Upstreams.Foundry)
+	strVar("TROVE_UPSTREAMS_BEDROCK", &c.Upstreams.Bedrock)
 	strVar("TROVE_BUDGET_PERIOD", &c.Budget.Period)
 	if v := getenv("TROVE_NOTIFICATIONS_DESKTOP"); v != "" {
 		b, err := strconv.ParseBool(v)
