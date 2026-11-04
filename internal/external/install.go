@@ -139,10 +139,22 @@ func (e Env) Install(ctx context.Context, name string, ap Approval) error {
 // Wiring plans the config edits that make a tool active for new sessions.
 type Wiring func(e Env, m Manifest) ([]*setup.Edit, error)
 
-var wirings = map[ActsAs]Wiring{ActsRulesFile: wireRules}
+var wirings = map[ActsAs]Wiring{ActsRulesFile: wireRules, ActsHook: wireHook}
 
 // RegisterWiring lets an adapter supply the edits for an ActsAs kind.
 func RegisterWiring(a ActsAs, w Wiring) { wirings[a] = w }
+
+func wireHook(e Env, m Manifest) ([]*setup.Edit, error) {
+	if e.ClaudeDir == "" {
+		return nil, errors.New("Trove could not find your agent's config folder, so it cannot add the hook. Set it up with the agent first")
+	}
+	ed, err := setup.PlanExternalHook(m.Name, filepath.Join(e.ClaudeDir, "settings.json"),
+		setup.HookSpec{Event: m.Wire.HookEvent, Matcher: m.Wire.HookMatcher, Command: m.Wire.HookCommand})
+	if err != nil {
+		return nil, err
+	}
+	return []*setup.Edit{ed}, nil
+}
 
 func wireRules(e Env, m Manifest) ([]*setup.Edit, error) {
 	if e.ClaudeDir == "" {
@@ -173,23 +185,35 @@ func wireRules(e Env, m Manifest) ([]*setup.Edit, error) {
 		"Adds "+m.Name+"'s rules to your agent's CLAUDE.md, fenced by markers so they can be removed exactly.", open, old, []byte(updated))}, nil
 }
 
-// PlanEnable returns the conflicts and file edits enabling name would cause.
-func (e Env) PlanEnable(ctx context.Context, name string) (Manifest, []Conflict, []*setup.Edit, error) {
+// EnablePlan is everything enabling a tool would do. Nothing has happened yet.
+type EnablePlan struct {
+	Manifest  Manifest
+	Conflicts []Conflict
+	Edits     []*setup.Edit
+	// Commands are run through the agent's own CLI (MCP-server tools).
+	Commands [][]string
+	// AlreadyOn is true when the tool is already enabled.
+	AlreadyOn bool
+}
+
+// PlanEnable returns the conflicts, file edits and commands enabling name would cause.
+func (e Env) PlanEnable(ctx context.Context, name string) (EnablePlan, error) {
+	var p EnablePlan
 	m, err := e.Find(name)
 	if err != nil {
-		return m, nil, nil, err
+		return p, err
 	}
+	p.Manifest = m
 	rec, ok, err := e.Store.Get(ctx, name)
 	if err != nil {
-		return m, nil, nil, err
+		return p, err
 	}
 	if !ok {
-		return m, nil, nil, fmt.Errorf("%s is not installed. Run `trove external install %s` first", name, name)
+		return p, fmt.Errorf("%s is not installed. Run `trove external install %s` first", name, name)
 	}
-	var conflicts []Conflict
 	all, err := e.Store.List(ctx)
 	if err != nil {
-		return m, nil, nil, err
+		return p, err
 	}
 	var enabled []Manifest
 	for _, t := range all {
@@ -203,43 +227,56 @@ func (e Env) PlanEnable(ctx context.Context, name string) (Manifest, []Conflict,
 	if e.BuiltinsOn != nil {
 		builtins = e.BuiltinsOn()
 	}
-	conflicts = CheckEnable(m, enabled, builtins)
+	p.Conflicts = CheckEnable(m, enabled, builtins)
 	if rec.State == "on" {
-		return m, conflicts, nil, nil
+		p.AlreadyOn = true
+		return p, nil
+	}
+	if m.ActsAs == ActsMCPServer {
+		if _, err := e.Runner.LookPath(m.Wire.Add[0]); err != nil {
+			return p, fmt.Errorf("%s needs %s on your PATH to register the tool with your agent. Install it, then run this again. Nothing was changed", name, m.Wire.Add[0])
+		}
+		p.Commands = [][]string{m.Wire.Add}
+		return p, nil
 	}
 	w, ok := wirings[m.ActsAs]
 	if !ok {
-		return m, conflicts, nil, fmt.Errorf("Trove cannot switch %s on yet: wiring for %s tools is not available in this version", name, m.ActsAs)
+		return p, fmt.Errorf("Trove cannot switch %s on yet: wiring for %s tools is not available in this version", name, m.ActsAs)
 	}
-	edits, err := w(e, m)
-	return m, conflicts, edits, err
+	p.Edits, err = w(e, m)
+	return p, err
 }
 
-// Enable applies the planned edits and marks the tool on. It refuses on
-// conflicts. The change takes effect for sessions started afterwards.
+// Enable applies the plan and marks the tool on. It refuses on conflicts. The
+// change takes effect for sessions started afterwards.
 func (e Env) Enable(ctx context.Context, name string) ([]setup.Change, error) {
-	m, conflicts, edits, err := e.PlanEnable(ctx, name)
+	p, err := e.PlanEnable(ctx, name)
 	if err != nil {
 		return nil, err
 	}
-	if len(conflicts) > 0 {
-		return nil, conflicts[0]
+	if len(p.Conflicts) > 0 {
+		return nil, p.Conflicts[0]
+	}
+	if p.AlreadyOn {
+		return nil, nil
 	}
 	rec, _, err := e.Store.Get(ctx, name)
 	if err != nil {
 		return nil, err
 	}
-	if rec.State == "on" {
-		return nil, nil
+	for _, argv := range p.Commands {
+		if out, err := e.Runner.Run(ctx, argv); err != nil {
+			return nil, fmt.Errorf("registering %s with your agent failed: %v%s. Nothing was recorded as on", name, err, tail(out))
+		}
 	}
-	changes, err := setup.Apply(e.DataDir, edits, e.now())
+	changes, err := setup.Apply(e.DataDir, p.Edits, e.now())
 	rec.ChangeIDs = append(rec.ChangeIDs, changeIDs(changes)...)
 	rec.State = "on"
 	if perr := e.Store.Put(ctx, rec); perr != nil && err == nil {
 		err = perr
 	}
 	if err != nil {
-		return changes, fmt.Errorf("could not fully enable %s: %v. Run `trove external disable %s` to undo what was written", m.Name, err, name)
+		return changes, fmt.Errorf("could not fully enable %s: %v. Run `trove external disable %s` to undo what was written", name, err, name)
 	}
 	return changes, nil
 }
@@ -255,6 +292,11 @@ func (e Env) Disable(ctx context.Context, name string) ([]setup.UndoResult, erro
 		return nil, fmt.Errorf("%s is not installed, so there is nothing to disable", name)
 	}
 	var res []setup.UndoResult
+	if m, err := e.Find(name); err == nil && m.ActsAs == ActsMCPServer && rec.State == "on" {
+		if out, err := e.Runner.Run(ctx, m.Wire.Remove); err != nil {
+			return nil, fmt.Errorf("unregistering %s from your agent failed: %v%s. It stays on; fix that and run this again", name, err, tail(out))
+		}
+	}
 	if len(rec.ChangeIDs) > 0 {
 		cs, err := setup.LoadChanges(e.DataDir)
 		if err != nil {

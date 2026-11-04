@@ -1,0 +1,27 @@
+# A short behavior-rules block written by the Trove project (not a third-party tool).
+# It is added to the user-level CLAUDE.md between markers and removed exactly on disable.
+# Its prompt cost is counted from the text below, never taken from this file.
+name = "terse-rules"
+version = "1.0.0"
+license = "Trove-project"
+source_url = "https://github.com/usetrove/trove"
+verified_on = "2026-11-04"
+acts_as = "rules_file"
+category = "behavior_rules"
+points = ["request"]
+supports_shadow = false
+shadow_note = "it only changes the agent's instructions, so Trove cannot estimate its effect without it being on"
+cautions = [
+  "Rules are advice to the model, which may not follow them. Whether they save anything on your work is decided by comparing the cost of sessions with and without them.",
+]
+rules = """
+Keep token use low:
+- Read only the lines you need (use offsets and limits) instead of whole large files.
+- Do not re-read a file you already read unless it changed.
+- For noisy commands, filter the output (head, grep, quiet flags) rather than printing everything.
+- Keep answers short; do not restate the task or summarize changes already visible in the diff.
+"""
+
+[claimed]
+text = "none: these are Trove's own rules and no savings figure is claimed for them"
+source_url = "https://github.com/usetrove/trove"

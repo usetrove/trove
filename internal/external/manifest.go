@@ -51,6 +51,19 @@ type Verify struct {
 	Contains string   `toml:"contains" json:"contains"` // must appear in the output
 }
 
+// Wire says how an enabled tool is connected to the agent.
+//   - hook tools: Trove adds one PreToolUse-style hook entry to the agent's
+//     settings through its own backed-up, undoable edit.
+//   - MCP-server tools: Trove runs the agent's own add command, because the
+//     agent keeps that registration in a file Trove does not edit. Remove undoes it.
+type Wire struct {
+	HookEvent   string   `toml:"hook_event" json:"hook_event,omitempty"`
+	HookMatcher string   `toml:"hook_matcher" json:"hook_matcher,omitempty"`
+	HookCommand string   `toml:"hook_command" json:"hook_command,omitempty"`
+	Add         []string `toml:"add" json:"add,omitempty"`
+	Remove      []string `toml:"remove" json:"remove,omitempty"`
+}
+
 // Overhead is what the tool adds to every request while on (rule 15).
 type Overhead struct {
 	ToolDefTokens  int `toml:"tool_def_tokens" json:"tool_def_tokens"`
@@ -85,6 +98,9 @@ type Manifest struct {
 	Install        Command  `toml:"install" json:"install"`
 	Remove         Command  `toml:"remove" json:"remove"`
 	Verify         Verify   `toml:"verify" json:"verify"`
+	Wire           Wire     `toml:"wire" json:"wire"`
+	// Cautions are facts about the tool the user should see before installing.
+	Cautions []string `toml:"cautions" json:"cautions,omitempty"`
 	// Rules is the text added to the agent's rules file (acts_as = rules_file only).
 	Rules    string   `toml:"rules" json:"rules,omitempty"`
 	Overhead Overhead `toml:"overhead" json:"overhead"`
@@ -129,6 +145,12 @@ func (m Manifest) Validate() error {
 	}
 	if len(m.Verify.Argv) > 0 {
 		need(m.Verify.Contains != "", "verify.contains is required when verify.argv is set")
+	}
+	switch m.ActsAs {
+	case ActsHook:
+		need(m.Wire.HookEvent != "" && m.Wire.HookCommand != "", "wire.hook_event and wire.hook_command are required for hook tools")
+	case ActsMCPServer:
+		need(len(m.Wire.Add) > 0 && len(m.Wire.Remove) > 0, "wire.add and wire.remove are required for MCP-server tools")
 	}
 	need((m.ActsAs == ActsRulesFile) == (strings.TrimSpace(m.Rules) != ""), "rules text is required for rules_file tools and not allowed for others")
 	need(m.Overhead.ToolDefTokens >= 0 && m.Overhead.InjectedTokens >= 0 && m.Overhead.ExtraTurnsEstimate >= 0, "overhead must not be negative")

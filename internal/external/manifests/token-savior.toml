@@ -1,0 +1,47 @@
+# token-savior: an MCP server for structural code navigation (find_symbol, get_function_source, ...).
+# Verified 2026-11-04 against https://github.com/Mibayy/token-savior (README, LICENSE) and
+# https://pypi.org/project/token-savior-recall/ : version 4.24.0 released 2026-10-15, MIT.
+# The PyPI project's Homepage and Repository links point to github.com/Mibayy/token-savior.
+name = "token-savior"
+version = "4.24.0"
+license = "MIT"
+source_url = "https://github.com/Mibayy/token-savior"
+verified_on = "2026-11-04"
+acts_as = "mcp_server"
+category = "code_nav"
+points = ["tool_output"]
+supports_shadow = false
+shadow_note = "it is an MCP server the agent chooses to call, so Trove cannot tell what it would have saved without it being on"
+cautions = [
+  "Several projects use the name token-savior. Trove installs only the PyPI package token-savior-recall, whose listed repository is github.com/Mibayy/token-savior.",
+  "The PyPI uploads have no provenance and do not use Trusted Publishing, so they are not cryptographically tied to the GitHub repository. The PyPI maintainer account (darkpancakes) differs from the GitHub owner (Mibayy).",
+  "The README says its benchmark source is not published, so its figures cannot be independently checked.",
+]
+
+[install]
+argv = ["pip", "install", "token-savior-recall[mcp]==4.24.0"]
+requires = ["pip"]
+
+[remove]
+argv = ["pip", "uninstall", "-y", "token-savior-recall"]
+
+[verify]
+argv = ["pip", "show", "token-savior-recall"]
+contains = "Version: 4.24.0"
+
+# Registered with the agent's own CLI. The README's recommended profile exposes 15 tools.
+[wire]
+add = ["claude", "mcp", "add", "--scope", "user", "-e", "TOKEN_SAVIOR_CLIENT=claude-code", "-e", "TOKEN_SAVIOR_PROFILE=optimized", "token-savior", "--", "token-savior"]
+remove = ["claude", "mcp", "remove", "token-savior", "--scope", "user"]
+
+# Declared by the tool: README profile table lists "optimized: 15 tools, ~1.5 KT" of manifest tokens.
+# Trove has not measured the real tools/list size; the net-cost check covers it either way.
+[overhead]
+tool_def_tokens = 1500
+injected_tokens = 0
+extra_turns_estimate = 0
+
+[claimed]
+text = "cost -45% (range -39% to -53%) in the README's 2026-10-07 re-measurement (8 tasks, Claude Haiku 4.5, 3 passes); the README also states the benchmark source is not currently published"
+percent = 45
+source_url = "https://github.com/Mibayy/token-savior"

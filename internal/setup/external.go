@@ -33,6 +33,10 @@ func NewExternalEdit(tool, path, show, summary, openMarker string, old, updated 
 
 // stripExternal removes a tool's fenced block from a file edited since Trove wrote it.
 func stripExternal(cur []byte, tool, openMarker string) ([]byte, bool) {
+	if strings.HasPrefix(openMarker, hookValuePrefix) {
+		next, err := stripHookGroups(cur, strings.TrimPrefix(openMarker, hookValuePrefix))
+		return next, err == nil
+	}
 	open, close := ExternalMarkers(tool)
 	if openMarker == "" || openMarker != open {
 		return nil, false
@@ -42,4 +46,22 @@ func stripExternal(cur []byte, tool, openMarker string) ([]byte, bool) {
 		return nil, false
 	}
 	return next, true
+}
+
+const hookValuePrefix = "hook:"
+
+// PlanExternalHook plans adding one hook entry for a third-party tool to the
+// agent's settings.json. The edit is recorded as external_<tool>, so it is undone
+// with the tool and never counted as Trove's own hooks. If the user edits the
+// file later, undo removes only this entry.
+func PlanExternalHook(tool, settingsPath string, spec HookSpec) (*Edit, error) {
+	e, err := planHooks(ClaudeHooks, settingsPath, []HookSpec{spec}, spec.Command)
+	if err != nil {
+		return nil, err
+	}
+	e.Agent = ExternalPrefix + tool
+	e.value = hookValuePrefix + spec.Command
+	e.Summary = "Adds " + tool + "'s hook to your agent's settings, next to your existing hooks."
+	e.Note = "`trove external disable " + tool + "` removes only this entry."
+	return e, nil
 }

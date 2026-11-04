@@ -1,0 +1,48 @@
+# RTK (Rust Token Killer): compresses shell command output before it reaches the model.
+# Verified 2026-11-04 against https://github.com/rtk-ai/rtk (README, INSTALL.md, LICENSE) and
+# the GitHub releases API: latest stable release is v1.1.0 (2026-10-25).
+#
+# Trove installs the Apache-2.0-only build (cargo --no-default-features, the "rtk-oss" edition),
+# so none of RTK's BUSL-1.1 code is installed. The default build links a BUSL-1.1 engine.
+name = "rtk"
+version = "1.1.0"
+license = "Apache-2.0"
+source_url = "https://github.com/rtk-ai/rtk"
+verified_on = "2026-11-04"
+acts_as = "hook"
+category = "shell_compressor"
+points = ["tool_input", "tool_output"]
+supports_shadow = false
+shadow_note = "it rewrites shell commands inside the agent's own hook, outside Trove's request path, so Trove cannot estimate what it would do without doing it"
+cautions = [
+  "Two different projects are called rtk. Trove installs only from https://github.com/rtk-ai/rtk at tag v1.1.0; never run `cargo install rtk` from crates.io.",
+  "Only shell (Bash) tool calls pass through it. The agent's built-in Read, Grep and Glob tools do not.",
+  "Trove installs the Apache-2.0-only build. RTK's default build adds a BUSL-1.1 engine, so its own savings figures may assume features this build lacks.",
+]
+
+[install]
+argv = ["cargo", "install", "--git", "https://github.com/rtk-ai/rtk", "--tag", "v1.1.0", "rtk", "--no-default-features"]
+requires = ["cargo"]
+
+[remove]
+argv = ["cargo", "uninstall", "rtk"]
+
+[verify]
+argv = ["rtk", "--version"]
+contains = "1.1.0"
+
+# Trove writes this hook entry itself (backed up, undoable). It never runs `rtk init`.
+[wire]
+hook_event = "PreToolUse"
+hook_matcher = "Bash"
+hook_command = "rtk hook claude"
+
+# Trove adds no rules text and no tool definitions for RTK, so nothing is added to the prompt.
+[overhead]
+tool_def_tokens = 0
+injected_tokens = 0
+extra_turns_estimate = 0
+
+[claimed]
+text = "reduces LLM token consumption by 60-90% on common dev commands"
+source_url = "https://github.com/rtk-ai/rtk"

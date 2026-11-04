@@ -156,6 +156,9 @@ func planText(p external.InstallPlan) string {
 	if p.License.Warning != "" {
 		fmt.Fprintf(&b, "  %s\n", p.License.Warning)
 	}
+	for _, c := range m.Cautions {
+		fmt.Fprintf(&b, "  Caution:  %s\n", c)
+	}
 	if len(p.InstallArgv) > 0 {
 		fmt.Fprintf(&b, "  Install:  %s\n", strings.Join(p.InstallArgv, " "))
 	}
@@ -283,15 +286,18 @@ func newExternalToggle(a *App, enable bool) *cobra.Command {
 				}
 				return a.emit(map[string]any{"name": name, "state": "off", "undone": res}, name+" is off. "+restart)
 			}
-			_, conflicts, edits, err := env.PlanEnable(ctx, name)
+			plan, err := env.PlanEnable(ctx, name)
 			if err != nil {
 				return err
 			}
-			if len(conflicts) > 0 {
-				return conflicts[0]
+			if len(plan.Conflicts) > 0 {
+				return plan.Conflicts[0]
 			}
 			var show strings.Builder
-			for _, e := range edits {
+			for _, argv := range plan.Commands {
+				fmt.Fprintf(&show, "Run: %s\n  Registers the tool with your agent (the agent keeps that setting in its own file, which Trove does not edit).\n", strings.Join(argv, " "))
+			}
+			for _, e := range plan.Edits {
 				if e.NoOp {
 					continue
 				}
