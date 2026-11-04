@@ -38,6 +38,9 @@ type setupReport struct {
 	// Explain says what Trove records, that nothing leaves the machine, that it
 	// starts observe-only, and how to see results.
 	Explain []string `json:"explain,omitempty"`
+	// Options explains who the gateway is for, how API credits on Max, Ultra and
+	// Team plans fit, which cloud backends it handles, and the healthcare caveat.
+	Options []string `json:"options,omitempty"`
 }
 
 func newSetup(a *App) *cobra.Command {
@@ -108,14 +111,15 @@ func runSetup(a *App, yes, statusLine bool) error {
 	if !a.JSON {
 		a.printPlans(rep.Plans)
 	}
+	rep.Options = optionsNotes() // also in --json output that makes no change
 	if pending == 0 {
 		rep.Verify, rep.TurnOff = verifySteps(cfg.Gateway.Port), turnOffSteps()
-		rep.Explain = explainSteps(dir, cfg)
+		rep.Explain, rep.Options = explainSteps(dir, cfg), optionsNotes()
 		statusText, err := statusLineStep(a, &rep, dir, claudeDir, statusLine)
 		if err != nil {
 			return err
 		}
-		return a.emit(rep, "Nothing to change: "+problemSummary(rep.Plans)+"\n\n"+statusText+strings.Join(rep.Verify, "\n")+"\n\n"+strings.Join(rep.Explain, "\n"))
+		return a.emit(rep, "Nothing to change: "+problemSummary(rep.Plans)+"\n\n"+statusText+strings.Join(rep.Verify, "\n")+"\n\n"+strings.Join(rep.Explain, "\n")+"\n\n"+strings.Join(rep.Options, "\n"))
 	}
 	consent := yes
 	if !consent && !a.JSON {
@@ -135,7 +139,7 @@ func runSetup(a *App, yes, statusLine bool) error {
 		return fmt.Errorf("%v. Run `trove undo` to reverse anything already applied", err)
 	}
 	rep.Verify, rep.TurnOff = verifySteps(cfg.Gateway.Port), turnOffSteps()
-	rep.Explain = explainSteps(dir, cfg)
+	rep.Explain, rep.Options = explainSteps(dir, cfg), optionsNotes()
 	statusText, err := statusLineStep(a, &rep, dir, claudeDir, statusLine)
 	if err != nil {
 		_ = a.emit(rep, "")
@@ -144,7 +148,7 @@ func runSetup(a *App, yes, statusLine bool) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Applied %d change(s). Backups are in %s.\n\n", len(rep.Changes), filepath.Join(dir, "backups"))
 	b.WriteString(statusText)
-	b.WriteString(strings.Join(rep.Verify, "\n") + "\n\n" + strings.Join(rep.TurnOff, "\n") + "\n\n" + strings.Join(rep.Explain, "\n"))
+	b.WriteString(strings.Join(rep.Verify, "\n") + "\n\n" + strings.Join(rep.TurnOff, "\n") + "\n\n" + strings.Join(rep.Explain, "\n") + "\n\n" + strings.Join(rep.Options, "\n"))
 	return a.emit(rep, b.String())
 }
 
@@ -159,6 +163,32 @@ func explainSteps(dir string, cfg config.Config) []string {
 		fmt.Sprintf("  Trove starts in observe-only mode. No optimizer is on and no request is changed. It estimates what each optimizer would save, and offers one only after a baseline of %d days and %d sessions.",
 			cfg.Measure.BaselineDays, cfg.Measure.BaselineSessions),
 		"  To see results, run `trove` (or `trove report`). Until you have made a few requests through the gateway it will say there is nothing to show yet.",
+	}
+}
+
+// optionsNotes is the part of setup that says who the gateway is for. The
+// sources and dates are in docs/compliance.md (checked 2026-11-04).
+func optionsNotes() []string {
+	return []string{
+		"Who the gateway is for:",
+		"  The gateway works with API keys and cloud credentials only: a Console API key, or a Google Vertex, Microsoft Foundry or Amazon Bedrock key.",
+		"  If you use Claude Code with a Free, Pro, Max, Ultra, Team or Enterprise login, the gateway refuses it (it never touches subscription logins).",
+		"  To use a subscription, run `trove undo` to remove the custom endpoint and use the Trove plugin instead.",
+		"",
+		"Max, Ultra and Team plans include monthly API credits:",
+		"  Link a Claude Console organization to your plan (claude.ai Settings > Billing, or Organization settings > Billing on Team),",
+		"  create an API key in that organization, and use it for automated work, such as Agent SDK programs and CI, through the gateway.",
+		"  Anthropic's credits page says they cover the Claude API and the Agent SDK, and do not cover interactive Claude Code or the cloud platforms (Bedrock, Vertex, Foundry).",
+		"  It does not mention `claude -p`; check your Console billing page before assuming credits apply to it.",
+		"  Trove cannot tell automated from interactive work by itself. To label automated runs, add the header X-Trove-Kind: automated",
+		"  (Claude Code: ANTHROPIC_CUSTOM_HEADERS=\"X-Trove-Kind: automated\"). `trove report` then shows that spend separately.",
+		"",
+		"Cloud backends and self-hosted models:",
+		"  Vertex and Foundry go through the gateway (set upstreams.vertex or upstreams.foundry). Bedrock works with an Amazon Bedrock API key; AWS SigV4-signed",
+		"  requests are refused because the signature covers the request and Trove never holds AWS credentials. OpenAI-compatible servers (vLLM, SGLang, or",
+		"  providers of open-weight models) are added under [[upstreams.compat]] for OpenAI-format agents such as Codex CLI; Claude Code is not supported against them.",
+		"",
+		"Healthcare: Anthropic's HIPAA configuration does not cover Claude Code routed through a gateway. If you rely on a BAA, use the plugin only and do not use this gateway.",
 	}
 }
 
