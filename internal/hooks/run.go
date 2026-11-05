@@ -34,8 +34,10 @@ import (
 
 // Event names accepted by `trove hook <event>`.
 const (
-	EventPreRead     = "pre_tool_repeat_read"
-	EventPostRead    = "post_tool_read_record"
+	EventPreRead  = "pre_tool_repeat_read"
+	EventPostRead = "post_tool_read_record"
+	// EventPostEdit records an edit for the session features; it never changes anything.
+	EventPostEdit    = "post_tool_edit_record"
 	EventReset       = "session_reset"
 	EventSessionEnd  = "session_end_receipt"
 	EventLargeOutput = "pre_tool_large_output"
@@ -48,7 +50,7 @@ const (
 )
 
 // Events lists every event name.
-var Events = []string{EventPreRead, EventPostRead, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch}
+var Events = []string{EventPreRead, EventPostRead, EventPostEdit, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch}
 
 const (
 	// maxHashBytes is the largest file the repeat-read hook will hash. Bigger
@@ -193,6 +195,8 @@ func run(dir, event, agent string, e Env) []byte {
 		out, err = h.preRead(in, key)
 	case EventPostRead:
 		err = h.postRead(in, key)
+	case EventPostEdit:
+		err = h.postEdit(in, key)
 	case EventReset:
 		err = h.reset(in, key)
 	case EventLargeOutput:

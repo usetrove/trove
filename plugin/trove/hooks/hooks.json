@@ -13,6 +13,16 @@
         ]
       },
       {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook post_tool_edit_record",
+            "timeout": 5
+          }
+        ]
+      },
+      {
         "matcher": "Bash|Grep|Glob",
         "hooks": [
           {

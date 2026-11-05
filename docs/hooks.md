@@ -19,9 +19,14 @@ trove hooks install --rewrite   # also install the hooks that rewrite tool input
 |---|---|---|
 | `pre_tool_repeat_read` | Claude Code `PreToolUse` on `Read` | If the session already read this file range and the file is unchanged (same modification time, size and content hash), denies the call once with a short message naming the earlier prompt, so the agent reuses what it has. |
 | `post_tool_read_record` | Claude Code `PostToolUse` on `Read` | Records the read, but only after it succeeded. A read that was denied or failed is never taken for one that happened. |
+| `post_tool_edit_record` | Claude Code `PostToolUse` on `Edit`, `Write`, `MultiEdit`, `NotebookEdit` | Records that a file was edited, for the session features ([features.md](features.md)). Never prints anything and never changes the call. |
 | `session_reset` | `SessionStart`, Claude Code `PreCompact` | Pins the optimizer states for the session. Forgets earlier reads after a compaction or resume, because the agent no longer has those files in context. |
-| `session_end_receipt` | `SessionEnd` | Moves the hook counters into the database, runs the hook guardrail, writes the session receipt, refreshes the snapshot the other hooks read. |
+| `session_end_receipt` | `SessionEnd` | Moves the hook counters into the database, runs the hook guardrail, writes the session receipt, refreshes the snapshot the other hooks read, then writes the session's features and, if stale, the repo's ([features.md](features.md)). |
 | `pre_tool_large_output` (optional, `--large-output`) | `PreToolUse` on `Bash` | For a known-noisy command (`go test ./...`, `npm test`, bare `pytest`, `make`, verbose builds) adds a hint to use `trove_run`. Never blocks. Only fires when the MCP server is registered. |
+
+Session features also come from `post_tool_read_record`, `session_reset` (compactions) and `post_tool_output`
+(tool-result features, only with `--rewrite`). Each call appends one numeric line to a small journal next to the
+ledger; paths and commands are hashed first, nothing from the content is written, and a failure to record is ignored.
 
 Codex CLI gets `session_reset`, `session_end_receipt` and, if you ask for it, `pre_tool_large_output`.
 It does **not** get repeat-read prevention: Codex's hook page names no file-read tool to match.

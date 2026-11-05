@@ -47,6 +47,7 @@ func (h *handler) postRead(in Input, key string) error {
 	if in.ToolName != "Read" {
 		return nil
 	}
+	h.featRead(in, key)
 	st := h.session(key, in)
 	_, reps := h.engine().TransformToolOutput(context.Background(), toolCall(in), ToolOutputOf(in), h.sess(key, st, in.ToolName))
 	return failure(reps)
@@ -58,6 +59,9 @@ func (h *handler) postRead(in Input, key string) error {
 // no longer in the agent's context, so the ledger is cleared: a block then would
 // leave the agent without the file.
 func (h *handler) reset(in Input, key string) error {
+	if in.Event == "PreCompact" || in.Event == "PostCompact" {
+		h.feat(key, "X")
+	}
 	st := loadSession(h.dir, key)
 	if len(st.Pins) == 0 {
 		for _, n := range OptimizerNames {
@@ -94,6 +98,7 @@ func (h *handler) postOutput(in Input, key string) ([]byte, error) {
 	if !ok || interrupted(in.ToolResponse) {
 		return nil, nil
 	}
+	h.featResults(in, key, texts)
 	st := h.session(key, in)
 	// The trimmer needs the recovery store, and the store is only useful when the
 	// agent can fetch the text back, so ask for it only then.
@@ -175,8 +180,9 @@ func (h *handler) postFetch(in Input, key string) error {
 // sessionEnd is session_end_receipt: it moves the hook counters into the
 // database, runs the hook guardrail, writes this session's receipt, refreshes
 // the snapshot the other hooks read, and forgets the session's ledger.
-func (h *handler) sessionEnd(_ Input, key string) error {
+func (h *handler) sessionEnd(in Input, key string) error {
 	defer func() { _ = os.Remove(sessionPath(h.dir, key)) }()
+	defer func() { _ = os.Remove(featPath(h.dir, key)) }()
 	h.sweepOldSessions()
 	ctx, cancel := context.WithTimeout(context.Background(), endDeadline-250*time.Millisecond)
 	defer cancel()
@@ -198,6 +204,10 @@ func (h *handler) sessionEnd(_ Input, key string) error {
 	}
 	if cfg.Notifications.Desktop && h.notify != nil && len(recs) > 0 {
 		h.notify(recs[len(recs)-1])
+	}
+	// Last, and best effort: the receipt is already written.
+	if err := h.flushFeatures(ctx, db, in, key); err != nil {
+		return fmt.Errorf("cannot write the session features: %v", err)
 	}
 	return nil
 }

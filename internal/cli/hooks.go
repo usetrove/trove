@@ -102,6 +102,7 @@ func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.H
 	s := []setup.HookSpec{
 		{Event: "PreToolUse", Matcher: "Read", Command: build(hooks.EventPreRead), Timeout: 5},
 		{Event: "PostToolUse", Matcher: "Read", Command: build(hooks.EventPostRead), Timeout: 5},
+		{Event: "PostToolUse", Matcher: "Edit|Write|MultiEdit|NotebookEdit", Command: build(hooks.EventPostEdit), Timeout: 5},
 		{Event: "SessionStart", Command: build(hooks.EventReset), Timeout: 5},
 		{Event: "PreCompact", Command: build(hooks.EventReset), Timeout: 5},
 		{Event: "SessionEnd", Command: build(hooks.EventSessionEnd), Timeout: 3},
