@@ -1,0 +1,112 @@
+#!/bin/sh
+# Trove plugin wrapper. Hooks and the MCP server call this by absolute path
+# (plugins do not get bin/ on PATH for them), and it runs the real trove program.
+#
+# Which program it runs, in order:
+#   1. the copy it downloaded earlier into the plugin's data folder (version-pinned);
+#   2. a `trove` on PATH, but only if it reports exactly the version in ../VERSION;
+#   3. a verified download of that version (SHA-256 checked against the release's
+#      checksums.txt, the same check install.sh does). Downloads happen for every
+#      command except `hook`, which is short-lived; the session-start command
+#      (`plugin start`) fetches the program before the first hook needs it.
+# A VERSION of "dev" (a source checkout) never downloads and accepts any `trove` on PATH.
+#
+# The wrapper handles no credentials and talks to nothing but the release download.
+# For `hook ...` it always exits 0 when it cannot find the program, so it can never
+# be the reason an agent stops working.
+set -u
+
+root=$(cd "$(dirname "$0")/.." 2>/dev/null && pwd) || exit 0
+ver=$(tr -d ' \r\n' <"$root/VERSION" 2>/dev/null)
+[ -n "$ver" ] || ver=dev
+data="${CLAUDE_PLUGIN_DATA:-${HOME:-/tmp}/.cache/trove-plugin}"
+cached="$data/trove-$ver/trove"
+repo="usetrove/trove"
+base="${TROVE_BASE_URL:-https://github.com/$repo/releases/download}"
+
+say() { echo "trove plugin: $*" >&2; }
+
+# Run the program found, or give up the way the caller's command should.
+give_up() {
+  case "${1:-}" in
+    hook) exit 0 ;;
+    plugin)
+      # The SessionStart command: tell the user once, in the hook's JSON output.
+      printf '{"systemMessage":"Trove could not start: %s"}\n' "$2"
+      exit 0
+      ;;
+  esac
+  say "$2"
+  exit 1
+}
+
+if [ -x "$cached" ]; then
+  exec "$cached" "$@"
+fi
+
+if p=$(command -v trove 2>/dev/null) && [ -n "$p" ]; then
+  if [ "$ver" = dev ] || [ "$("$p" version 2>/dev/null | head -n 1)" = "trove $ver" ]; then
+    exec "$p" "$@"
+  fi
+fi
+
+[ "$ver" != dev ] || give_up "${1:-}" "this is a source checkout; put the trove program you built on PATH."
+
+case "${1:-}" in
+  hook) give_up hook "" ;; # hooks are short-lived; the session-start command fetches the program
+esac
+
+os="${TROVE_OS:-$(uname -s | tr '[:upper:]' '[:lower:]')}" # TROVE_OS and TROVE_ARCH are for tests, as in install.sh
+case "$os" in
+  darwin | linux) ;;
+  *) give_up "${1:-}" "unsupported OS '$os'. Trove supports macOS and Linux. Build from source: go install github.com/$repo/cmd/trove@latest" ;;
+esac
+cpu="${TROVE_ARCH:-$(uname -m)}"
+case "$cpu" in
+  x86_64 | amd64) arch=amd64 ;;
+  arm64 | aarch64) arch=arm64 ;;
+  *) give_up "${1:-}" "unsupported CPU '$cpu'. Trove supports x86_64 and arm64." ;;
+esac
+command -v curl >/dev/null 2>&1 || give_up "${1:-}" "curl is required to fetch the trove program. Install curl, or install trove yourself (brew, npm or install.sh) at version $ver."
+
+# One downloader at a time: the MCP server and the session-start command both
+# call this at the start of a session. The other waits for the first to finish.
+mkdir -p "$data" 2>/dev/null || give_up "${1:-}" "cannot create $data."
+lock="$data/.lock-$ver"
+if ! mkdir "$lock" 2>/dev/null; then
+  i=0
+  while [ $i -lt 80 ] && [ ! -x "$cached" ]; do
+    sleep 1
+    i=$((i + 1))
+  done
+  [ -x "$cached" ] && exec "$cached" "$@"
+  give_up "${1:-}" "another download did not finish in time. Start a new session to retry."
+fi
+tmp=$(mktemp -d 2>/dev/null) || {
+  rmdir "$lock" 2>/dev/null
+  give_up "${1:-}" "cannot create a temporary folder."
+}
+trap 'rm -rf "$tmp"; rmdir "$lock" 2>/dev/null' EXIT INT TERM
+
+file="trove_${ver}_${os}_${arch}.tar.gz"
+curl -fsSL -o "$tmp/$file" "$base/v$ver/$file" || give_up "${1:-}" "download failed for version $ver. Check your network, or install trove $ver yourself."
+curl -fsSL -o "$tmp/checksums.txt" "$base/v$ver/checksums.txt" || give_up "${1:-}" "could not download checksums.txt for version $ver."
+want=$(awk -v f="$file" '$2 == f || $2 == "*" f { print $1 }' "$tmp/checksums.txt")
+[ -n "$want" ] || give_up "${1:-}" "checksums.txt has no entry for $file."
+if command -v sha256sum >/dev/null 2>&1; then
+  got=$(sha256sum "$tmp/$file" | awk '{ print $1 }')
+elif command -v shasum >/dev/null 2>&1; then
+  got=$(shasum -a 256 "$tmp/$file" | awk '{ print $1 }')
+else
+  give_up "${1:-}" "need sha256sum or shasum to verify the download."
+fi
+[ "$got" = "$want" ] || give_up "${1:-}" "checksum mismatch for $file, so nothing was installed."
+tar -xzf "$tmp/$file" -C "$tmp" trove || give_up "${1:-}" "could not unpack $file."
+mkdir -p "$data/trove-$ver" || give_up "${1:-}" "cannot create $data/trove-$ver."
+if ! { cp "$tmp/trove" "$cached.part" && chmod 755 "$cached.part" && mv "$cached.part" "$cached"; }; then
+  give_up "${1:-}" "could not write $cached."
+fi
+rm -rf "$tmp"
+rmdir "$lock" 2>/dev/null
+trap - EXIT INT TERM
+exec "$cached" "$@"

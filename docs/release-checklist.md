@@ -24,6 +24,7 @@ Do not tag until every box is ticked, with a date and initials. Nothing here is 
 - [ ] Local note: `golangci-lint` is blind on Go 1.27.3 locally, so rely on CI for lint
 - [ ] Version in `CHANGELOG.md` moved from "not yet released" to the release date
 - [ ] `go run ./scripts/checkclaims --publish` passes on `docs/launch/*.md` (every figure cites an existing source file)
+- [ ] Plugin: `plugin/trove/VERSION` set to the release version (no `v`, same as the archive names) before tagging, so the wrapper downloads the matching program; `claude plugin validate plugin/trove --strict` passes; [plugin-verification.md](plugin-verification.md) run on a real login
 
 ## 4. Dry run
 

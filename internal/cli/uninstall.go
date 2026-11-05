@@ -25,7 +25,7 @@ import (
 var (
 	ownedFiles = []string{
 		"config.toml", "changes.json", "fixqueue.json", "gateway.json", "gateway.log",
-		"mcp_installs.json", "mcp_trust.json",
+		"mcp_installs.json", "mcp_trust.json", pluginStateFile,
 	}
 	ownedDirs  = []string{"backups", "recovery", "hooks"}
 	ownedGlobs = []string{"hooks.log*", ".mcp_trust-*"}

@@ -172,6 +172,10 @@ func planHooksInstall(a *App, dir, home string, fl hooksInstallFlags) ([]hooksPl
 			p.Hooks = hookNames(specs)
 			e, err = setup.PlanCodexHooks(cfgDir, specs, base)
 		default:
+			if pluginHooksActive(cfgDir, fl) {
+				p.Problem = "the Trove plugin is enabled and already registers these hooks, so adding them to settings as well would run each one twice. Use the plugin's hooks, or disable the plugin first."
+				break
+			}
 			base, build, cerr := hookCommands(a, dir, "")
 			if cerr != nil {
 				p.Problem = cerr.Error()
