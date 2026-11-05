@@ -19,8 +19,8 @@ import (
 // Status says what the A/B data shows for one optimizer.
 type Status string
 
+// The statuses of an experiment: what the data supports so far.
 const (
-	// NotEnoughData: too few sessions on one side to say anything.
 	NotEnoughData Status = "not_enough_data"
 	NoClearEffect Status = "no_clear_effect"
 	Saves         Status = "saves"

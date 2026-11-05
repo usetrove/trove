@@ -22,8 +22,8 @@ var manifestFS embed.FS
 // ActsAs describes how a tool reaches the agent.
 type ActsAs string
 
+// The ways a tool can reach the agent.
 const (
-	// ActsShellWrapper rewrites or wraps shell commands.
 	ActsShellWrapper ActsAs = "shell_wrapper"
 	ActsMCPServer    ActsAs = "mcp_server"
 	ActsHook         ActsAs = "hook"
@@ -34,8 +34,8 @@ const (
 // category may be enabled at a time.
 type Category string
 
+// The categories of tool; at most one tool per exclusive category may be enabled.
 const (
-	// CategoryShellCompressor tools shrink shell output; only one may be enabled.
 	CategoryShellCompressor Category = "shell_compressor"
 	CategoryCodeNav         Category = "code_nav"
 	CategoryBehaviorRules   Category = "behavior_rules"

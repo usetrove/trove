@@ -22,8 +22,8 @@ import (
 // Point is a place in an agent's loop where an optimizer can act.
 type Point string
 
+// The points in an agent's loop where an optimizer can act.
 const (
-	// PointToolInput is before a tool runs, when its input can be rewritten.
 	PointToolInput  Point = "tool_input"
 	PointToolOutput Point = "tool_output"
 	PointRequest    Point = "request"
@@ -32,8 +32,8 @@ const (
 // Adapter names a way of reaching the engine.
 type Adapter string
 
+// The adapters that can reach the engine.
 const (
-	// AdapterGateway is the local HTTP gateway for API-key traffic.
 	AdapterGateway Adapter = "gateway"
 	AdapterHooks   Adapter = "hooks"
 	AdapterPlugin  Adapter = "plugin"
@@ -45,8 +45,8 @@ var Adapters = []Adapter{AdapterGateway, AdapterHooks, AdapterPlugin}
 // Level says how fully an adapter can run an optimizer.
 type Level string
 
+// How fully an adapter can run an optimizer.
 const (
-	// LevelSupported means the adapter runs the optimizer in full.
 	LevelSupported  Level = "supported"
 	LevelPartial    Level = "partial"
 	LevelImpossible Level = "impossible"

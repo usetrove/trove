@@ -5,8 +5,8 @@ import "strings"
 // LicenseClass tells the user how a license treats commercial or company use.
 type LicenseClass string
 
+// The license classes Trove gates installs on.
 const (
-	// LicensePermissive allows commercial and company use (MIT, Apache-2.0, BSD).
 	LicensePermissive LicenseClass = "permissive"
 	LicenseCopyleft   LicenseClass = "copyleft"
 	// LicenseRestricted limits commercial or company use.
