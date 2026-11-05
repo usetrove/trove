@@ -133,6 +133,17 @@ func Render(r Report, o Options) string {
 		}
 	}
 
+	if len(r.SettingsProfiles) > 0 {
+		b.WriteString("\n" + heading("Settings profiles you applied"))
+		for _, s := range r.SettingsProfiles {
+			b.WriteString(wrap(fmt.Sprintf("%s (%s, %s), applied %s", s.FixID, s.Task, s.Harness, day(s.AppliedAt.Local())), o.width(), "  ", "    ") + "\n")
+			b.WriteString(wrap(s.Text, o.width(), "    ", "    ") + "\n")
+			if s.Recommend != "" {
+				b.WriteString(wrap("Trove suggests undoing it: "+s.Recommend, o.width(), "    ", "    ") + "\n")
+			}
+		}
+	}
+
 	if len(r.ExternalTools) > 0 {
 		b.WriteString("\n" + heading("Third-party tools (each tool's own claim next to what Trove measured)"))
 		for _, t := range r.ExternalTools {

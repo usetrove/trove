@@ -168,6 +168,9 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	if r.Fixes, err = measure.FixEffects(ctx, db, in.Config.Measure); err != nil {
 		return r, err
 	}
+	if r.SettingsProfiles, err = measure.SettingsEffects(ctx, db, in.Config.Measure); err != nil {
+		return r, err
+	}
 	ad, err := measure.AdoptionFor(ctx, db, w, in.Config.Measure)
 	if err != nil {
 		return r, err

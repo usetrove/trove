@@ -39,6 +39,9 @@ type Report struct {
 	// Fixes are the config fixes from `trove fix` that are still in place, with
 	// what the data shows about each. Empty when none was applied.
 	Fixes []measure.FixEffect `json:"fixes,omitempty"`
+	// SettingsProfiles are the settings profiles from `trove settings` that are
+	// still in place, with what the data shows about each (see docs/settings.md).
+	SettingsProfiles []measure.SettingsEffect `json:"settings_profiles,omitempty"`
 	// Notes are plain-English caveats and next steps (for example the empty state).
 	Notes []string `json:"notes,omitempty"`
 	// History is the part of the figures that came from agents' local session
