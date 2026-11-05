@@ -74,6 +74,7 @@ All numbers, hashes, names and timings. "Kept" is how long Trove keeps it on its
 | `receipts` | One row per finished session: hashed key, agent, model names, call count, cost, cache-hit rate, savings | until uninstall |
 | `hook_events` | Counts from hooks: time, hashed session key, hook name, byte and token counts | until uninstall |
 | `fixes` | Fixes applied: change id, kind, agent, **hash** of the file path, estimated tokens and dollars | until uninstall |
+| `settings_profiles` | Settings profiles applied by `trove settings`: change id, task type (for example `quick-fix`), agent, the **names** of the settings changed (never their values), the agent version | until uninstall |
 | `guardrail_events` | When an optimizer was rolled back and why (generated text, numbers) | until uninstall |
 | `optimizations`, `measurements`, `budgets`, `settings`, `schema_migrations` | Optimizer states, measured results, your budget, small settings, migration history | until uninstall |
 
@@ -98,7 +99,7 @@ runs while the gateway is running (finding F-8 in [docs/security-findings.md](do
 | `gateway.log` | Only on macOS, only if you install the background service: the gateway's own log lines | Redacted logger; no headers or bodies. Path is `~/.trove/gateway.log` even if you chose another data folder (finding F-24) |
 | `mcp_installs.json` | The commands that undo MCP registrations Trove made | |
 | `mcp_trust.json` | Hashes of approved `.trove/commands.toml` files, keyed by a hash of the project path | |
-| `fixqueue.json` | Ids and file hashes of fixes waiting for your agent to be idle | |
+| `fixqueue.json` | Ids and file hashes of fixes waiting for your agent to be idle (for a settings profile, also its task name and whether unproven values were allowed) | |
 
 Trove also **reads**, without changing them, your agents' local session logs (`~/.claude/projects`,
 `~/.codex/sessions`) to estimate waste before you route traffic through the gateway. It keeps only the numbers

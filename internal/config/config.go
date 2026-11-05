@@ -37,6 +37,7 @@ type Config struct {
 	Notifications Notifications     `toml:"notifications"`
 	History       History           `toml:"history"`
 	Fixer         Fixer             `toml:"fixer"`
+	Settings      Settings          `toml:"settings"`
 	Recovery      Recovery          `toml:"recovery"`
 	Contribute    Contribute        `toml:"contribute"`
 	RetentionDays int               `toml:"retention_days"`
@@ -70,6 +71,18 @@ type Fixer struct {
 	// ActivityMinutes: a fix is not applied while an agent session has been
 	// active this recently; it is queued instead.
 	ActivityMinutes int `toml:"activity_minutes"`
+}
+
+// Settings holds the settings for `trove settings` (see docs/settings.md).
+type Settings struct {
+	// DefaultTask is the task type `trove settings plan` uses when --task is
+	// not given: quick-fix, feature, refactor or exploration. Empty means the
+	// command asks for one.
+	DefaultTask string `toml:"default_task"`
+	// AllowUnproven lets profiles include values that lower a setting below the
+	// harness default even though no benchmark or A/B evidence supports them.
+	// Off by default: shipped profiles never lower anything on their own.
+	AllowUnproven bool `toml:"allow_unproven"`
 }
 
 // History holds the settings for reading agents' local session logs
@@ -331,6 +344,17 @@ context_min_tokens = 1500
 # 1 to 1440); they are queued and applied when the agent is idle.
 activity_minutes = 30
 
+[settings]
+# "trove settings" proposes per-task-type values for your agent's built-in token
+# controls (thinking, compaction, MCP limits). It goes through the same approval,
+# backup and undo as "trove fix", and never overrides managed settings.
+# Task type used when --task is not given: quick-fix, feature, refactor or
+# exploration. Empty asks each time.
+default_task = ""
+# Profiles never lower a setting below the harness default unless evidence says
+# it is safe. Set true to allow lowering values that are not yet measured.
+allow_unproven = false
+
 [recovery]
 # The MCP tools keep the full text of any output they shorten here, in
 # ~/.trove/recovery (owner-only files), so nothing is ever lost.
@@ -424,6 +448,9 @@ func (c Config) Validate() error {
 	}
 	if f.ActivityMinutes < 1 || f.ActivityMinutes > 1440 {
 		add("fixer.activity_minutes is %d; use a number of minutes from 1 to 1440 (default 30).", f.ActivityMinutes)
+	}
+	if t := c.Settings.DefaultTask; t != "" && !validTaskName(t) {
+		add("settings.default_task is %q; use lowercase letters, digits and - (for example quick-fix), or leave it empty.", t)
 	}
 	if c.Recovery.MaxMB < 1 || c.Recovery.MaxMB > 10000 {
 		add("recovery.max_mb is %d; use a size in MB from 1 to 10000 (default 200).", c.Recovery.MaxMB)
@@ -650,4 +677,18 @@ type Recovery struct {
 	MaxMB int `toml:"max_mb"`
 	// TTLDays is how long an output is kept.
 	TTLDays int `toml:"ttl_days"`
+}
+
+// validTaskName accepts the shape of a task type name. Which names exist is
+// decided by the settings profiles, not here.
+func validTaskName(s string) bool {
+	if len(s) > 32 {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+			return false
+		}
+	}
+	return true
 }

@@ -65,3 +65,30 @@ previous call appended to. Expect much less on macOS and Linux, but that is unme
 - [ ] Claude Code: the unread last ~80k characters of `code.claude.com/docs/en/hooks` (of 283k) were not read. Skim them for anything on `PreToolUse` ordering, `PreCompact` input, or SessionEnd limits that changes this design.
 - [ ] Codex: the shell tool name your Codex version sends in `PreToolUse` for commands (`Bash`, `exec_command`) and whether any file-read tool exists by now. If one does, repeat-read could be added for Codex.
 - [ ] Windows: whether each agent's hook shell accepts the quoted absolute path of `trove.exe` as written.
+
+## Live probe and hooks-vs-gateway benchmark (not yet run)
+
+Neither has been run since the version pin in `bench/config.yaml` moved to Claude Code 2.1.318. The last live
+probe result in `docs/hook-capabilities.json` was for 2.1.318 (input rewriting and output replacement worked for
+Bash, Read, Grep and Glob). A rerun on 2026-11-05 stopped because `ANTHROPIC_API_KEY` was rejected ("Invalid API
+key"); it cost about $0.00 and changed nothing. Both steps spend real money on your own API key.
+
+1. [ ] Use a valid API key (not a subscription login) and check the version: `claude --version` must print `2.1.318`.
+   The probe is the only step that needs the exact installed version to match the pin.
+2. [ ] Run the probe, capped at $0.25 (the last run cost about $0.016):
+   `go run ./scripts/hookprobe --live --max-usd 0.25 --out probe.json`
+   Every Claude row must show `input=yes output=yes [live]`. Any `untested` row means the session failed; read its
+   evidence line. If a row says `no`, the dependent optimizer should switch itself off and `trove doctor` should say why.
+3. [ ] If the result is good and you want it as the committed record, rerun with the default `--out`
+   (`docs/hook-capabilities.json`) and review the diff before committing.
+4. [ ] Dry-run the benchmark, which spends nothing and prints the worst case:
+   add `hooks` and `hooks_gateway` under `conditions:` in `bench/config.yaml`, then
+   `python -m trovebench run --hook-capabilities probe.json --dry-run`
+   Check the worst-case cost against `limits.batch_cap_usd` (default $25) before going further. Lower
+   `repeats`, `run_cap_usd` or the task list if it is too high.
+5. [ ] Run it for real (drop `--dry-run`). The runner refuses to start if the probe's agent version differs from
+   `claude_version`, or if the hooks snapshot does not match the condition, so it cannot silently measure shadow mode.
+   The container path has only had its checks unit-tested, not run against Docker, so expect to debug that first.
+6. [ ] Compare the `hooks` and `hooks_gateway` conditions with `passthrough` and the gateway-only conditions on the
+   same tasks. Only report a savings figure if the ship rule's confidence interval supports it, and label it
+   "measured". Until then no hooks-versus-gateway number exists.

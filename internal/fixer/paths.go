@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -37,6 +38,10 @@ var credentialNames = map[string]bool{
 	".claude.json":      true, // holds account details and OAuth state
 	"credentials.json":  true,
 }
+
+// trovePerfileRE matches the Codex profile files Trove generates:
+// ~/.codex/trove-<task>.config.toml.
+var trovePerfileRE = regexp.MustCompile(`^trove-[a-z0-9-]+\.config\.toml$`)
 
 func norm(p string) string {
 	p = filepath.ToSlash(filepath.Clean(p))
@@ -121,6 +126,13 @@ func (e *Env) Allowed(path string) error {
 		if strings.HasPrefix(rp, rules) && strings.HasSuffix(rp, ".md") {
 			return nil
 		}
+	}
+	// Codex profiles are files in the user's Codex folder (learn.chatgpt.com/docs/
+	// config-file/config-advanced, read 2026-11-05). Trove only writes the ones it
+	// names itself, so it never touches a profile the user made.
+	if e.CodexDir != "" && trovePerfileRE.MatchString(filepath.Base(path)) &&
+		norm(resolve(filepath.Dir(path))) == norm(resolve(e.CodexDir)) {
+		return nil
 	}
 	return fmt.Errorf("%s is not one of the agent config files Trove edits (CLAUDE.md, AGENTS.md, .mcp.json, settings and config files in the project or your agent's own folder)", path)
 }

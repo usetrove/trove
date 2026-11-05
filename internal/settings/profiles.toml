@@ -1,0 +1,75 @@
+# Settings profiles per task type. Every value here must be applyable in the
+# catalog, use a value the docs confirmed, and carry an evidence reference.
+#
+# No benchmark or A/B result exists yet for any of these (bench/results holds only
+# smoke runs), so every value that can change behavior is evidence = "none" and
+# is left out of a plan unless the user sets settings.allow_unproven = true.
+# Numeric thinking and compaction values are deliberately not shipped: there is
+# nothing to base a number on yet. Add them with an evidence reference once a
+# result exists.
+version = 1
+
+[[profile]]
+task = "quick-fix"
+description = "Small, well-understood edits: short answers, no reasoning summaries."
+
+[[profile.value]]
+harness = "codex"
+key = "model_reasoning_summary"
+value = "none"
+evidence = "none"
+why = "Summaries are display text for a person; a quick fix does not need them."
+
+[[profile.value]]
+harness = "codex"
+key = "model_verbosity"
+value = "low"
+evidence = "none"
+why = "Shorter replies cut output tokens on tasks that need no explanation."
+
+[[profile.value]]
+harness = "claude_code"
+key = "outputStyle"
+value = "Concise"
+evidence = "none"
+why = "The built-in Concise style shortens replies on tasks that need no explanation."
+
+[[profile]]
+task = "feature"
+description = "New behavior across several files: harness defaults, no reasoning summaries."
+
+[[profile.value]]
+harness = "codex"
+key = "model_reasoning_summary"
+value = "none"
+evidence = "none"
+why = "Summaries are display text for a person."
+
+[[profile]]
+task = "refactor"
+description = "Mechanical changes across many files: harness defaults, no reasoning summaries."
+
+[[profile.value]]
+harness = "codex"
+key = "model_reasoning_summary"
+value = "none"
+evidence = "none"
+why = "Summaries are display text for a person."
+
+[[profile]]
+task = "exploration"
+description = "Reading and explaining code: concise replies, no reasoning summaries."
+
+[[profile.value]]
+harness = "codex"
+key = "model_reasoning_summary"
+value = "none"
+evidence = "none"
+why = "Summaries are display text for a person."
+
+[[profile.value]]
+harness = "claude_code"
+key = "outputStyle"
+value = "Concise"
+evidence = "none"
+why = "Concise replies for lookups; switch back with /output-style when you want explanations."

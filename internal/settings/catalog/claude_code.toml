@@ -1,0 +1,176 @@
+# Claude Code token controls. Source: code.claude.com/docs/en/ (settings-reference,
+# env-vars, model-config, memory, mcp, output-styles), read 2026-11-05.
+# verified = "verbatim" only when the key AND the values Trove writes were read
+# as raw page text. Everything else is listed for display and suggestions, never
+# written (applyable = false). See docs/settings.md for the verification log.
+version = 1
+harness = "claude_code"
+checked_on = "2026-11-05"
+docs_version = "2.1.314"
+
+[[setting]]
+key = "CLAUDE_CODE_AUTO_COMPACT_WINDOW"
+harness = "claude_code"
+target = "settings_env"
+scopes = ["user", "project", "local", "env"]
+type = "int"
+min = 100000
+max = 1000000
+default_note = "unset: compaction happens at the model's context limit"
+doc_url = "https://code.claude.com/docs/en/env-vars.md"
+verified_on = "2026-11-05"
+verified = "verbatim"
+risk = "changes_behavior"
+applyable = true
+notes = "Plain token count only in the env block; the 200k suffix needs v2.1.304 or later, so Trove writes integers."
+
+[[setting]]
+key = "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"
+harness = "claude_code"
+target = "settings_env"
+scopes = ["user", "project", "local", "env"]
+type = "int"
+min = 1
+max = 100
+default_note = "not stated in the docs"
+doc_url = "https://code.claude.com/docs/en/env-vars.md"
+verified_on = "2026-11-05"
+verified = "verbatim"
+risk = "changes_behavior"
+applyable = true
+notes = "Can only lower the compaction threshold; values above the default percentage are ignored."
+
+[[setting]]
+key = "claudeMdExcludes"
+harness = "claude_code"
+target = "settings_json"
+scopes = ["user", "project", "local", "managed"]
+type = "string_list"
+default_note = "unset (empty)"
+doc_url = "https://code.claude.com/docs/en/memory.md"
+verified_on = "2026-11-05"
+verified = "verbatim"
+risk = "changes_behavior"
+applyable = true
+notes = "Glob patterns matched against absolute paths. Arrays merge across layers. A managed CLAUDE.md cannot be excluded."
+
+[[setting]]
+key = "outputStyle"
+harness = "claude_code"
+target = "settings_json"
+scopes = ["user", "project", "local", "managed"]
+type = "enum"
+enum = ["Proactive", "Concise", "Explanatory", "Learning"]
+verified_values = ["Proactive", "Concise", "Explanatory", "Learning"]
+default_note = "unset: the Default style"
+doc_url = "https://code.claude.com/docs/en/output-styles.md"
+verified_on = "2026-11-05"
+verified = "verbatim"
+risk = "changes_behavior"
+applyable = true
+notes = "Case-sensitive; a non-matching value silently gives the Default style. Custom style names are not written by Trove."
+
+[[setting]]
+key = "effortLevel"
+harness = "claude_code"
+target = "settings_json"
+scopes = ["user", "project", "local", "managed"]
+type = "enum"
+enum = ["low", "medium", "high", "xhigh"]
+default_note = "unset: the model default (high on most models; medium on the 5.5 models)"
+doc_url = "https://code.claude.com/docs/en/settings-reference.md"
+verified_on = "2026-11-05"
+verified = "extractor"
+risk = "lowers_capability"
+applyable = false
+notes = "Key exists (raw index row) but its value list was only seen in a model-extracted view. Trove suggests '/effort <level>' instead of writing it. CLAUDE_CODE_EFFORT_LEVEL and /effort take precedence over the file."
+
+[[setting]]
+key = "MAX_THINKING_TOKENS"
+harness = "claude_code"
+target = "settings_env"
+scopes = ["user", "project", "local", "env"]
+type = "int"
+min = 1024
+default_note = "not stated"
+doc_url = "https://code.claude.com/docs/en/model-config.md"
+verified_on = "2026-11-05"
+verified = "extractor"
+risk = "lowers_capability"
+applyable = false
+notes = "Its env-vars.md entry was not read as raw text. Ignored on adaptive-reasoning models (the number itself is ignored there). 0 does not turn thinking off on the 5.5 models and Fable."
+
+[[setting]]
+key = "ENABLE_TOOL_SEARCH"
+harness = "claude_code"
+target = "settings_env"
+scopes = ["user", "project", "local", "env"]
+type = "string"
+pattern = "^(true|false|auto|auto:[0-9]+)$"
+default_note = "on by default"
+doc_url = "https://code.claude.com/docs/en/mcp.md"
+verified_on = "2026-11-05"
+verified = "extractor"
+risk = "changes_behavior"
+applyable = false
+notes = "Only 'false' and the on-by-default behaviour were seen as raw text; the other values are unconfirmed."
+
+[[setting]]
+key = "alwaysLoad"
+harness = "claude_code"
+target = "mcp_server"
+scopes = ["project", "user"]
+type = "bool"
+default_note = "omitted: tools the server author marked upfront load upfront"
+doc_url = "https://code.claude.com/docs/en/mcp.md"
+verified_on = "2026-11-05"
+verified = "extractor"
+risk = "changes_behavior"
+applyable = false
+notes = "Field name seen as raw text on ws/http entries; its meaning and the version for 'false' (reported v2.1.287) are unconfirmed."
+
+[[setting]]
+key = "MAX_MCP_OUTPUT_TOKENS"
+harness = "claude_code"
+target = "shell_env"
+scopes = ["env"]
+type = "int"
+default = "25000"
+doc_url = "https://code.claude.com/docs/en/mcp.md"
+verified_on = "2026-11-05"
+verified = "extractor"
+risk = "lowers_capability"
+applyable = false
+notes = "Docs show it exported in the shell. Whether the settings env block accepts it is unconfirmed, so Trove only suggests the export."
+
+[[setting]]
+key = "model"
+harness = "claude_code"
+target = "settings_json"
+scopes = ["user", "project", "local", "managed"]
+type = "string"
+default_note = "unset: the account default"
+doc_url = "https://code.claude.com/docs/en/settings-reference.md"
+verified_on = "2026-11-05"
+verified = "extractor"
+risk = "changes_behavior"
+applyable = false
+notes = "Already handled by the model_default fix. A managed model is a starting default, not a lock."
+
+[[setting]]
+key = "fallbackModel"
+harness = "claude_code"
+target = "settings_json"
+scopes = ["user", "project", "local", "managed"]
+type = "string_list"
+default_note = "unset"
+doc_url = "https://code.claude.com/docs/en/settings-reference.md"
+verified_on = "2026-11-05"
+verified = "extractor"
+risk = "changes_behavior"
+applyable = false
+notes = "Up to 3 models; the highest-precedence file defining it supplies the whole chain."
+
+[[gap]]
+key = "custom compaction instructions"
+reason = "No official setting or CLAUDE.md section was found in the docs. Only '/compact <focus text>' is documented, and that is per-session. Not offered."

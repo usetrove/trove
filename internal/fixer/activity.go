@@ -75,6 +75,9 @@ type Queued struct {
 	ID       string    `json:"id"`
 	FileSHA  string    `json:"file_sha256"`
 	QueuedAt time.Time `json:"queued_at"`
+	// Settings is the request a settings_profile fix needs to be planned again
+	// when it is applied later. A task name and a switch; no file content.
+	Settings *SettingsRequest `json:"settings,omitempty"`
 }
 
 // LoadQueue reads the queue (empty if none).
@@ -145,7 +148,12 @@ func enqueue(e *Env, f *Fix) error {
 			return saveQueue(e.DataDir, q)
 		}
 	}
-	q = append(q, Queued{ID: f.ID, FileSHA: fileSHA(f.Path), QueuedAt: e.now().UTC()})
+	it := Queued{ID: f.ID, FileSHA: fileSHA(f.Path), QueuedAt: e.now().UTC()}
+	if f.Kind == SettingsProfile && e.Settings != nil {
+		req := *e.Settings
+		it.Settings = &req
+	}
+	q = append(q, it)
 	return saveQueue(e.DataDir, q)
 }
 
@@ -168,7 +176,13 @@ func ApplyQueued(ctx context.Context, e *Env) ([]Result, error) {
 	var out []Result
 	for len(q) > 0 {
 		it := q[0]
-		fixes, _ := Detect(ctx, e)
+		ev := e
+		if it.Settings != nil {
+			c := *e
+			c.Settings = it.Settings
+			ev = &c
+		}
+		fixes, _ := Detect(ctx, ev)
 		f := Find(fixes, it.ID)
 		var r Result
 		switch {
@@ -177,7 +191,7 @@ func ApplyQueued(ctx context.Context, e *Env) ([]Result, error) {
 		case fileSHA(f.Path) != it.FileSHA:
 			r = Result{ID: it.ID, Status: "skipped", Detail: "dropped from the queue: the file changed after you approved the fix. Run `trove fix " + it.ID + "` to review it again"}
 		default:
-			r, err = applyOne(ctx, e, it.ID)
+			r, err = applyOne(ctx, ev, it.ID)
 			if err != nil {
 				_ = saveQueue(e.DataDir, q) // keep what is left
 				return append(out, r), err

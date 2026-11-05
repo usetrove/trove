@@ -58,6 +58,10 @@ type Fix struct {
 	// Advisory is a manual step when Trove cannot make the change itself.
 	Advisory string   `json:"advisory,omitempty"`
 	Notes    []string `json:"notes,omitempty"`
+	// Task and Keys are set for settings_profile fixes: the task type and the
+	// setting names it changes. Names only; never values or file contents.
+	Task string   `json:"task,omitempty"`
+	Keys []string `json:"keys,omitempty"`
 
 	old, updated []byte
 }
@@ -77,6 +81,14 @@ type Env struct {
 	DB         *sql.DB // optional; fixes that need gateway or history data skip themselves without it
 	Pricing    *pricing.Table
 	Cfg        config.Fixer
+
+	// Settings, when set, asks Detect to plan a settings profile for a task
+	// (see settings.go). Nil leaves `trove fix` exactly as it was.
+	Settings *SettingsRequest
+	// SettingsVersion returns the installed harness version text ("" if unknown).
+	SettingsVersion func(harness string) string
+	// ReadFile overrides os.ReadFile for settings planning (tests).
+	ReadFile func(string) ([]byte, error)
 
 	usage *usageScan
 }
@@ -99,7 +111,7 @@ func (e *Env) now() time.Time {
 // meaning the same thing between runs.
 func fixID(kind string, parts ...string) string {
 	h := sha256.Sum256([]byte(kind + "\x00" + strings.Join(parts, "\x00")))
-	short := map[string]string{MCPPrune: "mcp", ContextSlim: "ctx", CacheBreaker: "cache", ModelDefault: "model"}[kind]
+	short := map[string]string{MCPPrune: "mcp", ContextSlim: "ctx", CacheBreaker: "cache", ModelDefault: "model", SettingsProfile: "settings"}[kind]
 	return short + "-" + hex.EncodeToString(h[:])[:8]
 }
 
@@ -112,7 +124,7 @@ func pathHash(p string) string {
 // enough evidence, returns none.
 type detector func(ctx context.Context, e *Env) ([]*Fix, error)
 
-var detectors = []detector{detectMCPPrune, detectContextSlim, detectCacheBreaker, detectModelDefault}
+var detectors = []detector{detectMCPPrune, detectContextSlim, detectCacheBreaker, detectModelDefault, detectSettings}
 
 // Detect plans every available fix, largest estimated saving first. It writes
 // nothing. A detector that fails is reported in errs and does not hide the rest.
