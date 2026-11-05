@@ -1,0 +1,115 @@
+# Codex CLI token controls. Sources: learn.chatgpt.com/docs/config-file/
+# (config-reference, config-advanced; reached from developers.openai.com/codex/),
+# read 2026-11-05. Profile mechanics were read as raw text. The per-setting
+# value tables were only seen in a model-extracted view, so Trove writes only the
+# values seen in raw examples (verified_values) and suggests the rest.
+version = 1
+harness = "codex"
+checked_on = "2026-11-05"
+docs_version = "0.134.0"
+
+[[setting]]
+key = "model_reasoning_effort"
+harness = "codex"
+target = "codex_profile"
+scopes = ["user", "cli"]
+type = "string"
+pattern = "^[a-z]+$"
+verified_values = ["medium"]
+since = "0.134.0"
+default_note = "not stated; the selected model's advertised effort is used"
+doc_url = "https://learn.chatgpt.com/docs/config-file/config-advanced"
+verified_on = "2026-11-05"
+verified = "verbatim"
+risk = "lowers_capability"
+applyable = true
+notes = "Allowed values are 'advertised by the selected model' (low, medium, high, xhigh, max, ultra are given as examples), so the set is open. Only 'medium' was seen in a raw example."
+
+[[setting]]
+key = "model_verbosity"
+harness = "codex"
+target = "codex_profile"
+scopes = ["user", "cli"]
+type = "enum"
+enum = ["low", "medium", "high"]
+verified_values = ["low"]
+since = "0.134.0"
+default_note = "unset: the model or preset default"
+doc_url = "https://learn.chatgpt.com/docs/config-file/config-advanced"
+verified_on = "2026-11-05"
+verified = "verbatim"
+risk = "changes_behavior"
+applyable = true
+notes = "Applies only to providers using the Responses API; Chat Completions providers ignore it."
+
+[[setting]]
+key = "model_reasoning_summary"
+harness = "codex"
+target = "codex_profile"
+scopes = ["user", "cli"]
+type = "enum"
+enum = ["auto", "concise", "detailed", "none"]
+verified_values = ["none"]
+since = "0.134.0"
+default_note = "not stated"
+doc_url = "https://learn.chatgpt.com/docs/config-file/config-advanced"
+verified_on = "2026-11-05"
+verified = "verbatim"
+risk = "none"
+applyable = true
+notes = "Only 'none' was seen in a raw example."
+
+[[setting]]
+key = "tool_output_token_limit"
+harness = "codex"
+target = "codex_profile"
+scopes = ["user", "cli"]
+type = "int"
+min = 1
+since = "0.134.0"
+default_note = "not stated"
+doc_url = "https://learn.chatgpt.com/docs/config-file/config-reference"
+verified_on = "2026-11-05"
+verified = "extractor"
+risk = "lowers_capability"
+applyable = false
+notes = "Token budget for storing individual tool outputs in history. Seen only in a model-extracted table row."
+
+[[setting]]
+key = "model_auto_compact_token_limit"
+harness = "codex"
+target = "codex_profile"
+scopes = ["user", "cli"]
+type = "int"
+min = 1
+since = "0.134.0"
+default_note = "unset: model defaults"
+doc_url = "https://learn.chatgpt.com/docs/config-file/config-reference"
+verified_on = "2026-11-05"
+verified = "extractor"
+risk = "changes_behavior"
+applyable = false
+notes = "Related key model_auto_compact_token_limit_scope (total | body_after_prefix, default total) is also extractor-only."
+
+[[setting]]
+key = "compact_prompt"
+harness = "codex"
+target = "codex_profile"
+scopes = ["user", "cli"]
+type = "string"
+since = "0.134.0"
+default_note = "not stated"
+doc_url = "https://learn.chatgpt.com/docs/config-file/config-reference"
+verified_on = "2026-11-05"
+verified = "extractor"
+risk = "changes_behavior"
+applyable = false
+notes = "Inline compaction prompt override. Extractor-only."
+
+[[gap]]
+key = "codex profiles before 0.134.0"
+reason = "From 0.134.0, --profile loads ~/.codex/<name>.config.toml and no longer reads [profiles.<name>] in config.toml. Behaviour on older versions is not documented here, so Trove writes profile files only for 0.134.0 or newer."
+
+[[gap]]
+key = "codex project-local profiles"
+reason = "Project-local .codex/config.toml ignores profile and profiles, so Codex profiles can only live in the user's CODEX_HOME."
