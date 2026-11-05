@@ -78,13 +78,40 @@ per-key sources, so detection is best effort (see Known gaps).
    the repo: `bench/results/` holds only smoke runs. Profiles therefore ship
    without lowering any setting below the harness default.
 
+## How it works
+
+- `trove settings` lists the catalog checked against the installed versions.
+- `trove settings plan --task <type>` shows the diff and everything Trove will not do, and why. Changes nothing.
+- `trove settings apply --task <type>` goes through the Fixer: diff, approval, backup, `trove undo`, and queued while an agent session looks active (the queue remembers the task name and switch only).
+- Claude Code values are written to the project's `.claude/settings.json` (env block or native key). Codex values go in a new `~/.codex/trove-<task>.config.toml`; start Codex with `codex --profile trove-<task>`. The user's own `config.toml` is never touched.
+- Never over managed settings: a value that a readable managed file already sets, or that a higher-priority project file sets, is shown as "not changed" with the reason. Server-managed and MDM policy cannot be read, and the plan says so.
+- Profiles ship with values that cannot hurt (Codex `model_reasoning_summary = "none"`). Anything that changes behavior without evidence (`outputStyle = Concise`, `model_verbosity = low`) is left out unless `--allow-unproven` or `[settings] allow_unproven = true`.
+
+## Token overhead (rule 15)
+
+Profiles change settings values only. They add no tool definitions and inject
+no text into any prompt, so their own overhead is 0 tokens. If a future profile
+adds an `outputStyle` or instruction text, that text must be counted and
+charged against its measured saving.
+
+## Measurement
+
+Reported by `trove settings status` and in `trove report`. Output tokens per session, prompt tokens per request, and outcome counts (tool errors, turns, abandoned sessions) are compared across sessions before and after the change. Figures are "estimated" until both sides have `[measure] min_sessions`, then "measured". Limits, stated in every result:
+
+- Trove records no project or task on a session, so all sessions of the agent are compared.
+- Trove does not know whether tests passed. Outcome counts are the only success proxy.
+- A Codex profile is "not measurable": Trove cannot tell which sessions used `--profile`.
+- When outcomes clearly worsen, or output grows, the report suggests `trove undo <id>`. It does not undo automatically.
+
+## Known gaps
+
+- No benchmark evidence exists yet, so no profile lowers a setting below the agent default and no numeric thinking or compaction value ships.
+- No shadow estimate: history does not split thinking from other output, so Trove cannot honestly estimate a saving before applying.
+- A concurrent session-level A/B (arms chosen at session start) is not built; before/after is the only measurement.
+- No automatic rollback, only a recommendation.
+- Per-project value overrides in config are not built; per-project tuning is the project the plan targets.
+- Managed-settings detection is best effort (see above).
+
 ## Status
 
-- [x] Catalog + validator + version resolution (`catalog.go`, `version.go`)
-- [x] Profiles + `[settings]` config (`profiles.go`, `profiles.toml`)
-- [x] Fixer edit helpers (`SetJSONEnvString`, Trove-named Codex profile files allowed)
-- [x] `settings_profile` fix kind and planner (`plan.go`, `fixer/settings.go`)
-- [x] Managed-override blocking (managed files, higher project layers, unknowns reported)
-- [ ] Measurement extension and migration
-- [ ] Report section
-- [ ] CLI
+All planned steps are implemented: catalog, profiles, fixer wiring, managed-override blocking, measurement, report, CLI.
