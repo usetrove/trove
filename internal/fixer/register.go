@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/usetrove/trove/internal/settings"
 	"github.com/usetrove/trove/internal/setup"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -42,6 +44,18 @@ func register(e *Env, f *Fix, c setup.Change) error {
 		`INSERT OR REPLACE INTO fixes (change_id, fix_id, kind, agent, path_hash, applied_at, est_tokens, est_usd, label)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'estimated')`,
 		c.ID, f.ID, f.Kind, f.Agent, pathHash(f.Path), c.AppliedAt.UnixMilli(), f.TokensPerSession, usd)
+	if err != nil || f.Kind != SettingsProfile {
+		return err
+	}
+	// Names of the settings only: never a value, a path or file content.
+	keys, _ := json.Marshal(f.Keys)
+	ver := ""
+	if e.SettingsVersion != nil {
+		ver = strings.TrimSpace(e.SettingsVersion(f.Agent))
+	}
+	_, err = db.ExecContext(context.Background(),
+		`INSERT OR REPLACE INTO settings_profiles (change_id, fix_id, task, harness, keys, harness_version, catalog_version)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`, c.ID, f.ID, f.Task, f.Agent, string(keys), ver, settings.CatalogVersion)
 	return err
 }
 

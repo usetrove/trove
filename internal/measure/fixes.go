@@ -54,7 +54,7 @@ type fixRow struct {
 // FixEffects reports on every fix that is still in place, newest first. It
 // reads session totals only (counts and timestamps), never text.
 func FixEffects(ctx context.Context, db *store.DB, m config.Measure) ([]FixEffect, error) {
-	rows, err := db.QueryContext(ctx, `SELECT fix_id, kind, applied_at, est_tokens, est_usd FROM fixes WHERE reverted_at IS NULL ORDER BY applied_at DESC`)
+	rows, err := db.QueryContext(ctx, `SELECT fix_id, kind, applied_at, est_tokens, est_usd FROM fixes WHERE reverted_at IS NULL AND kind != 'settings_profile' ORDER BY applied_at DESC`)
 	if err != nil {
 		return nil, err
 	}

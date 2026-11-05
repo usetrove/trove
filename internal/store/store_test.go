@@ -144,6 +144,7 @@ func TestSchemaIsMetadataOnly(t *testing.T) {
 			"sidechain", "tool_names", "tool_result_bytes", "errors", "findings", "shadow_savings"},
 		"fixes": {"change_id", "fix_id", "kind", "agent", "path_hash", "applied_at", "reverted_at", "est_tokens",
 			"est_usd", "label"},
+		"settings_profiles":      {"change_id", "fix_id", "task", "harness", "keys", "harness_version", "catalog_version"},
 		"external_tools":         {"name", "version", "license", "state", "installed_at", "license_ack_at", "changes"},
 		"experiment_assignments": {"session_key", "optimizer", "arm", "stratum", "seq", "assigned_at"},
 		"experiment_results": {"id", "optimizer", "computed_at", "metric", "value", "low", "high", "confidence",
