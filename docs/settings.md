@@ -82,7 +82,8 @@ per-key sources, so detection is best effort (see Known gaps).
 
 - [x] Catalog + validator + version resolution (`catalog.go`, `version.go`)
 - [x] Profiles + `[settings]` config (`profiles.go`, `profiles.toml`)
-- [ ] Fixer edit helpers and `settings_profile` fix kind
+- [x] Fixer edit helpers (`SetJSONEnvString`, Trove-named Codex profile files allowed)
+- [ ] `settings_profile` fix kind and planner
 - [ ] Managed-override blocking
 - [ ] Measurement extension and migration
 - [ ] Report section
