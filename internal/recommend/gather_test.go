@@ -28,7 +28,7 @@ func TestGatherFromTheLocalDatabase(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	f, err := Gather(ctx, db, config.Default(), "r", "feature")
+	f, err := Gather(ctx, db, config.Default(), "r", "feature", now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestGatherFromTheLocalDatabase(t *testing.T) {
 	}
 
 	// No repo known: only the task profile applies.
-	f, err = Gather(ctx, db, config.Default(), "", "quick-fix")
+	f, err = Gather(ctx, db, config.Default(), "", "quick-fix", now)
 	if err != nil || f.Repo != nil || f.Sessions.Sessions != 0 {
 		t.Errorf("no repo: %+v err=%v", f, err)
 	}

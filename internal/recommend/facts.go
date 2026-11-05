@@ -62,6 +62,9 @@ type Facts struct {
 	States map[string]string
 	// RolledBack lists optimizers a guardrail rolled back on this device.
 	RolledBack []string
+	// Tuning holds per-repo parameter proposals computed from the repo's own
+	// results (ProposeTuning). Gather fills it.
+	Tuning []TuneProposal
 	// Task is the task type (quick-fix, feature, refactor, exploration), or "".
 	Task string
 }

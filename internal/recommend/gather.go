@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/experiment"
@@ -22,7 +23,7 @@ const RecentSessions = 30
 // empty and only the user's experiments, optimizer states and task are filled.
 // Everything it reads is already metadata; nothing is read from disk but the
 // database.
-func Gather(ctx context.Context, db *store.DB, cfg config.Config, repoKey, task string) (Facts, error) {
+func Gather(ctx context.Context, db *store.DB, cfg config.Config, repoKey, task string, now time.Time) (Facts, error) {
 	f := Facts{Task: task, States: map[string]string{}}
 	for _, n := range hooks.OptimizerNames {
 		f.States[n] = cfg.OptimizerState(n)
@@ -61,6 +62,9 @@ func Gather(ctx context.Context, db *store.DB, cfg config.Config, repoKey, task 
 		f.RolledBack = append(f.RolledBack, n)
 	}
 	sort.Strings(f.RolledBack)
+	if f.Tuning, err = ProposeTuning(ctx, db, cfg, repoKey, now); err != nil {
+		return f, err
+	}
 	return f, nil
 }
 

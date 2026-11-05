@@ -156,6 +156,7 @@ func TestSchemaIsMetadataOnly(t *testing.T) {
 		"repo_features": {"repo_key", "computed_at", "size_bucket", "lang_mix", "test_framework"},
 		"session_features": {"session_key", "repo_key", "recorded_at", "files_read", "files_edited", "repeat_reads",
 			"scout_calls", "compactions", "retries", "tool_results", "large_results", "avg_dup_ratio", "error_share", "stack_share"},
+		"repo_tuning":       {"repo_key", "optimizer", "param", "value", "state", "tuned_at", "source", "before_rate", "n_before"},
 		"schema_migrations": {"version", "applied_at"},
 	}
 	// Every table must be listed above. A new table is a privacy decision: list its

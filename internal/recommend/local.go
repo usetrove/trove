@@ -53,6 +53,9 @@ func (l Local) Recommend(_ context.Context, f Facts) ([]Recommendation, error) {
 		}
 		out = append(out, l.fromRule(rule, f))
 	}
+	for _, p := range f.Tuning {
+		out = append(out, p.Rec)
+	}
 	Sort(out)
 	return out, nil
 }
