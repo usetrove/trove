@@ -245,14 +245,19 @@ func (r *rig) post(fixture, stdout string, interrupted bool) (string, int) {
 	return r.run(EventPostOutput, r.input(fixture, "{{STDOUT}}", strings.Trim(string(j), `"`), "{{INTERRUPTED}}", fmt.Sprint(interrupted)))
 }
 
-func trimRig(t *testing.T, troveRun bool) *rig {
+// noClock lifts the post_tool_output deadline for one test. The tests run under
+// -race on a loaded CI machine; what is under test is the rewrite, not how fast
+// the machine is. The deadline itself is covered by TestHandlerTiming and TestFailOpen.
+func noClock(t *testing.T) {
 	t.Helper()
-	// The tests run under -race on a loaded CI machine; what is under test is the
-	// rewrite, not how fast the machine is. The deadline itself is covered by
-	// TestHandlerTiming and TestFailOpen.
 	old := postDeadline
 	postDeadline = time.Minute
 	t.Cleanup(func() { postDeadline = old })
+}
+
+func trimRig(t *testing.T, troveRun bool) *rig {
+	t.Helper()
+	noClock(t)
 	r := newRig(t, nil)
 	r.snapshot(Snapshot{States: map[string]string{rwTrim: "on", rwNoise: "on"}, TroveRun: troveRun})
 	r.allow(Capability{Tool: "Bash", OutputRewrite: CapYes}, Capability{Tool: "Grep", OutputRewrite: CapYes})
@@ -324,6 +329,7 @@ func TestTrimmingNeedsTheRecoveryPathTheProbeAndAnUninterruptedCommand(t *testin
 		}
 	})
 	t.Run("agent not probed for Bash output", func(t *testing.T) {
+		noClock(t)
 		r := newRig(t, nil)
 		r.snapshot(Snapshot{States: map[string]string{rwTrim: "on"}, TroveRun: true})
 		r.allow(Capability{Tool: "Bash", OutputRewrite: CapNo})
