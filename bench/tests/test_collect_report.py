@@ -8,6 +8,7 @@ from helpers import paired_runs, rec
 
 from trovebench.agent import get_agent
 from trovebench.agent.base import AgentResult, ModelUsage, parse_claude_style_result
+from trovebench.agent.claude_code import ClaudeCode
 from trovebench.collect import build_record, direct_cost, pins_match, read_gateway_db
 from trovebench.config import ConfigError, load_config
 from trovebench.conditions import parse_conditions
@@ -101,6 +102,49 @@ def test_no_requests_reaching_gateway_is_error(tmp_path):
                      agent=AgentResult(parsed=False), gateway=read_gateway_db(p), expected_states={"x": "off"},
                      table=TABLE, today=TODAY, agent_exit_ok=False)
     assert r.status == "error" and "custom endpoint" in r.note
+
+
+def test_direct_run_with_no_agent_result_is_error():
+    # Regression: a run where the agent never started ("claude: command not found") used to be recorded as
+    # status=ok, passed=False, cost=0, which would count as a free failed attempt in the analysis.
+    r = build_record(run_id="r", task_id="t", condition="direct", seed=0, passed=False, timed_out=False, wall_s=1,
+                     agent=AgentResult(parsed=False), gateway=None, expected_states=None,
+                     table=TABLE, today=TODAY, agent_exit_ok=False)
+    assert r.status == "error"
+
+
+def test_api_error_in_agent_result_is_error_not_a_failed_attempt():
+    # Shape seen in a real run: is_error true, terminal_reason api_error, api_error_status 401, zero usage.
+    out = json.dumps({"type": "result", "subtype": "success", "is_error": True, "terminal_reason": "api_error",
+                      "api_error_status": 401, "total_cost_usd": 0, "modelUsage": {}, "num_turns": 1})
+    res = parse_claude_style_result(out)
+    assert res.api_error_status == 401
+    r = build_record(run_id="r", task_id="t", condition="direct", seed=0, passed=False, timed_out=False, wall_s=1,
+                     agent=res, gateway=None, expected_states=None, table=TABLE, today=TODAY, agent_exit_ok=False)
+    assert r.status == "error" and "401" in r.note
+
+
+def test_hitting_the_budget_limit_is_still_a_real_failed_attempt():
+    out = json.dumps({"type": "result", "subtype": "error_max_budget_usd", "is_error": True, "total_cost_usd": 1.5,
+                      "num_turns": 30, "modelUsage": {"claude-haiku-5-5": {"inputTokens": 5, "outputTokens": 6}}})
+    res = parse_claude_style_result(out)
+    assert res.api_error_status is None
+    r = build_record(run_id="r", task_id="t", condition="direct", seed=0, passed=False, timed_out=False, wall_s=1,
+                     agent=res, gateway=None, expected_states=None, table=TABLE, today=TODAY, agent_exit_ok=False)
+    assert r.status == "ok"
+
+
+def test_direct_run_timeout_without_result_is_not_an_infra_error():
+    r = build_record(run_id="r", task_id="t", condition="direct", seed=0, passed=False, timed_out=True, wall_s=99,
+                     agent=AgentResult(parsed=False), gateway=None, expected_states=None,
+                     table=TABLE, today=TODAY, agent_exit_ok=False)
+    assert r.status == "ok"
+
+
+def test_claude_image_puts_claude_on_the_login_shell_path():
+    # Regression: `bash -lc` resets PATH on Debian, so only a binary in /usr/local/bin is found.
+    lines = ClaudeCode().install_lines("2.1.200")
+    assert any("/usr/local/bin/claude" in l for l in lines)
 
 
 def test_direct_cost_from_usage():

@@ -24,6 +24,9 @@ class AgentResult:
     usage_by_model: dict[str, ModelUsage] = field(default_factory=dict)
     session_id: str | None = None
     detail: str = ""
+    # HTTP status when the API call itself failed (401 bad key, 429, 5xx). Seen in a real Claude Code result
+    # as `api_error_status`. That is an infrastructure failure, not a verdict on the agent.
+    api_error_status: int | None = None
 
 
 class Agent(Protocol):
@@ -90,4 +93,5 @@ def parse_claude_style_result(text: str) -> AgentResult:
         usage_by_model=mu,
         session_id=obj.get("session_id") if isinstance(obj.get("session_id"), str) else None,
         detail=subtype,
+        api_error_status=obj["api_error_status"] if isinstance(obj.get("api_error_status"), int) else None,
     )
