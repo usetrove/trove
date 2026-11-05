@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
@@ -113,7 +115,31 @@ func (h *handler) sess(key string, st *sessionState, tool string) optimize.Sessi
 		Key: key, Agent: h.agent, Now: h.now(), TroveRun: h.snap.TroveRun,
 		Ledger: &ledgerView{st: st, dir: h.dir, key: key},
 		State:  func(name string) string { return h.stateFor(name, st.Pins[name], tool) },
+		Tuning: pinnedTuning(st.Pins),
 	}
+}
+
+// tunePinPrefix marks a session pin that holds a tuned value rather than an
+// optimizer state: "t:output_trimmer.keep_tail" -> "15".
+const tunePinPrefix = "t:"
+
+// pinnedTuning returns the tuning the session pinned when it started, nil if none.
+func pinnedTuning(pins map[string]string) optimize.Tuning {
+	var t optimize.Tuning
+	for k, v := range pins {
+		if !strings.HasPrefix(k, tunePinPrefix) {
+			continue
+		}
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			continue
+		}
+		if t == nil {
+			t = optimize.Tuning{}
+		}
+		t[strings.TrimPrefix(k, tunePinPrefix)] = n
+	}
+	return t
 }
 
 // toolCall is the hook's tool call in the engine's neutral form.

@@ -83,6 +83,7 @@ func NewRoot(a *App) *cobra.Command {
 		newEngine(a),
 		newExternal(a),
 		newExperiment(a),
+		newTune(a),
 		newHooks(a),
 		newHookCmd(a),
 		newPlugin(a),
