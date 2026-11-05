@@ -31,11 +31,11 @@ func newExperiment(a *App) *cobra.Command {
 		RunE: func(c *cobra.Command, _ []string) error { return c.Help() },
 	}
 	cmd.AddCommand(&cobra.Command{Use: "status", Short: "Show A/B results with their ranges and sample sizes", Args: cobra.NoArgs,
-		RunE: func(c *cobra.Command, _ []string) error { return experimentStatusCmd(a, c.Context()) }})
+		RunE: func(c *cobra.Command, _ []string) error { return experimentStatusCmd(c.Context(), a) }})
 	return cmd
 }
 
-func experimentStatusCmd(a *App, ctx context.Context) error {
+func experimentStatusCmd(ctx context.Context, a *App) error {
 	dir, cfg, err := loadConfig(a)
 	if err != nil {
 		return err

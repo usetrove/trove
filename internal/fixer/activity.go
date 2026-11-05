@@ -78,6 +78,8 @@ type Queued struct {
 	// Settings is the request a settings_profile fix needs to be planned again
 	// when it is applied later. A task name and a switch; no file content.
 	Settings *SettingsRequest `json:"settings,omitempty"`
+	// Tasks is the same for scout and cascade fixes: feature name and options.
+	Tasks *TasksRequest `json:"tasks,omitempty"`
 }
 
 // LoadQueue reads the queue (empty if none).
@@ -153,6 +155,10 @@ func enqueue(e *Env, f *Fix) error {
 		req := *e.Settings
 		it.Settings = &req
 	}
+	if (f.Kind == TaskScout || f.Kind == TaskCascade) && e.Tasks != nil {
+		req := *e.Tasks
+		it.Tasks = &req
+	}
 	q = append(q, it)
 	return saveQueue(e.DataDir, q)
 }
@@ -177,9 +183,9 @@ func ApplyQueued(ctx context.Context, e *Env) ([]Result, error) {
 	for len(q) > 0 {
 		it := q[0]
 		ev := e
-		if it.Settings != nil {
+		if it.Settings != nil || it.Tasks != nil {
 			c := *e
-			c.Settings = it.Settings
+			c.Settings, c.Tasks = it.Settings, it.Tasks
 			ev = &c
 		}
 		fixes, _ := Detect(ctx, ev)

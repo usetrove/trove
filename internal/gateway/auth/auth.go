@@ -42,7 +42,7 @@ const SigV4Message = "Trove's gateway cannot forward AWS SigV4-signed requests: 
 
 // oauthTokenPrefix starts Claude.ai OAuth tokens (login and `claude setup-token`).
 // Compared as a prefix only; used as a second signal beside the OAuth beta flag.
-const oauthTokenPrefix = "sk-ant-oat"
+const oauthTokenPrefix = "sk-ant-oat" //nolint:gosec // G101: a prefix used to recognise and reject OAuth tokens, not a credential
 
 // Decision is the verdict for one request.
 type Decision struct {

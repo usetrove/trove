@@ -28,6 +28,9 @@ class ClaudeCode:
         return [
             f"RUN curl -fsSL https://claude.ai/install.sh | bash -s {v}",
             "ENV PATH=/root/.local/bin:$PATH",
+            # The harness runs every command with `bash -lc`. On Debian a login shell resets PATH and drops
+            # /root/.local/bin, so `claude` would be "command not found". /usr/local/bin is on that PATH.
+            "RUN ln -sf /root/.local/bin/claude /usr/local/bin/claude && claude --version",
             # No auto-update, no telemetry or other nonessential traffic: one fixed version, quiet network.
             "ENV DISABLE_UPDATES=1 CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
         ]

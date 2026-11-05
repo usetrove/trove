@@ -43,6 +43,9 @@ var credentialNames = map[string]bool{
 // ~/.codex/trove-<task>.config.toml.
 var trovePerfileRE = regexp.MustCompile(`^trove-[a-z0-9-]+\.config\.toml$`)
 
+// troveTaskRE matches the subagent and command files Trove generates.
+var troveTaskRE = regexp.MustCompile(`^trove-[a-z0-9-]+\.md$`)
+
 func norm(p string) string {
 	p = filepath.ToSlash(filepath.Clean(p))
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
@@ -125,6 +128,16 @@ func (e *Env) Allowed(path string) error {
 		rules := norm(resolve(filepath.Join(e.ProjectDir, ".claude", "rules"))) + "/"
 		if strings.HasPrefix(rp, rules) && strings.HasSuffix(rp, ".md") {
 			return nil
+		}
+	}
+	// Scout and cascade files (docs/tasks.md): only trove-*.md directly inside the
+	// project's .claude/agents and .claude/commands, so a user's own agent or
+	// command is never reachable.
+	if e.ProjectDir != "" && troveTaskRE.MatchString(filepath.Base(path)) {
+		for _, d := range []string{"agents", "commands"} {
+			if norm(resolve(filepath.Dir(path))) == norm(resolve(filepath.Join(e.ProjectDir, ".claude", d))) {
+				return nil
+			}
 		}
 	}
 	// Codex profiles are files in the user's Codex folder (learn.chatgpt.com/docs/

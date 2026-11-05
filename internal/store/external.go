@@ -79,7 +79,7 @@ func (e *ExternalTools) list(ctx context.Context, where string, args ...any) ([]
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []ExternalTool
 	for rows.Next() {
 		var t ExternalTool

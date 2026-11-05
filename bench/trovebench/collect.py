@@ -114,7 +114,14 @@ def build_record(
     notes: list[str] = []
     status = OK
     if not agent.parsed and not timed_out:
+        # The agent never produced a result (not installed, crashed, bad auth). That is an infrastructure
+        # failure, not a failed attempt, so it must not count as "ran and failed" with a cost of zero.
+        status = "error"
         notes.append(agent.detail or "agent printed no result")
+    if agent.parsed and agent.api_error_status is not None:
+        status = "error"
+        notes.append(f"the API call failed with HTTP {agent.api_error_status}; this run says nothing about the agent "
+                     "(for 401, check ANTHROPIC_API_KEY is a pay-per-use API key)")
     if gateway is not None:
         why = pins_match(gateway.pinned_states, expected_states or {})
         if why:

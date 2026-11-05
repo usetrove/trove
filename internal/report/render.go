@@ -144,6 +144,17 @@ func Render(r Report, o Options) string {
 		}
 	}
 
+	if len(r.Tasks) > 0 {
+		b.WriteString("\n" + heading("Scout and cascade you installed"))
+		for _, t := range r.Tasks {
+			b.WriteString(wrap(fmt.Sprintf("%s, installed %s", t.Feature, day(t.AppliedAt.Local())), o.width(), "  ", "    ") + "\n")
+			b.WriteString(wrap(t.Text, o.width(), "    ", "    ") + "\n")
+			if t.Recommend != "" {
+				b.WriteString(wrap("Trove suggests undoing it: "+t.Recommend, o.width(), "    ", "    ") + "\n")
+			}
+		}
+	}
+
 	if len(r.ExternalTools) > 0 {
 		b.WriteString("\n" + heading("Third-party tools (each tool's own claim next to what Trove measured)"))
 		for _, t := range r.ExternalTools {

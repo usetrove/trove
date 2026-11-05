@@ -22,6 +22,7 @@ import (
 // Point is a place in an agent's loop where an optimizer can act.
 type Point string
 
+// The points in an agent's loop where an optimizer can act.
 const (
 	PointToolInput  Point = "tool_input"
 	PointToolOutput Point = "tool_output"
@@ -31,6 +32,7 @@ const (
 // Adapter names a way of reaching the engine.
 type Adapter string
 
+// The adapters that can reach the engine.
 const (
 	AdapterGateway Adapter = "gateway"
 	AdapterHooks   Adapter = "hooks"
@@ -43,6 +45,7 @@ var Adapters = []Adapter{AdapterGateway, AdapterHooks, AdapterPlugin}
 // Level says how fully an adapter can run an optimizer.
 type Level string
 
+// How fully an adapter can run an optimizer.
 const (
 	LevelSupported  Level = "supported"
 	LevelPartial    Level = "partial"
@@ -284,7 +287,7 @@ func failedReport(o Base, state, class string) Report {
 
 // guardTool runs fn behind a recover and the context's deadline. failed is ""
 // on success, else one of panic or timeout; a Report with Err set is "error".
-func guardTool[T any](ctx context.Context, name string, fn func() (T, Report)) (T, Report, string) {
+func guardTool[T any](ctx context.Context, _ string, fn func() (T, Report)) (T, Report, string) {
 	type outcome struct {
 		v      T
 		rep    Report

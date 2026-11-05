@@ -5,6 +5,7 @@ import "strings"
 // LicenseClass tells the user how a license treats commercial or company use.
 type LicenseClass string
 
+// The license classes Trove gates installs on.
 const (
 	LicensePermissive LicenseClass = "permissive"
 	LicenseCopyleft   LicenseClass = "copyleft"

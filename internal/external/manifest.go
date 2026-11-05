@@ -22,6 +22,7 @@ var manifestFS embed.FS
 // ActsAs describes how a tool reaches the agent.
 type ActsAs string
 
+// The ways a tool can reach the agent.
 const (
 	ActsShellWrapper ActsAs = "shell_wrapper"
 	ActsMCPServer    ActsAs = "mcp_server"
@@ -33,6 +34,7 @@ const (
 // category may be enabled at a time.
 type Category string
 
+// The categories of tool; at most one tool per exclusive category may be enabled.
 const (
 	CategoryShellCompressor Category = "shell_compressor"
 	CategoryCodeNav         Category = "code_nav"
@@ -172,7 +174,7 @@ func validName(s string) bool {
 		return false
 	}
 	for _, r := range s {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' && r != '_' {
 			return false
 		}
 	}

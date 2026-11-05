@@ -19,6 +19,7 @@ import (
 // Status says what the A/B data shows for one optimizer.
 type Status string
 
+// The statuses of an experiment: what the data supports so far.
 const (
 	NotEnoughData Status = "not_enough_data"
 	NoClearEffect Status = "no_clear_effect"
@@ -91,7 +92,6 @@ type sess struct {
 	key, arm, stratum string
 	cost, turns, errs float64
 	abandoned         float64
-	overhead          float64
 }
 
 // load reads the sessions of one optimizer's experiment. Only sessions that
@@ -204,7 +204,7 @@ func split(all []sess, pick func(sess) float64) (on, off byStratum, nOn, nOff in
 func seedFor(base int64, optimizer, metric string) int64 {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(optimizer + "\x00" + metric))
-	return base ^ int64(h.Sum64())
+	return base ^ int64(h.Sum64()) //nolint:gosec // G115: a wrapping hash-to-seed conversion is intended
 }
 
 func hashInputs(optimizer string, all []sess, x config.Experiment) string {

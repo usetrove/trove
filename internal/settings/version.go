@@ -38,6 +38,7 @@ func (v Version) Less(o Version) bool {
 // Status is how a catalog entry relates to the installed harness.
 type Status string
 
+// How a catalog entry relates to the installed harness version.
 const (
 	StatusOK         Status = "ok"
 	StatusTooOld     Status = "too_old"    // installed version predates the setting

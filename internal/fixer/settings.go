@@ -2,6 +2,7 @@ package fixer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -30,23 +31,33 @@ func (e *Env) readFile(p string) ([]byte, error) {
 	return os.ReadFile(p) //nolint:gosec // an allowed agent config file, or a managed file read-only
 }
 
-func detectSettings(_ context.Context, e *Env) ([]*Fix, error) {
+// PlanSettings plans the settings profile in e.Settings without writing
+// anything. The CLI shows it, and detectSettings turns it into fixes.
+func PlanSettings(e *Env) (*settings.Plan, *settings.Catalog, error) {
 	if e.Settings == nil {
-		return nil, nil
+		return nil, nil, errors.New("no settings task was requested")
 	}
 	cat, err := settings.Builtin()
 	if err != nil {
-		return nil, fmt.Errorf("the settings catalog could not be loaded: %w", err)
+		return nil, nil, fmt.Errorf("the settings catalog could not be loaded: %w", err)
 	}
 	profiles, err := settings.BuiltinProfiles(cat)
 	if err != nil {
-		return nil, fmt.Errorf("the settings profiles could not be loaded: %w", err)
+		return nil, nil, fmt.Errorf("the settings profiles could not be loaded: %w", err)
 	}
 	plan, err := settings.BuildPlan(cat, profiles, settings.Inputs{
 		Task: e.Settings.Task, AllowUnproven: e.Settings.AllowUnproven,
 		ProjectDir: e.ProjectDir, ClaudeDir: e.ClaudeDir, CodexDir: e.CodexDir,
 		Getenv: e.Getenv, ReadFile: e.readFile, Version: e.SettingsVersion,
 	})
+	return plan, cat, err
+}
+
+func detectSettings(_ context.Context, e *Env) ([]*Fix, error) {
+	if e.Settings == nil {
+		return nil, nil
+	}
+	plan, cat, err := PlanSettings(e)
 	if err != nil {
 		return nil, err
 	}

@@ -42,6 +42,9 @@ type Report struct {
 	// SettingsProfiles are the settings profiles from `trove settings` that are
 	// still in place, with what the data shows about each (see docs/settings.md).
 	SettingsProfiles []measure.SettingsEffect `json:"settings_profiles,omitempty"`
+	// Tasks are the scout and cascade features from `trove tasks` that are still
+	// in place, with what the data shows about each (see docs/tasks.md).
+	Tasks []measure.TasksEffect `json:"tasks,omitempty"`
 	// Notes are plain-English caveats and next steps (for example the empty state).
 	Notes []string `json:"notes,omitempty"`
 	// History is the part of the figures that came from agents' local session
