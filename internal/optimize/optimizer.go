@@ -59,6 +59,17 @@ type Session struct {
 	// TroveRun is true when Trove's MCP server is registered with the agent, so
 	// trove_run exists to be suggested.
 	TroveRun bool
+	// Tuning holds per-session optimizer parameters (see Tuning). The adapter fills
+	// it from the session's pin; nil means every optimizer uses its shipped values.
+	// It never changes during a session.
+	Tuning Tuning
+}
+
+// SessionTransformer is implemented by optimizers whose request-level transform
+// depends on per-session tuning. The engine calls it instead of Transform. It must
+// stay a pure function of the request and the session's Tuning.
+type SessionTransformer interface {
+	TransformSession(ctx context.Context, r *Request, s Session) (*Request, Report)
 }
 
 // Report says what one optimizer did to one request.
