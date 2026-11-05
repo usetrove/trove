@@ -7,6 +7,7 @@
 package report
 
 import (
+	"github.com/usetrove/trove/internal/store"
 	"time"
 
 	"github.com/usetrove/trove/internal/experiment"
@@ -57,6 +58,9 @@ type Report struct {
 	// calls, re-reads that followed a block). Empty when no hook has recorded
 	// anything.
 	Hooks []measure.HookStats `json:"hooks,omitempty"`
+	// Adapters is what Trove's plugins for other harnesses (OpenCode) did and what
+	// the harness reported, by harness and login type. Nil when none ran.
+	Adapters *Adapters `json:"adapters,omitempty"`
 	// Upstreams is capacity and cost per OpenAI-compatible server (self-hosted or
 	// open-weight). Empty when no such traffic was recorded.
 	Upstreams []measure.UpstreamRow `json:"upstreams,omitempty"`
@@ -222,3 +226,11 @@ type Pacing struct {
 }
 
 func day(t time.Time) string { return t.Format(time.DateOnly) }
+
+// Adapters is the plugin-adapter section of the report (docs/opencode.md). Counts
+// of decisions are measured by Trove; token figures for decisions are estimated
+// from sizes; usage and cost are what the harness itself reported.
+type Adapters struct {
+	Decisions []store.AdapterDecisionRow `json:"decisions"`
+	Usage     []store.AdapterUsageRow    `json:"usage"`
+}

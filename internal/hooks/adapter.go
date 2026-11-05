@@ -128,6 +128,10 @@ func toolCall(in Input) optimize.ToolCall {
 	return optimize.ToolCall{Name: in.ToolName, Input: b}
 }
 
+// ToolCallOf is the hook's tool call in the engine's neutral form. The parity
+// test uses it to drive this adapter's input side.
+func ToolCallOf(in Input) optimize.ToolCall { return toolCall(in) }
+
 // ToolOutputOf reads the tool output out of a PostToolUse hook input as text
 // parts. The shape of tool_response differs by tool; this takes the string
 // fields that carry output (stdout, stderr, content, or a bare string) and

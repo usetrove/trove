@@ -73,6 +73,7 @@ All numbers, hashes, names and timings. "Kept" is how long Trove keeps it on its
 | `usage_daily` | Per-day request count and spend | until uninstall |
 | `receipts` | One row per finished session: hashed key, agent, model names, call count, cost, cache-hit rate, savings | until uninstall |
 | `hook_events` | Counts from hooks: time, hashed session key, hook name, byte and token counts | until uninstall |
+| `adapter_events` | What a plugin for another harness (OpenCode) did, written by `trove engine serve`: time, **hashed** session key, harness name, a login label (`api_key`, `copilot` or `subscription_or_unknown`, which the plugin works out from non-secret fields; Trove never sees a credential), provider and model names (checked against a strict pattern, so free text is dropped), optimizer name and state, byte and token counts, and, for usage rows, the token counts and cost the harness itself reported | until uninstall |
 | `fixes` | Fixes applied: change id, kind, agent, **hash** of the file path, estimated tokens and dollars | until uninstall |
 | `settings_profiles` | Settings profiles applied by `trove settings`: change id, task type (for example `quick-fix`), agent, the **names** of the settings changed (never their values), the agent version | until uninstall |
 | `guardrail_events` | When an optimizer was rolled back and why (generated text, numbers) | until uninstall |

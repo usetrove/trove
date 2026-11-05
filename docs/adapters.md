@@ -80,25 +80,45 @@ plugin starts one long-lived child process and speaks JSON lines over stdin and 
 
 ### Plugin protocol
 
-One JSON object per line in each direction, replies in order.
+One JSON object per line in each direction, replies in order. This is protocol version 1.
 
 ```
--> {"id":1,"method":"tool_output","session":{"key":"s1","agent":"opencode","states":{"noise_normalizer":"on"}},
+-> {"id":1,"method":"hello"}
+<- {"id":1,"ok":true,"protocol":1,"version":"0.1.0","recoverable":false,"capabilities":[...]}
+-> {"id":2,"method":"tool_output","session":{"key":"s1","harness":"opencode","login":"api_key","cannot":["deny"]},
     "call":{"name":"Bash"},"output":{"parts":[{"text":"..."}]}}
-<- {"id":1,"ok":true,"output":{"parts":[{"text":"..."}]},"reports":[{"name":"noise_normalizer","state":"on",...}]}
+<- {"id":2,"ok":true,"output":{"parts":[{"text":"..."}]},"reports":[{"name":"noise_normalizer","state":"on",...}]}
 ```
 
-Methods: `capabilities`, `tool_input`, `tool_output`, `request`. A `request` carries `provider`, `path`,
-`content_encoding` and `body` (base64, so bytes are exact).
+Methods: `hello`, `capabilities`, `session`, `tool_input`, `tool_output`, `request`, `observe`. A `request` carries
+`provider`, `path`, `content_encoding` and `body` (base64, so bytes are exact).
 
+- **Handshake.** `hello` returns the protocol version. A plugin that does not speak it does nothing (fails open).
 - **Fail open.** If `ok` is false, or the process died, use your original input. A reply never contains anything the
   plugin did not send.
 - **No credentials.** The protocol has no header or key field, so none can reach the engine (a test checks the
-  types). Do not send any.
-- **States.** The plugin sends the optimizer states it resolved for the session. `output_trimmer` stays in shadow
-  here, because the serve process has no recovery store.
+  types). Do not send any. The login is a three-valued label the plugin derives from non-secret fields:
+  `api_key`, `copilot` or `subscription_or_unknown`. Only the first two may have content changed; for the third
+  every optimizer runs in shadow (it counts, changes nothing) and a `request` comes back untouched with
+  `skipped: "login_not_eligible"`. An empty login counts as the third.
+- **States.** A plugin that names a `harness` and sends no `states` gets them from the server: the configured state,
+  lowered to shadow by a guardrail rollback (read again on every call, so a rollback acts at once) and by the control
+  arm of the A/B experiment, and pinned for the session at its first call (rule 5). `session` returns them. A plugin
+  that sends `states` is used as before (hooks-style callers and tests). The baseline gate that the gateway applies
+  is not applied here, as for hooks.
+- **What the harness cannot do.** `cannot` lists `deny`, `rewrite_input`, `rewrite_output` and `rewrite_request`.
+  Where a plugin cannot carry out what an optimizer does, the engine counts in shadow instead (a "blocked" that the
+  harness never enforced would be a wrong number).
+- **Agent label.** A harness plugin that names none is labelled `other`, the label the gateway gives an unknown
+  client, so `custom_agents = ["other"]` in `config.toml` enables `volatile_prefix_mover` and `cache_breakpoints`
+  for it exactly as on the gateway. Only `sdk` and `other` can be marked custom.
+- **Recording.** With a `harness`, the server hashes the session key and writes decisions and `observe` signals to
+  `adapter_events` (metadata only; see PRIVACY.md). `observe` takes a `usage` or an `outcome` with a short fixed
+  detail; free text is rejected. Provider and model names must match a strict pattern or they are dropped.
+- **Recovery.** `output_trimmer` may be on only when the Trove MCP server is registered and the recovery store opens;
+  `hello` says which (`recoverable`).
 - **Stdout** carries only protocol lines. Logs go to stderr.
-- `trove engine serve` refuses to run from a terminal.
+- `trove engine serve` refuses to run from a terminal. Closing its stdin makes it write out what it recorded and exit.
 
 ### Per-call overhead of the plugin path
 
@@ -126,8 +146,14 @@ call. The gateway's 5 ms p50 target is a different measurement (a request throug
    `ToolInputOptimizer` or `ToolOutputOptimizer`, whichever points it acts at.
 2. Register it in `Pipeline()` (request level, order is a cache contract) or `ToolPipeline()`.
 3. Add `SupportOverrider` or `Caveater` if an adapter's answer differs from the default for a reason of its own.
-4. Run `go test ./internal/optimize -run TestAdaptersDoc -update` and commit the regenerated table. The parity test
-   (`internal/adapter/parity_test.go`) picks the new optimizer up from the matrix.
+4. Run `go test ./internal/optimize -run TestAdaptersDoc -update` and commit the regenerated table. The parity tests
+   pick the new optimizer up from the matrix and fail until it has a fixture:
+   `internal/gateway/parity_test.go` (gateway against hooks, tool output),
+   `internal/gateway/parity_plugin_test.go` (plugin against gateway and hooks, request and tool output; add a tool
+   fixture to `parityFixtures` or a request fixture to `requestOnlyBody`) and
+   `internal/gateway/parity_plugin_tool_test.go` (plugin against hooks, tool input; add one to `toolInputFixtures`).
+   Then run `go test ./internal/gateway -run PluginParity -update-plugin-fixtures` to refresh
+   `plugins/opencode/test/fixtures/parity.json`, which the OpenCode plugin's own tests replay through the real engine.
 
 ## Known gaps
 
@@ -136,8 +162,11 @@ call. The gateway's 5 ms p50 target is a different measurement (a request throug
   schema-size` has the number).
 - Hooks do not emit `updatedToolOutput`: per-tool output shapes are unverified, and whether later requests keep the
   replaced output (Q2 in `non-gateway-optimization.md`) is unanswered, which matters for cache safety.
-- The plugin server has no recovery store or pin store, so it cannot turn the trimmer on, and it keeps read ledgers
-  in memory only.
+- The plugin server keeps read ledgers in memory only, and pins session states in memory (the experiment arm is
+  stored, so it survives a restart; the rest is recomputed from config, which can differ if config changed).
+- The plugin server does not apply the gateway's baseline period before an optimizer may be "on" (hooks do not
+  either); the A/B experiment and guardrail rollbacks are applied.
+- Request-level transforms in a plugin are only for harnesses that expose the request body; see `opencode.md`.
 - `trove_run` in the MCP server still has its own head-and-tail fallback trimming outside the engine.
 - Hooks now count a prompt on every `Bash` call, not only on noisy ones, so the "prompt #N" in a repeat-read message
   can differ by a little from before.

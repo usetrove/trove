@@ -1,0 +1,27 @@
+{
+  "name": "trove-opencode",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Trove for OpenCode: runs Trove's optimizer engine inside OpenCode through the local trove program. Works with OpenCode on an API key or a GitHub Copilot login.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 \"test/*.test.ts\"",
+    "bench": "node bench/bridge.bench.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}

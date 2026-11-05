@@ -150,7 +150,9 @@ func TestSchemaIsMetadataOnly(t *testing.T) {
 		"experiment_assignments": {"session_key", "optimizer", "arm", "stratum", "seq", "assigned_at"},
 		"experiment_results": {"id", "optimizer", "computed_at", "metric", "value", "low", "high", "confidence",
 			"n_on", "n_off", "label", "status", "inputs_hash"},
-		"hook_events":       {"id", "ts", "session_key", "hook", "kind", "bytes", "tokens"},
+		"hook_events": {"id", "ts", "session_key", "hook", "kind", "bytes", "tokens"},
+		"adapter_events": {"id", "ts", "session_key", "harness", "login", "provider", "model", "kind", "optimizer", "state",
+			"bytes", "tokens", "overhead_tokens", "in_tokens", "out_tokens", "cache_read_tokens", "cache_write_tokens", "cost_usd", "detail"},
 		"schema_migrations": {"version", "applied_at"},
 	}
 	// Every table must be listed above. A new table is a privacy decision: list its

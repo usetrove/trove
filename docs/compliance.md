@@ -380,8 +380,38 @@ is not verified. Pages were read in full unless noted.
   Claude mobile app, and Claude Code routed through a third-party cloud provider or a gateway aren't covered."
 - *Trove:* `trove setup` says organizations relying on a BAA should use the plugin only, not the gateway.
 
+### 7. The OpenCode plugin: Copilot and ChatGPT logins (decision, 2026-11-05)
+
+The plugin (`plugins/opencode`, [opencode.md](opencode.md)) is not the gateway: it sees no credential, and the
+gateway's refusal rule does not apply to it. What it may do for each login is therefore its own decision.
+
+- *Sources read 2026-11-05:* GitHub changelog 2026-01-16 "GitHub Copilot now supports OpenCode"; OpenCode's provider
+  docs (opencode.ai/docs/providers); OpenAI's developer docs on signing in with a ChatGPT plan in open-source apps
+  (developers.openai.com/siwc/token-sharing-open-source and its preview-limitations page); Anthropic's Claude Code
+  legal-and-compliance page and Consumer Terms section 3. **Not readable:** OpenAI's help article "Using your ChatGPT
+  plan in other apps and sites" (HTTP 403 to automated reads), OpenAI's Terms of Use, Services Agreement and Usage
+  Policies. GitHub's Copilot product-specific terms and generative AI services terms were not read.
+- *GitHub Copilot:* GitHub says it "is officially supporting using your Copilot Pro, Pro+, Business, or Enterprise
+  subscription with OpenCode". The plugin may change content for a Copilot login (tool level).
+- *ChatGPT:* OpenCode's docs describe the login and OpenAI's developer docs describe a "Sign in with ChatGPT" program
+  for open-source and locally hosted apps (a preview, with request-shape limits). The primary page that would name
+  OpenCode and the terms could not be read, and Business eligibility is unclear. **Decision: shadow-only** (count,
+  change nothing) until they have been read and confirm it. This does not contradict section 2: that is about a
+  gateway holding the token; here the plugin never sees one.
+- *Claude Pro/Max:* not allowed in OpenCode (Anthropic's page); Trove does nothing for it.
+- *Plugins that change content:* none of the texts read addresses a third-party plugin that modifies prompts or tool
+  results while the user signs in normally. Trove's documents must say "not addressed in the texts reviewed", never
+  "permitted". Open question for a lawyer, added below.
+- *How the rule is enforced:* the plugin passes a three-valued login label; the engine changes content only for
+  `api_key` and `copilot`, lowers everything else to shadow, and returns request bodies untouched. Tests:
+  `internal/adapter/plugin/harness_test.go` (`TestLoginsThatMayNotBeChangedAreShadowOnly`),
+  `plugins/opencode/test/guard.test.ts`, `plugins/opencode/test/adapters.test.ts`.
+
 ### New open items
 
+0. For the OpenCode plugin: read OpenAI's help article 20001542, Terms of Use and Services Agreement before enabling
+   ChatGPT logins; read GitHub's Copilot product-specific terms; ask whether a plugin that rewrites prompts or tool
+   results is within each provider's terms (none says).
 1. Confirm with a real Amazon Bedrock account that SigV4 requests cannot pass through a proxy that changes Host.
 2. Capture one real Bedrock streamed response and run it through `usage/eventstream.go`.
 3. Check vLLM `--api-key` and streaming usage, and each open-weight provider's official docs, before documenting

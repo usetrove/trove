@@ -55,6 +55,7 @@ func Render(r Report, o Options) string {
 		if r.Budget != nil {
 			b.WriteString("\n" + RenderPacingLine(r.Budget, o) + "\n")
 		}
+		writeAdapters(&b, r, o)
 		return b.String()
 	}
 	for _, n := range r.Notes {
@@ -195,6 +196,8 @@ func Render(r Report, o Options) string {
 			b.WriteString(wrap(l, o.width(), "  ", "    ") + "\n")
 		}
 	}
+
+	writeAdapters(&b, r, o)
 
 	b.WriteString("\n" + heading("Recommendations (suggestions only; Trove changes nothing on its own)"))
 	if len(r.Recommendations) == 0 {

@@ -98,6 +98,14 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	if r.Hooks, err = measure.HookTotals(ctx, db, p.From); err != nil {
 		return r, err
 	}
+	if r.Adapters, err = buildAdapters(ctx, db, p.From); err != nil {
+		return r, err
+	}
+	if r.Adapters != nil && (r.State == StateEmpty || r.State == StateQuiet) {
+		// The default advice here is about the gateway (`trove setup`, `trove gateway`),
+		// which is wrong for someone using a plugin, possibly with a subscription.
+		r.Notes = []string{"Nothing has gone through the Trove gateway " + p.Label() + ". Below is what the plugin for your coding tool saw."}
+	}
 
 	// Budget pacing is shown even when this period is quiet.
 	pace, err := BuildPacing(ctx, db, in.Config, in.Now)
@@ -448,4 +456,21 @@ func measuredFrom(name string, c *measure.Corroboration) *Measured {
 		m.Percent = 100 * (c.OffMean - c.OnMean) / c.OffMean
 	}
 	return m
+}
+
+// buildAdapters reads what harness plugins recorded since from. It returns nil
+// when there is nothing, so reports without a plugin are unchanged.
+func buildAdapters(ctx context.Context, db *store.DB, from time.Time) (*Adapters, error) {
+	dec, err := db.AdapterEvents().Decisions(ctx, from)
+	if err != nil {
+		return nil, err
+	}
+	use, err := db.AdapterEvents().Usage(ctx, from)
+	if err != nil {
+		return nil, err
+	}
+	if len(dec) == 0 && len(use) == 0 {
+		return nil, nil
+	}
+	return &Adapters{Decisions: dec, Usage: use}, nil
 }
