@@ -102,6 +102,17 @@ context_min_tokens = 1500
 # 1 to 1440); they are queued and applied when the agent is idle.
 activity_minutes = 30
 
+[settings]
+# "trove settings" proposes per-task-type values for your agent's built-in token
+# controls (thinking, compaction, MCP limits). It goes through the same approval,
+# backup and undo as "trove fix", and never overrides managed settings.
+# Task type used when --task is not given: quick-fix, feature, refactor or
+# exploration. Empty asks each time.
+default_task = ""
+# Profiles never lower a setting below the harness default unless evidence says
+# it is safe. Set true to allow lowering values that are not yet measured.
+allow_unproven = false
+
 [recovery]
 # The MCP tools keep the full text of any output they shorten here, in
 # ~/.trove/recovery (owner-only files), so nothing is ever lost.
