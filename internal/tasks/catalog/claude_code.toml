@@ -1,0 +1,55 @@
+# Claude Code subagent and command file format. Source: code.claude.com/docs/en/sub-agents.md
+# and /slash-commands.md, read as raw page text 2026-11-05 (Claude Code 2.1.318 pinned in bench).
+# Trove writes only the fields listed here. A field not in this file is never written.
+version = 1
+harness = "claude_code"
+checked_on = "2026-11-05"
+
+[agent_dir]
+project = ".claude/agents"
+command_dir = ".claude/commands"
+doc_url = "https://code.claude.com/docs/en/sub-agents.md"
+verified = "verbatim"
+
+# Frontmatter fields of a subagent file (sub-agents.md, "Supported frontmatter fields").
+[[field]]
+name = "name"
+required = true
+notes = "At most 256 characters. Must not contain ':' (reserved for plugin ids). Hooks receive it as agent_type."
+verified = "verbatim"
+
+[[field]]
+name = "description"
+required = true
+notes = "What Claude reads to decide when to delegate. Always in the main prompt, so its size is overhead."
+verified = "verbatim"
+
+[[field]]
+name = "tools"
+notes = "Comma-separated string or YAML list. Omitted means every tool is inherited, so Trove always sets it."
+verified = "verbatim"
+
+[[field]]
+name = "model"
+values = ["sonnet", "opus", "haiku", "fable", "inherit"]
+notes = "Or a full model ID such as claude-opus-5-5. Ignored while CLAUDE_CODE_SUBAGENT_MODEL_FORCE is on."
+verified = "verbatim"
+
+[[field]]
+name = "maxTurns"
+since = "2.1.246"
+notes = "Output is marked partial when the limit is reached (needs v2.1.246 or later)."
+verified = "verbatim"
+
+# Frontmatter fields of a command file (slash-commands.md). name is not allowed there.
+[[command_field]]
+name = "description"
+verified = "verbatim"
+
+[[command_field]]
+name = "argument-hint"
+verified = "verbatim"
+
+# Tools a read-only scout may hold. Bash is never listed: it can write.
+[read_only]
+tools = ["Read", "Grep", "Glob"]

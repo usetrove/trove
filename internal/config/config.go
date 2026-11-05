@@ -38,6 +38,7 @@ type Config struct {
 	History       History           `toml:"history"`
 	Fixer         Fixer             `toml:"fixer"`
 	Settings      Settings          `toml:"settings"`
+	Tasks         Tasks             `toml:"tasks"`
 	Recovery      Recovery          `toml:"recovery"`
 	Contribute    Contribute        `toml:"contribute"`
 	RetentionDays int               `toml:"retention_days"`
@@ -452,6 +453,12 @@ func (c Config) Validate() error {
 	if t := c.Settings.DefaultTask; t != "" && !validTaskName(t) {
 		add("settings.default_task is %q; use lowercase letters, digits and - (for example quick-fix), or leave it empty.", t)
 	}
+	if t := c.Tasks; t.MaxTurns < 0 || t.MaxTurns > 200 {
+		add("tasks.max_turns is %d; use a number from 1 to 200, or 0 for the default (25).", t.MaxTurns)
+	}
+	if t := c.Tasks.TestCmd; strings.ContainsAny(t, "\r\n`") || len(t) > 200 {
+		add("tasks.test_cmd must be one line of at most 200 characters without backticks.")
+	}
 	if c.Recovery.MaxMB < 1 || c.Recovery.MaxMB > 10000 {
 		add("recovery.max_mb is %d; use a size in MB from 1 to 10000 (default 200).", c.Recovery.MaxMB)
 	}
@@ -691,4 +698,19 @@ func validTaskName(s string) bool {
 		}
 	}
 	return true
+}
+
+// Tasks holds the settings for `trove tasks` (the scout subagent and the
+// cascade workflow, see docs/tasks.md). Empty values take the defaults in
+// internal/tasks; whether a model name is one the agent documents is checked
+// there, against the verified catalog, when a plan is made.
+type Tasks struct {
+	ScoutModel      string `toml:"scout_model"`
+	WorkerModel     string `toml:"worker_model"`
+	EscalationModel string `toml:"escalation_model"`
+	// TestCmd is the project's test command. The cascade will not install
+	// without it: escalating on a guess is not allowed.
+	TestCmd string `toml:"test_cmd"`
+	// MaxTurns limits the cheap worker before it must stop (0 means 25).
+	MaxTurns int `toml:"max_turns"`
 }

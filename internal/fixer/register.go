@@ -44,8 +44,14 @@ func register(e *Env, f *Fix, c setup.Change) error {
 		`INSERT OR REPLACE INTO fixes (change_id, fix_id, kind, agent, path_hash, applied_at, est_tokens, est_usd, label)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'estimated')`,
 		c.ID, f.ID, f.Kind, f.Agent, pathHash(f.Path), c.AppliedAt.UnixMilli(), f.TokensPerSession, usd)
-	if err != nil || f.Kind != SettingsProfile {
+	if err != nil {
 		return err
+	}
+	if f.Kind == TaskScout || f.Kind == TaskCascade {
+		return registerTask(db, e, f, c.ID)
+	}
+	if f.Kind != SettingsProfile {
+		return nil
 	}
 	// Names of the settings only: never a value, a path or file content.
 	keys, _ := json.Marshal(f.Keys)
