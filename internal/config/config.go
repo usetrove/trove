@@ -162,6 +162,14 @@ const (
 	// OptimizerHookLargeOutput adds a hint to run a known-noisy command through
 	// trove_run. It never blocks.
 	OptimizerHookLargeOutput = "hook_large_output"
+	// OptimizerHookReadLimit adds a line limit to a Read of a large file that has
+	// none. The agent can still ask for more with offset and limit.
+	OptimizerHookReadLimit = "hook_read_limit"
+	// OptimizerHookQuietCommands adds output-quieting flags to allowlisted shell
+	// commands. It never changes what a command does.
+	OptimizerHookQuietCommands = "hook_quiet_commands"
+	// OptimizerNoiseNormalizer is lossless; it also runs in hooks on tool output.
+	OptimizerNoiseNormalizer = "noise_normalizer"
 )
 
 // EnvOptimize is the kill-switch environment variable. Set to "off", it

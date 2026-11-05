@@ -1,0 +1,1 @@
+{"session_id":"{{SESSION}}","prompt_id":"{{PROMPT}}","hook_event_name":"PostToolUse","tool_name":"Grep","tool_input":{"pattern":"FAIL","path":"/home/u/proj"},"tool_response":{"content":"{{STDOUT}}","numLines":400},"tool_use_id":"toolu_01GREP"}

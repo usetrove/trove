@@ -1,0 +1,26 @@
+{
+  "cwd": "{{PATH}}",
+  "duration_ms": 317,
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "permission_mode": "default",
+  "prompt_id": "{{PROMPT}}",
+  "session_id": "{{SESSION}}",
+  "tool_input": {
+    "path": "{{TMP}}\\project",
+    "pattern": "TROVE_PROBE_IN_f0dbe4"
+  },
+  "tool_name": "Grep",
+  "tool_response": {
+    "filenames": [
+      "b.txt"
+    ],
+    "mode": "files_with_matches",
+    "numFiles": 1,
+    "totalFiles": 1
+  },
+  "tool_use_id": "{{TOOL_USE}}",
+  "transcript_path": "{{PATH}}"
+}

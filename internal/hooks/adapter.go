@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/optimize"
+	"github.com/usetrove/trove/internal/recovery"
 )
 
 // This file is the whole of the hooks adapter's contact with the engine: build
@@ -28,23 +30,97 @@ const engineMargin = 30 * time.Millisecond
 func (h *handler) engine() *optimize.Engine {
 	if h.eng == nil {
 		cfg := config.Default()
-		cfg.Optimize.BudgetMS = int((callDeadline - engineMargin) / time.Millisecond)
-		h.eng = optimize.New(optimize.Options{Config: cfg, Getenv: h.getenv, Now: h.now, KillFile: optimize.KillFile(h.dir)})
+		budget := h.budget
+		if budget <= 0 {
+			budget = callDeadline
+		}
+		cfg.Optimize.BudgetMS = int((budget - engineMargin) / time.Millisecond)
+		opts := optimize.Options{Config: cfg, Getenv: h.getenv, Now: h.now, KillFile: optimize.KillFile(h.dir)}
+		if h.recover {
+			// Without a recovery store the engine keeps the trimmer in shadow, so
+			// a store that cannot be opened is not an error: nothing is trimmed.
+			if rec := h.openRecovery(); rec != nil {
+				opts.Recovery = rec
+			}
+		}
+		h.eng = optimize.New(opts)
 	}
 	return h.eng
 }
 
+// openRecovery opens the store that holds the full text of trimmed output. The
+// size cap and lifetime come from the snapshot (config [recovery]).
+func (h *handler) openRecovery() optimize.RecoveryStore {
+	d := config.Default().Recovery
+	if h.snap.RecoveryMaxMB > 0 {
+		d.MaxMB = h.snap.RecoveryMaxMB
+	}
+	if h.snap.RecoveryTTLDays > 0 {
+		d.TTLDays = h.snap.RecoveryTTLDays
+	}
+	st, err := recovery.Open(filepath.Join(h.dir, "recovery"), recovery.Options{
+		MaxBytes: int64(d.MaxMB) << 20, TTL: time.Duration(d.TTLDays) * 24 * time.Hour})
+	if err != nil {
+		logf(h.dir, "recovery", "the recovery store could not be opened, so output is not trimmed: %v", err)
+		return nil
+	}
+	return st
+}
+
+// capabilities loads the probe result once per process.
+func (h *handler) capabilities() Capabilities {
+	if h.caps == nil {
+		c := LoadCapabilities(h.dir)
+		h.caps = &c
+	}
+	return *h.caps
+}
+
+// rewriteKind says which kind of rewrite an optimizer does, or "" if it does not
+// rewrite anything the agent could ignore.
+func rewriteKind(name string) string {
+	switch name {
+	case config.OptimizerHookReadLimit, config.OptimizerHookQuietCommands:
+		return RewriteInput
+	case config.OptimizerNoiseNormalizer, config.OptimizerOutputTrimmer:
+		return RewriteOutput
+	}
+	return ""
+}
+
+// stateFor is the state an optimizer acts in for one tool call: the pinned state,
+// lowered to shadow when the agent version has not been seen to honour that kind
+// of rewrite for this tool (CLAUDE.md rule 4: doing less is always safe), and
+// switched off where the optimizer does not belong. Both are adapter-level
+// support facts; whether and how to optimize is still the engine's call.
+func (h *handler) stateFor(name, pinned, tool string) string {
+	st := h.snap.State(name, pinned, h.dir, h.getenv)
+	if name == config.OptimizerOutputTrimmer && tool != "Bash" {
+		return stateOff // it is made for command output, not search results or file text
+	}
+	if st != stateOn {
+		return st
+	}
+	if kind := rewriteKind(name); kind != "" && !h.capabilities().Supports(h.agent, tool, kind) {
+		return stateShadow
+	}
+	return st
+}
+
 // sess describes the hook's session to the engine.
-func (h *handler) sess(key string, st *sessionState) optimize.Session {
+func (h *handler) sess(key string, st *sessionState, tool string) optimize.Session {
 	return optimize.Session{
 		Key: key, Agent: h.agent, Now: h.now(), TroveRun: h.snap.TroveRun,
 		Ledger: &ledgerView{st: st, dir: h.dir, key: key},
-		State:  func(name string) string { return h.snap.State(name, st.Pins[name], h.dir, h.getenv) },
+		State:  func(name string) string { return h.stateFor(name, st.Pins[name], tool) },
 	}
 }
 
 // toolCall is the hook's tool call in the engine's neutral form.
 func toolCall(in Input) optimize.ToolCall {
+	if len(in.ToolInput.Raw) > 0 {
+		return optimize.ToolCall{Name: in.ToolName, Input: in.ToolInput.Raw}
+	}
 	b, _ := json.Marshal(map[string]any{
 		"file_path": in.ToolInput.FilePath, "offset": in.ToolInput.Offset, "limit": in.ToolInput.Limit,
 		"pages": in.ToolInput.Pages, "command": in.ToolInput.Command,
@@ -106,15 +182,24 @@ func failure(reps []optimize.Report) error {
 // render counts the engine's decisions and turns the one that needs the agent's
 // attention into hook output. Counting comes first: a decision that cannot be
 // counted is not acted on.
-func (h *handler) render(key string, reps []optimize.Report) ([]byte, error) {
+func (h *handler) render(key string, cur optimize.ToolCall, reps []optimize.Report) ([]byte, error) {
 	if err := failure(reps); err != nil {
 		return nil, err
 	}
+	denied := false
+	for _, r := range reps {
+		denied = denied || (r.Decision != nil && r.Decision.IsDeny())
+	}
 	var out []byte
+	var notes []string
+	rewritten := false
 	for _, r := range reps {
 		d := r.Decision
 		if d == nil {
 			continue
+		}
+		if denied && (d.Kind == optimize.KindRewritten || d.Kind == optimize.KindWouldRewrite) {
+			continue // the call is not running, so nothing was rewritten
 		}
 		if err := h.emit(key, r.Name, d.Kind, d.Bytes, d.Tokens); err != nil {
 			return nil, err
@@ -123,10 +208,23 @@ func (h *handler) render(key string, reps []optimize.Report) ([]byte, error) {
 		case optimize.KindBlocked:
 			out = denyJSON(d.Message)
 		case optimize.KindAdvised:
-			out = contextJSON(d.Message)
+			notes = append(notes, d.Message)
+		case optimize.KindRewritten:
+			rewritten = true
+			if d.Message != "" {
+				notes = append(notes, d.Message)
+			}
 		}
 	}
-	return out, nil
+	switch {
+	case denied:
+		return out, nil
+	case rewritten:
+		return updatedInputJSON(cur.Input, joinNotes(notes)), nil
+	case len(notes) > 0:
+		return contextJSON(joinNotes(notes)), nil
+	}
+	return nil, nil
 }
 
 // ledgerView gives the engine the session journal as a ReadLedger.

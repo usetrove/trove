@@ -1,0 +1,17 @@
+{
+  "cwd": "{{PATH}}",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PreToolUse",
+  "permission_mode": "default",
+  "prompt_id": "{{PROMPT}}",
+  "session_id": "{{SESSION}}",
+  "tool_input": {
+    "command": "echo TROVE_PROBE_SRC",
+    "description": "Echo the probe string"
+  },
+  "tool_name": "Bash",
+  "tool_use_id": "{{TOOL_USE}}",
+  "transcript_path": "{{PATH}}"
+}

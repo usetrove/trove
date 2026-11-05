@@ -1,0 +1,1 @@
+{"session_id":"{{SESSION}}","prompt_id":"{{PROMPT}}","transcript_path":"/home/u/.claude/projects/x/s.jsonl","cwd":"/home/u/proj","permission_mode":"default","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"{{COMMAND}}","description":"Install dependencies","timeout":120000,"run_in_background":false},"tool_use_id":"toolu_01PIP"}

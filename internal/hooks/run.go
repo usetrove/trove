@@ -39,10 +39,16 @@ const (
 	EventReset       = "session_reset"
 	EventSessionEnd  = "session_end_receipt"
 	EventLargeOutput = "pre_tool_large_output"
+	// EventPostOutput runs after Bash, Grep and Glob and may replace the output
+	// the model sees (PostToolUse updatedToolOutput).
+	EventPostOutput = "post_tool_output"
+	// EventPostFetch runs after the trove_fetch_full MCP tool and counts fetch-backs
+	// of output that a hook trimmed.
+	EventPostFetch = "post_tool_fetch"
 )
 
 // Events lists every event name.
-var Events = []string{EventPreRead, EventPostRead, EventReset, EventSessionEnd, EventLargeOutput}
+var Events = []string{EventPreRead, EventPostRead, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch}
 
 const (
 	// maxHashBytes is the largest file the repeat-read hook will hash. Bigger
@@ -55,6 +61,13 @@ const (
 	// (Claude Code's default budget is 1.5 s, Codex's 1 s with a 3 s maximum).
 	endDeadline = 2500 * time.Millisecond
 )
+
+// postDeadline is the safety net for post_tool_output. It is longer than
+// callDeadline because shortening output writes the full text to the recovery
+// store first; past it the original output goes through untouched. It is a
+// variable only so that tests, which run under a race detector and a loaded CI
+// machine, are not decided by the clock.
+var postDeadline = 250 * time.Millisecond
 
 // Env is everything Main needs from its surroundings, so tests can supply them.
 type Env struct {
@@ -88,8 +101,11 @@ func Main(e Env) (code int) {
 		return 0
 	}
 	deadline := callDeadline
-	if event == EventSessionEnd {
+	switch event {
+	case EventSessionEnd:
 		deadline = endDeadline
+	case EventPostOutput:
+		deadline = postDeadline
 	}
 	done := make(chan []byte, 1)
 	go func() {
@@ -143,6 +159,12 @@ type handler struct {
 	notify func(measure.Receipt)
 	snap   Snapshot
 	eng    *optimize.Engine
+	// budget is the engine's time budget for this process: the hook's deadline
+	// less a margin. recover is set when the output trimmer may run for real, so
+	// the engine gets the recovery store.
+	budget  time.Duration
+	recover bool
+	caps    *Capabilities
 }
 
 func run(dir, event, agent string, e Env) []byte {
@@ -160,7 +182,10 @@ func run(dir, event, agent string, e Env) []byte {
 		return nil
 	}
 	snap, _ := LoadSnapshot(dir)
-	h := &handler{dir: dir, agent: agent, getenv: e.Getenv, now: e.Now, notify: e.Notify, snap: snap}
+	h := &handler{dir: dir, agent: agent, getenv: e.Getenv, now: e.Now, notify: e.Notify, snap: snap, budget: callDeadline}
+	if event == EventPostOutput {
+		h.budget = postDeadline
+	}
 	key := h.sessionKey(in.SessionID)
 	var out []byte
 	switch event {
@@ -172,6 +197,10 @@ func run(dir, event, agent string, e Env) []byte {
 		err = h.reset(in, key)
 	case EventLargeOutput:
 		out, err = h.largeOutput(in, key)
+	case EventPostOutput:
+		out, err = h.postOutput(in, key)
+	case EventPostFetch:
+		err = h.postFetch(in, key)
 	case EventSessionEnd:
 		err = h.sessionEnd(in, key)
 	}

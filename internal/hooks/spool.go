@@ -23,6 +23,11 @@ const (
 	KindAdvised      = "advised"
 	KindWouldAdvise  = "would_advise"
 	KindRereadAnyway = "reread_anyway"
+	KindRewritten    = "rewritten"
+	KindWouldRewrite = "would_rewrite"
+	KindReissued     = "reissued"
+	// KindFetchedBack: the agent called trove_fetch_full for output a hook trimmed.
+	KindFetchedBack = "fetched_back"
 )
 
 // event is one line of the spool. Counts, sizes and a hashed session key only.
@@ -130,7 +135,7 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 
 func validKind(k string) bool {
 	switch k {
-	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway:
+	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack:
 		return true
 	}
 	return false

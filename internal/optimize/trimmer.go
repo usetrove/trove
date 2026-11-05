@@ -244,6 +244,17 @@ func IsFailureLine(l string) bool {
 	return len(l) <= maxTrimLineBytes && failureRe.MatchString(l)
 }
 
+// TrimmedIDs returns the output ids named by the trim markers in text, in order.
+func TrimmedIDs(text string) []string {
+	var ids []string
+	for _, l := range strings.Split(text, "\n") {
+		if m := trimMarker.FindString(strings.TrimRight(l, "\r")); m != "" {
+			ids = append(ids, m[len(m)-17:len(m)-1])
+		}
+	}
+	return ids
+}
+
 // recoveryID is the ID the recovery store gives text: the first 16 hex
 // characters of its sha256, the same hash the marker line carries.
 func recoveryID(text string) string {

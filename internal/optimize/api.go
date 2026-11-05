@@ -101,6 +101,13 @@ const (
 	KindRereadAnyway = "reread_anyway"
 	KindWouldAdvise  = "would_advise"
 	KindAdvised      = "advised"
+	// KindRewritten means the call's input was changed; KindWouldRewrite is the
+	// shadow-mode version. The rewritten input is the returned ToolCall.
+	KindRewritten    = "rewritten"
+	KindWouldRewrite = "would_rewrite"
+	// KindReissued means the agent ran a command again exactly as it first wrote
+	// it, after the command had been quieted: the quiet flag did not satisfy it.
+	KindReissued = "reissued"
 )
 
 // IsDeny reports whether the adapter must refuse to run the call.
@@ -146,7 +153,7 @@ type ToolOutputOptimizer interface {
 // ToolPipeline returns the tool-level optimizers in run order. The request-level
 // Pipeline is separate because its order is a byte-level cache contract.
 func ToolPipeline() []Base {
-	return []Base{NoiseNormalizer{}, OutputTrimmer{}, RepeatRead{}, LargeOutputAdvice{}}
+	return []Base{NoiseNormalizer{}, OutputTrimmer{}, RepeatRead{}, ReadLimit{}, QuietCommands{}, LargeOutputAdvice{}}
 }
 
 // TransformToolInput runs the tool-input optimizers on one call. It never

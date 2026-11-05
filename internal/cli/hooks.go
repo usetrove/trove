@@ -20,8 +20,8 @@ import (
 )
 
 type hooksInstallFlags struct {
-	agent, scope, projectDir string
-	yes, dryRun, largeOutput bool
+	agent, scope, projectDir          string
+	yes, dryRun, largeOutput, rewrite bool
 }
 
 // hooksPlan is one settings file Trove proposes to add hooks to.
@@ -52,7 +52,7 @@ func newHooks(a *App) *cobra.Command {
 		Long: "Hooks are small commands Claude Code and Codex CLI run around tool calls and when a session ends. They work\n" +
 			"without the gateway, so they also help if you use a subscription. See docs/hooks.md.",
 	}
-	c.AddCommand(newHooksInstall(a), newHooksUninstall(a), newHooksStatus(a), newHooksSync(a))
+	c.AddCommand(newHooksInstall(a), newHooksUninstall(a), newHooksStatus(a), newHooksSync(a), newHooksProbe(a))
 	return c
 }
 
@@ -74,6 +74,7 @@ func newHooksInstall(a *App) *cobra.Command {
 	c.Flags().StringVar(&fl.scope, "scope", "user", "Claude Code only: user (all projects) or project (.claude/settings.local.json)")
 	c.Flags().StringVar(&fl.projectDir, "project", "", "project folder for --scope project (default: the current folder)")
 	c.Flags().BoolVar(&fl.largeOutput, "large-output", false, "also add the optional hint that suggests trove_run for noisy commands (test suites, verbose builds)")
+	c.Flags().BoolVar(&fl.rewrite, "rewrite", false, "also let hooks rewrite tool calls and output (Bash quiet flags, line limits on big reads, trimmed test/build output); they stay inert until the matching optimizers are set to shadow or on")
 	c.Flags().BoolVar(&fl.yes, "yes", false, "apply without asking")
 	c.Flags().BoolVar(&fl.dryRun, "dry-run", false, "show what would change and stop")
 	return c
@@ -97,7 +98,7 @@ func hookCommands(a *App, dir string, agentFlag string) (base string, build func
 	return base, func(event string) string { return base + event + suffix }, nil
 }
 
-func claudeSpecs(build func(string) string, largeOutput bool) []setup.HookSpec {
+func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.HookSpec {
 	s := []setup.HookSpec{
 		{Event: "PreToolUse", Matcher: "Read", Command: build(hooks.EventPreRead), Timeout: 5},
 		{Event: "PostToolUse", Matcher: "Read", Command: build(hooks.EventPostRead), Timeout: 5},
@@ -105,20 +106,31 @@ func claudeSpecs(build func(string) string, largeOutput bool) []setup.HookSpec {
 		{Event: "PreCompact", Command: build(hooks.EventReset), Timeout: 5},
 		{Event: "SessionEnd", Command: build(hooks.EventSessionEnd), Timeout: 3},
 	}
-	if largeOutput {
+	if largeOutput || rewrite {
 		s = append(s, setup.HookSpec{Event: "PreToolUse", Matcher: "Bash", Command: build(hooks.EventLargeOutput), Timeout: 5})
+	}
+	if rewrite {
+		// PostToolUse can replace what the model sees (updatedToolOutput). Which
+		// tools honour it on the installed version is probed, not assumed:
+		// `trove hooks probe` and `trove doctor`.
+		s = append(s, setup.HookSpec{Event: "PostToolUse", Matcher: "Bash|Grep|Glob", Command: build(hooks.EventPostOutput), Timeout: 5})
+		// Counts fetch-backs of trimmed output, which is what stops the trimmer if it is too aggressive.
+		s = append(s, setup.HookSpec{Event: "PostToolUse", Matcher: "mcp__trove__trove_fetch_full", Command: build(hooks.EventPostFetch), Timeout: 5})
 	}
 	return s
 }
 
 // codexSpecs leaves out repeat-read: Codex's hook page names no file-read tool to
 // match (checked 2026-10-30), so there is nothing to hook.
-func codexSpecs(build func(string) string, largeOutput bool) []setup.HookSpec {
+func codexSpecs(build func(string) string, largeOutput, rewrite bool) []setup.HookSpec {
 	s := []setup.HookSpec{
 		{Event: "SessionStart", Command: build(hooks.EventReset), Timeout: 3},
 		{Event: "SessionEnd", Command: build(hooks.EventSessionEnd), Timeout: 3},
 	}
-	if largeOutput {
+	// Codex can rewrite a Bash command's input (updatedInput) but not tool output
+	// (updatedMCPToolOutput is parsed and not supported; learn.chatgpt.com/docs/hooks,
+	// read 2026-11-04), so --rewrite adds only the Bash pre-hook there.
+	if largeOutput || rewrite {
 		s = append(s, setup.HookSpec{Event: "PreToolUse", Matcher: "^Bash$", Command: build(hooks.EventLargeOutput), Timeout: 3})
 	}
 	return s
@@ -156,7 +168,7 @@ func planHooksInstall(a *App, dir, home string, fl hooksInstallFlags) ([]hooksPl
 				p.Problem = cerr.Error()
 				break
 			}
-			specs := codexSpecs(build, fl.largeOutput)
+			specs := codexSpecs(build, fl.largeOutput, fl.rewrite)
 			p.Hooks = hookNames(specs)
 			e, err = setup.PlanCodexHooks(cfgDir, specs, base)
 		default:
@@ -165,7 +177,7 @@ func planHooksInstall(a *App, dir, home string, fl hooksInstallFlags) ([]hooksPl
 				p.Problem = cerr.Error()
 				break
 			}
-			specs := claudeSpecs(build, fl.largeOutput)
+			specs := claudeSpecs(build, fl.largeOutput, fl.rewrite)
 			p.Hooks = hookNames(specs)
 			path := filepath.Join(cfgDir, "settings.json")
 			if fl.scope == "project" {
