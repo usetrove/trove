@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/usetrove/trove/internal/external"
 	"github.com/usetrove/trove/internal/mcp/install"
 	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/store"
 )
 
@@ -28,9 +30,15 @@ func (h *handler) preRead(in Input, key string) ([]byte, error) {
 	if in.ToolName != "Read" {
 		return nil, nil
 	}
-	st, call := h.session(key, in), toolCall(in)
-	_, reps := h.engine().TransformToolInput(context.Background(), call, h.sess(key, st))
-	return h.render(key, reps)
+	return h.preTool(in, key)
+}
+
+// preTool runs the engine's tool-input optimizers on a call and renders the
+// result: a deny, a note, or a rewritten input.
+func (h *handler) preTool(in Input, key string) ([]byte, error) {
+	st := h.session(key, in)
+	cur, reps := h.engine().TransformToolInput(context.Background(), toolCall(in), h.sess(key, st, in.ToolName))
+	return h.render(key, cur, reps)
 }
 
 // postRead is post_tool_read_record. PostToolUse only fires for a Read that
@@ -40,7 +48,7 @@ func (h *handler) postRead(in Input, key string) error {
 		return nil
 	}
 	st := h.session(key, in)
-	_, reps := h.engine().TransformToolOutput(context.Background(), toolCall(in), ToolOutputOf(in), h.sess(key, st))
+	_, reps := h.engine().TransformToolOutput(context.Background(), toolCall(in), ToolOutputOf(in), h.sess(key, st, in.ToolName))
 	return failure(reps)
 }
 
@@ -68,9 +76,100 @@ func (h *handler) largeOutput(in Input, key string) ([]byte, error) {
 	if in.ToolName != "Bash" {
 		return nil, nil
 	}
+	return h.preTool(in, key)
+}
+
+// postOutput is post_tool_output. For Bash, Grep and Glob it runs the engine's
+// tool-output optimizers and, if one in "on" state shortened the text, replaces
+// what the model sees with updatedToolOutput in the tool's own response shape.
+// It counts what each optimizer did (estimated, from sizes). Anything it does not
+// understand, or any failure, lets the original output through.
+func (h *handler) postOutput(in Input, key string) ([]byte, error) {
+	switch in.ToolName {
+	case "Bash", "Grep", "Glob":
+	default:
+		return nil, nil
+	}
+	keys, texts, ok := responseTexts(in.ToolResponse)
+	if !ok || interrupted(in.ToolResponse) {
+		return nil, nil
+	}
 	st := h.session(key, in)
-	_, reps := h.engine().TransformToolInput(context.Background(), toolCall(in), h.sess(key, st))
-	return h.render(key, reps)
+	// The trimmer needs the recovery store, and the store is only useful when the
+	// agent can fetch the text back, so ask for it only then.
+	pinned := st.Pins[config.OptimizerOutputTrimmer]
+	h.recover = in.ToolName == "Bash" && h.snap.TroveRun && pinned != "" && pinned != stateOff
+	res, reps := h.engine().TransformToolOutput(context.Background(), toolCall(in), outputForEngine(texts), h.sess(key, st, in.ToolName))
+	if err := failure(reps); err != nil {
+		return nil, err
+	}
+	applied := false
+	for _, r := range reps {
+		if !r.Changed {
+			continue
+		}
+		kind := optimize.KindWouldRewrite
+		if r.State == stateOn {
+			kind, applied = optimize.KindRewritten, true
+		}
+		if err := h.emit(key, r.Name, kind, int64(r.BytesRemoved), r.TokensRemoved); err != nil {
+			return nil, err
+		}
+	}
+	if !applied || len(res.Parts) != len(texts) {
+		return nil, nil
+	}
+	out := make([]string, len(res.Parts))
+	for i, p := range res.Parts {
+		out[i] = p.Text
+	}
+	updated, ok := withResponseTexts(in.ToolResponse, keys, out)
+	if !ok {
+		return nil, nil
+	}
+	// Remember which outputs were trimmed, so a later fetch-back is attributed to
+	// the trimmer and not to trove_run, whose output is fetched the same way.
+	sess := h.sess(key, st, in.ToolName)
+	for _, t := range out {
+		for _, id := range optimize.TrimmedIDs(t) {
+			sess.Ledger.Put(optimize.TrimmedKey(id), optimize.ReadEntry{Prompt: sess.Ledger.Prompts(), At: h.now().Unix()})
+		}
+	}
+	if err := sess.Ledger.Save(); err != nil {
+		return nil, err
+	}
+	return updatedOutputJSON(updated), nil
+}
+
+// fetchTool is trove_fetch_full as the agent names it (server "trove").
+const fetchTool = "mcp__trove__trove_fetch_full"
+
+// postFetch is post_tool_fetch. When the agent fetches back an output a hook
+// trimmed, it counts one fetched_back for the trimmer. The guardrail uses the
+// share of trimmed outputs that come back: if the agent keeps needing them, the
+// trimming is too aggressive and the trimmer goes back to shadow.
+func (h *handler) postFetch(in Input, key string) error {
+	if in.ToolName != fetchTool {
+		return nil
+	}
+	var a struct {
+		ID string `json:"output_id"`
+	}
+	if json.Unmarshal(in.ToolInput.Raw, &a) != nil || a.ID == "" {
+		return nil
+	}
+	st := h.session(key, in)
+	sess := h.sess(key, st, in.ToolName)
+	ent, ok := sess.Ledger.Get(optimize.TrimmedKey(a.ID))
+	if !ok || ent.BlockedSum != "" {
+		return nil // not ours, or already counted
+	}
+	ent.BlockedSum = "counted"
+	sess.Ledger.Put(optimize.TrimmedKey(a.ID), ent)
+	if err := sess.Ledger.Save(); err != nil {
+		return err
+	}
+	return h.emit(key, config.OptimizerOutputTrimmer, KindFetchedBack, 0, 0)
 }
 
 // sessionEnd is session_end_receipt: it moves the hook counters into the

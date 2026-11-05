@@ -564,6 +564,17 @@ func hooksLines(stats []measure.HookStats) []string {
 			l += fmt.Sprintf("%d repeat reads blocked, %d more would have been blocked in shadow mode (measured counts)", s.Blocked, s.WouldBlock)
 		case s.Advised+s.WouldAdvise > 0:
 			l += fmt.Sprintf("%d hints added, %d more would have been added in shadow mode (measured counts)", s.Advised, s.WouldAdvise)
+		case s.Rewritten+s.WouldRewrite > 0:
+			l += fmt.Sprintf("%d tool calls or outputs rewritten, %d more would have been in shadow mode (measured counts)", s.Rewritten, s.WouldRewrite)
+			if s.TokensRewritten != nil {
+				l += fmt.Sprintf("; about %s tokens removed from what the model sees (estimated from sizes; whether the agent needed them is judged by the A/B results, not by this number)", FormatTokens(s.TokensRewritten.Value))
+			}
+			if s.Reissued > 0 {
+				l += fmt.Sprintf("; the agent ran %d quieted commands again as first written (measured)", s.Reissued)
+			}
+			if s.FetchedBack > 0 {
+				l += fmt.Sprintf("; the agent fetched back %d trimmed outputs (measured)", s.FetchedBack)
+			}
 		default:
 			l += "no activity"
 		}

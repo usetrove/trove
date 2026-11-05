@@ -104,6 +104,9 @@ func runDoctor(a *App) doctorReport {
 	cs = append(cs, checkConfig(a, dir))
 	cs = append(cs, checkPricing(time.Now()))
 	cs = append(cs, checkAgents(a)...)
+	if cfg, err := config.Load(dir, a.Getenv); err == nil {
+		cs = append(cs, hookRewritesCheck(a, dir, cfg.OptimizerState))
+	}
 	return finish(cs)
 }
 

@@ -1,0 +1,60 @@
+{
+  "capabilities": {
+    "v": 0,
+    "entries": [
+      {
+        "agent": "codex",
+        "agent_version": "",
+        "tool": "Bash",
+        "input_rewrite": "yes",
+        "output_rewrite": "no",
+        "method": "docs",
+        "evidence": "documentation only (not run): PreToolUse updatedInput works for Bash with a string command; PostToolUse output replacement is parsed but not supported",
+        "probed_at": "2026-11-05T06:01:26Z"
+      },
+      {
+        "agent": "claude",
+        "agent_version": "2.1.318",
+        "tool": "Bash",
+        "input_rewrite": "yes",
+        "output_rewrite": "yes",
+        "method": "live",
+        "evidence": "the tool ran with the rewritten input (seen by the PostToolUse hook); the model's reply contained the replacement output",
+        "probed_at": "2026-11-05T06:01:26Z"
+      },
+      {
+        "agent": "claude",
+        "agent_version": "2.1.318",
+        "tool": "Read",
+        "input_rewrite": "yes",
+        "output_rewrite": "yes",
+        "method": "live",
+        "evidence": "the tool ran with the rewritten input (seen by the PostToolUse hook); the model's reply contained the replacement output",
+        "probed_at": "2026-11-05T06:01:26Z"
+      },
+      {
+        "agent": "claude",
+        "agent_version": "2.1.318",
+        "tool": "Grep",
+        "input_rewrite": "yes",
+        "output_rewrite": "yes",
+        "method": "live",
+        "evidence": "the tool ran with the rewritten input (seen by the PostToolUse hook); the model's reply contained the replacement output",
+        "probed_at": "2026-11-05T06:01:26Z"
+      },
+      {
+        "agent": "claude",
+        "agent_version": "2.1.318",
+        "tool": "Glob",
+        "input_rewrite": "yes",
+        "output_rewrite": "yes",
+        "method": "live",
+        "evidence": "the tool ran with the rewritten input (seen by the PostToolUse hook); the model's reply contained the replacement output",
+        "probed_at": "2026-11-05T06:01:26Z"
+      }
+    ]
+  },
+  "agent_version": "2.1.318",
+  "live": true,
+  "spent_usd": 0.01589515
+}

@@ -261,3 +261,35 @@ func TestHookCommandAlwaysExitsZeroAndStaysQuiet(t *testing.T) {
 		t.Fatalf("exit %d", code)
 	}
 }
+
+func TestHooksRewriteIsOptInAndCodexGetsInputOnly(t *testing.T) {
+	// By default no PostToolUse output hook is installed.
+	h, _, home := mcpHarness(t)
+	if code := h.run("hooks", "install", "--yes"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	for _, c := range hookCommandsIn(t, hookClaudeSettings(home), "PostToolUse") {
+		if strings.Contains(c, "post_tool_output") {
+			t.Fatalf("output rewriting must be opt-in, found %q", c)
+		}
+	}
+
+	h, _, home = mcpHarness(t)
+	if code := h.run("hooks", "install", "--yes", "--rewrite"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	var found bool
+	for _, c := range hookCommandsIn(t, hookClaudeSettings(home), "PostToolUse") {
+		found = found || (strings.HasPrefix(c, "Bash|Grep|Glob|") && strings.Contains(c, "post_tool_output"))
+	}
+	if !found {
+		t.Fatalf("Claude PostToolUse = %v", hookCommandsIn(t, hookClaudeSettings(home), "PostToolUse"))
+	}
+	// Codex can rewrite a Bash command's input but not output (learn.chatgpt.com/docs/hooks).
+	for _, c := range hookCommandsIn(t, codexHooksFile(home), "PostToolUse") {
+		t.Fatalf("Codex must get no output hook, found %q", c)
+	}
+	if got := hookCommandsIn(t, codexHooksFile(home), "PreToolUse"); len(got) != 1 || !strings.Contains(got[0], "pre_tool_large_output") {
+		t.Fatalf("Codex PreToolUse = %v", got)
+	}
+}

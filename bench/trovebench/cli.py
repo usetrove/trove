@@ -39,6 +39,7 @@ def _common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--repeats", type=int, help="runs per task per condition (overrides config)")
     p.add_argument("--fake", action="store_true", help="use the fake agent and a mock upstream: no API key, no spend")
     p.add_argument("--dry-run", action="store_true", help="print the plan and cost estimate, then stop")
+    p.add_argument("--hook-capabilities", type=Path, help="hookprobe JSON from a live probe (go run ./scripts/hookprobe --live); required by the hooks and hooks_gateway conditions")
     p.add_argument("--json", action="store_true", help="print a machine-readable summary")
 
 
@@ -145,6 +146,7 @@ def _cmd_run(args, *, smoke: bool = False, plan_only: bool = False) -> int:
         agent=get_agent(cfg.agent), model=cfg.model, run_cap_usd=cfg.run_cap_usd, run_timeout_s=cfg.run_timeout_s,
         batch_dir=batch, tasks={t.id: t for t in tasks}, conditions={c.name: c for c in conds if c.measurable},
         table=table, claude_version=cfg.claude_version, fake=args.fake,
+        hook_capabilities=getattr(args, "hook_capabilities", None),
     )
     print("Preparing binaries and task images (the first build can take a while)...")
     runner.prepare(sorted({s.task_id for s in specs}))

@@ -15,6 +15,7 @@ from . import docker_env as de
 from .agent.base import Agent
 from .collect import build_record, read_gateway_db
 from .conditions import Condition, render_config_toml
+from .hooks_env import HooksSetupError, capabilities_for, check_snapshot, install_command
 from .manifest import Task
 from .plan import RunSpec
 from .pricing import PricingTable
@@ -47,6 +48,8 @@ class ContainerRunner:
     trove_bin: Path | None = None
     fake_bin: Path | None = None
     arch: str = ""
+    # JSON written by `go run ./scripts/hookprobe --live`; required by hooks conditions.
+    hook_capabilities: Path | None = None
 
     # --- batch setup ----------------------------------------------------------------
     def prepare(self, task_ids: list[str]) -> None:
@@ -153,6 +156,9 @@ class ContainerRunner:
         elif self.fake:
             agent_env.update(self.agent.base_url_env(f"http://{mock_addr}"))
 
+        if cond.uses_hooks:
+            self._setup_hooks(c, td, cond)
+
         timeout = min(task.timeout_s, self.run_timeout_s)
         t0 = time.monotonic()
         res = c.exec(self.agent.command(model=self.model, max_budget_usd=self.run_cap_usd, prompt_path="/bench/prompt.txt"),
@@ -175,6 +181,11 @@ class ContainerRunner:
                                                  encoding="utf-8", newline="\n")
             stats = read_gateway_db(run_dir / "trove-data" / "trove.db")
 
+        if cond.uses_hooks and not cond.uses_gateway:
+            # No gateway database here: cost comes from the agent's own output. Keep the
+            # hooks' counters and log next to the run for inspection.
+            c.get(TROVE_DATA, run_dir / "trove-data")
+
         parsed = self.agent.parse(res.out)
         rec = build_record(
             run_id=spec.run_id, task_id=spec.task_id, condition=spec.condition, seed=spec.seed,
@@ -184,6 +195,34 @@ class ContainerRunner:
         )
         (run_dir / "record.json").write_text(json.dumps(rec.as_row(), indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
         return rec
+
+    def _setup_hooks(self, c: de.Container, td: Path, cond: Condition) -> None:
+        """Install the rewriting hooks and prove they are on before the agent runs.
+
+        Hooks need three things the gateway does not: the hooks in the agent's settings,
+        a snapshot of the optimizer states, and a live probe result for this exact agent
+        version (otherwise they stay in shadow). Each is checked here.
+        """
+        if not cond.uses_gateway:
+            (td / "config.toml").write_text(render_config_toml(cond), encoding="utf-8", newline="\n")
+            c.put(self.trove_bin, "/usr/local/bin/trove")
+            c.exec(f"chmod +x /usr/local/bin/trove && mkdir -p {TROVE_DATA}", workdir="/")
+            c.put(td / "config.toml", f"{TROVE_DATA}/config.toml")
+        if self.fake:
+            return      # the fake agent runs no hooks, so there is nothing to install or prove
+        try:
+            ver = c.exec(self.agent.version_command(), workdir="/").out.strip().split()
+            caps = capabilities_for(self.hook_capabilities, ver[0] if ver else "")
+            (td / "capabilities.json").write_text(caps, encoding="utf-8", newline="\n")
+            c.exec(f"mkdir -p {TROVE_DATA}/hooks", workdir="/")
+            c.put(td / "capabilities.json", f"{TROVE_DATA}/hooks/capabilities.json")
+            r = c.exec(install_command(TROVE_DATA), workdir="/")
+            if r.rc != 0:
+                raise HooksSetupError(f"`trove hooks install --rewrite` failed in the container: {(r.out + r.err)[-300:]}")
+            snap = c.exec(f"cat {TROVE_DATA}/hooks/config.json", workdir="/").out
+            check_snapshot(snap, cond)
+        except HooksSetupError as e:
+            raise RunEnvError(str(e)) from e
 
     def _assert_configured(self, c: de.Container, cond: Condition) -> None:
         """Before spending anything, confirm the gateway read the condition's config as intended."""

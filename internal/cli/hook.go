@@ -14,6 +14,9 @@ import (
 // built, so a hook pays for as little start-up work as possible. args are the
 // arguments after "hook". The exit code is always 0 (see hooks.Main).
 func RunHook(args []string, stdin io.Reader, stdout io.Writer) int {
+	if runProbeHook(args, stdin, stdout) {
+		return 0
+	}
 	return hooks.Main(hooks.Env{Args: args, Stdin: stdin, Stdout: stdout, Getenv: os.Getenv, Notify: notifierSync()})
 }
 
@@ -31,6 +34,9 @@ func newHookCmd(a *App) *cobra.Command {
 			in := a.In
 			if in == nil {
 				in = strings.NewReader("")
+			}
+			if runProbeHook(args, in, a.Out) {
+				return nil
 			}
 			hooks.Main(hooks.Env{Args: args, Stdin: in, Stdout: a.Out, Getenv: a.Getenv})
 			return nil

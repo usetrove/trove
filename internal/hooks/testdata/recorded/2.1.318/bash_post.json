@@ -1,0 +1,25 @@
+{
+  "cwd": "{{PATH}}",
+  "duration_ms": 3414,
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "permission_mode": "default",
+  "prompt_id": "{{PROMPT}}",
+  "session_id": "{{SESSION}}",
+  "tool_input": {
+    "command": "echo TROVE_PROBE_IN_a7fc48",
+    "description": "Echo the probe string"
+  },
+  "tool_name": "Bash",
+  "tool_response": {
+    "interrupted": false,
+    "isImage": false,
+    "noOutputExpected": false,
+    "stderr": "\nShell cwd was reset to {{TMP}}\\project",
+    "stdout": "TROVE_PROBE_IN_a7fc48"
+  },
+  "tool_use_id": "{{TOOL_USE}}",
+  "transcript_path": "{{PATH}}"
+}

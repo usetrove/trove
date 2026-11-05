@@ -24,13 +24,31 @@ type Input struct {
 	Source    string `json:"source"`
 	// ToolResponse is the tool's output in PostToolUse events.
 	ToolResponse json.RawMessage `json:"tool_response"`
-	ToolInput    struct {
-		FilePath string  `json:"file_path"`
-		Offset   lenient `json:"offset"`
-		Limit    lenient `json:"limit"`
-		Pages    string  `json:"pages"`
-		Command  string  `json:"command"`
-	} `json:"tool_input"`
+	ToolInput    ToolInput       `json:"tool_input"`
+}
+
+// ToolInput is the tool's arguments. The named fields are the ones Trove reads.
+// Raw is the whole object byte for byte, because updatedInput replaces the entire
+// input and a rewrite must carry every other field over unchanged.
+type ToolInput struct {
+	FilePath string          `json:"file_path"`
+	Offset   lenient         `json:"offset"`
+	Limit    lenient         `json:"limit"`
+	Pages    string          `json:"pages"`
+	Command  string          `json:"command"`
+	Raw      json.RawMessage `json:"-"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (t *ToolInput) UnmarshalJSON(b []byte) error {
+	type plain ToolInput // no methods, so no recursion
+	var p plain
+	if err := json.Unmarshal(b, &p); err != nil {
+		return err
+	}
+	*t = ToolInput(p)
+	t.Raw = append(json.RawMessage(nil), b...)
+	return nil
 }
 
 // Prompt is the id that groups the tool calls of one user prompt.

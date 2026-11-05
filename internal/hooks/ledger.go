@@ -59,7 +59,11 @@ func (o op) line() []byte {
 		if b == "" {
 			b = "-"
 		}
-		return []byte(fmt.Sprintf("R %s %s %d %d %d %d %s", o.K, e.Sum, e.MTime, e.Size, e.Prompt, e.At, b))
+		sum := e.Sum
+		if sum == "" {
+			sum = "-" // entries that are not file reads (rewritten commands, trimmed outputs) have no content hash
+		}
+		return []byte(fmt.Sprintf("R %s %s %d %d %d %d %s", o.K, sum, e.MTime, e.Size, e.Prompt, e.At, b))
 	case "del":
 		return []byte("D " + o.K)
 	}
@@ -93,11 +97,14 @@ func parseOp(line []byte) (op, bool) {
 			if e1 != nil || e2 != nil || e3 != nil || e4 != nil {
 				return op{}, false
 			}
-			b := f[7]
+			b, sum := f[7], f[2]
 			if b == "-" {
 				b = ""
 			}
-			return op{T: "read", K: f[1], E: &readEntry{Sum: f[2], MTime: mt, Size: sz, Prompt: pr, At: at, BlockedSum: b}}, true
+			if sum == "-" {
+				sum = ""
+			}
+			return op{T: "read", K: f[1], E: &readEntry{Sum: sum, MTime: mt, Size: sz, Prompt: pr, At: at, BlockedSum: b}}, true
 		}
 	case "D":
 		if len(f) == 2 {

@@ -22,6 +22,20 @@ OPTIMIZERS = (
     "cache_breakpoints",
 )
 
+# Hook-side optimizers (internal/hooks). They run in the agent's own hooks, with
+# no gateway, so they work for subscription users. noise_normalizer and
+# output_trimmer also run there on tool output, but they are named above because
+# the gateway runs them too; for a hooks condition they are set in the same
+# [optimizers] table. output_trimmer needs the MCP server registered, which a
+# benchmark run does not do, so it stays out of the hooks conditions.
+HOOK_OPTIMIZERS = (
+    "hook_repeat_read",
+    "hook_read_limit",
+    "hook_quiet_commands",
+    "hook_large_output",
+)
+HOOKS_ON = ("hook_repeat_read", "hook_read_limit", "hook_quiet_commands", "noise_normalizer")
+
 # Optimizers that can be "on" for each agent. Everything else is reported as
 # "not measurable with this agent" rather than silently measured as a no-op.
 _CUSTOM_ONLY = {"volatile_prefix_mover", "cache_breakpoints"}
@@ -44,6 +58,8 @@ class Condition:
     uses_gateway: bool
     on: tuple[str, ...] = ()               # optimizers set to "on"
     unsupported_reason: str | None = None  # set when it cannot be measured with this agent
+    uses_hooks: bool = False               # `trove hooks install --rewrite` is run for the agent
+    hooks_on: tuple[str, ...] = ()         # hook-side optimizers set to "on"
 
     @property
     def measurable(self) -> bool:
@@ -52,6 +68,11 @@ class Condition:
     def effective_states(self) -> dict[str, str]:
         """Expected pinned state of every optimizer; the runner asserts the gateway agrees."""
         return {o: ("on" if o in self.on else "off") for o in OPTIMIZERS}
+
+    def hook_states(self) -> dict[str, str]:
+        """Expected state of every hook-side optimizer, for the runner to assert."""
+        names = HOOK_OPTIMIZERS + tuple(o for o in self.hooks_on if o not in HOOK_OPTIMIZERS)
+        return {o: ("on" if o in self.hooks_on else "off") for o in names}
 
 
 def parse_condition(spec: str, agent: str) -> Condition:
@@ -62,6 +83,11 @@ def parse_condition(spec: str, agent: str) -> Condition:
         return Condition("passthrough", uses_gateway=True)
     if spec == "all_safe":
         return Condition("all_safe", uses_gateway=True, on=supported)
+    if spec == "hooks":
+        # Hooks alone: no gateway, so the agent talks to the provider directly.
+        return Condition("hooks", uses_gateway=False, uses_hooks=True, hooks_on=HOOKS_ON)
+    if spec == "hooks_gateway":
+        return Condition("hooks_gateway", uses_gateway=True, on=supported, uses_hooks=True, hooks_on=HOOKS_ON)
     if spec.startswith("alone:"):
         name = spec.split(":", 1)[1]
         if name not in OPTIMIZERS:
@@ -74,7 +100,7 @@ def parse_condition(spec: str, agent: str) -> Condition:
             why = f"{name} only acts for custom agents, and {agent} is never a custom agent"
         return Condition(spec.replace(":", "_"), uses_gateway=True, unsupported_reason=why)
     raise ConditionError(
-        f"unknown condition '{spec}'. Use direct, passthrough, all_safe or alone:<optimizer>."
+        f"unknown condition '{spec}'. Use direct, passthrough, all_safe, hooks, hooks_gateway or alone:<optimizer>."
     )
 
 
@@ -93,8 +119,8 @@ def render_config_toml(cond: Condition, *, retention_days: int = 3650) -> str:
     on from the first request. Unlisted optimizers are off, but we list them all
     explicitly so the file documents the condition.
     """
-    if not cond.uses_gateway:
-        raise ConditionError(f"condition '{cond.name}' has no gateway, so it has no config.toml.")
+    if not cond.uses_gateway and not cond.uses_hooks:
+        raise ConditionError(f"condition '{cond.name}' has no gateway and no hooks, so it has no config.toml.")
     if not cond.measurable:
         raise ConditionError(f"condition '{cond.name}' cannot be run: {cond.unsupported_reason}.")
     lines = [
@@ -103,7 +129,10 @@ def render_config_toml(cond: Condition, *, retention_days: int = 3650) -> str:
         "",
         "[optimizers]",
     ]
-    for name, state in cond.effective_states().items():
+    states = dict(cond.effective_states())
+    if cond.uses_hooks:
+        states.update(cond.hook_states())
+    for name, state in states.items():
         lines.append(f'{name} = "{state}"')
     lines += [
         "",
