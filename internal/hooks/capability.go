@@ -85,7 +85,7 @@ func (c Capabilities) Supports(agent, tool, kind string) bool {
 		// Codex is not available to probe, and its documentation states Bash input
 		// rewriting (learn.chatgpt.com/docs/hooks, read 2026-11-04), so a docs
 		// result counts there for input only. Everything else needs a live probe.
-		if e.Method != "live" && !(e.Method == "docs" && agent == "codex" && kind == RewriteInput) {
+		if e.Method != "live" && (e.Method != "docs" || agent != "codex" || kind != RewriteInput) {
 			continue
 		}
 		switch kind {

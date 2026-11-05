@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/optimize"
@@ -67,6 +68,15 @@ func parseOut(t *testing.T, s string) hookOut {
 		t.Fatalf("not hook output: %q: %v", s, err)
 	}
 	return o
+}
+
+// hookLog is what the hooks wrote to hooks.log, for a failure message.
+func (r *rig) hookLog() string {
+	b, err := os.ReadFile(filepath.Join(r.dir, "hooks.log"))
+	if err != nil {
+		return "(no hooks.log: " + err.Error() + ")"
+	}
+	return string(b)
 }
 
 func (r *rig) kinds() []string {
@@ -236,6 +246,13 @@ func (r *rig) post(fixture, stdout string, interrupted bool) (string, int) {
 }
 
 func trimRig(t *testing.T, troveRun bool) *rig {
+	t.Helper()
+	// The tests run under -race on a loaded CI machine; what is under test is the
+	// rewrite, not how fast the machine is. The deadline itself is covered by
+	// TestHandlerTiming and TestFailOpen.
+	old := postDeadline
+	postDeadline = time.Minute
+	t.Cleanup(func() { postDeadline = old })
 	r := newRig(t, nil)
 	r.snapshot(Snapshot{States: map[string]string{rwTrim: "on", rwNoise: "on"}, TroveRun: troveRun})
 	r.allow(Capability{Tool: "Bash", OutputRewrite: CapYes}, Capability{Tool: "Grep", OutputRewrite: CapYes})
@@ -250,7 +267,7 @@ func TestNoisyBashOutputIsTrimmedRecoverablyAndFailuresSurvive(t *testing.T) {
 	full, failures := goTestOutput(400)
 	out, code := r.post("claude_post_bash.json", full, false)
 	if code != 0 || out == "" {
-		t.Fatalf("code %d output %q", code, out)
+		t.Fatalf("code %d output %q; the hook's own log says: %s", code, out, r.hookLog())
 	}
 	o := parseOut(t, out)
 	if o.H.Event != "PostToolUse" {

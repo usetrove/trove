@@ -44,7 +44,7 @@ func newHooksProbe(a *App) *cobra.Command {
 			"small model, capped by --max-usd) in a throwaway folder, with your own login, and records the result.\n" +
 			"Until a tool has passed, Trove's rewriting optimizers stay in shadow mode for it. Run it again after each agent update.",
 		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error { return runHooksProbe(a, cmd.Context(), fl) },
+		RunE: func(cmd *cobra.Command, _ []string) error { return runHooksProbe(cmd.Context(), a, fl) },
 	}
 	c.Flags().BoolVar(&fl.live, "live", false, "run real agent sessions (costs a few cents; needs --max-usd)")
 	c.Flags().Float64Var(&fl.maxUSD, "max-usd", 0, "spending cap in USD for a live run, split across tools")
@@ -55,7 +55,7 @@ func newHooksProbe(a *App) *cobra.Command {
 	return c
 }
 
-func runHooksProbe(a *App, ctx context.Context, fl hooksProbeFlags) error {
+func runHooksProbe(ctx context.Context, a *App, fl hooksProbeFlags) error {
 	dir, _, err := loadConfig(a)
 	if err != nil {
 		return err
@@ -138,7 +138,7 @@ func hookRewritesCheck(a *App, dir string, optimizerState func(string) string) c
 		if caps.Supports("claude", n.tool, n.kind) {
 			continue
 		}
-		blocked = append(blocked, fmt.Sprintf("%s (%s %s: %s)", n.opt, n.tool, n.kind, capReason(caps, n.tool, n.kind)))
+		blocked = append(blocked, fmt.Sprintf("%s (%s %s: %s)", n.opt, n.tool, n.kind, capReason(caps, n.tool)))
 	}
 	switch {
 	case active == 0:
@@ -159,7 +159,7 @@ func hookRewritesCheck(a *App, dir string, optimizerState func(string) string) c
 	return check{name, statusOK, d, ""}
 }
 
-func capReason(c hooks.Capabilities, tool, kind string) string {
+func capReason(c hooks.Capabilities, tool string) string {
 	e, ok := c.Find("claude", tool)
 	switch {
 	case !ok:

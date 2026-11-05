@@ -57,14 +57,17 @@ const (
 	// callDeadline is the safety net for the per-call hooks. They normally take a
 	// few milliseconds; past this the agent is let through.
 	callDeadline = 150 * time.Millisecond
-	// postDeadline is the safety net for post_tool_output. It is longer because
-	// shortening output writes the full text to the recovery store first; past it
-	// the original output goes through untouched.
-	postDeadline = 250 * time.Millisecond
 	// endDeadline fits inside the 3 s timeout the installer sets on SessionEnd
 	// (Claude Code's default budget is 1.5 s, Codex's 1 s with a 3 s maximum).
 	endDeadline = 2500 * time.Millisecond
 )
+
+// postDeadline is the safety net for post_tool_output. It is longer than
+// callDeadline because shortening output writes the full text to the recovery
+// store first; past it the original output goes through untouched. It is a
+// variable only so that tests, which run under a race detector and a loaded CI
+// machine, are not decided by the clock.
+var postDeadline = 250 * time.Millisecond
 
 // Env is everything Main needs from its surroundings, so tests can supply them.
 type Env struct {
