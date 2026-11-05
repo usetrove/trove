@@ -109,7 +109,7 @@ func BlockArm(seed int64, optimizer, stratum string, seq int) string {
 	block, pos := seq/blockSize, seq%blockSize
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(strconv.FormatInt(seed, 10) + "\x00" + optimizer + "\x00" + stratum + "\x00" + strconv.Itoa(block)))
-	r := rand.New(rand.NewSource(int64(h.Sum64()))) // #nosec G404 -- reproducible assignment, not security
+	r := rand.New(rand.NewSource(int64(h.Sum64()))) // #nosec G404 G115 -- reproducible assignment, not security; wrapping is intended
 	perm := []string{ArmOn, ArmOn, ArmOff, ArmOff}
 	r.Shuffle(len(perm), func(i, j int) { perm[i], perm[j] = perm[j], perm[i] })
 	return perm[pos]

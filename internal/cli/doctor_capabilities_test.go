@@ -19,7 +19,7 @@ func TestDoctorCapabilities(t *testing.T) {
 		VerifiedOn string         `json:"harness_facts_verified_on"`
 		Optimizers []optimize.Row `json:"optimizers"`
 	}
-	if err := json.Unmarshal([]byte(h.out.String()), &got); err != nil {
+	if err := json.Unmarshal(h.out.Bytes(), &got); err != nil {
 		t.Fatalf("not JSON: %v\n%s", err, h.out.String())
 	}
 	if got.VerifiedOn == "" || len(got.Optimizers) != len(optimize.Matrix()) {

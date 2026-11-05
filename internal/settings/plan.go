@@ -112,7 +112,7 @@ func defaultManagedCodex(os, codexDir string) string {
 	return "/etc/codex"
 }
 
-// ProfileFileName is the Codex profile file Trove writes for a task, and the
+// ProfileName is the Codex profile name Trove writes for a task, and the
 // name to pass to `codex --profile`.
 func ProfileName(task string) string { return "trove-" + task }
 

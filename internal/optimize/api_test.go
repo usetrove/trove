@@ -40,7 +40,7 @@ func stateOf(s string) Session {
 	return Session{Key: "s", State: func(string) string { return s }}
 }
 
-func shorten(o ToolOutput) (ToolOutput, Report) {
+func shorten(_ ToolOutput) (ToolOutput, Report) {
 	return ToolOutput{Parts: []Part{{Text: "short"}}}, Report{Name: "x"}
 }
 

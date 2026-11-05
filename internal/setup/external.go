@@ -16,7 +16,7 @@ func IsExternal(agent string) bool { return strings.HasPrefix(agent, ExternalPre
 // ExternalMarkers returns the comment lines that fence a tool's block in a
 // Markdown rules file. They are HTML comments so they do not reach the model
 // as visible text in rendered views, and are unique per tool.
-func ExternalMarkers(tool string) (open, close string) {
+func ExternalMarkers(tool string) (open, closeMark string) {
 	return "<!-- >>> trove external " + tool + " (managed by `trove external`; remove with `trove external remove " + tool + "`) -->",
 		"<!-- <<< trove external " + tool + " -->"
 }
@@ -37,11 +37,11 @@ func stripExternal(cur []byte, tool, openMarker string) ([]byte, bool) {
 		next, err := stripHookGroups(cur, strings.TrimPrefix(openMarker, hookValuePrefix))
 		return next, err == nil
 	}
-	open, close := ExternalMarkers(tool)
+	open, closeMark := ExternalMarkers(tool)
 	if openMarker == "" || openMarker != open {
 		return nil, false
 	}
-	next, err := stripBetween(cur, open, close)
+	next, err := stripBetween(cur, open, closeMark)
 	if err != nil {
 		return nil, false
 	}

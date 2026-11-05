@@ -168,8 +168,8 @@ func wireRules(e Env, m Manifest) ([]*setup.Edit, error) {
 	if errors.Is(err, os.ErrNotExist) {
 		old = nil
 	}
-	open, close := setup.ExternalMarkers(m.Name)
-	block := open + "\n" + strings.TrimRight(m.Rules, "\n") + "\n" + close + "\n"
+	open, closeMark := setup.ExternalMarkers(m.Name)
+	block := open + "\n" + strings.TrimRight(m.Rules, "\n") + "\n" + closeMark + "\n"
 	if strings.Contains(string(old), open) {
 		return []*setup.Edit{setup.NewExternalEdit(m.Name, path, block, "already present", open, old, old)}, nil
 	}

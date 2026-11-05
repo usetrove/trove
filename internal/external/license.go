@@ -6,6 +6,7 @@ import "strings"
 type LicenseClass string
 
 const (
+	// LicensePermissive allows commercial and company use (MIT, Apache-2.0, BSD).
 	LicensePermissive LicenseClass = "permissive"
 	LicenseCopyleft   LicenseClass = "copyleft"
 	// LicenseRestricted limits commercial or company use.

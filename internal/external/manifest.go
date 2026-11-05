@@ -23,6 +23,7 @@ var manifestFS embed.FS
 type ActsAs string
 
 const (
+	// ActsShellWrapper rewrites or wraps shell commands.
 	ActsShellWrapper ActsAs = "shell_wrapper"
 	ActsMCPServer    ActsAs = "mcp_server"
 	ActsHook         ActsAs = "hook"
@@ -34,6 +35,7 @@ const (
 type Category string
 
 const (
+	// CategoryShellCompressor tools shrink shell output; only one may be enabled.
 	CategoryShellCompressor Category = "shell_compressor"
 	CategoryCodeNav         Category = "code_nav"
 	CategoryBehaviorRules   Category = "behavior_rules"
@@ -172,7 +174,7 @@ func validName(s string) bool {
 		return false
 	}
 	for _, r := range s {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' && r != '_' {
 			return false
 		}
 	}

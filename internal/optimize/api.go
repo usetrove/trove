@@ -23,6 +23,7 @@ import (
 type Point string
 
 const (
+	// PointToolInput is before a tool runs, when its input can be rewritten.
 	PointToolInput  Point = "tool_input"
 	PointToolOutput Point = "tool_output"
 	PointRequest    Point = "request"
@@ -32,6 +33,7 @@ const (
 type Adapter string
 
 const (
+	// AdapterGateway is the local HTTP gateway for API-key traffic.
 	AdapterGateway Adapter = "gateway"
 	AdapterHooks   Adapter = "hooks"
 	AdapterPlugin  Adapter = "plugin"
@@ -44,6 +46,7 @@ var Adapters = []Adapter{AdapterGateway, AdapterHooks, AdapterPlugin}
 type Level string
 
 const (
+	// LevelSupported means the adapter runs the optimizer in full.
 	LevelSupported  Level = "supported"
 	LevelPartial    Level = "partial"
 	LevelImpossible Level = "impossible"
@@ -284,7 +287,7 @@ func failedReport(o Base, state, class string) Report {
 
 // guardTool runs fn behind a recover and the context's deadline. failed is ""
 // on success, else one of panic or timeout; a Report with Err set is "error".
-func guardTool[T any](ctx context.Context, name string, fn func() (T, Report)) (T, Report, string) {
+func guardTool[T any](ctx context.Context, _ string, fn func() (T, Report)) (T, Report, string) {
 	type outcome struct {
 		v      T
 		rep    Report

@@ -31,6 +31,7 @@ const (
 type Target string
 
 const (
+	// TargetSettingsJSON is a top-level key in Claude Code settings.json.
 	TargetSettingsJSON Target = "settings_json" // top-level key in Claude Code settings.json
 	TargetSettingsEnv  Target = "settings_env"  // key inside the "env" block of settings.json
 	TargetShellEnv     Target = "shell_env"     // only documented as a shell variable; Trove suggests, never writes
@@ -45,6 +46,7 @@ const (
 type Verified string
 
 const (
+	// VerifiedVerbatim: the key and values were read as raw page text.
 	VerifiedVerbatim  Verified = "verbatim"
 	VerifiedExtractor Verified = "extractor"
 )
@@ -53,6 +55,7 @@ const (
 type Risk string
 
 const (
+	// RiskNone: lowering the value cannot cost capability.
 	RiskNone             Risk = "none"
 	RiskChangesBehavior  Risk = "changes_behavior"
 	RiskLowersCapability Risk = "lowers_capability"
