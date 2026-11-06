@@ -187,3 +187,149 @@ func TestEnableShowsTheExamplePayloadAndAddressBeforeConsent(t *testing.T) {
 		}
 	}
 }
+
+// ---- trove contribute delete (CLAUDE.md rule 1, part c) ----
+
+type reqLog struct {
+	method, path, body string
+}
+
+// receiver is a stand-in for the summary receiver that records every request it gets.
+func receiver(t *testing.T, deleteStatus int) (h *harness, dir string, got *[]reqLog) {
+	t.Helper()
+	got = new([]reqLog)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		*got = append(*got, reqLog{r.Method, r.URL.Path, string(b)})
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(deleteStatus)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	h = newHarness(t, nil)
+	dir = h.app.Getenv("TROVE_DATA_DIR")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("[contribute]\nendpoint = \""+srv.URL+"/v1/contribute\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return h, dir, got
+}
+
+func deletes(got []reqLog) (n int) {
+	for _, r := range got {
+		if r.method == http.MethodDelete {
+			n++
+		}
+	}
+	return n
+}
+
+func installID(t *testing.T, dir string) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(dir, "contribute.json"))
+	if err != nil {
+		return ""
+	}
+	var st struct {
+		Enabled   bool   `json:"enabled"`
+		InstallID string `json:"install_id"`
+	}
+	_ = json.Unmarshal(b, &st)
+	return st.InstallID
+}
+
+func TestContributeDeleteWithNoInstallIDSendsNothing(t *testing.T) {
+	h, _, got := receiver(t, 204)
+	if code := h.run("contribute", "delete", "--yes"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	if len(*got) != 0 || !strings.Contains(h.out.String(), "Nothing to delete") {
+		t.Errorf("requests=%v out=%s", *got, h.out)
+	}
+}
+
+func TestContributeDeleteAsksFirstAndSendsNothingWithoutAYes(t *testing.T) {
+	h, dir, got := receiver(t, 204)
+	h.run("contribute", "enable", "--yes", "--no-history")
+	id := installID(t, dir)
+	h.reset()
+	// No terminal and no --yes: the request is shown, not sent.
+	if code := h.run("contribute", "delete"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	if !strings.Contains(h.out.String(), "DELETE ") || !strings.Contains(h.out.String(), "/v1/contribute/"+id) || !strings.Contains(h.out.String(), "Nothing was sent") {
+		t.Errorf("the request must be shown before anything is sent:\n%s", h.out)
+	}
+	if deletes(*got) != 0 || installID(t, dir) != id {
+		t.Errorf("a refused delete changed something: %v", *got)
+	}
+}
+
+func TestContributeDeleteSendsOneBareRequestThenTurnsSharingOffAndForgetsTheID(t *testing.T) {
+	h, dir, got := receiver(t, 204)
+	h.run("contribute", "enable", "--yes", "--no-history")
+	id := installID(t, dir)
+	h.reset()
+	if code := h.run("contribute", "delete", "--yes"); code != 0 {
+		t.Fatalf("exit %d: %s %s", code, h.out, h.err)
+	}
+	if !strings.Contains(h.out.String(), "Sharing is now off") {
+		t.Errorf("the result should say sharing is off, got: %s", h.out)
+	}
+	if deletes(*got) != 1 {
+		t.Fatalf("requests = %v, want exactly one DELETE", *got)
+	}
+	last := (*got)[len(*got)-1]
+	if last.method != http.MethodDelete || last.path != "/v1/contribute/"+id || last.body != "" {
+		t.Errorf("sent %+v", last)
+	}
+	if installID(t, dir) != "" {
+		t.Error("the local install id must be removed after the receiver accepted the request")
+	}
+	// Sharing is off for good: a report no longer uploads anything.
+	before := len(*got)
+	h.run("report", "--no-history")
+	if len(*got) != before {
+		t.Errorf("a report uploaded after the data was deleted: %v", (*got)[before:])
+	}
+}
+
+func TestContributeDeleteFailureChangesNothingSoItCanBeRetried(t *testing.T) {
+	h, dir, got := receiver(t, 500)
+	h.run("contribute", "enable", "--yes", "--no-history")
+	id := installID(t, dir)
+	h.reset()
+	if code := h.run("contribute", "delete", "--yes"); code == 0 {
+		t.Fatal("a refused request must be reported as a failure")
+	}
+	if deletes(*got) != 1 {
+		t.Errorf("requests = %v", *got)
+	}
+	if installID(t, dir) != id {
+		t.Error("the install id must survive a failed delete, or the user could never retry")
+	}
+	if !strings.Contains(h.err.String(), "HTTP 500") {
+		t.Errorf("stderr should say what happened: %q", h.err)
+	}
+}
+
+// The delete request has exactly one trigger. Every other command, including the ones that remove local data and
+// the ones that upload, must never send it.
+func TestNothingButContributeDeleteEverSendsADelete(t *testing.T) {
+	h, dir, got := receiver(t, 204)
+	h.run("contribute", "enable", "--yes", "--no-history")
+	for _, args := range [][]string{
+		{"report", "--no-history"}, {"contribute"}, {"contribute", "status"}, {"contribute", "disable"}, {"contribute", "reset"},
+		{"data", "export", "--out", filepath.Join(t.TempDir(), "x")}, {"data", "delete", "--yes"},
+		{"uninstall", "--yes", "--purge-data"}, {"doctor"},
+	} {
+		h.reset()
+		h.run(args...)
+		if deletes(*got) != 0 {
+			t.Fatalf("`trove %s` sent a DELETE: %v", strings.Join(args, " "), *got)
+		}
+	}
+	_ = dir
+}

@@ -56,7 +56,7 @@ func newContribute(a *App) *cobra.Command {
 	}
 	pf.add(c)
 	c.Flags().StringVar(&export, "export", "", "write the summary to this file so you can share it yourself")
-	c.AddCommand(newContributeEnable(a), newContributeDisable(a), newContributeReset(a), newContributeStatus(a))
+	c.AddCommand(newContributeEnable(a), newContributeDisable(a), newContributeDelete(a), newContributeReset(a), newContributeStatus(a))
 	return c
 }
 
@@ -159,17 +159,72 @@ func newContributeDisable(a *App) *cobra.Command {
 				return err
 			}
 			return a.emit(contributeStatus{Endpoint: cfg.Contribute.Endpoint, InstallID: st.InstallID, LastSent: st.LastSent},
-				"Sharing is off. Nothing more will be sent. Data already sent stays until you ask for it to be deleted (send your install id: `trove contribute status`).")
+				"Sharing is off. Nothing more will be sent. Data already sent stays until you ask for it to be deleted: run `trove contribute delete`.")
 		},
 	}
+}
+
+func newContributeDelete(a *App) *cobra.Command {
+	var yes bool
+	c := &cobra.Command{
+		Use:   "delete",
+		Short: "Ask the receiver to delete every summary it holds under your install id",
+		Long: "Sends one request, only when you run this command: DELETE to the sharing endpoint in config.toml followed by your install id.\n" +
+			"It has no body, no credentials and no cookies, and follows no redirects. Trove shows the exact request first and asks.\n" +
+			"If the receiver accepts it, sharing is switched off and your install id is removed from this computer. If it cannot be\n" +
+			"reached nothing changes, so you can try again. Nothing else ever triggers this request.",
+		Example: "  trove contribute delete\n  trove contribute delete --yes",
+		Args:    cobra.NoArgs,
+		RunE:    func(*cobra.Command, []string) error { return runContributeDelete(a, yes) },
+	}
+	c.Flags().BoolVar(&yes, "yes", false, "send the request without asking")
+	return c
+}
+
+func runContributeDelete(a *App, yes bool) error {
+	dir, cfg, err := loadConfig(a)
+	if err != nil {
+		return err
+	}
+	st, err := contribute.LoadState(dir)
+	if err != nil {
+		return err
+	}
+	if st.InstallID == "" {
+		return a.emit(contributeStatus{Endpoint: cfg.Contribute.Endpoint}, "Nothing to delete: this computer has no install id, so nothing was ever shared under one.")
+	}
+	url, err := contribute.DeleteURL(cfg.Contribute.Endpoint, st.InstallID)
+	if err != nil {
+		return err
+	}
+	if !yes {
+		if !a.JSON {
+			_, _ = fmt.Fprintf(a.Out, "This sends one request, and nothing else:\n  DELETE %s\nIt asks the receiver to delete every summary stored under your install id. It has no body, no credentials and no cookies.\n", url)
+		}
+		if !a.confirm("Send the request?") {
+			return a.emit(contributeStatus{Enabled: st.Enabled, InstallID: st.InstallID, Endpoint: cfg.Contribute.Endpoint}, "Nothing was sent. Run again and answer y, or pass --yes.")
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), contribute.Timeout)
+	defer cancel()
+	if err := contribute.Delete(ctx, cfg.Contribute.Endpoint, st.InstallID); err != nil {
+		return err
+	}
+	if err := contribute.SaveState(dir, contribute.State{}); err != nil {
+		return err
+	}
+	return a.emit(contributeStatus{Endpoint: cfg.Contribute.Endpoint},
+		"The receiver accepted the request to delete everything stored under your install id. Sharing is now off and the install id is removed from this computer.\n"+
+			"Trove cannot check the receiver's database from here. To share again later, run `trove contribute enable`, which makes a new id.")
 }
 
 func newContributeReset(a *App) *cobra.Command {
 	return &cobra.Command{
 		Use:   "reset",
 		Short: "Replace the install id with a new random one",
-		Long:  "Makes a new random install id, so later uploads are not tied to earlier ones. Rows already sent keep the old id.",
-		Args:  cobra.NoArgs,
+		Long: "Makes a new random install id, so later uploads are not tied to earlier ones. Rows already sent keep the old id, and once the old id is gone\n" +
+			"you can no longer ask for them to be deleted. Run `trove contribute delete` first if you want them removed.",
+		Args: cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
 			dir, cfg, err := loadConfig(a)
 			if err != nil {

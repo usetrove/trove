@@ -138,8 +138,8 @@ opt-in summary (it is sent to a service the project operates, with no advertisin
 - Nothing is sent unless the user turns it on after seeing the exact text and address; a damaged consent record means off.
 - The summary holds coarse figures, no content and no dates finer than "the length of the period".
 - The user can see (`trove contribute`), export (`trove data export`), delete locally (`trove data delete`), and request
-  deletion at the receiver by install id. Deletion at the receiver is a request the user makes; Trove makes no network
-  call for it.
+  deletion at the receiver by install id. Deletion at the receiver is `trove contribute delete`, which the user runs on purpose;
+  nothing else sends it (CLAUDE.md rule 1, part c).
 - A team edition, if built, must default to aggregated views with a minimum group size, never hold content, make
   individual views opt-in by the individual, tell every member what is shared before it is shared, and be added to
   CLAUDE.md as a new network rule first.

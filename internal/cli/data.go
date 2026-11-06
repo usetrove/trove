@@ -288,15 +288,16 @@ func newDataDelete(a *App) *cobra.Command {
 	return c
 }
 
-// deleteContributedHint is what a user does to remove a summary they shared. It
-// is printed, never executed: Trove makes no call that is not on its short list
-// (CLAUDE.md rule 1).
+// deleteContributedHint is what a user does to remove a summary they shared. `trove data delete` only prints it:
+// the one request that deletes contributed data is `trove contribute delete`, run by the user on purpose
+// (CLAUDE.md rule 1), never as a side effect of deleting local data.
 func deleteContributedHint(endpoint, installID string) string {
 	if installID == "" || endpoint == "" {
 		return ""
 	}
-	return fmt.Sprintf("You turned on sharing earlier. To ask the receiver to delete what it holds for this install, run:\n"+
-		"  curl -X DELETE %s/%s\nSave that install id first; this command deletes the local copy of it.", strings.TrimRight(endpoint, "/"), installID)
+	return fmt.Sprintf("You turned on sharing earlier. To ask the receiver to delete what it holds for this install, run `trove contribute delete`\n"+
+		"first: this command removes the local copy of your install id, and the request needs it. The same request by hand is:\n"+
+		"  curl -X DELETE %s/%s\nSave that install id before deleting.", strings.TrimRight(endpoint, "/"), installID)
 }
 
 func runDataDelete(a *App, yes, dry bool) error {

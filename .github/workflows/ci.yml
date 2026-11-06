@@ -63,8 +63,8 @@ jobs:
         run: go test -count=1 ./internal/redact ./internal/store ./internal/hooks ./internal/logs/... ./internal/features ./internal/tuning ./internal/recommend
       - name: Canary strings never reach the database, the data folder or anything shared
         run: go test -count=1 -v ./internal/privacy
-      - name: Opt-in sharing is off by default; data export and delete; uninstall purges the consent record
-        run: go test -count=1 -run 'Contribute|TestData|Uninstall|Purge' ./internal/cli ./internal/contribute
+      - name: Opt-in sharing is off by default; only `contribute delete` ever sends a delete; setup needs an API key; data export and delete
+        run: go test -count=1 -run 'Contribute|TestData|Uninstall|Purge|TestSetup|TestNothingBut' ./internal/cli ./internal/contribute
       - name: No Claude, Anthropic, Codex or OpenAI in our own names (rule 13)
         run: go test -count=1 ./internal/naming
 

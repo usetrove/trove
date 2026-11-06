@@ -500,9 +500,10 @@ one is added without review):
 
 No prompts, code, file paths, hashes, model names, dollar amounts or exact token counts. **Retention at the receiver** (per `server/worker/README.md`): it keeps one row per install id per day, keeps no IP address
 (the Worker discards it), applies a daily cap, and deletes rows after 365 days. You can ask it to delete
-yours: `curl -X DELETE <endpoint>/<install id>` (`trove data delete` prints the exact line before it
-removes your local id). Trove never makes that call for you: it is not one of Trove's allowed network
-calls.
+yours with `trove contribute delete`, which shows the exact request (`DELETE <endpoint>/<install id>`), asks, sends it, and
+then switches sharing off and removes your local id. It has no body, credentials or cookies and follows no redirects.
+It is the only thing that ever sends that request: nothing runs it automatically, and `trove data delete` only reminds
+you to run it first (CLAUDE.md rule 1, part c).
 
 ## Never stored or sent
 
@@ -544,4 +545,5 @@ Rules the design must keep:
 
 - The Windows data folder has no Trove-set permissions; it relies on your profile's.
 - `history_files` keeps a path hash and offsets until `trove data delete`, by design (see its retention).
-- Deleting data you contributed is a manual request to the receiver (above).
+- `trove contribute delete` asks the receiver to delete your rows but cannot check that it did; the receiver's own
+  documentation is the only statement of what it keeps.

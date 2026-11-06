@@ -18,6 +18,7 @@ Your prompts, code, file paths and tool output are not written to the database.
 |---|---|---|
 | Your agent's API request (including your API key, as your agent sent it) | The upstream in your config: `https://api.anthropic.com` and `https://api.openai.com` by default | Only while the gateway runs and your agent is pointed at it |
 | The anonymous summary shown by `trove contribute` (including a random install id) | `https://contribute.troverelay.com/v1/contribute` (the `[contribute] endpoint` in your config; you can change it) | Only after you run `trove contribute enable` and answer yes; at most once every 7 days, when you run `trove report` |
+| One request asking that same endpoint to delete what it holds under your install id (`DELETE <endpoint>/<install id>`, no body, credentials or cookies) | The same endpoint | Only when you run `trove contribute delete` |
 
 Nothing else. Specifically, Trove does not send crash reports, version checks, or pricing lookups, and sends no
 usage data unless you turned on the summary above.
@@ -137,7 +138,7 @@ and the UTC day it arrived (no time, no IP address, no headers), keeps its own r
 most 5,000 summaries a day, and deletes rows after 365 days. It runs on Cloudflare, which carries your connection
 and may keep its own operational records of it (such as your IP address) under its own policies; the project cannot
 see or delete those. If that matters to you, use `trove contribute --export` and send the file yourself. To have your rows
-deleted sooner, send `DELETE <endpoint>/<install id>` (the id is shown by `trove contribute status`).
+deleted sooner, run `trove contribute delete`: it shows the request (`DELETE <endpoint>/<install id>`), asks, sends it, then turns sharing off and removes your local id. Nothing else ever sends it.
 
 The summary holds: schema and Trove version, OS and architecture, the length of the period in days, a coarse
 request-count bucket (`0`, `1-19`, `20-99`, `100-999`, `1000+`), the agents seen from a fixed list (`claude-code`,
