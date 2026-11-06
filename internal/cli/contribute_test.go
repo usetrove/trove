@@ -162,3 +162,28 @@ func TestDefaultEndpointStillNeedsConsent(t *testing.T) {
 		t.Error("consent record written without a yes")
 	}
 }
+
+// Consent is informed: the exact payload and the address it goes to are printed before anything is recorded,
+// with or without --yes, and the printed example is the same text `trove contribute` shows.
+func TestEnableShowsTheExamplePayloadAndAddressBeforeConsent(t *testing.T) {
+	for _, args := range [][]string{{"contribute", "enable", "--no-history"}, {"contribute", "enable", "--yes", "--no-history"}} {
+		h, dir, hits, _ := contributeHarness(t)
+		cfgBytes, _ := os.ReadFile(filepath.Join(dir, "config.toml"))
+		endpoint := strings.Trim(strings.TrimSpace(strings.SplitN(string(cfgBytes), "endpoint = ", 2)[1]), `"`)
+		if code := h.run(args...); code != 0 {
+			t.Fatalf("%v: exit %d: %s", args, code, h.err)
+		}
+		out := h.out.String()
+		for _, want := range []string{endpoint, `"install_id"`, `"schema_version"`, `"requests_bucket"`, "at most once every 7 days"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("%v: the consent screen does not show %q:\n%s", args, want, out)
+			}
+		}
+		if i, j := strings.Index(out, `"install_id"`), strings.Index(out, "Nothing changed"); !strings.Contains(strings.Join(args, " "), "--yes") && (j < 0 || i > j) {
+			t.Errorf("%v: the payload must come before the outcome:\n%s", args, out)
+		}
+		if atomic.LoadInt32(hits) != 0 {
+			t.Errorf("%v: enabling must never upload", args)
+		}
+	}
+}

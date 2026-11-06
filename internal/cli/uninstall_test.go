@@ -194,3 +194,22 @@ func TestUninstallJSONAndNothingToDo(t *testing.T) {
 		t.Errorf("not JSON: %s", h.out)
 	}
 }
+
+// The consent record and its install id are Trove's data too: --purge-data must not leave them behind.
+func TestPurgeDataAlsoRemovesTheConsentRecord(t *testing.T) {
+	h, _, _, _ := installEverything(t)
+	dir, _ := h.app.ResolveDataDir()
+	for _, name := range []string{"contribute.json", "contribute.json.12345"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(`{"enabled":true,"install_id":"abc"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if code := h.run("uninstall", "--yes", "--purge-data"); code != 0 {
+		t.Fatalf("exit %d\nout: %s\nerr: %s", code, h.out, h.err)
+	}
+	for _, name := range []string{"contribute.json", "contribute.json.12345"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Errorf("%s survived --purge-data", name)
+		}
+	}
+}

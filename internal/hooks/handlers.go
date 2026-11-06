@@ -230,6 +230,9 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	if _, err := IngestSpool(ctx, db, dir); err != nil {
 		return fmt.Errorf("cannot ingest hook counts: %v", err)
 	}
+	// Retention must not depend on the gateway running: subscription users never start it. Once a day
+	// across all processes, best effort (an old row surviving a day is never worth failing a hook for).
+	_, _ = db.PurgeIfDue(ctx, cfg.RetentionDays, now)
 	if _, err := measure.EvaluateHooks(ctx, db, cfg.Measure, now); err != nil {
 		return fmt.Errorf("cannot check the hook guardrail: %v", err)
 	}

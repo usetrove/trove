@@ -92,6 +92,7 @@ func NewRoot(a *App) *cobra.Command {
 		newReconcile(a),
 		newFeedback(a),
 		newContribute(a),
+		newData(a),
 		newUninstall(a),
 	)
 	return root
