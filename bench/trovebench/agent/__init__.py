@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from .base import Agent
-from .claude_code import ClaudeCode
+from .cc import CcAgent
 from .fake import FakeAgent
 
 
 def get_agent(name: str) -> Agent:
     if name == "claude_code":
-        return ClaudeCode()
+        return CcAgent()
     if name == "fake":
         return FakeAgent()
     if name == "codex":

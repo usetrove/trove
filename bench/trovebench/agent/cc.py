@@ -15,7 +15,7 @@ from .base import AgentResult, parse_claude_style_result
 ALLOWED_TOOLS = "Bash,Read,Edit,Write"
 
 
-class ClaudeCode:
+class CcAgent:
     name = "claude_code"
 
     def install_lines(self, version: str | None) -> list[str]:

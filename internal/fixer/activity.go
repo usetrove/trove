@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/logs"
-	"github.com/usetrove/trove/internal/logs/claudecode"
-	"github.com/usetrove/trove/internal/logs/codex"
+	"github.com/usetrove/trove/internal/logs/cchistory"
+	"github.com/usetrove/trove/internal/logs/cxhistory"
 )
 
 // Activity says whether an agent session looks active right now.
@@ -48,8 +48,8 @@ func CheckActivity(ctx context.Context, e *Env) Activity {
 	}
 	home := func() (string, error) { return e.Home, nil }
 	srcs := []logs.Source{
-		&claudecode.Source{Getenv: e.Getenv, Home: home},
-		&codex.Source{Getenv: e.Getenv, Home: home},
+		&cchistory.Source{Getenv: e.Getenv, Home: home},
+		&cxhistory.Source{Getenv: e.Getenv, Home: home},
 	}
 	for _, s := range srcs {
 		files, _ := s.Discover(ctx, nil)

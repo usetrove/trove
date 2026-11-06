@@ -69,7 +69,7 @@ func newSandbox(t *testing.T, extraEnv ...string) *sandbox {
 	if err := os.MkdirAll(hist, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if b, err := os.ReadFile(filepath.Join(repoRoot(t), "internal", "logs", "claudecode", "testdata", "v2_basic.jsonl")); err == nil {
+	if b, err := os.ReadFile(filepath.Join(repoRoot(t), "internal", "logs", "cchistory", "testdata", "v2_basic.jsonl")); err == nil {
 		_ = os.WriteFile(filepath.Join(hist, "s.jsonl"), b, 0o644)
 	}
 	return s

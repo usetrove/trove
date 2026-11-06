@@ -1,4 +1,4 @@
-package codex
+package cxhistory
 
 import (
 	"context"

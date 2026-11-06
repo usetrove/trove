@@ -1,4 +1,4 @@
-// Package claudecode reads Claude Code session history.
+// Package cchistory reads Claude Code session history.
 //
 // Format (checked 2026-10-29 against the Claude Code docs and a local install
 // of v2.1.302; see docs/logs.md):
@@ -14,7 +14,7 @@
 //
 // Only counts, sizes, hashes and tool names are kept. Text is read in memory to
 // measure and hash it, then dropped.
-package claudecode
+package cchistory
 
 import (
 	"bufio"
