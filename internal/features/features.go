@@ -15,7 +15,6 @@
 package features
 
 import (
-	"hash/fnv"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -95,7 +94,6 @@ func ToolResult(path string, output []byte) Result {
 	}
 	seen := make(map[uint64]struct{}, 256)
 	var nonBlank, dups, frames, pass, fail int
-	h := fnv.New64a()
 	rest := string(output)
 	for rest != "" {
 		if r.Lines >= MaxScanLines {
@@ -115,18 +113,16 @@ func ToolResult(path string, output []byte) Result {
 			continue
 		}
 		nonBlank++
-		h.Reset()
-		_, _ = h.Write([]byte(trimmed))
-		sum := h.Sum64()
+		sum := fnv64(trimmed)
 		if _, ok := seen[sum]; ok {
 			dups++
 		} else {
 			seen[sum] = struct{}{}
 		}
 		switch {
-		case passRe.MatchString(line):
+		case isPass(line):
 			pass++
-		case optimize.IsFailureLine(line):
+		case isFailure(line):
 			r.HasError = true
 			if strings.Contains(line, "FAIL") || strings.Contains(line, "✗") || strings.Contains(line, "×") {
 				fail++
@@ -135,7 +131,7 @@ func ToolResult(path string, output []byte) Result {
 				r.HasStackTrace = true
 			}
 		}
-		if frameRe.MatchString(line) {
+		if isFrame(line) {
 			frames++
 		}
 	}
@@ -150,6 +146,67 @@ func ToolResult(path string, output []byte) Result {
 		r.PassShare = round2(float64(pass) / float64(pass+fail))
 	}
 	return r
+}
+
+// fnv64 is FNV-1a over s, without allocating.
+func fnv64(s string) uint64 {
+	h := uint64(14695981039346656037)
+	for i := 0; i < len(s); i++ {
+		h ^= uint64(s[i])
+		h *= 1099511628211
+	}
+	return h
+}
+
+// The three line classifiers below run a cheap substring test before the regex.
+// The regexes dominate the cost of extraction, and almost every line fails the
+// cheap test. The prefilters are supersets: a line the regex would match always
+// passes its prefilter, which TestPrefiltersAgreeWithTheRegexes checks against
+// the plain regexes on a large generated corpus.
+
+func nonASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			return true
+		}
+	}
+	return false
+}
+
+func isPass(l string) bool {
+	t := strings.TrimLeft(l, "\t\n\f\r ")
+	if t == "" {
+		return false
+	}
+	switch t[0] {
+	case '-', 'o', 'P', 't', 0xE2: // --- PASS, ok, PASS(ED), test ... ok, the check marks
+	default:
+		if !strings.Contains(l, ".py ") {
+			return false
+		}
+	}
+	return passRe.MatchString(l)
+}
+
+func isFailure(l string) bool {
+	if len(l) > 400 { // optimize.IsFailureLine ignores long lines
+		return false
+	}
+	if !(nonASCII(l) || strings.Contains(l, "FAIL") || strings.Contains(l, "ERR") || strings.Contains(l, "rror") ||
+		strings.Contains(l, "panic") || strings.Contains(l, "fatal") || strings.Contains(l, "Traceback") ||
+		strings.Contains(l, "xception") || strings.Contains(l, "E   ")) {
+		return false
+	}
+	return optimize.IsFailureLine(l)
+}
+
+func isFrame(l string) bool {
+	if !(strings.Contains(l, " at ") || strings.Contains(l, ".go:") || strings.Contains(l, "File \"") || strings.Contains(l, ".rs:") ||
+		strings.Contains(l, ".java:") || strings.Contains(l, ".kt:") || strings.Contains(l, ".py:") ||
+		strings.Contains(l, ".js:") || strings.Contains(l, ".ts:")) {
+		return false
+	}
+	return frameRe.MatchString(l)
 }
 
 func round2(f float64) float64 { return float64(int(f*100+0.5)) / 100 }

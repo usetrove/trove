@@ -141,8 +141,8 @@ func TestToolResultIsBoundedAndFast(t *testing.T) {
 	big := []byte(strings.Repeat("line of output that repeats\n", 200000)) // ~5.6 MB
 	start := time.Now()
 	r := ToolResult("", big)
-	if d := time.Since(start); d > 250*time.Millisecond {
-		t.Errorf("extraction took %v for %d bytes; the budget is 250ms at the scan limits", d, len(big))
+	if d := time.Since(start); d > 50*time.Millisecond {
+		t.Errorf("extraction took %v for %d bytes; the budget is 50ms at the scan limits (about 6ms when measured)", d, len(big))
 	}
 	if !r.Truncated || r.SizeBytes != len(big) || r.Lines > MaxScanLines {
 		t.Errorf("limits not applied: %+v", r)
@@ -150,7 +150,7 @@ func TestToolResultIsBoundedAndFast(t *testing.T) {
 	typical := []byte(strings.Repeat("ok  \tpkg/x\t0.123s\n", 400))
 	start = time.Now()
 	ToolResult("", typical)
-	if d := time.Since(start); d > 20*time.Millisecond {
+	if d := time.Since(start); d > 10*time.Millisecond {
 		t.Errorf("a typical output took %v", d)
 	}
 }
