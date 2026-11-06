@@ -135,7 +135,8 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 			schemaTokens = sz.EstimatedTokens
 		}
 	}
-	r, err := report.Build(context.Background(), db, report.Inputs{Config: cfg, Now: now, Prices: tbl, KillSwitch: on, HistoryPlanEvidence: planEvidence, Recoverable: registered, SchemaTokens: schemaTokens}, p)
+	r, err := report.Build(context.Background(), db, report.Inputs{Config: cfg, Now: now, Prices: tbl, KillSwitch: on, HistoryPlanEvidence: planEvidence, Recoverable: registered, SchemaTokens: schemaTokens,
+		RepoKey: repoKeyFor(context.Background(), db, "")}, p)
 	if err != nil {
 		return r, fmt.Errorf("cannot read recorded usage: %v. Run `trove doctor` for details", err)
 	}

@@ -212,6 +212,12 @@ func statusLineCommand(a *App, dir string) (string, error) {
 // applies only with its own consent: the --status-line flag, or a yes at the
 // prompt. --yes alone does not agree to it. It returns text for the summary.
 func statusLineStep(a *App, rep *setupReport, dir, claudeDir string, flag bool) (string, error) {
+	return statusLineStepRetry(a, rep, dir, claudeDir, flag, "trove setup --status-line")
+}
+
+// statusLineStepRetry is statusLineStep with the command named in the "add it
+// later" hint, so the plugin's command does not point at the gateway setup.
+func statusLineStepRetry(a *App, rep *setupReport, dir, claudeDir string, flag bool, retry string) (string, error) {
 	if claudeDir == "" {
 		return "", nil
 	}
@@ -242,7 +248,7 @@ func statusLineStep(a *App, rep *setupReport, dir, claudeDir string, flag bool) 
 		consent = a.confirm("Add Trove to Claude Code's status line? Your settings file is backed up first and `trove undo` removes it.")
 	}
 	if !consent {
-		return "Status line not added. Add it later with `trove setup --status-line`.\n\n", nil
+		return "Status line not added. Add it later with `" + retry + "`.\n\n", nil
 	}
 	if err := ensureConfigFile(dir); err != nil {
 		return "", err

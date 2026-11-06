@@ -150,7 +150,13 @@ func TestSchemaIsMetadataOnly(t *testing.T) {
 		"experiment_assignments": {"session_key", "optimizer", "arm", "stratum", "seq", "assigned_at"},
 		"experiment_results": {"id", "optimizer", "computed_at", "metric", "value", "low", "high", "confidence",
 			"n_on", "n_off", "label", "status", "inputs_hash"},
-		"hook_events":       {"id", "ts", "session_key", "hook", "kind", "bytes", "tokens"},
+		"hook_events": {"id", "ts", "session_key", "hook", "kind", "bytes", "tokens"},
+		"adapter_events": {"id", "ts", "session_key", "harness", "login", "provider", "model", "kind", "optimizer", "state",
+			"bytes", "tokens", "overhead_tokens", "in_tokens", "out_tokens", "cache_read_tokens", "cache_write_tokens", "cost_usd", "detail"},
+		"repo_features": {"repo_key", "computed_at", "size_bucket", "lang_mix", "test_framework"},
+		"session_features": {"session_key", "repo_key", "recorded_at", "files_read", "files_edited", "repeat_reads",
+			"scout_calls", "compactions", "retries", "tool_results", "large_results", "avg_dup_ratio", "error_share", "stack_share"},
+		"repo_tuning":       {"repo_key", "optimizer", "param", "value", "state", "tuned_at", "source", "before_rate", "n_before"},
 		"schema_migrations": {"version", "applied_at"},
 	}
 	// Every table must be listed above. A new table is a privacy decision: list its

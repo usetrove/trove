@@ -19,6 +19,7 @@ type Input struct {
 	PromptID  string `json:"prompt_id"` // Claude Code
 	TurnID    string `json:"turn_id"`   // Codex
 	Event     string `json:"hook_event_name"`
+	Cwd       string `json:"cwd"` // a common input field (code.claude.com/docs/en/hooks, checked 2026-11-05); only hashed, never stored
 	ToolName  string `json:"tool_name"`
 	Reason    string `json:"reason"`
 	Source    string `json:"source"`

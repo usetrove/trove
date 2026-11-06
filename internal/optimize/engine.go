@@ -310,7 +310,13 @@ func guard(ctx context.Context, o Optimizer, r *Request, s Session) (*Request, R
 			done <- outcome{req: r}
 			return
 		}
-		out, rep := o.Transform(ctx, r)
+		var out *Request
+		var rep Report
+		if st, ok := o.(SessionTransformer); ok {
+			out, rep = st.TransformSession(ctx, r, s)
+		} else {
+			out, rep = o.Transform(ctx, r)
+		}
 		switch {
 		case out == nil:
 			done <- outcome{fail: &Failure{Optimizer: o.Name(), Class: "error"}}

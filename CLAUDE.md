@@ -18,6 +18,18 @@ You are helping build Trove, "the efficiency layer for AI coding agents."
 7. Metadata only. Prompt text, code, file paths and tool output may be processed in memory but are never written to the database. Store token counts, sizes, hashes, model names, timings and outcome signals. The only exception is the opt-in local recovery store for trimmed output (Phase B): local, size-capped, auto-expiring, permissions 0600.
 8. Verify, don't assume. For any provider API detail (endpoints, streaming event formats, usage fields, caching rules, limits, pricing) or agent behavior (config locations, custom-endpoint settings, hooks, MCP registration, log formats), check current official documentation. Tell the user what you verified, where, and when. Never rely on memory for these.
 9. Accuracy over features. A wrong number shown to a user is worse than no number.
+10. Reject every Claude.ai subscription login in the gateway, including Team and Enterprise. Never collect, store or forward Claude.ai credentials or session tokens.
+11. Never scrape Anthropic or other provider web pages (for example usage meters). Never decompile or reverse engineer an agent; use documented extension points and logs.
+12. Never train any model on model output content (generated code or text), including in the benchmark lab. Train only on metadata, derived features and outcomes.
+13. Naming: no "Claude", "Anthropic", "Codex" or "OpenAI" in any product, plugin, feature, package or command name. Plain-text "works with Claude Code" is fine.
+14. Never pay for, resell or intermediate model usage. Users always bring their own keys or subscriptions.
+15. Every optimizer declares its own token overhead (tool definitions, injected text) and is charged for it.
+
+## Updated direction (supersedes the phase order above)
+- Most users are on subscriptions (Claude Free/Pro/Max, Team and Enterprise seats). The Claude Code plugin (hooks, MCP tools, subagents, commands, settings) is Trove's main reach and ships in v1 alongside the gateway. See docs/plugin.md.
+- The gateway is the deeper option for API-key traffic, including Max/Ultra/Team monthly API credits used for automated work (claude -p, Agent SDK).
+- One optimizer engine, many adapters: gateway, Claude Code hooks, OpenCode plugin, settings writer. Adapters hold no optimization logic. Keep features identical across adapters wherever the harness allows.
+- Honest measurement is the product. Judge every optimization against the actual bill and task outcomes using session-level A/B comparisons, never against a hypothetical raw-output baseline.
 
 ## Engineering standards
 - Go (current stable), pure-Go dependencies (no cgo), one static binary. macOS and Linux first; Windows later.
@@ -31,4 +43,4 @@ You are helping build Trove, "the efficiency layer for AI coding agents."
 - At the end: what changed, how to test it, known gaps, and what to verify next.
 
 ## Layout
-cmd/trove (entry), internal/{cli,config,store,redact} implemented in the foundation; pricing, gateway, analyze, optimize, measure, report, logs (history parsers and audit, see docs/logs.md), fixer and mcp (see docs/mcp.md; also recovery) are implemented; hooks (see docs/hooks.md) is implemented; bench/ (Python, later).
+cmd/trove (entry), internal/{cli,config,store,redact} implemented in the foundation; pricing, gateway, analyze, optimize, measure, report, logs (history parsers and audit, see docs/logs.md), fixer and mcp (see docs/mcp.md; also recovery) are implemented; hooks (see docs/hooks.md) is implemented; features (derived, content-free numbers; see docs/features.md), recommend (local rules recommender plus bundled defaults, see docs/recommend.md) and tuning (per-repo optimizer parameters) are implemented; bench/ (Python, later).

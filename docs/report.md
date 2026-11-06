@@ -36,7 +36,11 @@ Sections, in order:
    During the baseline nothing is offered, and the report says so.
 4. **Optimizers.** State, estimated savings (or what shadow mode would have saved), the measured
    comparison, rollbacks and guardrail events, and baseline progress.
-5. **Recommendations.** Suggestions Trove never applies, each with a confidence.
+5. **Recommendations.** Suggestions Trove never applies, each with a confidence. Usage-based ones carry an
+   estimated saving or a scenario. Ones from the local recommender ([recommend.md](recommend.md)) carry a reason,
+   what they rest on (your own data, a benchmark run, or a rule of thumb) and a measured/estimated label, and show
+   no dollar figure. The recommender is steered by the folder you run `trove report` in; it is best effort and a
+   failure there never fails the report.
 
 Empty states: no database yet, or no data in the period, prints what to do next
 (`trove setup`, `trove gateway`) and no zeros. Under 20 requests the report says its numbers

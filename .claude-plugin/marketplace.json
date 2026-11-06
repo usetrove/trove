@@ -1,0 +1,20 @@
+{
+  "description": "Trove's plugin for Claude Code.",
+  "name": "trove",
+  "owner": {
+    "name": "Trove"
+  },
+  "plugins": [
+    {
+      "category": "productivity",
+      "description": "Cuts the tokens your coding agent wastes and shows that results did not suffer. Works with Claude Code on any login, local only, and starts in shadow mode.",
+      "name": "trove",
+      "source": "./plugin/trove",
+      "tags": [
+        "tokens",
+        "cost",
+        "local-first"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+Trove report: this month (since Oct 1)
+
+Headline
+  Spend        ~$73.50 (estimated at list prices, not an invoice); 1.6M tokens
+               (measured)
+  Waste found  at least ~$5.85, 8% of spend (estimated; overlapping findings
+               counted once)
+  Savings      ~$0.50 so far (estimated)
+  Measured     not enough data yet to compare sessions with and without an
+               optimizer. The dollar savings above are estimates.
+  Budget       ~$73.50 of $1,000 used (7%, estimated), 92% of the month gone.
+               Under pace.
+
+Spend by agent and model
+  Agent        Requests  Tokens (measured)  Cost (estimated)
+  claude_code        20                 1M           ~$50.00
+  codex_cli          10               520K           ~$23.50
+
+  Model     Requests  Tokens (measured)  Cost (estimated)
+  claude-a        10               520K           ~$25.00
+  claude-b        10               520K           ~$25.00
+  gpt-x           10               520K           ~$23.50
+
+Biggest leaks (estimated, overlapping, not additive)
+  1. Repeated tool results: ~$4.50 (estimated), 60K tokens (estimated)
+     Do this: duplicate_result_collapser = "on"
+     Add this line under [optimizers] in config.toml. It applies from your next
+     session.
+  2. Noisy tool output: ~$3.00 (estimated), 90K tokens (estimated)
+     Do this: trove optimize status
+     noise_normalizer is on. See what it saved under Optimizers.
+  3. Prompt cache misses: ~$1.35 (estimated), 27K tokens (estimated)
+     Cache misses happen when the start of a request changes between turns.
+     Avoid editing early context mid-session.
+
+Optimizers
+  volatile_prefix_mover: off
+  noise_normalizer: on
+    Saved ~$0.50 (estimated).
+  output_trimmer: off
+  duplicate_result_collapser: off
+    Would have saved ~$3.60 (estimated, shadow mode).
+    To turn on, add under [optimizers] in config.toml:
+    duplicate_result_collapser = "on"
+  cache_breakpoints: off
+  Guardrail events: none.
+  No regression detected locally. Trove checks retries, tool errors and
+  re-fetches; it does not prove output quality.
+
+Recommendations (suggestions only; Trove changes nothing on its own)
+  1. Try hook_large_output in shadow mode (confidence: low)
+     Tool results in this repo average 4.0 large outputs per session over 6
+     sessions, and a go_test test setup was detected. The large-output hint
+     suggests the trove_run tool for noisy commands; in shadow mode it only
+     counts.
+     A rule of thumb with no benchmark or measurement behind it yet (defaults
+     seed-1; estimated). No savings figure.
+  2. Try hook_quiet_commands in shadow mode (confidence: low)
+     A go_test test setup was detected and tool results here average 4.0 large
+     outputs per session. Quiet flags on test commands in shadow mode estimate
+     the saving.
+     A rule of thumb with no benchmark or measurement behind it yet (defaults
+     seed-1; estimated). No savings figure.
+  3. Try hook_read_limit in shadow mode (confidence: low)
+     This repo is in size bucket L and sessions read about 30 files each. Line
+     limits on big reads in shadow mode estimate what they would save.
+     A rule of thumb with no benchmark or measurement behind it yet (defaults
+     seed-1; estimated). No savings figure.
+  4. Try hook_repeat_read in shadow mode (confidence: low)
+     Sessions here re-read a file already read about 3.0 times each (over 6
+     sessions). Repeat-read prevention in shadow mode counts how many reads it
+     would have avoided.
+     A rule of thumb with no benchmark or measurement behind it yet (defaults
+     seed-1; estimated). No savings figure.
+  5. Try output_trimmer in shadow mode (confidence: low)
+     Over your last 6 sessions in this repo, tool results averaged 4.0 per
+     session over 6,000 bytes. The output trimmer keeps failures and a summary
+     and shortens the rest; in shadow mode it only estimates what it would
+     remove.
+     A rule of thumb with no benchmark or measurement behind it yet (defaults
+     seed-1; estimated). No savings figure.
+  6. Use the quick-fix settings profile (confidence: low)
+     You said the task is quick-fix. Trove has a settings profile for it (`trove
+     settings`). It has no benchmark behind it yet, so values without evidence
+     are left out unless you allow them.
+     A rule of thumb with no benchmark or measurement behind it yet (defaults
+     seed-1; estimated). No savings figure.

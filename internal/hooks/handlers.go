@@ -6,15 +6,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/external"
+	"github.com/usetrove/trove/internal/features"
 	"github.com/usetrove/trove/internal/mcp/install"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/store"
+	"github.com/usetrove/trove/internal/tuning"
 )
 
 // session loads the session's state and counts the prompt.
@@ -47,6 +50,7 @@ func (h *handler) postRead(in Input, key string) error {
 	if in.ToolName != "Read" {
 		return nil
 	}
+	h.featRead(in, key)
 	st := h.session(key, in)
 	_, reps := h.engine().TransformToolOutput(context.Background(), toolCall(in), ToolOutputOf(in), h.sess(key, st, in.ToolName))
 	return failure(reps)
@@ -58,10 +62,21 @@ func (h *handler) postRead(in Input, key string) error {
 // no longer in the agent's context, so the ledger is cleared: a block then would
 // leave the agent without the file.
 func (h *handler) reset(in Input, key string) error {
+	if in.Event == "PreCompact" || in.Event == "PostCompact" {
+		h.feat(key, "X")
+	}
 	st := loadSession(h.dir, key)
 	if len(st.Pins) == 0 {
 		for _, n := range OptimizerNames {
 			st.do(op{T: "pin", N: n, V: h.snap.Pin(n)})
+		}
+		// Tuned values are pinned with the states, so they cannot change mid-session
+		// (rule 5). The repo is the hash of the working directory; none is pinned
+		// when the directory is unknown or the repo has no applied tuning.
+		if in.Cwd != "" && h.snap.RepoSalt != "" {
+			for k, v := range h.snap.Tuning[features.RepoKey(in.Cwd, h.snap.RepoSalt)] {
+				st.do(op{T: "pin", N: tunePinPrefix + k, V: strconv.Itoa(v)})
+			}
 		}
 	}
 	if in.Event == "PreCompact" || in.Event == "PostCompact" || (in.Event == "SessionStart" && in.Source != "" && in.Source != "startup") {
@@ -94,6 +109,7 @@ func (h *handler) postOutput(in Input, key string) ([]byte, error) {
 	if !ok || interrupted(in.ToolResponse) {
 		return nil, nil
 	}
+	h.featResults(in, key, texts)
 	st := h.session(key, in)
 	// The trimmer needs the recovery store, and the store is only useful when the
 	// agent can fetch the text back, so ask for it only then.
@@ -175,8 +191,9 @@ func (h *handler) postFetch(in Input, key string) error {
 // sessionEnd is session_end_receipt: it moves the hook counters into the
 // database, runs the hook guardrail, writes this session's receipt, refreshes
 // the snapshot the other hooks read, and forgets the session's ledger.
-func (h *handler) sessionEnd(_ Input, key string) error {
+func (h *handler) sessionEnd(in Input, key string) error {
 	defer func() { _ = os.Remove(sessionPath(h.dir, key)) }()
+	defer func() { _ = os.Remove(featPath(h.dir, key)) }()
 	h.sweepOldSessions()
 	ctx, cancel := context.WithTimeout(context.Background(), endDeadline-250*time.Millisecond)
 	defer cancel()
@@ -199,6 +216,10 @@ func (h *handler) sessionEnd(_ Input, key string) error {
 	if cfg.Notifications.Desktop && h.notify != nil && len(recs) > 0 {
 		h.notify(recs[len(recs)-1])
 	}
+	// Last, and best effort: the receipt is already written.
+	if err := h.flushFeatures(ctx, db, in, key); err != nil {
+		return fmt.Errorf("cannot write the session features: %v", err)
+	}
 	return nil
 }
 
@@ -219,7 +240,17 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	if err != nil {
 		return fmt.Errorf("cannot read guardrail rollbacks: %v", err)
 	}
-	return WriteSnapshot(dir, BuildSnapshot(cfg, rolled, install.Registered(dir), now))
+	// Revert tuning that did not help before the snapshot is written, so the next
+	// session already starts with the defaults. Best effort: tuning must never stop
+	// the rest of the bookkeeping.
+	_, _ = tuning.Review(ctx, db, cfg.Measure, now)
+	snap := BuildSnapshot(cfg, rolled, install.Registered(dir), now)
+	if applied, err := tuning.Applied(ctx, db); err == nil && len(applied) > 0 {
+		if salt, err := db.Features().Salt(ctx); err == nil {
+			snap.RepoSalt, snap.Tuning = salt, applied
+		}
+	}
+	return WriteSnapshot(dir, snap)
 }
 
 // sweepOldSessions removes session files nobody has touched for a week (a

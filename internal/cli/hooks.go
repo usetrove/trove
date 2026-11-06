@@ -102,6 +102,7 @@ func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.H
 	s := []setup.HookSpec{
 		{Event: "PreToolUse", Matcher: "Read", Command: build(hooks.EventPreRead), Timeout: 5},
 		{Event: "PostToolUse", Matcher: "Read", Command: build(hooks.EventPostRead), Timeout: 5},
+		{Event: "PostToolUse", Matcher: "Edit|Write|MultiEdit|NotebookEdit", Command: build(hooks.EventPostEdit), Timeout: 5},
 		{Event: "SessionStart", Command: build(hooks.EventReset), Timeout: 5},
 		{Event: "PreCompact", Command: build(hooks.EventReset), Timeout: 5},
 		{Event: "SessionEnd", Command: build(hooks.EventSessionEnd), Timeout: 3},
@@ -172,6 +173,10 @@ func planHooksInstall(a *App, dir, home string, fl hooksInstallFlags) ([]hooksPl
 			p.Hooks = hookNames(specs)
 			e, err = setup.PlanCodexHooks(cfgDir, specs, base)
 		default:
+			if pluginHooksActive(cfgDir, fl) {
+				p.Problem = "the Trove plugin is enabled and already registers these hooks, so adding them to settings as well would run each one twice. Use the plugin's hooks, or disable the plugin first."
+				break
+			}
 			base, build, cerr := hookCommands(a, dir, "")
 			if cerr != nil {
 				p.Problem = cerr.Error()

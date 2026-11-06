@@ -1,0 +1,16 @@
+{
+  "author": {
+    "name": "Trove"
+  },
+  "description": "Cuts the tokens your coding agent wastes and shows that results did not suffer. Works with Claude Code on any login, local only, and starts in shadow mode.",
+  "homepage": "https://github.com/usetrove/trove",
+  "keywords": [
+    "tokens",
+    "cost",
+    "efficiency",
+    "local-first"
+  ],
+  "license": "Apache-2.0",
+  "name": "trove",
+  "repository": "https://github.com/usetrove/trove"
+}

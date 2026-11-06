@@ -13,6 +13,8 @@ Preparing 0.1.0, the first public release. See [docs/release-checklist.md](docs/
 - `scripts/pricingage --strict --max-age-days N`: release gate for price freshness.
 - `scripts/checkclaims`: fails if a launch draft states a figure without a measured or estimated slot that cites a real source file.
 - README rewrite and new docs: measurement method, supported agents, beta checklist, install verification, release checklist, launch drafts.
+- Claude Code plugin (`plugin/trove`, marketplace in `.claude-plugin`): hooks, `/trove:report`, `/trove:status`, `/trove:setup`, `/trove:uninstall`, a first-run report, and a capability check after Claude Code updates. Works with every login type; nothing is enabled without approval. New `trove plugin start|status|status-line`. `trove hooks install` refuses to double-register when the plugin is enabled. See [docs/plugin.md](docs/plugin.md). No `/trove:handoff` yet.
+- OpenCode plugin (`plugins/opencode`, TypeScript; not published): runs the optimizer engine inside OpenCode through `trove engine serve`, for both plugin APIs OpenCode ships (1.x and 2.x). Works with an API key or a GitHub Copilot login; ChatGPT and other subscription logins are shadow-only. Request-level transforms on 2.x for Anthropic bodies; tool-level on both. Engine protocol gains `hello` (version handshake), `session`, `observe`, a harness and login label, what-the-harness-cannot-do, and recording into the new `adapter_events` table; `trove report` shows a Harness plugins section. See [docs/opencode.md](docs/opencode.md). Not yet run on a real OpenCode.
 
 ## [0.1.0] - not yet released
 

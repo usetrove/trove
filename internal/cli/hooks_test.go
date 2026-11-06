@@ -101,8 +101,8 @@ func TestHooksInstallAndUninstallKeepUserHooks(t *testing.T) {
 	if len(end) != 2 || end[0] != "|/home/me/bye.sh" || !strings.Contains(end[1], "hook session_end_receipt") {
 		t.Fatalf("SessionEnd = %v", end)
 	}
-	for _, ev := range []string{"PostToolUse", "SessionStart", "PreCompact"} {
-		if got := hookCommandsIn(t, hookClaudeSettings(home), ev); len(got) != 1 {
+	for ev, n := range map[string]int{"PostToolUse": 2, "SessionStart": 1, "PreCompact": 1} { // PostToolUse: read and edit records
+		if got := hookCommandsIn(t, hookClaudeSettings(home), ev); len(got) != n {
 			t.Errorf("%s = %v", ev, got)
 		}
 	}

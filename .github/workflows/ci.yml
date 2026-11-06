@@ -60,13 +60,36 @@ jobs:
       - name: No credential or prompt text in logs, responses or on disk
         run: go test -count=1 -v -run 'TestNoCredentialOrPromptReachesLogsResponsesOrDisk|TestNonAPIKeyAuthIsRejected' ./internal/gateway
       - name: Redaction and metadata-only schema
-        run: go test -count=1 ./internal/redact ./internal/store ./internal/hooks ./internal/logs/...
+        run: go test -count=1 ./internal/redact ./internal/store ./internal/hooks ./internal/logs/... ./internal/features ./internal/tuning ./internal/recommend
 
   npm-wrapper:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: node --test "npm/test/*.test.js"
+
+  # The OpenCode plugin: strict typecheck, then its tests against a real `trove engine serve`
+  # built from this checkout. Serial: each test file builds or starts the program.
+  opencode-plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - name: Build trove for the plugin tests
+        run: go build -o "$RUNNER_TEMP/trove" ./cmd/trove
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.18.0 # the tests run TypeScript directly and use node:sqlite
+      - run: npm ci
+        working-directory: plugins/opencode
+      - run: npx tsc --noEmit
+        working-directory: plugins/opencode
+      - run: npm test
+        working-directory: plugins/opencode
+        env:
+          TROVE_BIN: ${{ runner.temp }}/trove
 
   # The optional summary receiver (server/worker). It also reads a Go golden file, so
   # a payload change that its validator would reject fails here.
@@ -92,7 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - run: shellcheck install.sh
+      - run: shellcheck install.sh plugin/trove/bin/trove
       - run: sh install_test.sh
 
   vulncheck:

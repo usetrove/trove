@@ -273,6 +273,9 @@ func (d *DB) Purge(ctx context.Context, days int, now time.Time) (int64, error) 
 	if _, err := tx.ExecContext(ctx, `DELETE FROM experiment_assignments WHERE assigned_at < ?`, cutoff); err != nil {
 		return 0, err
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM session_features WHERE recorded_at < ?`, cutoff); err != nil {
+		return 0, err
+	}
 	return n, tx.Commit()
 }
 

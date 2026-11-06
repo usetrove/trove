@@ -7,23 +7,93 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/usetrove/trove/internal/config"
 )
 
-// Thresholds for the output trimmer. Output smaller than this is not worth
-// trimming, and the trimmer only acts on text that is recognizably test or
-// build output, never on a file the agent read.
+// Fixed parameters of the output trimmer. The trimmer only acts on text that is
+// recognizably test or build output, never on a file the agent read. The values a
+// repo may tune are in TrimThresholds below.
 const (
-	minTrimBytes     = 6000
-	minTrimLines     = 60
 	minSignature     = 10 // lines that look like test/build output
-	minTrimmedLines  = 20 // trimming fewer lines than this is not worth a marker
-	keepHead         = 5
-	keepTail         = 10
 	contextBefore    = 2
 	contextAfter     = 2
 	maxStackLines    = 40
 	maxTrimLineBytes = 400
 )
+
+// TrimThresholds are the output trimmer's tunable parameters. Output smaller
+// than MinBytes or MinLines is not worth trimming; KeepHead and KeepTail are the
+// first and last lines always kept (runners print their summary there); fewer
+// than MinTrimmedLines trimmed lines is not worth a marker.
+//
+// They are an explicit input, never read from global state, so Transform stays a
+// pure function of the request and these values. An adapter pins them at the
+// start of a session (Session.Tuning) so cached prefixes stay valid (rule 5).
+type TrimThresholds struct {
+	MinBytes        int
+	MinLines        int
+	MinTrimmedLines int
+	KeepHead        int
+	KeepTail        int
+}
+
+// DefaultTrimThresholds are the shipped values, used whenever a session carries
+// no tuning.
+var DefaultTrimThresholds = TrimThresholds{MinBytes: 6000, MinLines: 60, MinTrimmedLines: 20, KeepHead: 5, KeepTail: 10}
+
+// TuneParam describes one tunable parameter: its name, its shipped default and
+// the range any tuned value is clamped to, so a bad stored value can never make
+// the trimmer unsafe.
+type TuneParam struct {
+	Name     string
+	Default  int
+	Min, Max int
+}
+
+// The trimmer's parameter names, as used in Session.Tuning keys (TuningKey).
+const (
+	ParamMinBytes        = "min_bytes"
+	ParamMinLines        = "min_lines"
+	ParamMinTrimmedLines = "min_trimmed_lines"
+	ParamKeepHead        = "keep_head"
+	ParamKeepTail        = "keep_tail"
+)
+
+// TrimParams lists the trimmer's tunable parameters in a fixed order.
+var TrimParams = []TuneParam{
+	{ParamMinBytes, 6000, 2000, 50000},
+	{ParamMinLines, 60, 20, 500},
+	{ParamMinTrimmedLines, 20, 10, 200},
+	{ParamKeepHead, 5, 2, 20},
+	{ParamKeepTail, 10, 5, 40},
+}
+
+// Tuning holds per-session parameter values keyed by TuningKey. A missing key
+// means the shipped default. It is copied into the session's pin when the session
+// starts and never changes afterwards.
+type Tuning map[string]int
+
+// TuningKey is the key of an optimizer's parameter in a Tuning.
+func TuningKey(optimizer, param string) string { return optimizer + "." + param }
+
+// Clamp returns v limited to the parameter's allowed range.
+func (p TuneParam) Clamp(v int) int { return min(max(v, p.Min), p.Max) }
+
+// TrimThresholdsFrom resolves a session's tuning into thresholds, clamping every
+// value to its range. A nil Tuning gives DefaultTrimThresholds.
+func TrimThresholdsFrom(t Tuning) TrimThresholds {
+	get := func(p TuneParam) int {
+		if v, ok := t[TuningKey(config.OptimizerOutputTrimmer, p.Name)]; ok {
+			return p.Clamp(v)
+		}
+		return p.Default
+	}
+	return TrimThresholds{
+		MinBytes: get(TrimParams[0]), MinLines: get(TrimParams[1]), MinTrimmedLines: get(TrimParams[2]),
+		KeepHead: get(TrimParams[3]), KeepTail: get(TrimParams[4]),
+	}
+}
 
 var (
 	// signatureRe marks lines typical of test runners and build tools.
@@ -67,18 +137,19 @@ func (OutputTrimmer) OverheadTokens() int { return 0 }
 // TransformOutput implements ToolOutputOptimizer, using the same trimOutput as
 // the request-level Transform. The full text of anything shortened goes in
 // Report.Originals; the engine stores it before the shortened text is returned.
-func (OutputTrimmer) TransformOutput(ctx context.Context, _ ToolCall, out ToolOutput, _ Session) (ToolOutput, Report) {
+func (OutputTrimmer) TransformOutput(ctx context.Context, _ ToolCall, out ToolOutput, s Session) (ToolOutput, Report) {
+	th := TrimThresholdsFrom(s.Tuning)
 	res := ToolOutput{Parts: make([]Part, len(out.Parts)), IsError: out.IsError}
 	var originals []string
 	for i, p := range out.Parts {
 		res.Parts[i] = p
-		if len(p.Text) < minTrimBytes {
+		if len(p.Text) < th.MinBytes {
 			continue
 		}
 		if ctx.Err() != nil {
 			return out, Report{Err: "time budget exceeded"}
 		}
-		if trimmed, changed := trimOutput(p.Text); changed {
+		if trimmed, changed := trimWith(p.Text, th); changed {
 			res.Parts[i] = Part{Text: trimmed}
 			originals = append(originals, p.Text)
 		}
@@ -87,11 +158,12 @@ func (OutputTrimmer) TransformOutput(ctx context.Context, _ ToolCall, out ToolOu
 }
 
 // Applies implements Optimizer: any large tool result.
-func (OutputTrimmer) Applies(r *Request, _ Session) bool {
+func (OutputTrimmer) Applies(r *Request, s Session) bool {
+	minBytes := TrimThresholdsFrom(s.Tuning).MinBytes
 	for _, m := range r.Messages {
 		for _, b := range m.Blocks {
 			for _, sp := range b.Texts {
-				if sp.Len() >= minTrimBytes {
+				if sp.Len() >= minBytes {
 					return true
 				}
 			}
@@ -100,8 +172,16 @@ func (OutputTrimmer) Applies(r *Request, _ Session) bool {
 	return false
 }
 
-// Transform implements Optimizer.
-func (OutputTrimmer) Transform(ctx context.Context, r *Request) (*Request, Report) {
+// Transform implements Optimizer, with the shipped thresholds. The engine calls
+// TransformSession instead, so a session's pinned tuning applies.
+func (t OutputTrimmer) Transform(ctx context.Context, r *Request) (*Request, Report) {
+	return t.TransformSession(ctx, r, Session{})
+}
+
+// TransformSession implements SessionTransformer: Transform with the session's
+// pinned tuning. It is a pure function of the request and that tuning.
+func (OutputTrimmer) TransformSession(ctx context.Context, r *Request, s Session) (*Request, Report) {
+	th := TrimThresholdsFrom(s.Tuning)
 	if err := r.Ensure(); err != nil {
 		return r, Report{Err: err.Error()}
 	}
@@ -110,7 +190,7 @@ func (OutputTrimmer) Transform(ctx context.Context, r *Request) (*Request, Repor
 	for _, m := range r.Messages {
 		for _, b := range m.Blocks {
 			for _, sp := range b.Texts {
-				if sp.Len() < minTrimBytes {
+				if sp.Len() < th.MinBytes {
 					continue
 				}
 				if ctx.Err() != nil {
@@ -120,7 +200,7 @@ func (OutputTrimmer) Transform(ctx context.Context, r *Request) (*Request, Repor
 				if !ok {
 					continue
 				}
-				if trimmed, changed := trimOutput(s); changed {
+				if trimmed, changed := trimWith(s, th); changed {
 					edits = append(edits, Edit{Span: sp, New: EncodeString(trimmed)})
 					originals = append(originals, s)
 				}
@@ -137,12 +217,15 @@ func (OutputTrimmer) Transform(ctx context.Context, r *Request) (*Request, Repor
 // trimOutput is a pure function of text. Which lines survive depends only on
 // the line itself and its neighbors, and every surviving line stays put, so
 // trimming already-trimmed output removes nothing.
-func trimOutput(text string) (string, bool) {
-	if len(text) < minTrimBytes {
+func trimOutput(text string) (string, bool) { return trimWith(text, DefaultTrimThresholds) }
+
+// trimWith is trimOutput with explicit thresholds.
+func trimWith(text string, th TrimThresholds) (string, bool) {
+	if len(text) < th.MinBytes {
 		return text, false
 	}
 	lines := strings.Split(text, "\n")
-	if len(lines) < minTrimLines {
+	if len(lines) < th.MinLines {
 		return text, false
 	}
 	signature := 0
@@ -155,17 +238,17 @@ func trimOutput(text string) (string, bool) {
 		return text, false
 	}
 
-	return collapseRuns(text, lines, keepLines(lines), minTrimmedLines)
+	return collapseRuns(text, lines, keepLines(lines, th), th.MinTrimmedLines)
 }
 
 // keepLines marks the lines worth keeping: the head and tail, every failure or
 // stack-frame line with its context, and any existing trim marker.
-func keepLines(lines []string) []bool {
+func keepLines(lines []string, th TrimThresholds) []bool {
 	keep := make([]bool, len(lines))
-	for i := 0; i < len(lines) && i < keepHead; i++ {
+	for i := 0; i < len(lines) && i < th.KeepHead; i++ {
 		keep[i] = true
 	}
-	for i := max(0, len(lines)-keepTail); i < len(lines); i++ {
+	for i := max(0, len(lines)-th.KeepTail); i < len(lines); i++ {
 		keep[i] = true
 	}
 	for i, l := range lines {
@@ -236,7 +319,7 @@ func Condense(text string) (string, bool) {
 	if len(lines) < 30 {
 		return text, false
 	}
-	return collapseRuns(text, lines, keepLines(lines), 10)
+	return collapseRuns(text, lines, keepLines(lines, DefaultTrimThresholds), 10)
 }
 
 // IsFailureLine reports whether a line of command output carries a failure.

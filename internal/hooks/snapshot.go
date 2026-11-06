@@ -34,6 +34,12 @@ type Snapshot struct {
 	// trimmer writes to (config [recovery]); zero means the defaults.
 	RecoveryMaxMB   int `json:"recovery_max_mb,omitempty"`
 	RecoveryTTLDays int `json:"recovery_ttl_days,omitempty"`
+	// RepoSalt and Tuning carry per-repo optimizer tuning (internal/tuning). A
+	// session that starts in a repo pins that repo's applied values; the repo is
+	// found by hashing the hook's working directory under RepoSalt, so no path is
+	// stored here. Tuning is keyed by that hash.
+	RepoSalt string                     `json:"repo_salt,omitempty"`
+	Tuning   map[string]optimize.Tuning `json:"tuning,omitempty"`
 }
 
 const snapshotVersion = 1

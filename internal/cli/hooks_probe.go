@@ -192,5 +192,7 @@ func rewriteHooksInstalled(a *App) bool {
 		return false
 	}
 	b, err := os.ReadFile(home + string(os.PathSeparator) + ".claude" + string(os.PathSeparator) + "settings.json") //nolint:gosec // the user's own agent settings
-	return err == nil && strings.Contains(string(b), hooks.EventPostOutput)
+	// The plugin registers the output hook too, from its own hooks.json.
+	return (err == nil && strings.Contains(string(b), hooks.EventPostOutput)) ||
+		(err == nil && pluginEnabled(home+string(os.PathSeparator)+".claude"+string(os.PathSeparator)+"settings.json"))
 }
