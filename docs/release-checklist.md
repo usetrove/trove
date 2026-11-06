@@ -14,8 +14,8 @@ Do not tag until every box is ticked, with a date and initials. Nothing here is 
 
 - [ ] Prices re-verified against official pages ([pricing.md](pricing.md) checklist); `data_version` bumped
 - [ ] `go run ./scripts/pricingage --strict --max-age-days 7` passes. Date: ______
-- [ ] [compliance.md](compliance.md) and [legal-and-credentials.md](legal-and-credentials.md) re-checked against current provider terms and agent docs; dates updated. Date: ______
-- [ ] [PRIVACY.md](../PRIVACY.md) re-checked against the code (what is stored); [threat-model.md](threat-model.md) and [security-findings.md](security-findings.md) have no open high findings
+- [ ] [compliance.md](compliance.md) and [legal-and-credentials.md](legal-and-credentials.md) re-checked against current provider terms and agent docs; dates updated. Last done 2026-11-06 (the OpenAI pages could not be fetched and still need a manual read). Date: ______
+- [ ] [data.md](data.md) matches the code (`go test ./internal/store` fails if not); [PRIVACY.md](../PRIVACY.md) re-checked against the code (what is stored); [threat-model.md](threat-model.md) and [security-findings.md](security-findings.md) have no open high findings
 - [ ] Agent integration facts (config locations, custom-endpoint settings, hooks, MCP registration) re-verified against current official docs
 
 ## 3. Code

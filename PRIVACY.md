@@ -1,6 +1,6 @@
 # Privacy
 
-Last checked against the code: 2026-10-30 (the "Sharing a summary" section and its table row: 2026-11-02; the receiver paragraph: 2026-11-02). Each statement below was checked against the source or a test,
+Last checked against the code: 2026-11-06 for the stored-data tables, retention and your controls (the complete, tested field-by-field list is [docs/data.md](docs/data.md)); 2026-10-30 for the rest (the "Sharing a summary" section and its table row: 2026-11-02; the receiver paragraph: 2026-11-02). Each statement below was checked against the source or a test,
 named in brackets. If the code changes and this file does not, that is a bug; please report it.
 
 ## In one paragraph
@@ -44,7 +44,7 @@ commands it starts (`claude mcp add`, `claude mcp remove`) and any command you a
   Trove never opens `~/.claude.json`, `.credentials.json` or `auth.json`. [`gateway/auth`; `fixer/paths.go`
   denylist; `TestNonAPIKeyAuthIsRejected`]
 - **Prompt text, code, tool output or file contents in the database.** [`TestSchemaIsMetadataOnly` lists all
-  15 tables and every column, and fails if a table or column is added without review]
+  26 tables and every column, and fails if a table or column is added without review]
 - **File paths in the database.** Files are identified by a hash (`history_files.file_key`, `fixes.path_hash`).
   The endpoint column holds the request path on the provider (like `/v1/messages`), not a file path.
 
@@ -67,25 +67,28 @@ All numbers, hashes, names and timings. "Kept" is how long Trove keeps it on its
 | `session_pins` | Which optimizers were on for a session (names and states) | `retention_days` |
 | `external_tools` | Third-party tools you approved: name, pinned version, license, on/off, timestamps, IDs of config changes to undo on removal | removed by `trove external remove` |
 | `experiment_assignments` | Which arm ("on" or "off") a session was given for an optimizer in the A/B comparison: hashed session key, optimizer name, a hashed stratum label, position, time | `retention_days` |
-| `experiment_results` | A/B result numbers per optimizer: metric name, relative change, 95% range, session counts, measured/estimated label, status, a hash of the inputs | until uninstall |
+| `experiment_results` | A/B result numbers per optimizer: metric name, relative change, 95% range, session counts, measured/estimated label, status, a hash of the inputs | `retention_days` |
 | `history_requests` | One row per request found in your agent's local session logs: hashed keys, model, token counts, cost, tool **names** with counts, sizes, error counts | `retention_days` |
-| `history_files` | Which log files were read: hash of the path, size, modified time, parser offsets, line counts | until uninstall |
-| `usage_daily` | Per-day request count and spend | until uninstall |
-| `receipts` | One row per finished session: hashed key, agent, model names, call count, cost, cache-hit rate, savings | until uninstall |
-| `repo_features` | A bucketed description of a repo, computed on your device: a **salted hash** of the working directory (the salt is random and stays in your `settings` table), a size bucket (S, M, L, XL), up to three language names with whole percentages, and the name of the test framework from a fixed list. No path or file name | until uninstall |
+| `history_files` | Which log files were read: hash of the path, size, modified time, parser offsets, line counts | until `trove data delete` or uninstall (kept on purpose so purged history is not read again) |
+| `usage_daily` | Per-day request count and spend | `retention_days` |
+| `receipts` | One row per finished session: hashed key, agent, model names, call count, cost, cache-hit rate, savings | `retention_days` |
+| `repo_features` | A bucketed description of a repo, computed on your device: a **salted hash** of the working directory (the salt is random and stays in your `settings` table), a size bucket (S, M, L, XL), up to three language names with whole percentages, and the name of the test framework from a fixed list. No path or file name | `retention_days` |
 | `session_features` | One row per finished session: hashed key, the repo hash, and counts and ratios derived from the session (files read and edited, repeated reads, scout calls, compactions, retries, tool results, duplicate-line, error and stack-trace shares). Numbers only; nothing from the content itself | `retention_days` |
 | `repo_tuning` | Per-repo tuned values for an optimizer: the repo **hash**, optimizer and parameter **names**, a number, whether it is suggested, applied or reverted, and the fetch-back share it was judged against. Stays on your device unless you opt in to `trove contribute` | until `trove tune reset` or uninstall |
-| `hook_events` | Counts from hooks: time, hashed session key, hook name, byte and token counts | until uninstall |
-| `adapter_events` | What a plugin for another harness (OpenCode) did, written by `trove engine serve`: time, **hashed** session key, harness name, a login label (`api_key`, `copilot` or `subscription_or_unknown`, which the plugin works out from non-secret fields; Trove never sees a credential), provider and model names (checked against a strict pattern, so free text is dropped), optimizer name and state, byte and token counts, and, for usage rows, the token counts and cost the harness itself reported | until uninstall |
-| `fixes` | Fixes applied: change id, kind, agent, **hash** of the file path, estimated tokens and dollars | until uninstall |
-| `settings_profiles` | Settings profiles applied by `trove settings`: change id, task type (for example `quick-fix`), agent, the **names** of the settings changed (never their values), the agent version | until uninstall |
-| `guardrail_events` | When an optimizer was rolled back and why (generated text, numbers) | until uninstall |
-| `optimizations`, `measurements`, `budgets`, `settings`, `schema_migrations` | Optimizer states, measured results, your budget, small settings, migration history | until uninstall |
+| `hook_events` | Counts from hooks: time, hashed session key, hook name, byte and token counts | `retention_days` |
+| `adapter_events` | What a plugin for another harness (OpenCode) did, written by `trove engine serve`: time, **hashed** session key, harness name, a login label (`api_key`, `copilot` or `subscription_or_unknown`, which the plugin works out from non-secret fields; Trove never sees a credential), provider and model names (checked against a strict pattern, so free text is dropped), optimizer name and state, byte and token counts, and, for usage rows, the token counts and cost the harness itself reported | `retention_days` |
+| `fixes` | Fixes applied: change id, kind, agent, **hash** of the file path, estimated tokens and dollars | `retention_days` after the fix is undone; while it is in place it is current state |
+| `settings_profiles` | Settings profiles applied by `trove settings`: change id, task type (for example `quick-fix`), agent, the **names** of the settings changed (never their values), the agent version | `retention_days` after its fix is undone; kept while in place |
+| `task_installs` | Scout and cascade files written by `trove tasks`: change id, the feature and role, the model aliases chosen, and estimated token overhead. No path or file content | `retention_days` after its fix is undone; kept while in place |
+| `guardrail_events` | When an optimizer was rolled back and why (generated text, numbers) | `retention_days` |
+| `optimizations`, `measurements`, `budgets`, `settings`, `schema_migrations` | Optimizer states, latest measured results, your budget, small settings (including the repo-hash salt), migration history | kept: current state, until `trove data delete` or uninstall |
 
 Text that originates outside Trove is limited to: model name (cut to 100 bytes), route (200), error class (64),
 tool names from your agent logs, and the agent label. [`TestClientControlledFieldsAreCappedInTheRecord`]
-Not every table is purged automatically: only the first four above follow `retention_days`, and the purge
-runs while the gateway is running (finding F-8 in [docs/security-findings.md](docs/security-findings.md)).
+Every table with a time in it follows `retention_days` (default 90), except the state tables marked "kept". The purge runs
+at most once a day, from whichever Trove process runs first (the gateway, a hook at the end of a session, or
+`trove report`), so it no longer depends on the gateway [`TestEveryTableHasARetentionDecision`,
+`TestPurgeDeletesOldRowsFromEveryAgedTable`; closes finding F-8 in [docs/security-findings.md](docs/security-findings.md)].
 `trove uninstall --purge-data` deletes all of it.
 
 ### Other files in the data folder
@@ -149,6 +152,10 @@ if a field is added without review]
 - `trove uninstall` restores every file Trove edited and removes its registrations; add `--purge-data` to
   delete what Trove created in the data folder (it leaves any file it did not create).
 - `trove undo` reverses only the edits.
+- `trove data export` copies everything Trove stores about your usage into a new folder (backups of your agent config
+  files are never copied; the recovery store only with `--include-recovery`). `trove data delete` removes the usage
+  data and keeps what `trove undo` needs. Both work offline and send nothing; if you ever shared a summary, `delete`
+  prints the request that asks the receiver to remove it [`TestData*` in `internal/cli`].
 - Delete `~/.trove` yourself at any time; nothing outside it depends on it.
 
 ## What is not covered here

@@ -126,11 +126,12 @@ the upstream transport has no response-header timeout. A local client can hold m
 timeouts interact with long streams and slow providers and need a design; a semaphore on in-flight body bytes and
 a `ResponseHeaderTimeout` are the likely fix.
 
-**F-8. Retention covers four of fifteen tables.** *Open.* `Purge` deletes `requests`, `sessions`,
-`session_pins`, `history_requests`; `receipts`, `hook_events`, `usage_daily`, `fixes`, `guardrail_events`,
-`measurements`, `history_files` are kept until uninstall, and the purge only runs while the gateway runs. They hold
-no content, but the privacy statement should not overstate; PRIVACY.md says so. Which of them reports need
-long-term is a product decision.
+**F-8. Retention covered four of fifteen tables.** *Closed 2026-11-06.* `Purge` now has an age rule for every table that
+holds history (`internal/store/retention.go`), and each remaining table is listed there with the reason it is kept.
+`TestEveryTableHasARetentionDecision` fails if a table has neither, and `TestPurgeDeletesOldRowsFromEveryAgedTable`
+checks each rule. The purge runs at most once a day from the gateway, from the session-end hook and from `trove report`
+(`PurgeIfDue`), so it no longer needs the gateway. `history_files` (a path hash and offsets) stays by design so purged
+history is not read again; `trove data delete` removes it. Reverted fixes expire; fixes still in place are state and do not.
 
 **F-9. The recovery store is global and holds raw, unredacted output.** *Open.* Files are named by the first 16 hex
 characters of the content's SHA-256, any MCP client can fetch any ID, IDs are not scoped to a project, and output
