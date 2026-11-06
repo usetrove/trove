@@ -206,6 +206,10 @@ func Render(r Report, o Options) string {
 	for i, s := range r.Recommendations {
 		b.WriteString(wrap(fmt.Sprintf("%d. %s (confidence: %s)", i+1, s.Title, s.Confidence), o.width(), "  ", "     ") + "\n")
 		b.WriteString(wrap(s.Detail, o.width(), "     ", "     ") + "\n")
+		if s.Source == "recommender" {
+			b.WriteString(wrap(recommenderBasis(s), o.width(), "     ", "     ") + "\n")
+			continue
+		}
 		switch {
 		case s.EstSavingsUSD != nil:
 			b.WriteString(wrap(fmt.Sprintf("Estimated saving: ~%s over %d requests.", FormatUSD(*s.EstSavingsUSD), s.Requests), o.width(), "     ", "     ") + "\n")
@@ -612,4 +616,19 @@ func hooksLines(stats []measure.HookStats) []string {
 		out = append(out, l+".")
 	}
 	return out
+}
+
+// recommenderBasis says what a recommender suggestion rests on, so no suggestion
+// reads as more certain than it is. It never shows a dollar figure: none exists.
+func recommenderBasis(s Recommendation) string {
+	var basis string
+	switch s.Evidence {
+	case "local":
+		basis = "Based on your own data (" + s.Label + ")."
+	case "benchmark":
+		basis = "Based on a benchmark run (defaults " + s.DefaultsRelease + "); not yet checked on your own sessions (" + s.Label + ")."
+	default:
+		basis = "A rule of thumb with no benchmark or measurement behind it yet (defaults " + s.DefaultsRelease + "; " + s.Label + ")."
+	}
+	return basis + " No savings figure."
 }

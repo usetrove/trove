@@ -46,7 +46,7 @@ kind = "optimizer"
 name = "hook_read_limit"
 action = "shadow"
 evidence = "none"
-reason = "This is a {size} repo and sessions read about {files_read} files each. Line limits on big reads in shadow mode estimate what they would save."
+reason = "This repo is in size bucket {size} and sessions read about {files_read} files each. Line limits on big reads in shadow mode estimate what they would save."
 [rule.when]
 size_in = ["L", "XL"]
 min_files_read = 20

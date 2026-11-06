@@ -14,6 +14,7 @@ import (
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/optimize/suggest"
 	"github.com/usetrove/trove/internal/pricing"
+	"github.com/usetrove/trove/internal/recommend"
 	"github.com/usetrove/trove/internal/store"
 )
 
@@ -37,6 +38,14 @@ type Inputs struct {
 	// ExternalManifests describes installed third-party tools; nil means the
 	// manifests built into this binary.
 	ExternalManifests []external.Manifest
+	// RepoKey identifies the repo the report is for (features.RepoKey), or "" when
+	// unknown. Task is the task type the user named, or "". Both only steer the
+	// local recommender; neither is printed.
+	RepoKey string
+	Task    string
+	// Provider supplies the recommender's suggestions. Nil means the open local
+	// one; a hosted provider (opt-in, later) is composed in front by the caller.
+	Providers []recommend.Provider
 }
 
 // Build assembles the report for p. It reads only through the measurement layer.
@@ -171,8 +180,9 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 		return r, err
 	}
 	for _, s := range sugg {
-		r.Recommendations = append(r.Recommendations, Recommendation{s})
+		r.Recommendations = append(r.Recommendations, Recommendation{Suggestion: s})
 	}
+	r.Recommendations = append(r.Recommendations, recommenderSuggestions(ctx, db, in)...)
 	if r.Fixes, err = measure.FixEffects(ctx, db, in.Config.Measure); err != nil {
 		return r, err
 	}
@@ -473,4 +483,57 @@ func buildAdapters(ctx context.Context, db *store.DB, from time.Time) (*Adapters
 		return nil, nil
 	}
 	return &Adapters{Decisions: dec, Usage: use}, nil
+}
+
+// recommenderSuggestions asks the recommender for suggestions. It is best effort:
+// a failure to gather the facts or run a provider drops the suggestions and never
+// fails the report (rule 4).
+func recommenderSuggestions(ctx context.Context, db *store.DB, in Inputs) []Recommendation {
+	facts, err := recommend.Gather(ctx, db, in.Config, in.RepoKey, in.Task, in.Now)
+	if err != nil {
+		return nil
+	}
+	providers := in.Providers
+	if len(providers) == 0 {
+		providers = []recommend.Provider{recommend.NewLocal()}
+	}
+	recs, _ := recommend.Compose(ctx, facts, providers...)
+	release := recommend.BundledDefaults().Release
+	out := make([]Recommendation, 0, len(recs))
+	for _, rc := range recs {
+		out = append(out, FromRecommendation(rc, release))
+	}
+	return out
+}
+
+// FromRecommendation puts a recommender suggestion in the report's shape.
+func FromRecommendation(rc recommend.Recommendation, defaultsRelease string) Recommendation {
+	r := Recommendation{
+		Suggestion: suggest.Suggestion{Kind: string(rc.Kind), Title: recommendationTitle(rc), Detail: rc.Reason,
+			Confidence: string(rc.Confidence), Label: rc.Label},
+		Source: "recommender", Name: rc.Name, Action: string(rc.Action), Evidence: string(rc.Evidence), SuggestedValue: rc.Value,
+	}
+	if rc.Evidence != recommend.EvidenceLocal {
+		r.DefaultsRelease = defaultsRelease
+	}
+	return r
+}
+
+func recommendationTitle(rc recommend.Recommendation) string {
+	switch rc.Action {
+	case recommend.ActionShadow:
+		return "Try " + rc.Name + " in shadow mode"
+	case recommend.ActionEnable:
+		return "Turn on " + rc.Name
+	case recommend.ActionAvoid:
+		return "Leave " + rc.Name + " off"
+	case recommend.ActionUseProfile:
+		return "Use the " + rc.Name + " settings profile"
+	case recommend.ActionTune:
+		if rc.Value != nil {
+			return fmt.Sprintf("Set %s to %d for this repo", rc.Name, int(*rc.Value))
+		}
+		return "Tune " + rc.Name + " for this repo"
+	}
+	return rc.Name
 }

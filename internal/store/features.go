@@ -70,6 +70,17 @@ func (f *Features) Salt(ctx context.Context) (string, error) {
 	return v, err
 }
 
+// ExistingSalt returns the repo-key salt if one has been created, and never
+// creates it, so read-only commands (the report) leave no trace.
+func (f *Features) ExistingSalt(ctx context.Context) (string, bool, error) {
+	var v string
+	err := f.db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, repoSaltKey).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	return v, err == nil, err
+}
+
 // PutRepo stores or replaces the features of a repo.
 func (f *Features) PutRepo(ctx context.Context, r RepoFeaturesRow) error {
 	_, err := f.db.ExecContext(ctx, `INSERT INTO repo_features (repo_key, computed_at, size_bucket, lang_mix, test_framework)

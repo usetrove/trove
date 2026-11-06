@@ -60,7 +60,7 @@ jobs:
       - name: No credential or prompt text in logs, responses or on disk
         run: go test -count=1 -v -run 'TestNoCredentialOrPromptReachesLogsResponsesOrDisk|TestNonAPIKeyAuthIsRejected' ./internal/gateway
       - name: Redaction and metadata-only schema
-        run: go test -count=1 ./internal/redact ./internal/store ./internal/hooks ./internal/logs/...
+        run: go test -count=1 ./internal/redact ./internal/store ./internal/hooks ./internal/logs/... ./internal/features ./internal/tuning ./internal/recommend
 
   npm-wrapper:
     runs-on: ubuntu-latest

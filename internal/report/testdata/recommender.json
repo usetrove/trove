@@ -1,0 +1,309 @@
+{
+  "period": {
+    "name": "month",
+    "label": "this month (since Oct 1)",
+    "from": "2026-10-01",
+    "to": "2026-10-29"
+  },
+  "state": "ok",
+  "requests": 30,
+  "headline": {
+    "spend_usd": {
+      "value": 73.5,
+      "label": "estimated",
+      "n": 30
+    },
+    "tokens": {
+      "value": 1560000,
+      "label": "measured",
+      "n": 30
+    },
+    "waste_usd": {
+      "value": 5.85,
+      "label": "estimated",
+      "n": 18
+    },
+    "waste_percent": {
+      "value": 7.959183673469388,
+      "label": "estimated",
+      "n": 18
+    },
+    "savings_usd": {
+      "value": 0.5,
+      "label": "estimated",
+      "n": 10
+    },
+    "measured_note": "not enough data yet to compare sessions with and without an optimizer. The dollar savings above are estimates."
+  },
+  "budget": {
+    "period": "monthly",
+    "name": "month",
+    "from": "2026-10-01",
+    "to": "2026-10-31",
+    "cap_usd": 1000,
+    "spent_usd": {
+      "value": 73.5,
+      "label": "estimated",
+      "n": 30
+    },
+    "percent_used": 7.35,
+    "percent_elapsed": 91.93548387096774,
+    "status": "under",
+    "projected_total_usd": {
+      "value": 79.947368,
+      "label": "estimated",
+      "n": 30
+    },
+    "cap_reached": false,
+    "lever": "The biggest leak is repeated tool results, about $4.50 this month (estimated). Fixing it is the largest change available."
+  },
+  "spend": {
+    "by_agent": [
+      {
+        "key": "claude_code",
+        "requests": 20,
+        "input_uncached_tokens": 200000,
+        "cache_write_tokens": 0,
+        "cache_read_tokens": 800000,
+        "output_tokens": 40000,
+        "cost_usd": {
+          "value": 50,
+          "label": "estimated",
+          "n": 20
+        }
+      },
+      {
+        "key": "codex_cli",
+        "requests": 10,
+        "input_uncached_tokens": 100000,
+        "cache_write_tokens": 0,
+        "cache_read_tokens": 400000,
+        "output_tokens": 20000,
+        "cost_usd": {
+          "value": 23.5,
+          "label": "estimated",
+          "n": 10
+        }
+      }
+    ],
+    "by_model": [
+      {
+        "key": "claude-a",
+        "requests": 10,
+        "input_uncached_tokens": 100000,
+        "cache_write_tokens": 0,
+        "cache_read_tokens": 400000,
+        "output_tokens": 20000,
+        "cost_usd": {
+          "value": 25,
+          "label": "estimated",
+          "n": 10
+        }
+      },
+      {
+        "key": "claude-b",
+        "requests": 10,
+        "input_uncached_tokens": 100000,
+        "cache_write_tokens": 0,
+        "cache_read_tokens": 400000,
+        "output_tokens": 20000,
+        "cost_usd": {
+          "value": 25,
+          "label": "estimated",
+          "n": 10
+        }
+      },
+      {
+        "key": "gpt-x",
+        "requests": 10,
+        "input_uncached_tokens": 100000,
+        "cache_write_tokens": 0,
+        "cache_read_tokens": 400000,
+        "output_tokens": 20000,
+        "cost_usd": {
+          "value": 23.5,
+          "label": "estimated",
+          "n": 10
+        }
+      }
+    ]
+  },
+  "leaks": [
+    {
+      "category": "duplicate_tool_result",
+      "title": "Repeated tool results",
+      "usd": {
+        "value": 4.5,
+        "label": "estimated",
+        "n": 15
+      },
+      "tokens": {
+        "value": 60000,
+        "label": "estimated",
+        "n": 15
+      },
+      "command": "duplicate_result_collapser = \"on\"",
+      "advice": "Add this line under [optimizers] in config.toml. It applies from your next session."
+    },
+    {
+      "category": "noisy_output",
+      "title": "Noisy tool output",
+      "usd": {
+        "value": 3,
+        "label": "estimated",
+        "n": 15
+      },
+      "tokens": {
+        "value": 90000,
+        "label": "estimated",
+        "n": 15
+      },
+      "command": "trove optimize status",
+      "advice": "noise_normalizer is on. See what it saved under Optimizers."
+    },
+    {
+      "category": "cache_miss",
+      "title": "Prompt cache misses",
+      "usd": {
+        "value": 1.35,
+        "label": "estimated",
+        "n": 3
+      },
+      "tokens": {
+        "value": 27000,
+        "label": "estimated",
+        "n": 3
+      },
+      "advice": "Cache misses happen when the start of a request changes between turns. Avoid editing early context mid-session."
+    }
+  ],
+  "optimizers": {
+    "kill_switch": false,
+    "rows": [
+      {
+        "name": "volatile_prefix_mover",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "noise_normalizer",
+        "configured": "on",
+        "effective": "on",
+        "saved_usd": {
+          "value": 0.5,
+          "label": "estimated",
+          "n": 10
+        }
+      },
+      {
+        "name": "output_trimmer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "duplicate_result_collapser",
+        "configured": "off",
+        "effective": "off",
+        "would_save_usd": {
+          "value": 3.6,
+          "label": "estimated",
+          "n": 12
+        },
+        "enable": "duplicate_result_collapser = \"on\""
+      },
+      {
+        "name": "cache_breakpoints",
+        "configured": "off",
+        "effective": "off"
+      }
+    ],
+    "guardrail_events": [],
+    "quality": "No regression detected locally. Trove checks retries, tool errors and re-fetches; it does not prove output quality."
+  },
+  "recommendations": [
+    {
+      "kind": "optimizer",
+      "title": "Try hook_large_output in shadow mode",
+      "detail": "Tool results in this repo average 4.0 large outputs per session over 6 sessions, and a go_test test setup was detected. The large-output hint suggests the trove_run tool for noisy commands; in shadow mode it only counts.",
+      "est_savings_usd": null,
+      "confidence": "low",
+      "label": "estimated",
+      "requests": 0,
+      "source": "recommender",
+      "name": "hook_large_output",
+      "action": "shadow",
+      "evidence": "none",
+      "defaults_release": "seed-1"
+    },
+    {
+      "kind": "optimizer",
+      "title": "Try hook_quiet_commands in shadow mode",
+      "detail": "A go_test test setup was detected and tool results here average 4.0 large outputs per session. Quiet flags on test commands in shadow mode estimate the saving.",
+      "est_savings_usd": null,
+      "confidence": "low",
+      "label": "estimated",
+      "requests": 0,
+      "source": "recommender",
+      "name": "hook_quiet_commands",
+      "action": "shadow",
+      "evidence": "none",
+      "defaults_release": "seed-1"
+    },
+    {
+      "kind": "optimizer",
+      "title": "Try hook_read_limit in shadow mode",
+      "detail": "This repo is in size bucket L and sessions read about 30 files each. Line limits on big reads in shadow mode estimate what they would save.",
+      "est_savings_usd": null,
+      "confidence": "low",
+      "label": "estimated",
+      "requests": 0,
+      "source": "recommender",
+      "name": "hook_read_limit",
+      "action": "shadow",
+      "evidence": "none",
+      "defaults_release": "seed-1"
+    },
+    {
+      "kind": "optimizer",
+      "title": "Try hook_repeat_read in shadow mode",
+      "detail": "Sessions here re-read a file already read about 3.0 times each (over 6 sessions). Repeat-read prevention in shadow mode counts how many reads it would have avoided.",
+      "est_savings_usd": null,
+      "confidence": "low",
+      "label": "estimated",
+      "requests": 0,
+      "source": "recommender",
+      "name": "hook_repeat_read",
+      "action": "shadow",
+      "evidence": "none",
+      "defaults_release": "seed-1"
+    },
+    {
+      "kind": "optimizer",
+      "title": "Try output_trimmer in shadow mode",
+      "detail": "Over your last 6 sessions in this repo, tool results averaged 4.0 per session over 6,000 bytes. The output trimmer keeps failures and a summary and shortens the rest; in shadow mode it only estimates what it would remove.",
+      "est_savings_usd": null,
+      "confidence": "low",
+      "label": "estimated",
+      "requests": 0,
+      "source": "recommender",
+      "name": "output_trimmer",
+      "action": "shadow",
+      "evidence": "none",
+      "defaults_release": "seed-1"
+    },
+    {
+      "kind": "profile",
+      "title": "Use the quick-fix settings profile",
+      "detail": "You said the task is quick-fix. Trove has a settings profile for it (`trove settings`). It has no benchmark behind it yet, so values without evidence are left out unless you allow them.",
+      "est_savings_usd": null,
+      "confidence": "low",
+      "label": "estimated",
+      "requests": 0,
+      "source": "recommender",
+      "name": "quick-fix",
+      "action": "use_profile",
+      "evidence": "none",
+      "defaults_release": "seed-1"
+    }
+  ]
+}

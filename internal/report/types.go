@@ -200,9 +200,27 @@ type GuardrailEvent struct {
 	Cleared   bool   `json:"cleared"`
 }
 
-// Recommendation is a suggestion Trove never applies by itself.
+// Recommendation is a suggestion Trove never applies by itself. The first group
+// of fields comes from the usage-based suggestions (internal/optimize/suggest).
+// Recommendations from the local recommender (internal/recommend) fill the rest:
+// what it is about, what to do, where it came from and what it rests on. Their
+// Detail is the reason, Confidence is high, medium or low, and Label is
+// "measured" for a figure from your own A/B results or counts, else "estimated".
 type Recommendation struct {
 	suggest.Suggestion
+	// Source is "recommender" for suggestions from internal/recommend; empty for
+	// usage-based ones.
+	Source string `json:"source,omitempty"`
+	// Name is the optimizer, settings profile or parameter the suggestion is about.
+	Name string `json:"name,omitempty"`
+	// Action is shadow, enable, avoid, use_profile or tune.
+	Action string `json:"action,omitempty"`
+	// Evidence is local (your own data), benchmark (a reproducible lab run) or none.
+	Evidence string `json:"evidence,omitempty"`
+	// SuggestedValue is the number a tuning suggestion proposes.
+	SuggestedValue *float64 `json:"suggested_value,omitempty"`
+	// DefaultsRelease names the bundled defaults file the rules came from.
+	DefaultsRelease string `json:"defaults_release,omitempty"`
 }
 
 // Pacing is the budget view. Every dollar figure is estimated.
