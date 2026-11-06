@@ -18,7 +18,7 @@ class FakeAgent:
     def version_command(self) -> str:
         return "echo benchfake"
 
-    def command(self, *, model: str, max_budget_usd: float, prompt_path: str) -> str:
+    def command(self, *, model: str, max_budget_usd: float, prompt_path: str, effort: str = "", bare: bool = True) -> str:
         # /bench/solution.sh exists only for tasks that ship one; it stands in for "the agent fixed it".
         sol = '$([ -f /bench/solution.sh ] && echo "-solution /bench/solution.sh")'
         return f"{FAKE_BIN} agent -turns 3 -model {shlex.quote(model)} {sol}"

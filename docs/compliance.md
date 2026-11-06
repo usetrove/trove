@@ -240,7 +240,8 @@ changes the first pass's conclusion: **no contradiction found in the text read.*
    to the local gateway before it is refused. Trove does not log, store or forward it. Does merely *receiving* it
    on `127.0.0.1` fall under "collect, store, or intermediate Claude.ai credentials or session tokens"?
    (First raised in [legal-and-credentials.md](legal-and-credentials.md). A mitigation was proposed there:
-   refuse `trove setup` unless `ANTHROPIC_API_KEY` is set. Not implemented.)
+   refuse `trove setup` unless there is evidence of an API key. Implemented 2026-11-06 for the setup path; a user who sets
+   `ANTHROPIC_BASE_URL` by hand, or logs in with Claude.ai after setup, still sends the token first.)
 2. Is a local gateway that refuses subscription traffic "restrict[ing] any authentication method built into"
    Claude Code, for the clause written about customers offering Claude Code in their products?
 3. Do Anthropic's and OpenAI's terms allow a third-party tool to read an agent's local session logs to compute
@@ -420,3 +421,191 @@ gateway's refusal rule does not apply to it. What it may do for each login is th
    the bearer-only rule already cover the documented cases).
 5. Decide whether `x-claude-code-*` headers can ever support an honest interactive vs automated label (none is
    documented today).
+
+## Update 2026-11-06: terms re-read, code review against the data and provider rules, naming
+
+Not legal advice, and no legal conclusions are drawn. This update re-reads the provider terms, records the
+clauses that matter for CLAUDE.md rules 3, 10, 11, 12, 13 and 14 word for word, and records what a review of the code
+found. Quotes are exactly as the fetch returned them; each is at most 125 characters, so longer clauses are split
+with "..." and the page is the authority. Quotes were taken from one fetch each and have not been re-read by a
+second person.
+
+### Sources read today
+
+| Source | Stated date on the page | Read? |
+|---|---|---|
+| [Claude Code: Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance) | none | Yes, in full |
+| [Usage Policy](https://www.anthropic.com/legal/aup) | Effective **Nov 12, 2026** (six days after today; version history is linked from the page) | Yes, in full |
+| [Consumer Terms of Service](https://www.anthropic.com/legal/consumer-terms) | Effective **Oct 8, 2025** | Yes, in full (was NOT READ before) |
+| [Commercial Terms of Service](https://www.anthropic.com/legal/commercial-terms) | Effective **Jun 17, 2025** | Yes, in full |
+| [Trademark guidelines](https://www.anthropic.com/legal/trademark-guidelines) (the URL `/legal/trademark` returns 404) | Effective **Aug 1, 2024** | Yes, in full (was not read before) |
+| [Data Processing Addendum](https://www.anthropic.com/legal/data-processing-addendum) | Effective **Feb 24, 2025** | Yes, in full; the subprocessor list it links to was not fetched |
+| [GitHub Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service) | Effective **Apr 27, 2026** | **Partly**: sections A through the start of L.3 verbatim; L.3 to S were only summarised by the fetch tool and nothing from them is quoted |
+| [GitHub Acceptable Use Policies](https://docs.github.com/en/site-policy/acceptable-use-policies/github-acceptable-use-policies) | none stated | Yes, in full |
+| OpenCode [license](https://github.com/anomalyco/opencode/blob/dev/LICENSE) (MIT; the old `sst/opencode` address now resolves to this repository) | "Copyright (c) 2025 opencode" | Yes, in full |
+| OpenCode [Terms of Service](https://opencode.ai/legal/terms-of-service) | Effective **Aug 15, 2026** | Yes, in full. Its Privacy Policy (effective Nov 6, 2026) and brand page (`/brand`) were not fetched |
+| OpenAI [Terms of Use](https://openai.com/policies/terms-of-use), [Usage policies](https://openai.com/policies/usage-policies), [Services Agreement](https://openai.com/policies/services-agreement) | unknown | **NOT READ: HTTP 403** to automated fetches. The 2026-10-31 reading (copied from a browser) is the latest we have. Needs a person to paste the current pages |
+| Codex authentication docs | unknown | **NOT READ.** `developers.openai.com/codex` redirects to a different host (`learn.chatgpt.com`); only its front page came back and nothing from it is used here. The sign-in and authentication pages were not fetched |
+
+What changed since the 2026-10-30 to 2026-11-04 checks: the Consumer Terms, the Trademark guidelines and the DPA were
+read for the first time. The Usage Policy and Commercial Terms dates are unchanged. Nothing read contradicts what the
+earlier sections of this file say Trove does. Not yet verified: the current OpenAI pages, which may have changed.
+
+### Clauses, verbatim
+
+These are the clauses a reader should look at first. Trove makes no claim that it complies with them; that is for the
+lawyer questions below.
+
+**Competing products and services**
+
+| Source | Clause |
+|---|---|
+| Consumer Terms, section 3 "Use of our Services", item 2 | "To develop any products or services that compete with our Services" ... "including to develop or train any artificial intelligence or machine learning algorithms or models or resell the Services." |
+| Commercial Terms, section D.4 "Use Restrictions" | "Customer may not and must not attempt to (a) access the Services to build a competing product or service, including to train competing AI models" ... "or resell the Services except as expressly approved by Anthropic" |
+| OpenCode Terms, "Are there restrictions in how I can use the Services?", item 7 | "uses Output to develop artificial intelligence models that compete with the Services or any Third Party Models;" |
+| Usage Policy, GitHub terms and GitHub AUP, Claude Code legal page, Trademark guidelines, DPA | no competing-product clause found in the text read |
+
+**Training AI models**
+
+| Source | Clause |
+|---|---|
+| Usage Policy, "Do Not Abuse Our Platform" | "Use outputs to train an AI model (e.g., "model scraping" or "model distillation") without prior authorization from Anthropic" |
+| Consumer Terms, section 3, item 2 | "to develop or train any artificial intelligence or machine learning algorithms or models" (same clause as above) |
+| Commercial Terms, section D.4(a) | "to train competing AI models" (same clause as above); section D.2 incorporates the Usage Policy |
+| OpenCode Terms, item 7 | as above |
+| GitHub Terms, section D.9 "Access Reciprocity" | "By using automated means to access, collect, or otherwise use" ... "for the purpose of developing or training any commercially available artificial intelligence model". |
+| GitHub Terms, section J.3 | A licence granted *to GitHub* to use Inputs and Outputs to "develop, train and improve" its models; not a restriction on users |
+| Anthropic's own side (for context) | Commercial Terms, section B: "Anthropic may not train models on Customer Content from Services."; Consumer Terms, section 4: "We may use Materials to provide, maintain, and improve the Services and to develop other products and services, including training our models, unless you opt out of training through your account settings." |
+
+**Why Trove's use of metadata is a different thing (flagged for lawyer review, no conclusion).** Trove trains no model on
+model output, generated code or text (CLAUDE.md rule 12). Where Trove learns from data, the inputs are metadata,
+derived features and outcomes: token counts, sizes, hashes, fixed labels, pass/fail. `internal/recommend` is rules and a
+lookup table with no model; `internal/features` produces only numbers, booleans and fixed vocabularies
+(`TestNoFeatureCanHoldText`); `internal/tuning` stores one number per repo parameter. The opt-in summary holds counts
+and percentages (see [data.md](data.md)). Benchmark transcripts are redacted, git-ignored and used only for analysis
+and debugging ([benchmark-methodology.md](benchmark-methodology.md)). Whether a model trained on such metadata could
+fall under any clause above is a question for a lawyer (questions 8 and 9 below).
+
+**Automated access, reselling, intermediaries and credentials**
+
+| Source | Clause |
+|---|---|
+| Claude Code legal page, "Can customers offer Claude Code in their products?" | "Customers may not pay for, resell, or intermediate Claude usage on their end users' behalf." |
+| Claude Code legal page, "Authentication and credential use" | "OAuth authentication is intended exclusively for purchasers of Claude Free, Pro, Max, Ultra, Team, and Enterprise" |
+| same | "Anthropic does not permit third-party developers to offer Claude.ai login into their own applications" |
+| same | "developers may not collect, store, or intermediate Claude.ai credentials or session tokens" |
+| same | "The Claude Code binary must not be modified." and "customers may not remove, disable, or restrict any authentication method built into it" |
+| Usage Policy, "Do Not Abuse Our Platform" | "Resell, proxy, or otherwise provide access to Claude through unauthorized means" ... "including services that route requests through consumer subscriptions or misrepresent the product or client being used" |
+| Usage Policy | "Intentionally bypass or interfere with capabilities, restrictions, or guardrails established within our products, including by circumvention of the account sign-up or log-in process" |
+| Consumer Terms, section 3, item 7 | "Except when you are accessing our Services via an Anthropic API Key or where we otherwise explicitly permit it" ... "to access the Services through automated or non-human means, whether through a bot, script, or otherwise." |
+| Consumer Terms, section 2 | "You may not share your Account login information, Anthropic API key, or Account credentials with anyone else." |
+| Consumer Terms, section 3, item 3 | "To decompile, reverse engineer, disassemble, or otherwise reduce our Services to human-readable form" |
+| Commercial Terms, section D.4 | "(b) reverse engineer or duplicate the Services" |
+| GitHub Terms, section B.3 | "Your login may only be used by one person" ... "a single login may not be shared by multiple people." |
+| GitHub Terms, section H "API Terms" | "You may not share API tokens to exceed GitHub's rate limitations." |
+| OpenCode Terms, restrictions item 5 | "automatically or programmatically extracts data or Output (defined below);" |
+| OpenCode Terms, "What are the basics of using OpenCode?" | "You will only use the Services for your own internal use, and not on behalf of or for the benefit of any third party," |
+| OpenCode Terms, "What about Third Party Models?" | "Your ability to access Third Party Models is contingent on you having API keys" |
+| OpenAI (pages not readable today) | Last read 2026-10-31: see the OpenAI section above and question 7 |
+
+**Names and logos**
+
+| Source | Clause |
+|---|---|
+| Claude Code legal page, "Using the Claude Code name and logo" | "you can't use the Claude Code or Anthropic names or logos as part of your own product, feature, or company name" |
+| same | "in a way that suggests Anthropic built, endorses, or is partnered with your product." and "You can accurately say, in plain text, that your product has Claude Code preinstalled or that it runs Claude Code." |
+| Consumer Terms, section 12 "Use of our brand" | "You may not, without our prior written permission, use our name, logos, or other trademarks in connection with products or services other than the Services" |
+| Trademark guidelines | "You may only use our trademarks as specifically permitted by us and only in materials we approve beforehand." and "You may not use our trademarks in a manner that implies Anthropic's sponsorship or endorsement" |
+| GitHub Terms, section G.2 | "you must follow all of our trademark guidelines, including those on our logos page" |
+| OpenCode Terms colophon | "Marks: the OpenCode logo, wordmark and font." |
+
+### What a review of the code found (2026-11-06)
+
+Every item below is a reading of the code and its tests, with file references. "None found" means none found by
+searching for it, not a proof of absence.
+
+| Question | Result |
+|---|---|
+| Handling of subscription credentials or session tokens | The gateway classifies every request in one place, `internal/gateway/auth/auth.go`, called at `internal/gateway/proxy.go:66` before the body is read or anything is forwarded. It refuses claude.ai logins (an `anthropic-beta` value containing "oauth"; a bearer with no `x-api-key`; a different bearer; the `sk-ant-oat` prefix), JWT-shaped OpenAI bearers, and Bedrock SigV4. The reply is HTTP 401 with a message that names all claude.ai plans and ChatGPT logins. Credentials are not in the header allowlist (`proxy.go:285`) that later code sees; the log line on refusal holds the provider and a credential-free reason. Trove never opens `~/.claude.json`, `.credentials.json` or `auth.json` (they are on the refuse lists in `internal/fixer/paths.go` and `internal/mcp/root/sensitive.go`). **Unresolved:** a subscription user who sets only `ANTHROPIC_BASE_URL` sends their OAuth token to the local gateway before the 401 (question 1). The `sk-ant-oat` prefix and the JWT shape are assumptions (open item 4 above) |
+| Scraping of provider web pages | None found. No usage-meter scrapers, cookies or browser automation. The only fetches of provider pages are the maintainer script `scripts/pricing-update.sh`, which downloads official docs pages as text for a person to read and never edits prices, and the bench Docker image, which runs the vendor's own install script |
+| Decompiling or probing agent internals beyond documented interfaces | No decompiling, binary reading or `strings` on binaries found. `trove hooks probe --live` (`internal/hooks/probe`) runs the user's own `claude -p` with documented flags to test whether hook rewrites take effect. `internal/logs/cchistory` reads Claude Code's session files read-only (`docs/logs.md`; the schema was confirmed by inspecting local files, which is observation of an unstable format). `internal/logs/cxhistory` reads Codex rollout files whose format OpenAI does not document (its header says "UNVERIFIED ON REAL INSTALLS"); this is the weakest item |
+| Model output used to train a model | None found. No training or fine-tuning code. Bench transcripts (`agent_stdout.txt` and friends) are redacted, written under `bench/results/` which is git-ignored, and read only by humans and the report. The recommender is rules (`internal/recommend/recommend.go`). A future `Provider` interface for a hosted settings bundle is mentioned in a comment and not implemented |
+| Resale or intermediation of usage | None found. The gateway binds to loopback only (`internal/cli/gateway.go`), forwards the caller's own key, and holds no key of its own; it refuses to hold AWS credentials to re-sign requests. `trove probe --live` spends the user's own money under a cap they set |
+| Outbound calls | Only four allowlisted files may reach the network, enforced by `internal/egress/static_test.go`: the gateway's forwarding to the configured upstream (`gateway/proxy.go`, `gateway/server.go`), a loopback-only health probe (`cli/gateway.go`), the opt-in summary upload and the one delete request only `trove contribute delete` makes (`contribute/upload.go`; CLAUDE.md rule 1, parts b and c, amended 2026-11-06). On Linux a second test traces real commands with strace; it does not run on macOS or Windows. See [data.md](data.md) |
+
+### Naming (rule 13)
+
+Checked by `internal/naming/naming_test.go`, which walks every folder and file name, the command tree, the package and
+plugin manifests, the MCP tool names and the subagent names, and fails if a new one contains Claude, Anthropic, Codex
+or OpenAI. It runs in CI.
+
+Changed today, because the rule lists "package": `internal/logs/claudecode` is now `internal/logs/cchistory`,
+`internal/logs/codex` is `internal/logs/cxhistory`, `internal/hooks/probe/codex.go` is `cxcaps.go`,
+`internal/fixer/codexmodel_test.go` is `cxmodel_test.go`, and `bench/trovebench/agent/claude_code.py` is `cc.py`
+(class `CcAgent`).
+
+Clean already: the Go module `github.com/usetrove/trove`, the plugin and marketplace name `trove`, the npm package
+`trove-cli`, the OpenCode plugin `trove-opencode`, the pip package `trovebench`, every `trove` subcommand, the MCP tools
+(`trove_read`, `trove_search`, `trove_run`, `trove_fetch_full`), the subagents (`trove-scout`, `trove-cascade`) and the
+plugin commands.
+
+Kept on purpose, each a name the integrated agent or provider dictates or a plain description of what is integrated
+(decision 2026-11-06; for lawyer review, question 6 above):
+
+- `.claude-plugin/` and `CLAUDE.md`: names Claude Code's own formats require.
+- Gateway route prefixes `/anthropic` and `/openai`, config sections `upstreams.anthropic` and `upstreams.openai`, the
+  environment variables `TROVE_UPSTREAMS_ANTHROPIC` and `TROVE_UPSTREAMS_OPENAI`, and `--provider anthropic|openai`:
+  they name the provider API being forwarded to. Renaming them would break installed agent settings
+  (`ANTHROPIC_BASE_URL` points at `/anthropic`).
+- Agent identifiers used as data values (`claude_code`, `codex`, `claude-code`, and setup/undo ids such as
+  `claude_code_hooks`) and the files that list the agents' documented settings
+  (`internal/settings/catalog/*.toml`, `internal/tasks/catalog/claude_code.toml`).
+- Parsers and fixtures named for the API they read (`internal/gateway/usage/anthropic.go`, `openai.go`, `testdata/`).
+- Identifiers inside code (for example `logs.SourceClaudeCode`) and documentation page names.
+
+### New open items (2026-11-06)
+
+1. Paste the current OpenAI Terms of Use, Usage policies and Services Agreement, and the Codex sign-in and
+   authentication pages, into a file for review (automated fetches get HTTP 403 or a redirect to another host).
+2. Read GitHub Terms of Service sections L.3 to S, the OpenCode Privacy Policy and its brand page.
+3. The Usage Policy's effective date (Nov 12, 2026) is six days away. Re-read it on or after that date.
+4. ~~The mitigation for question 1~~ Done 2026-11-06: `trove setup` refuses to point Claude Code at the gateway without evidence of an API key (`internal/cli/setup.go` `claudeNeedsAPIKey`). The residual case (endpoint set by hand) remains in question 1.
+5. `trove hooks probe --live` runs the user's own `claude -p`, possibly under a subscription login. It is user-started,
+   capped to a few cents and uses documented flags, but it is automated use of that login; see question for Anthropic 4.
+6. The Codex session-file reader depends on an undocumented format; verify on a real install or remove it.
+7. Retention gap closed today: before this update only six tables were pruned and only while the gateway ran; see
+   [data.md](data.md).
+
+### Questions for a lawyer (added 2026-11-06; 1 to 7 above still stand)
+
+8. Trove stores no model output and trains nothing on content. Could any "train" or "develop AI models" clause quoted
+   above apply to a model trained only on metadata (token counts, sizes, fixed labels, pass/fail) about a user's own
+   sessions?
+9. The Usage Policy clause is about outputs. Is a count of tokens in an output, or a pass/fail on code an agent wrote,
+   "using outputs"?
+10. The benchmark lab runs a provider's agent on public coding tasks with its own API key and keeps redacted transcripts
+    for analysis only. Is publishing aggregate results (costs, pass rates) within each provider's terms?
+11. Is the opt-in summary (see [data.md](data.md)) "personal information" or "personal data" under PIPEDA, BC PIPA,
+    GDPR or US state laws, given a random install id and coarse counts? See [privacy-law.md](privacy-law.md).
+12. For a future team edition: what notice, consent and aggregation does employee-monitoring law require in each region?
+    See [privacy-law.md](privacy-law.md).
+13. Does the Consumer Terms ban on "automated or non-human means" apply to a user who runs `trove hooks probe --live`
+    under a Pro or Max login?
+
+### Questions for Anthropic
+
+1. May a third-party local tool read the session files Claude Code writes under `~/.claude/projects`, read-only, to
+   compute usage and cost for the same user? Is that format stable or supported?
+2. When a subscription user points `ANTHROPIC_BASE_URL` at a local gateway that immediately refuses the request,
+   is receiving the OAuth token on loopback, without logging or forwarding it, within "may not collect, store, or
+   intermediate Claude.ai credentials or session tokens"? What do you recommend to prevent it?
+3. Is "works with Claude Code" in plain text, in docs and a README, within the Trademark guidelines for a tool that
+   also names `ANTHROPIC_BASE_URL` and registers an MCP server?
+4. Is a user-started `claude -p` run, a few cents' budget, under their own subscription login to test whether a hook
+   rewrite works, within the Consumer Terms on automated access?
+5. Is there a documented way for a tool to learn whether a session is API-key or subscription authenticated, instead of
+   inferring it from settings and headers?
+6. Does an opt-in optimizer that rewrites a user's own API request body, before it reaches the API, raise any issue
+   under the Usage Policy or Commercial Terms?
+7. Which of the pages above (Usage Policy, Consumer Terms) governs a Team or Enterprise seat's Claude Code use, given
+   the Claude Code legal page says Commercial Terms apply to Team, Enterprise and API users?

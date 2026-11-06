@@ -6,6 +6,7 @@ the same runs always give byte-identical numbers.
 
 from __future__ import annotations
 
+import dataclasses
 import random
 import statistics
 from dataclasses import dataclass
@@ -73,17 +74,37 @@ class Pair:
     ref: RunRecord
     treated: RunRecord
 
+    @property
+    def effort(self) -> str:
+        return self.treated.effort
+
+
+COST_BASES = ("recorded", "agent")
+
+
+def rebase_cost(records: Sequence[RunRecord], basis: str) -> list[RunRecord]:
+    """Put every record on one cost source. "recorded" keeps each run's own (gateway-measured for gateway
+    conditions, agent-usage for the rest); "agent" uses the agent-reported cost for all runs, which is the
+    only basis that compares conditions with and without a gateway like for like."""
+    if basis not in COST_BASES:
+        raise ValueError(f"cost basis must be one of {', '.join(COST_BASES)}.")
+    if basis == "recorded":
+        return list(records)
+    return [dataclasses.replace(r, cost_usd=r.agent_cost_usd, cost_source="agent-usage") for r in records]
+
 
 def usable(r: RunRecord) -> bool:
     return r.status == OK and r.cost_usd is not None
 
 
-def make_pairs(records: Sequence[RunRecord], reference: str, treated: str) -> list[Pair]:
-    """Pair runs that share (task, seed). A pair needs both runs gradeable with a known cost."""
-    ref = {(r.task_id, r.seed): r for r in records if r.condition == reference and usable(r)}
+def make_pairs(records: Sequence[RunRecord], reference: str, treated: str, effort: str | None = None) -> list[Pair]:
+    """Pair runs that share (task, seed, effort). A pair needs both runs gradeable with a known cost.
+    effort=None pools every effort level; a level name keeps only that level."""
+    ref = {(r.task_id, r.seed, r.effort): r for r in records if r.condition == reference and usable(r)}
+    mine = (r for r in records if r.condition == treated and usable(r) and (effort is None or r.effort == effort))
     out = []
-    for r in sorted((r for r in records if r.condition == treated and usable(r)), key=lambda r: (r.task_id, r.seed)):
-        other = ref.get((r.task_id, r.seed))
+    for r in sorted(mine, key=lambda r: (r.task_id, r.seed, r.effort)):
+        other = ref.get((r.task_id, r.seed, r.effort))
         if other is not None:
             out.append(Pair(r.task_id, r.seed, other, r))
     return out

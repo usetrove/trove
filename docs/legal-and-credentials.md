@@ -37,8 +37,14 @@ What they say, in short:
 If a subscription user runs `trove setup` and then starts Claude Code with no API key, the OAuth token
 arrives at the local gateway in a request header before Trove rejects the request. Trove does not log,
 store or forward it, but whether merely receiving it counts as "collect" is not settled by the docs.
-Possible mitigation: make `trove setup` refuse unless `ANTHROPIC_API_KEY` is set (check existence only,
-never read the value). Not implemented.
+Mitigation, implemented 2026-11-06: `trove setup` no longer points Claude Code at the gateway unless there is evidence it will
+use an API key: `ANTHROPIC_API_KEY` is set (existence only, the value is never read), or `apiKeyHelper` or
+`forceLoginMethod: console` is in its settings, or the user declared `plan = "api_key"` under `[history]` in config.toml. A
+bearer-only `ANTHROPIC_AUTH_TOKEN` does not count, because the gateway refuses a bearer without an `x-api-key`. Otherwise setup
+leaves Claude Code alone and says to use the plugin. Test: `internal/cli/setup_apikey_test.go`. **What it does not cover:** a user
+who set the endpoint by hand, or who runs `trove setup` with a key and later logs in with Claude.ai, still sends the
+login token to the gateway before it is refused. That residual case stays question 1 for a lawyer. Codex CLI is not affected:
+Trove's provider entry reads the key from `OPENAI_API_KEY`.
 
 ## Not yet checked
 

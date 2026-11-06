@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/logs"
-	"github.com/usetrove/trove/internal/logs/claudecode"
+	"github.com/usetrove/trove/internal/logs/cchistory"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -31,8 +31,8 @@ func newIngester(t *testing.T) (*logs.Ingester, *store.DB) {
 	}
 	return &logs.Ingester{
 		DB:       db,
-		Sources:  []logs.Source{&claudecode.Source{Now: future}},
-		Versions: logs.ParserVersions{logs.SourceClaudeCode: claudecode.ParserVersion},
+		Sources:  []logs.Source{&cchistory.Source{Now: future}},
+		Versions: logs.ParserVersions{logs.SourceClaudeCode: cchistory.ParserVersion},
 		Pricing:  tbl,
 		Plan:     func(string) logs.Plan { return logs.PlanAPIKey },
 	}, db
@@ -49,7 +49,7 @@ func historyDir(t *testing.T) string {
 
 func copyFixture(t *testing.T, projects, name string) string {
 	t.Helper()
-	b, err := os.ReadFile("claudecode/testdata/v2_basic.jsonl")
+	b, err := os.ReadFile("cchistory/testdata/v2_basic.jsonl")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -142,3 +142,65 @@ python -m trovebench validate --tasks bench/tasks/mined
 - Update the "Not yet run end to end" bullet in `bench/README.md` (Known gaps) with the date and what you ran.
 - Fix anything found, and add an offline test for each bug so it cannot come back.
 - Remaining known gaps (not part of this checklist): Codex adapter, non-Python polyglot, Django/SymPy SWE-bench, Terminal-Bench.
+
+---
+
+# Rigorous studies (pre-registered, paired): status and test plan
+
+Added in commit e36ae2e. Design and statistics are in `docs/benchmark-methodology.md`.
+**This work is only partly done.** Everything below marked BUILT passes its offline tests but has never run
+against a real agent; everything marked NOT BUILT does not exist yet.
+
+## Status by item
+
+| Item | State |
+|---|---|
+| Study files, pre-registration lock, paired randomized plan with effort axis | BUILT (offline tested) |
+| Statistics (`inference.py`), per-study report, charts, CSVs | BUILT (offline tested) |
+| Study (a) parity: `bench/studies/parity.yaml` | BUILT; never run for real; needs Docker, API key, tasks, and a hook check (see A below) |
+| Docker-free `--simulate` mode | BUILT; measures nothing, for pipeline testing only |
+| Defaults generator (`trovebench defaults`) and Go load test | BUILT; only ever fed simulated data, so no rule is `benchmark` yet |
+| Methodology doc | BUILT |
+| Study (b) cascading (cheap model, escalate on failing tests, vs strong alone) | NOT BUILT (`cascade.py`) |
+| Study (c) scout subagent on/off condition | NOT BUILT |
+| Study (d) settings-profile conditions | NOT BUILT |
+| Study (e) third-party tool adapters (`trovebench/tools/`) | NOT BUILT. Analysis of claim vs measurement exists (`claims:` in a study file). The real tool is still to be chosen, and its claim and install steps verified from official docs |
+| Study (f) open-weight models: Codex CLI adapter (`agent/codex.py`) through `/compat/<name>` | NOT BUILT. Verify Codex's current custom-endpoint and reasoning-effort config from official docs first |
+| Task licence allowlist check in `validate`; `publishable` flag; `LICENSES.md` update | NOT BUILT |
+| Transcript policy (gitignored `transcripts/`, `NO_TRAINING.md`, `data_use` in versions.json) | NOT BUILT |
+| CLAUDE.md layout line mentions bench as "Python, later" | not updated |
+
+## Acceptance criteria still open
+- Parity study run end to end for real, reporting plugin savings as a % of the gateway's with CIs.
+- At least one third-party tool measured against its own claim.
+- Defaults file regenerated from real results that met the ship rule (`python -m trovebench defaults --results ...`).
+
+## Tests to run at the end
+
+Free, no Docker:
+- [ ] `cd bench && python -m pytest tests -q` passes (173 at the time of writing).
+- [ ] `go test ./internal/recommend ./internal/experiment` passes.
+- [ ] Simulated parity run, then read the report. Needs a task folder and an effects file (see `tests/test_study_cli.py` for a working
+      example). Check the report opens with the SIMULATED banner and `parity.csv` has a plugin-share row with a CI.
+- [ ] `python -m trovebench defaults --results <that simulated folder>` is refused with a "simulated" message.
+- [ ] `python -m trovebench defaults --dry-run` reports no result folders and leaves `internal/recommend/defaults.toml` unchanged.
+- [ ] Editing a locked study file makes `plan`/`run`/`report` refuse with "changed since".
+
+Needs Docker and an API key (real money; read the plan estimate first):
+- [ ] **A. Confirm hooks really fire in the hook conditions.** Hook conditions (`hooks`, `hooks_gateway`) now run Claude Code
+      *without* `--bare`, because `--bare` skips hooks (docs, verified 2026-11-06). Run `go run ./scripts/hookprobe --live`, then
+      one `hooks` run, and check `trove-data/` in the run folder shows hook activity. There is no automatic assertion yet, so a
+      silent no-op would produce a plugin-only result identical to no Trove.
+- [ ] **B. Confirm `--effort` works** at the pinned Claude Code version: `docker run --rm <image> claude --help` lists `--effort`,
+      and a `low` vs `high` run differs in reasoning tokens. The user-level `effortLevel` setting may be ignored for newer models;
+      the harness uses the flag, not the setting.
+- [ ] **C. Confirm the usage fields.** `agent_stdout.txt` contains `modelUsage` (camelCase per-model keys) and `total_cost_usd`.
+      Unconfirmed whether the CLI uses `modelUsage` or `model_usage`; the parser reads `modelUsage`, so a mismatch would make
+      `agent_cost_usd` empty and the whole study unusable. Check `agent_cost_usd` is filled in `runs.csv`.
+- [ ] **D. Cost cross-check.** For gateway conditions, `note` flags runs where the agent's own estimate and the gateway differ by
+      more than 10%. Review those before trusting the parity numbers.
+- [ ] Generate tasks: `python -m trovebench fetch polyglot -n 20`, then `validate`.
+- [ ] `prereg`, `plan --study bench/studies/parity.yaml` (free), read the estimate and worst case, then `run ... --yes`.
+- [ ] Read the report: pairs per effort, "incomplete units" count, parity row estimable or not, Holm-adjusted p-values.
+- [ ] Only after real results exist: `python -m trovebench defaults --results bench/results/<date>/parity-1`, then
+      `go test ./internal/recommend ./internal/experiment`, then review the diff before committing.

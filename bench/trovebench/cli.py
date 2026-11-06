@@ -20,6 +20,9 @@ from .docker_run import ContainerRunner, RunEnvError
 from .ledger import Ledger
 from .manifest import ManifestError, Task, load_tasks
 from .plan import RunSpec, build_plan, read_plan, write_plan
+from .prereg import verify_lock
+from .study import load_study
+from .studyreport import ship_rule_for, write_study_report
 from .report import write_all
 from .runner import execute
 from .sources.http import FetchError
@@ -41,6 +44,8 @@ def _common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--dry-run", action="store_true", help="print the plan and cost estimate, then stop")
     p.add_argument("--hook-capabilities", type=Path, help="hookprobe JSON from a live probe (go run ./scripts/hookprobe --live); required by the hooks and hooks_gateway conditions")
     p.add_argument("--json", action="store_true", help="print a machine-readable summary")
+    p.add_argument("--study", type=Path, help="a pre-registered study file (bench/studies/<id>.yaml); see `prereg`")
+    p.add_argument("--simulate", type=Path, help="effects file: run synthetic, Docker-free runs to test the pipeline. Measures nothing")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -56,6 +61,16 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("smoke", help="3 tiny tasks x 2 conditions, end to end")
     _common(s)
     s.add_argument("--yes", action="store_true", help="confirm spending real API money")
+
+    g = sub.add_parser("prereg", help="lock a study file (hash, commit, time) before running it")
+    g.add_argument("study", type=Path, help="bench/studies/<id>.yaml")
+
+    d = sub.add_parser("defaults", help="generate the recommender defaults and experiment priors from study results")
+    d.add_argument("--results", type=Path, nargs="*", default=[], help="finished study folders (bench/results/<date>/<study-id>)")
+    d.add_argument("--seed", type=Path, default=BENCH / "defaults_seed.toml")
+    d.add_argument("--out", type=Path, default=BENCH.parent / "internal" / "recommend" / "defaults.toml")
+    d.add_argument("--priors-out", type=Path, default=BENCH.parent / "internal" / "experiment" / "priors.toml")
+    d.add_argument("--dry-run", action="store_true", help="show what each result supports; write nothing")
 
     f = sub.add_parser("fetch", help="generate task manifests from polyglot or SWE-bench Verified")
     f.add_argument("source", choices=["polyglot", "swebench"])
@@ -77,21 +92,41 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _setup(args, *, smoke: bool = False) -> tuple[Config, list[Task], list, list[RunSpec], Path]:
     cfg = load_config(args.config)
-    if args.fake:
+    study = None
+    args._study = None
+    if args.study:
+        if smoke or args.repeats:
+            raise UserError("A study fixes its own repeats and conditions; edit and re-register the study file instead of overriding them.")
+        study, lock = verify_lock(args.study)
+        args._study = (study, lock, args.study.read_text(encoding="utf-8"))
+        cfg = dataclasses.replace(
+            cfg, agent=study.agent, model=study.model or cfg.model, repeats=study.repeats, order_seed=study.order_seed,
+            conditions=tuple(study.conditions), ship_rule=ship_rule_for(study),
+            batch_cap_usd=float(study.budget.get("batch_cap_usd", cfg.batch_cap_usd)),
+            run_cap_usd=float(study.budget.get("run_cap_usd", cfg.run_cap_usd)))
+        if cfg.run_cap_usd > cfg.batch_cap_usd:
+            raise UserError("The study's run_cap_usd is above its batch_cap_usd, so no run could ever start.")
+    if args.fake or args.simulate:
         cfg = dataclasses.replace(cfg, agent="fake")
     if smoke:
         cfg = dataclasses.replace(cfg, conditions=("direct", "all_safe"), repeats=1)
     if args.repeats:
         cfg = dataclasses.replace(cfg, repeats=args.repeats)
-    tasks_dir = args.tasks or (BENCH / "tasks" / "smoke" if smoke else None)
+    tasks_dir = args.tasks or (BENCH / "tasks" / "smoke" if smoke else (BENCH / study.tasks if study else None))
     if tasks_dir is None:
         raise UserError("Give --tasks <folder of manifests>. The smoke suite lives in bench/tasks/smoke.")
     tasks = load_tasks(tasks_dir)
     if not tasks:
         raise UserError(f"No task manifests (*.yaml) found under {tasks_dir}.")
     conds = parse_conditions(list(cfg.conditions), "claude_code" if cfg.agent == "fake" else cfg.agent)
-    specs = build_plan(tasks, conds, cfg.repeats, cfg.order_seed)
-    batch = args.batch or (BENCH / "results" / (date.today().isoformat() + ("-smoke" if smoke else "")))
+    if study:
+        base = next((c for c in conds if c.name == study.baseline_condition), None)
+        if base is None or not base.measurable:
+            raise UserError(f"The baseline condition '{study.baseline_condition}' cannot be measured with this agent, "
+                            "so nothing can be compared with it.")
+    specs = build_plan(tasks, conds, cfg.repeats, cfg.order_seed, efforts=study.efforts if study else ())
+    default_batch = BENCH / "results" / (date.today().isoformat() + ("-smoke" if smoke else ""))
+    batch = args.batch or (default_batch / study.id if study else default_batch)
     return cfg, tasks, conds, specs, batch
 
 
@@ -132,7 +167,7 @@ def _cmd_run(args, *, smoke: bool = False, plan_only: bool = False) -> int:
         raise UserError(f"{len(unvalidated)} task(s) have not passed validation (first: {unvalidated[0]}). "
                         "Run `python -m trovebench validate --tasks <folder>` first; it proves each task is solvable "
                         "before any agent is paid to try it. Remove tasks that are rejected.")
-    if not args.fake:
+    if not args.fake and not args.simulate:
         if est.expected_usd > est.batch_cap_usd:
             raise UserError(f"The estimate (${est.expected_usd:.2f}) is above the batch cap (${est.batch_cap_usd:.2f}). "
                             "Lower the number of tasks or repeats, or raise limits.batch_cap_usd in the config.")
@@ -140,7 +175,18 @@ def _cmd_run(args, *, smoke: bool = False, plan_only: bool = False) -> int:
             raise UserError("This will spend real API money on your key. Re-run with --yes to confirm "
                             f"(hard stop at ${est.batch_cap_usd:.2f}).")
     write_plan(plan_path, specs)
-    (batch / "config.used.yaml").write_text(_config_text(args.config), encoding="utf-8", newline="\n")
+    study_info = args._study
+    (batch / "config.used.yaml").write_text(study_info[2] if study_info else _config_text(args.config), encoding="utf-8", newline="\n")
+    if args.simulate:
+        from .simulate import load_effects, make_run_one
+
+        print("SIMULATION: synthetic runs from the effects file. This measures nothing about any agent.")
+        versions = {"agent": "simulated", "model": cfg.model, "fake_agent": True, "simulated": True, "config_sha256": cfg.sha256}
+        (batch / "versions.json").write_text(json.dumps(versions, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
+        result = execute(specs, ledger, make_run_one(load_effects(args.simulate)), batch_cap_usd=1e9, run_cap_usd=1.0)
+        _finish(batch, cfg, conds, versions, len(tasks), ledger, study_info)
+        print(f"Simulated {result.ran} run(s), {result.skipped_done} already done. Report: {batch / 'report.md'}")
+        return 0 if result.complete else 3
 
     runner = ContainerRunner(
         agent=get_agent(cfg.agent), model=cfg.model, run_cap_usd=cfg.run_cap_usd, run_timeout_s=cfg.run_timeout_s,
@@ -155,7 +201,7 @@ def _cmd_run(args, *, smoke: bool = False, plan_only: bool = False) -> int:
     (batch / "versions.json").write_text(json.dumps(versions, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
 
     result = execute(specs, ledger, runner.run_one, batch_cap_usd=cfg.batch_cap_usd, run_cap_usd=cfg.run_cap_usd)
-    _write_report(batch, cfg, conds, versions, len(tasks), ledger)
+    _finish(batch, cfg, conds, versions, len(tasks), ledger, study_info)
     print(f"Ran {result.ran}, skipped {result.skipped_done} already done, spent ${result.spent_usd:.4f}. Stop reason: {result.stop_reason}.")
     print(f"Report: {batch / 'report.md'}")
     return 0 if result.complete else 3
@@ -165,6 +211,14 @@ def _config_text(path: Path | None) -> str:
     from .config import DEFAULT_PATH
 
     return (path or DEFAULT_PATH).read_text(encoding="utf-8")
+
+
+def _finish(batch: Path, cfg: Config, conds, versions: dict, n_tasks: int, ledger: Ledger, study_info) -> None:
+    if study_info:
+        study, lock, text = study_info
+        write_study_report(batch, study, lock, ledger.final_records(), versions, text)
+    else:
+        _write_report(batch, cfg, conds, versions, n_tasks, ledger)
 
 
 def _write_report(batch: Path, cfg: Config, conds, versions: dict, n_tasks: int, ledger: Ledger) -> None:
@@ -178,6 +232,18 @@ def _cmd_report(args) -> int:
     for need in ("ledger.jsonl", "versions.json", "config.used.yaml"):
         if not (batch / need).exists():
             raise UserError(f"{batch / need} is missing; this does not look like a trovebench batch folder.")
+    if (batch / "study.lock.json").exists():
+        # A study batch: the registered study file is kept as config.used.yaml and must still match its lock.
+        lock = json.loads((batch / "study.lock.json").read_text(encoding="utf-8"))
+        study = load_study(batch / "config.used.yaml")
+        if study.sha256 != lock.get("study_sha256"):
+            raise UserError(f"{batch / 'config.used.yaml'} no longer matches the hash locked at registration, "
+                            "so a report from it would not be of the registered study.")
+        versions = json.loads((batch / "versions.json").read_text(encoding="utf-8"))
+        write_study_report(batch, study, lock, Ledger(batch / "ledger.jsonl").final_records(), versions,
+                           (batch / "config.used.yaml").read_text(encoding="utf-8"))
+        print(f"Report: {batch / 'report.md'}")
+        return 0
     cfg = load_config(batch / "config.used.yaml")
     conds = parse_conditions(list(cfg.conditions), "claude_code" if cfg.agent == "fake" else cfg.agent)
     versions = json.loads((batch / "versions.json").read_text(encoding="utf-8"))
@@ -241,9 +307,38 @@ def _cmd_validate(args) -> int:
     return 1 if bad else 0
 
 
+def _cmd_prereg(args) -> int:
+    from .prereg import write_lock
+
+    lp = write_lock(args.study)
+    print(f"Locked {args.study.name} in {lp}. Commit both files before running the study.")
+    return 0
+
+
+def _cmd_defaults(args) -> int:
+    from .defaults_gen import generate
+
+    defaults, priors, findings = generate(args.seed.read_text(encoding="utf-8"), args.results)
+    for f in findings:
+        print(f"{f.status.upper():12} {f.name} ({f.results_dir}, {f.pairs} pairs): {f.why}")
+    if not findings:
+        print("No result folders given: the output is the seed rules unchanged.")
+    if args.dry_run:
+        return 0
+    for path, text in ((args.out, defaults), (args.priors_out, priors)):
+        path.write_text(text, encoding="utf-8", newline="\n")
+        print(f"Wrote {path}")
+    print("Next: go test ./internal/recommend ./internal/experiment")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.cmd == "defaults":
+            return _cmd_defaults(args)
+        if args.cmd == "prereg":
+            return _cmd_prereg(args)
         if args.cmd == "fetch":
             return _cmd_fetch(args)
         if args.cmd == "mine":
@@ -258,7 +353,7 @@ def main(argv: list[str] | None = None) -> int:
             return _cmd_run(args, smoke=True)
         return _cmd_report(args)
     except (UserError, ConfigError, ManifestError, ConditionError, DockerError, RunEnvError, pricing_mod.PricingError,
-            NotImplementedError, ValueError, FetchError) as e:
+            NotImplementedError, ValueError, FetchError) as e:  # StudyError is a ValueError
         print(f"trovebench: {e}", file=sys.stderr)
         return 2
 

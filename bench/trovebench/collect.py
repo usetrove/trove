@@ -109,9 +109,12 @@ def direct_cost(usage: AgentResult, table: PricingTable, at: date) -> tuple[floa
 def build_record(
     *, run_id: str, task_id: str, condition: str, seed: int, passed: bool, timed_out: bool, wall_s: float,
     agent: AgentResult, gateway: GatewayStats | None, expected_states: dict[str, str] | None,
-    table: PricingTable, today: date, agent_exit_ok: bool,
+    table: PricingTable, today: date, agent_exit_ok: bool, effort: str = "",
 ) -> RunRecord:
     notes: list[str] = []
+    # Always computed from the agent's own usage report, whatever the condition, so a study can compare
+    # every condition on one cost source. The gateway figure stays the cross-check (see the drift note).
+    agent_cost = direct_cost(agent, table, today)[0] if agent.usage_by_model else None
     status = OK
     if not agent.parsed and not timed_out:
         # The agent never produced a result (not installed, crashed, bad auth). That is an infrastructure
@@ -154,5 +157,5 @@ def build_record(
         cost_usd=cost, cost_source=source,
         input_uncached_tokens=tokens["input_uncached"], cache_write_tokens=tokens["cache_write"],
         cache_read_tokens=tokens["cache_read"], output_tokens=tokens["output"], reasoning_tokens=reasoning,
-        note="; ".join(notes),
+        note="; ".join(notes), effort=effort, agent_cost_usd=agent_cost,
     )

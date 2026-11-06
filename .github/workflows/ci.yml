@@ -59,8 +59,14 @@ jobs:
         run: go test -count=1 -v ./internal/egress
       - name: No credential or prompt text in logs, responses or on disk
         run: go test -count=1 -v -run 'TestNoCredentialOrPromptReachesLogsResponsesOrDisk|TestNonAPIKeyAuthIsRejected' ./internal/gateway
-      - name: Redaction and metadata-only schema
+      - name: Redaction, metadata-only schema, retention of every table, data inventory matches the schema
         run: go test -count=1 ./internal/redact ./internal/store ./internal/hooks ./internal/logs/... ./internal/features ./internal/tuning ./internal/recommend
+      - name: Canary strings never reach the database, the data folder or anything shared
+        run: go test -count=1 -v ./internal/privacy
+      - name: Opt-in sharing is off by default; only `contribute delete` ever sends a delete; setup needs an API key; data export and delete
+        run: go test -count=1 -run 'Contribute|TestData|Uninstall|Purge|TestSetup|TestNothingBut' ./internal/cli ./internal/contribute
+      - name: No Claude, Anthropic, Codex or OpenAI in our own names (rule 13)
+        run: go test -count=1 ./internal/naming
 
   npm-wrapper:
     runs-on: ubuntu-latest

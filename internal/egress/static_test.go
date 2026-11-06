@@ -20,7 +20,7 @@ var allowedSites = map[string]string{
 	"internal/gateway/proxy.go":     "ReverseProxy: forwards the user's own API request to the configured provider",
 	"internal/gateway/server.go":    "clones http.DefaultTransport for that same upstream connection",
 	"internal/cli/gateway.go":       "2 s health probe of the local gateway; the address is checked to be loopback first",
-	"internal/contribute/upload.go": "opt-in anonymous summary upload; runs only after `trove contribute enable` (contribute.json) and with contribute.endpoint set; sends exactly the text `trove contribute` shows",
+	"internal/contribute/upload.go": "opt-in anonymous summary upload (runs only after `trove contribute enable` and with contribute.endpoint set; sends exactly the text `trove contribute` shows) and the one DELETE request that only `trove contribute delete` makes (CLAUDE.md rule 1, parts b and c)",
 }
 
 // bannedSelectors are package-level names that dial, resolve or build a client.

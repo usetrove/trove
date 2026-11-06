@@ -161,7 +161,8 @@ class ContainerRunner:
 
         timeout = min(task.timeout_s, self.run_timeout_s)
         t0 = time.monotonic()
-        res = c.exec(self.agent.command(model=self.model, max_budget_usd=self.run_cap_usd, prompt_path="/bench/prompt.txt"),
+        res = c.exec(self.agent.command(model=self.model, max_budget_usd=self.run_cap_usd, prompt_path="/bench/prompt.txt",
+                                           effort=spec.effort, bare=not cond.uses_hooks),
                      timeout=timeout, env=agent_env)
         wall = time.monotonic() - t0
         (run_dir / "agent_stdout.txt").write_text(redact(res.out, secrets), encoding="utf-8", newline="\n")
@@ -191,7 +192,7 @@ class ContainerRunner:
             run_id=spec.run_id, task_id=spec.task_id, condition=spec.condition, seed=spec.seed,
             passed=grade.rc == 0, timed_out=res.timed_out, wall_s=wall, agent=parsed, gateway=stats,
             expected_states=cond.effective_states() if cond.uses_gateway else None,
-            table=self.table, today=date.today(), agent_exit_ok=res.rc == 0,
+            table=self.table, today=date.today(), agent_exit_ok=res.rc == 0, effort=spec.effort,
         )
         (run_dir / "record.json").write_text(json.dumps(rec.as_row(), indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
         return rec

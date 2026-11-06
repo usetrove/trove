@@ -15,7 +15,7 @@ from .base import AgentResult, parse_claude_style_result
 ALLOWED_TOOLS = "Bash,Read,Edit,Write"
 
 
-class ClaudeCode:
+class CcAgent:
     name = "claude_code"
 
     def install_lines(self, version: str | None) -> list[str]:
@@ -38,11 +38,16 @@ class ClaudeCode:
     def version_command(self) -> str:
         return "claude --version"
 
-    def command(self, *, model: str, max_budget_usd: float, prompt_path: str) -> str:
+    def command(self, *, model: str, max_budget_usd: float, prompt_path: str, effort: str = "", bare: bool = True) -> str:
+        # --bare skips hooks, installed plugins and CLAUDE.md (docs: code.claude.com/docs/en/headless, verified
+        # 2026-11-06), so a condition that depends on Trove's hooks must run without it. The container is fresh,
+        # holds no OAuth or keychain login, and gets only an API key, so dropping --bare adds no credential path.
+        # --effort is documented in code.claude.com/docs/en/cli-reference (low|medium|high|xhigh|max).
         return (
-            f'claude --bare -p "$(cat {shlex.quote(prompt_path)})" '
+            f'claude {"--bare " if bare else ""}-p "$(cat {shlex.quote(prompt_path)})" '
             f"--model {shlex.quote(model)} --output-format json "
-            f"--max-budget-usd {max_budget_usd:g} --permission-mode acceptEdits "
+            + (f"--effort {shlex.quote(effort)} " if effort else "")
+            + f"--max-budget-usd {max_budget_usd:g} --permission-mode acceptEdits "
             f"--allowedTools {shlex.quote(ALLOWED_TOOLS)} --no-session-persistence"
         )
 

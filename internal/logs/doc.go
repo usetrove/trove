@@ -6,5 +6,5 @@
 // timestamps. They have no field that could hold prompt text, code, file paths
 // or tool output, so none of it can reach the database.
 //
-// Sources live in sub-packages (claudecode, codex) and implement Source.
+// Sources live in sub-packages (cchistory, cxhistory) and implement Source.
 package logs

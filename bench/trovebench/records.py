@@ -26,6 +26,8 @@ class RunRecord:
     output_tokens: int = 0
     reasoning_tokens: int = 0
     note: str = ""
+    effort: str = ""           # reasoning effort level of this run; "" when the study has no effort axis
+    agent_cost_usd: float | None = None   # list price applied to the agent's own reported usage; same source for every condition
 
     def as_row(self) -> dict:
         return asdict(self)

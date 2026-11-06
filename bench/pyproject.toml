@@ -7,7 +7,7 @@ name = "trovebench"
 version = "0.1.0"
 description = "Reproducible A/B harness: coding agents with and without Trove optimizations"
 requires-python = ">=3.10"
-dependencies = ["pyyaml>=6"]
+dependencies = ["pyyaml>=6", "tomli>=2; python_version < '3.11'"]
 
 [project.optional-dependencies]
 report = ["matplotlib>=3.8"]

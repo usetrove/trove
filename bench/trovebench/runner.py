@@ -71,7 +71,7 @@ def execute(
             rec = RunRecord(
                 run_id=spec.run_id, task_id=spec.task_id, condition=spec.condition, seed=spec.seed,
                 status="error", passed=False, timed_out=False, wall_s=0.0, turns=0, tool_calls=0, retries=0,
-                cost_usd=None, cost_source="none", note=redact(f"{type(e).__name__}: {e}")[:500],
+                cost_usd=None, cost_source="none", note=redact(f"{type(e).__name__}: {e}")[:500], effort=spec.effort,
             )
         if rec.run_id != spec.run_id:
             raise RuntimeError(

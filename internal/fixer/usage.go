@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/logs"
-	"github.com/usetrove/trove/internal/logs/claudecode"
+	"github.com/usetrove/trove/internal/logs/cchistory"
 )
 
 // usageScan is what a live read of one project's Claude Code history found:
@@ -76,7 +76,7 @@ func (e *Env) projectUsage(ctx context.Context) *usageScan {
 		return u
 	}
 	root := filepath.Join(e.ClaudeDir, "projects", encodeProject(e.ProjectDir))
-	src := &claudecode.Source{Getenv: e.Getenv, Home: func() (string, error) { return e.Home, nil }}
+	src := &cchistory.Source{Getenv: e.Getenv, Home: func() (string, error) { return e.Home, nil }}
 	files, _ := src.Discover(ctx, []string{root})
 	if len(files) == 0 {
 		return u

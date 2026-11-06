@@ -7,7 +7,6 @@ import (
 	"context"
 	"database/sql"
 	"embed"
-	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -240,43 +239,6 @@ func PermissionProblems(dataDir string) []string {
 		check(filepath.Join(dataDir, f), 0o600)
 	}
 	return out
-}
-
-// Purge deletes requests and finished sessions older than days, relative to now.
-// It returns the number of request rows removed.
-func (d *DB) Purge(ctx context.Context, days int, now time.Time) (int64, error) {
-	if days < 1 {
-		return 0, errors.New("retention days must be at least 1")
-	}
-	cutoff := now.AddDate(0, 0, -days).UnixMilli()
-	tx, err := d.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, err
-	}
-	defer func() { _ = tx.Rollback() }()
-	res, err := tx.ExecContext(ctx, `DELETE FROM requests WHERE ts < ?`, cutoff)
-	if err != nil {
-		return 0, err
-	}
-	n, _ := res.RowsAffected()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE COALESCE(ended_at, started_at) < ?`, cutoff); err != nil {
-		return 0, err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM session_pins WHERE pinned_at < ?`, cutoff); err != nil {
-		return 0, err
-	}
-	// History rows older than the cutoff go too. File checkpoints stay, so the
-	// next scan does not re-read old files and bring the rows back.
-	if _, err := tx.ExecContext(ctx, `DELETE FROM history_requests WHERE ts < ?`, cutoff); err != nil {
-		return 0, err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM experiment_assignments WHERE assigned_at < ?`, cutoff); err != nil {
-		return 0, err
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM session_features WHERE recorded_at < ?`, cutoff); err != nil {
-		return 0, err
-	}
-	return n, tx.Commit()
 }
 
 // RunRetention purges once immediately and then every interval until ctx ends.

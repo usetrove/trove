@@ -77,6 +77,8 @@ class Condition:
 
 def parse_condition(spec: str, agent: str) -> Condition:
     supported = supported_optimizers(agent)
+    if spec.startswith("alone_"):      # the name a condition carries in records and study files
+        spec = "alone:" + spec[len("alone_"):]
     if spec == "direct":
         return Condition("direct", uses_gateway=False)
     if spec == "passthrough":

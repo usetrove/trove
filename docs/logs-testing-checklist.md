@@ -6,7 +6,7 @@ Written 2026-10-29. Companion to [logs.md](logs.md) (what it does) and [logs-ver
 
 | # | Check | How | Pass looks like |
 |---|---|---|---|
-| A1 | **Codex wrapper format.** The `{timestamp, type, payload}` line shape and the `function_call` / `function_call_output` item names are from community write-ups, not OpenAI. | Install Codex CLI, run one short session that uses a tool, then `head -c 600 ~/.codex/sessions/*/*/*/rollout-*.jsonl` (look at structure only). Compare with `internal/logs/codex/testdata/rollout_basic.jsonl`. | Same top-level keys and type names. If not, fix `internal/logs/codex/codex.go` and the fixture. |
+| A1 | **Codex wrapper format.** The `{timestamp, type, payload}` line shape and the `function_call` / `function_call_output` item names are from community write-ups, not OpenAI. | Install Codex CLI, run one short session that uses a tool, then `head -c 600 ~/.codex/sessions/*/*/*/rollout-*.jsonl` (look at structure only). Compare with `internal/logs/cxhistory/testdata/rollout_basic.jsonl`. | Same top-level keys and type names. If not, fix `internal/logs/cxhistory/codex.go` and the fixture. |
 | A2 | **Codex token numbers.** | `trove logs scan`, then compare a session's request count and token totals against Codex's own `/status`. | Input = input minus cached; totals within a few percent. |
 | A3 | **Codex plan.** ChatGPT-login users cannot be told from local signals. | Run with and without `OPENAI_API_KEY` set; check `trove logs status`. | `api_key` with the variable, `unknown` without. `[history] plan = "subscription"` flips it. |
 | A4 | **Subscription Claude Code user.** | On a machine logged in with a Claude subscription and no API key env var, run `trove` and `trove logs status`. | Plan `unknown` (or `subscription` with `forceLoginMethod`), report shows **API value**, not **Spend**. |
@@ -48,8 +48,8 @@ Written 2026-10-29. Companion to [logs.md](logs.md) (what it does) and [logs-ver
 ```sh
 go test ./...                     # everything
 go test -race ./...               # CI does this on Linux/macOS; not run on Windows here
-go test ./internal/logs/... -fuzz FuzzHandleLine -fuzztime 60s -run xxx   # run from internal/logs/claudecode
+go test ./internal/logs/... -fuzz FuzzHandleLine -fuzztime 60s -run xxx   # run from internal/logs/cchistory
 golangci-lint run ./internal/logs/...
 ```
 
-Goldens are refreshed with `-update` (`internal/logs/claudecode`, `internal/logs/codex`, `internal/report`) and `UPDATE_GOLDEN=1` (`internal/config`). Review the diff before keeping any refresh.
+Goldens are refreshed with `-update` (`internal/logs/cchistory`, `internal/logs/cxhistory`, `internal/report`) and `UPDATE_GOLDEN=1` (`internal/config`). Review the diff before keeping any refresh.

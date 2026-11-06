@@ -1,4 +1,4 @@
-// Package codex reads Codex CLI session history.
+// Package cxhistory reads Codex CLI session history.
 //
 // UNVERIFIED ON REAL INSTALLS. Codex CLI was not installed where this was
 // written, and OpenAI's documentation does not describe the session files.
@@ -19,7 +19,7 @@
 // function_call (name, call_id) and function_call_output (call_id, output).
 // Run `trove logs scan` on a real install and check docs/logs-verification.md
 // before relying on these numbers. CODEX_HOME relocates the directory (documented).
-package codex
+package cxhistory
 
 import (
 	"bufio"

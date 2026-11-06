@@ -8,7 +8,7 @@ from helpers import paired_runs, rec
 
 from trovebench.agent import get_agent
 from trovebench.agent.base import AgentResult, ModelUsage, parse_claude_style_result
-from trovebench.agent.claude_code import ClaudeCode
+from trovebench.agent.cc import CcAgent
 from trovebench.collect import build_record, direct_cost, pins_match, read_gateway_db
 from trovebench.config import ConfigError, load_config
 from trovebench.conditions import parse_conditions
@@ -143,7 +143,7 @@ def test_direct_run_timeout_without_result_is_not_an_infra_error():
 
 def test_claude_image_puts_claude_on_the_login_shell_path():
     # Regression: `bash -lc` resets PATH on Debian, so only a binary in /usr/local/bin is found.
-    lines = ClaudeCode().install_lines("2.1.200")
+    lines = CcAgent().install_lines("2.1.200")
     assert any("/usr/local/bin/claude" in l for l in lines)
 
 
@@ -225,3 +225,14 @@ def test_report_outputs(tmp_path):
     first = (tmp_path / "summary.csv").read_bytes()
     write_all(tmp_path, uniq, conds, rule, {"agent": "claude_code", "model": "m", "fake_agent": True}, "x: 1\n", 20)
     assert (tmp_path / "summary.csv").read_bytes() == first          # reproducible byte for byte
+
+
+def test_claude_command_effort_and_bare():
+    from trovebench.agent.cc import CcAgent
+
+    a = CcAgent()
+    base = dict(model="claude-haiku-5-5", max_budget_usd=1.5, prompt_path="/bench/prompt.txt")
+    assert "--effort" not in a.command(**base)
+    assert "--effort high " in a.command(**base, effort="high")
+    assert "--bare" in a.command(**base) and "--bare" not in a.command(**base, bare=False)
+    assert a.command(**base, bare=False).startswith('claude -p "$(cat')

@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/usetrove/trove/internal/contribute"
 	"github.com/usetrove/trove/internal/fixer"
 	"github.com/usetrove/trove/internal/mcp/install"
 	"github.com/usetrove/trove/internal/service"
@@ -25,10 +26,10 @@ import (
 var (
 	ownedFiles = []string{
 		"config.toml", "changes.json", "fixqueue.json", "gateway.json", "gateway.log",
-		"mcp_installs.json", "mcp_trust.json", pluginStateFile,
+		"mcp_installs.json", "mcp_trust.json", pluginStateFile, contribute.StateFile,
 	}
 	ownedDirs  = []string{"backups", "recovery", "hooks"}
-	ownedGlobs = []string{"hooks.log*", ".mcp_trust-*"}
+	ownedGlobs = []string{"hooks.log*", ".mcp_trust-*", contribute.StateFile + ".*"}
 )
 
 type uninstallReport struct {

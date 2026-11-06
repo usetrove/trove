@@ -11,8 +11,8 @@ import (
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/logs"
-	"github.com/usetrove/trove/internal/logs/claudecode"
-	"github.com/usetrove/trove/internal/logs/codex"
+	"github.com/usetrove/trove/internal/logs/cchistory"
+	"github.com/usetrove/trove/internal/logs/cxhistory"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/store"
@@ -21,12 +21,12 @@ import (
 // historyDays is how far back a scan looks. Files not written to since are skipped.
 const historyDays = 30
 
-func claudeSource(a *App) *claudecode.Source {
-	return &claudecode.Source{Getenv: a.Getenv, Home: a.HomeDir}
+func claudeSource(a *App) *cchistory.Source {
+	return &cchistory.Source{Getenv: a.Getenv, Home: a.HomeDir}
 }
 
-func codexSource(a *App) *codex.Source {
-	return &codex.Source{Getenv: a.Getenv, Home: a.HomeDir}
+func codexSource(a *App) *cxhistory.Source {
+	return &cxhistory.Source{Getenv: a.Getenv, Home: a.HomeDir}
 }
 
 // detectPlan estimates how the user pays for Claude Code from settings and
@@ -84,7 +84,7 @@ func scanHistory(ctx context.Context, a *App, dir string, cfg config.Config, all
 	in := &logs.Ingester{
 		DB:       db,
 		Sources:  []logs.Source{src, cdx},
-		Versions: logs.ParserVersions{logs.SourceClaudeCode: claudecode.ParserVersion, logs.SourceCodex: codex.ParserVersion},
+		Versions: logs.ParserVersions{logs.SourceClaudeCode: cchistory.ParserVersion, logs.SourceCodex: cxhistory.ParserVersion},
 		Pricing:  tbl,
 		Plan: func(source string) logs.Plan {
 			if source == logs.SourceCodex {
