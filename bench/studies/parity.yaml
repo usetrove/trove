@@ -1,0 +1,42 @@
+# Study (a): parity on one Claude Code version with an API key.
+# Question: what share of the gateway's saving does the plugin's hook layer deliver on its own?
+#
+# Register before running:   python -m trovebench prereg bench/studies/parity.yaml
+# Plan (spends nothing):     python -m trovebench plan --study bench/studies/parity.yaml
+# Run (spends real money):   python -m trovebench run  --study bench/studies/parity.yaml --yes
+#
+# Conditions (all use the same pinned Claude Code version from config.yaml, API-key auth only):
+#   direct         no Trove
+#   hooks          plugin layer only (Trove hooks, no gateway)
+#   all_safe       gateway only (every optimizer that can be on for this agent)
+#   hooks_gateway  both
+# Before trusting `hooks` and `hooks_gateway`, confirm with the live hook probe that the hooks really fire
+# (go run ./scripts/hookprobe --live): hook conditions run without --bare, since --bare skips hooks.
+
+id: parity-1
+title: "Parity: no Trove vs plugin only vs gateway only vs both"
+hypothesis: >
+  The plugin's hooks alone deliver a meaningful share of the gateway's cost saving, and using both
+  saves more than either alone, without lowering task success.
+primary_metric: billed_cost_usd
+secondary_metrics: [success_rate, latency_s]
+baseline_condition: direct
+conditions: [direct, hooks, all_safe, hooks_gateway]
+efforts: [low, medium, high]
+tasks: tasks/polyglot        # generate with: python -m trovebench fetch polyglot -n 20
+repeats: 3
+order_seed: 20261106
+cost_basis: agent            # every condition priced from the agent's own usage report: the only like-for-like basis
+parity: {none: direct, plugin: hooks, gateway: all_safe, both: hooks_gateway}
+analysis:
+  alpha: 0.05
+  bootstrap_resamples: 10000
+  bootstrap_seed: 20261106
+  multiple_comparison: holm
+ship_rule:
+  min_cost_reduction_pct: 5
+  success_margin_pts: 5
+  min_pairs: 30
+budget:
+  batch_cap_usd: 150.0
+  run_cap_usd: 1.5

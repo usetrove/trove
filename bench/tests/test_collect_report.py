@@ -225,3 +225,14 @@ def test_report_outputs(tmp_path):
     first = (tmp_path / "summary.csv").read_bytes()
     write_all(tmp_path, uniq, conds, rule, {"agent": "claude_code", "model": "m", "fake_agent": True}, "x: 1\n", 20)
     assert (tmp_path / "summary.csv").read_bytes() == first          # reproducible byte for byte
+
+
+def test_claude_command_effort_and_bare():
+    from trovebench.agent.claude_code import ClaudeCode
+
+    a = ClaudeCode()
+    base = dict(model="claude-haiku-5-5", max_budget_usd=1.5, prompt_path="/bench/prompt.txt")
+    assert "--effort" not in a.command(**base)
+    assert "--effort high " in a.command(**base, effort="high")
+    assert "--bare" in a.command(**base) and "--bare" not in a.command(**base, bare=False)
+    assert a.command(**base, bare=False).startswith('claude -p "$(cat')

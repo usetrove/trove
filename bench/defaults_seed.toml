@@ -1,0 +1,125 @@
+# Recommendation defaults: a lookup table of rules for internal/recommend.
+# Version 1 of the schema.
+#
+# Each rule says: when the repo and its recent sessions look like this, suggest
+# this. Rules only ever suggest the safe first step: an optimizer in shadow mode
+# (estimate only, change nothing) or a settings profile. Turning an optimizer on
+# is only suggested from the user's own measured A/B result, never from this file.
+#
+# Evidence: every rule here is evidence = "none". The benchmark lab has not
+# produced results yet (bench/results holds only smoke runs), so these are rules
+# of thumb. Trove labels them low confidence and never shows a figure for them.
+# When a reproducible run supports a rule, set evidence = "benchmark" and put the
+# run's id in source; that raises its confidence to medium. Update this file with
+# each release.
+#
+# Reasons are templates. Placeholders: {sessions} {files_read} {repeat_reads}
+# {large_results} {dup_ratio} {error_share} {compactions} {size} {framework} {task}.
+# They are filled with numbers and fixed names only.
+version = 1
+release = "seed-1"
+min_sessions = 3
+
+[[rule]]
+id = "trim-large-test-output"
+kind = "optimizer"
+name = "output_trimmer"
+action = "shadow"
+evidence = "none"
+reason = "Over your last {sessions} sessions in this repo, tool results averaged {large_results} per session over 6,000 bytes. The output trimmer keeps failures and a summary and shortens the rest; in shadow mode it only estimates what it would remove."
+[rule.when]
+min_large_results = 3
+
+[[rule]]
+id = "block-repeat-reads"
+kind = "optimizer"
+name = "hook_repeat_read"
+action = "shadow"
+evidence = "none"
+reason = "Sessions here re-read a file already read about {repeat_reads} times each (over {sessions} sessions). Repeat-read prevention in shadow mode counts how many reads it would have avoided."
+[rule.when]
+min_repeat_reads = 2
+
+[[rule]]
+id = "limit-big-reads"
+kind = "optimizer"
+name = "hook_read_limit"
+action = "shadow"
+evidence = "none"
+reason = "This repo is in size bucket {size} and sessions read about {files_read} files each. Line limits on big reads in shadow mode estimate what they would save."
+[rule.when]
+size_in = ["L", "XL"]
+min_files_read = 20
+
+[[rule]]
+id = "quiet-test-commands"
+kind = "optimizer"
+name = "hook_quiet_commands"
+action = "shadow"
+evidence = "none"
+reason = "A {framework} test setup was detected and tool results here average {large_results} large outputs per session. Quiet flags on test commands in shadow mode estimate the saving."
+[rule.when]
+test_framework_in = ["go_test", "pytest", "jest", "vitest", "mocha", "cargo_test", "junit", "rspec"]
+min_large_results = 1
+
+[[rule]]
+id = "hint-large-output"
+kind = "optimizer"
+name = "hook_large_output"
+action = "shadow"
+evidence = "none"
+reason = "Tool results in this repo average {large_results} large outputs per session over {sessions} sessions, and a {framework} test setup was detected. The large-output hint suggests the trove_run tool for noisy commands; in shadow mode it only counts."
+[rule.when]
+test_framework_in = ["go_test", "pytest", "jest", "vitest", "mocha", "cargo_test", "junit", "rspec"]
+min_large_results = 3
+
+[[rule]]
+id = "normalize-noisy-output"
+kind = "optimizer"
+name = "noise_normalizer"
+action = "shadow"
+evidence = "none"
+reason = "About {dup_ratio} of non-blank lines in tool results here are repeated (over {sessions} sessions). The noise normalizer in shadow mode estimates what collapsing them would save."
+[rule.when]
+min_dup_ratio = 0.3
+min_tool_results = 5
+
+[[rule]]
+id = "profile-quick-fix"
+kind = "profile"
+name = "quick-fix"
+action = "use_profile"
+evidence = "none"
+reason = "You said the task is {task}. Trove has a settings profile for it (`trove settings`). It has no benchmark behind it yet, so values without evidence are left out unless you allow them."
+[rule.when]
+task_in = ["quick-fix"]
+
+[[rule]]
+id = "profile-feature"
+kind = "profile"
+name = "feature"
+action = "use_profile"
+evidence = "none"
+reason = "You said the task is {task}. Trove has a settings profile for it (`trove settings`). It has no benchmark behind it yet, so values without evidence are left out unless you allow them."
+[rule.when]
+task_in = ["feature"]
+
+[[rule]]
+id = "profile-refactor"
+kind = "profile"
+name = "refactor"
+action = "use_profile"
+evidence = "none"
+reason = "You said the task is {task}. Trove has a settings profile for it (`trove settings`). It has no benchmark behind it yet, so values without evidence are left out unless you allow them."
+[rule.when]
+task_in = ["refactor"]
+
+[[rule]]
+id = "profile-exploration"
+kind = "profile"
+name = "exploration"
+action = "use_profile"
+evidence = "none"
+reason = "You said the task is {task}. Trove has a settings profile for it (`trove settings`). It has no benchmark behind it yet, so values without evidence are left out unless you allow them."
+[rule.when]
+task_in = ["exploration"]

@@ -66,12 +66,17 @@ Every rule carries `evidence`:
 
 ### Updating it with each release
 
-1. Run the benchmark lab and keep its results (`bench/`).
-2. For each rule the results support, set `evidence = "benchmark"` and `source` to
-   the run's id; add rules for newly proven optimizers; remove rules the results
-   contradict.
-3. Bump `release`. Bump `version` only if the schema changes (and teach `LoadDefaults`
-   the new shape).
+1. Run the benchmark lab's pre-registered studies and keep their result folders (`bench/`).
+2. Generate the file, do not edit it: `python -m trovebench defaults --results
+   bench/results/<date>/<study-id> ...`. It starts from `bench/defaults_seed.toml` (the
+   rules of thumb), upgrades a rule to `evidence = "benchmark"` (with the study id and lock
+   hash as `source`) only when the study's pooled result cleared its registered ship rule
+   and no effort level contradicted it, drops rules the results contradict, and rewrites
+   `internal/experiment/priors.toml` the same way. Simulated results are refused. See
+   [benchmark-methodology.md](benchmark-methodology.md).
+3. `release` is set by the generator. Bump `version` only if the schema changes (and teach
+   `LoadDefaults` the new shape). Add or change a rule of thumb in the seed file, never in
+   the generated one.
 4. `go test ./internal/recommend`. The tests load the file, check the schema rules and
    check that every rule names an optimizer an adapter implements or a settings
    profile that exists.

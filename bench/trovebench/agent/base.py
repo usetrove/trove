@@ -37,8 +37,9 @@ class Agent(Protocol):
 
     def version_command(self) -> str: ...
 
-    def command(self, *, model: str, max_budget_usd: float, prompt_path: str) -> str:
-        """Shell command (run in the repo root inside the container) that runs the agent headless."""
+    def command(self, *, model: str, max_budget_usd: float, prompt_path: str, effort: str = "", bare: bool = True) -> str:
+        """Shell command (run in the repo root inside the container) that runs the agent headless.
+        effort is a reasoning-effort level ("" = the model default); bare=False lets hooks and plugins load."""
 
     def static_env(self) -> dict[str, str]:
         """Non-secret environment for the container (the API key is passed separately)."""
