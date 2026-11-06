@@ -20,6 +20,8 @@ Preparing 0.1.0, the first public release. See [docs/release-checklist.md](docs/
 - OpenCode plugin (`plugins/opencode`, TypeScript; not published): runs the optimizer engine inside OpenCode through `trove engine serve`, for both plugin APIs OpenCode ships (1.x and 2.x). Works with an API key or a GitHub Copilot login; ChatGPT and other subscription logins are shadow-only. Request-level transforms on 2.x for Anthropic bodies; tool-level on both. Engine protocol gains `hello` (version handshake), `session`, `observe`, a harness and login label, what-the-harness-cannot-do, and recording into the new `adapter_events` table; `trove report` shows a Harness plugins section. See [docs/opencode.md](docs/opencode.md). Not yet run on a real OpenCode.
 
 ### Changed
+- `trove setup` no longer points Claude Code at the gateway unless there is evidence it will use an API key (`ANTHROPIC_API_KEY` set, an `apiKeyHelper`, a Console login, or `plan = "api_key"` in config.toml), so a Claude.ai login token is never sent to the gateway by setup. Codex CLI is unaffected.
+- `trove data delete` keeps the hook state files (`hooks/config.json`, `hooks/capabilities.json`) so the hooks do not quietly revert to defaults.
 - Retention now covers every table that holds history, not four of fifteen, and runs from the session-end hook and `trove report` as well as the gateway, so it no longer needs the gateway (closes finding F-8). Tables that are current state are kept and listed with the reason.
 - Internal renames for the naming rule: `internal/logs/claudecode` is `cchistory`, `internal/logs/codex` is `cxhistory`, and the benchmark agent module is `trovebench.agent.cc`. No user-visible command, config key or route changed.
 

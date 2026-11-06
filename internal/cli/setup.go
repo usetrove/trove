@@ -12,6 +12,7 @@ import (
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/fixer"
+	"github.com/usetrove/trove/internal/logs"
 	"github.com/usetrove/trove/internal/setup"
 )
 
@@ -41,6 +42,27 @@ type setupReport struct {
 	// Options explains who the gateway is for, how API credits on Max, Ultra and
 	// Team plans fit, which cloud backends it handles, and the healthcare caveat.
 	Options []string `json:"options,omitempty"`
+}
+
+// claudeNeedsAPIKey returns an empty string when there is evidence that Claude Code will authenticate with an
+// API key, and otherwise the plain-English reason setup will not point it at the gateway. The evidence is the same
+// non-credential signals the history audit uses (presence of ANTHROPIC_API_KEY, apiKeyHelper, a Console login in
+// settings), or the user's own statement in config.toml ([history] plan = "api_key"). A bearer-only
+// ANTHROPIC_AUTH_TOKEN is not enough: the gateway refuses a bearer without an x-api-key.
+func claudeNeedsAPIKey(a *App, cfgDir, planOverride string) string {
+	res := logs.DetectClaudeCodePlan(a.Getenv, cfgDir, planOverride)
+	if res.Plan == logs.PlanAPIKey {
+		for _, ev := range res.Evidence {
+			if ev != "env:ANTHROPIC_AUTH_TOKEN" {
+				return ""
+			}
+		}
+	}
+	return "Not changed. Nothing says Claude Code here uses an API key, and if it uses a Claude.ai login (Free, Pro, Max, Ultra, Team or Enterprise), " +
+		"pointing it at the gateway would send that login token to the gateway before the gateway refuses it. Trove never handles those logins. " +
+		"If you use an API key, set ANTHROPIC_API_KEY in the environment you start Claude Code from (or an apiKeyHelper in its settings) and run `trove setup` again; " +
+		"if you set the key some other way, add `plan = \"api_key\"` under [history] in config.toml. " +
+		"If you use a Claude.ai plan, use the Trove plugin instead; it needs no gateway."
 }
 
 func newSetup(a *App) *cobra.Command {
@@ -85,6 +107,14 @@ func runSetup(a *App, yes, statusLine bool) error {
 			e, perr = setup.PlanCodex(cfgDir, cfg.Gateway.Port)
 		} else {
 			e, perr = setup.PlanClaudeCode(cfgDir, cfg.Gateway.Port, cfg.Upstreams.Anthropic)
+			if perr == nil && !e.NoOp {
+				// Pointing Claude Code at the gateway without an API key would send its Claude.ai login token
+				// to the gateway before the gateway refuses it. Never create that situation (rules 3 and 10).
+				if why := claudeNeedsAPIKey(a, cfgDir, cfg.History.Plan); why != "" {
+					rep.Plans = append(rep.Plans, setupPlanJSON{Agent: spec.name, Problem: why})
+					continue
+				}
+			}
 			if perr == nil {
 				claudeDir = cfgDir
 			}

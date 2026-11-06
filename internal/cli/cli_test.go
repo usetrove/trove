@@ -25,7 +25,9 @@ func newHarness(t *testing.T, env map[string]string, binaries ...string) *harnes
 	home := t.TempDir()
 	// Never let a test resolve the real ~/.trove: point the data directory into
 	// the temporary home unless the test chose one.
-	all := map[string]string{"TROVE_DATA_DIR": filepath.Join(home, ".trove")}
+	// A fake API key is present by default because `trove setup` refuses to point Claude Code at the gateway
+	// without evidence of one (see setup_apikey_test.go); tests that need it absent pass "" for it.
+	all := map[string]string{"TROVE_DATA_DIR": filepath.Join(home, ".trove"), "ANTHROPIC_API_KEY": "test-value-not-a-key"}
 	for k, v := range env {
 		all[k] = v
 	}

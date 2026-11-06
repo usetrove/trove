@@ -27,9 +27,14 @@ import (
 // dataDeleteTargets are the usage data. The rest of the data directory is the
 // setup state `trove undo` and `trove uninstall` need to restore your agents'
 // own files, so `trove data delete` leaves it.
+// hooksKept are the files in hooks/ that are setup state, not usage data: the optimizer-state snapshot the hooks read
+// at the start of every session, and the result of the live capability probe. Deleting them would silently switch the
+// hooks back to their defaults until the next session end rewrites the snapshot.
+var hooksKept = map[string]bool{"config.json": true, "capabilities.json": true}
+
 var (
 	dataDeleteFiles = []string{"contribute.json", "gateway.log"}
-	dataDeleteDirs  = []string{"hooks", "recovery"}
+	dataDeleteDirs  = []string{"recovery"}
 	dataDeleteGlobs = []string{"hooks.log*", "contribute.json.*"}
 )
 
@@ -270,7 +275,7 @@ func newDataDelete(a *App) *cobra.Command {
 	c := &cobra.Command{
 		Use:   "delete",
 		Short: "Delete the usage data Trove keeps on this computer",
-		Long: "Deletes Trove's database (requests, sessions, receipts, features, tuning), the hook counters and logs, the\n" +
+		Long: "Deletes Trove's database (requests, sessions, receipts, features, tuning), the hook journals, counters and logs, the\n" +
 			"recovery store and your consent record. It keeps the setup state that `trove undo` and `trove uninstall` need to restore\n" +
 			"your agents' own files (settings, change records, backups), so you can still remove Trove cleanly afterwards.\n" +
 			"It sends nothing. If you ever shared an anonymous summary, it prints how to ask the receiver to delete it.",
@@ -398,9 +403,19 @@ func dataTargets(dir string) (targets, kept []string) {
 		return strings.HasPrefix(name, store.DBFileName)
 	}
 	for _, e := range entries {
-		if match(e.Name()) {
+		switch {
+		case e.Name() == "hooks" && e.IsDir():
+			inner, _ := os.ReadDir(filepath.Join(dir, "hooks"))
+			for _, f := range inner {
+				if hooksKept[f.Name()] {
+					kept = append(kept, "hooks/"+f.Name())
+				} else {
+					targets = append(targets, "hooks/"+f.Name())
+				}
+			}
+		case match(e.Name()):
 			targets = append(targets, e.Name())
-		} else {
+		default:
 			kept = append(kept, e.Name())
 		}
 	}

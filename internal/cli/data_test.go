@@ -32,14 +32,17 @@ func dataFixture(t *testing.T, h *harness) string {
 	}
 	_ = db.Close()
 	files := map[string]string{
-		"config.toml":         "retention_days = 30\n",
-		"changes.json":        "[]",
-		"backups/claude.json": `{"apiKey":"SECRET-IN-A-BACKUP"}`,
-		"recovery/aa/out.txt": "RAW-COMMAND-OUTPUT",
-		"hooks/config.json":   `{"hook_repeat_read":"shadow"}`,
-		"hooks.log":           "a redacted line\n",
-		"contribute.json":     `{"enabled":true,"install_id":"0123456789abcdef0123456789abcdef"}`,
-		"notes-from-the-user": "not Trove's",
+		"config.toml":             "retention_days = 30\n",
+		"changes.json":            "[]",
+		"backups/claude.json":     `{"apiKey":"SECRET-IN-A-BACKUP"}`,
+		"recovery/aa/out.txt":     "RAW-COMMAND-OUTPUT",
+		"hooks/config.json":       `{"hook_repeat_read":"shadow"}`,
+		"hooks/capabilities.json": `{"verified":true}`,
+		"hooks/events.jsonl":      `{"kind":"blocked"}`,
+		"hooks/abc.log":           "journal of content hashes",
+		"hooks.log":               "a redacted line\n",
+		"contribute.json":         `{"enabled":true,"install_id":"0123456789abcdef0123456789abcdef"}`,
+		"notes-from-the-user":     "not Trove's",
 	}
 	for name, body := range files {
 		p := filepath.Join(dir, name)
@@ -159,13 +162,15 @@ func TestDataDeleteRemovesUsageDataKeepsUndoStateAndPrintsTheSharedDataHint(t *t
 	}
 	left := walkAll(t, dir)
 	for name := range left {
-		for _, gone := range []string{"trove.db", "hooks/", "hooks.log", "recovery/", "contribute.json"} {
+		for _, gone := range []string{"trove.db", "hooks/events.jsonl", "hooks/abc.log", "hooks.log", "recovery/", "contribute.json"} {
 			if strings.HasPrefix(name, gone) {
 				t.Errorf("%s survived `trove data delete`", name)
 			}
 		}
 	}
-	for _, kept := range []string{"config.toml", "changes.json", "backups/claude.json", "notes-from-the-user"} {
+	// hooks/config.json is the optimizer-state snapshot the hooks read at every session start: deleting it would
+	// quietly switch the hooks back to defaults.
+	for _, kept := range []string{"config.toml", "changes.json", "backups/claude.json", "notes-from-the-user", "hooks/config.json", "hooks/capabilities.json"} {
 		if _, ok := left[kept]; !ok {
 			t.Errorf("%s must survive: `trove undo` and uninstall need it, or it is not Trove's", kept)
 		}

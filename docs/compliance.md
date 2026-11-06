@@ -240,7 +240,8 @@ changes the first pass's conclusion: **no contradiction found in the text read.*
    to the local gateway before it is refused. Trove does not log, store or forward it. Does merely *receiving* it
    on `127.0.0.1` fall under "collect, store, or intermediate Claude.ai credentials or session tokens"?
    (First raised in [legal-and-credentials.md](legal-and-credentials.md). A mitigation was proposed there:
-   refuse `trove setup` unless `ANTHROPIC_API_KEY` is set. Not implemented.)
+   refuse `trove setup` unless there is evidence of an API key. Implemented 2026-11-06 for the setup path; a user who sets
+   `ANTHROPIC_BASE_URL` by hand, or logs in with Claude.ai after setup, still sends the token first.)
 2. Is a local gateway that refuses subscription traffic "restrict[ing] any authentication method built into"
    Claude Code, for the clause written about customers offering Claude Code in their products?
 3. Do Anthropic's and OpenAI's terms allow a third-party tool to read an agent's local session logs to compute
@@ -568,7 +569,7 @@ Kept on purpose, each a name the integrated agent or provider dictates or a plai
    authentication pages, into a file for review (automated fetches get HTTP 403 or a redirect to another host).
 2. Read GitHub Terms of Service sections L.3 to S, the OpenCode Privacy Policy and its brand page.
 3. The Usage Policy's effective date (Nov 12, 2026) is six days away. Re-read it on or after that date.
-4. The "mitigation" for question 1 (refuse `trove setup` unless an API key is set) is still not implemented.
+4. ~~The mitigation for question 1~~ Done 2026-11-06: `trove setup` refuses to point Claude Code at the gateway without evidence of an API key (`internal/cli/setup.go` `claudeNeedsAPIKey`). The residual case (endpoint set by hand) remains in question 1.
 5. `trove hooks probe --live` runs the user's own `claude -p`, possibly under a subscription login. It is user-started,
    capped to a few cents and uses documented flags, but it is automated use of that login; see question for Anthropic 4.
 6. The Codex session-file reader depends on an undocumented format; verify on a real install or remove it.
