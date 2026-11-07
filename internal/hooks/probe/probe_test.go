@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,7 +101,7 @@ func (f *fakeAgent) Run(_ context.Context, _ string, env []string, name string, 
 }
 
 func opts(f *fakeAgent) Options {
-	return Options{Exec: f, Live: true, MaxUSD: 0.5, Now: func() time.Time { return time.Unix(1_800_000_000, 0) },
+	return Options{Exec: f, Live: true, APIKeyAuth: true, MaxUSD: 0.5, Now: func() time.Time { return time.Unix(1_800_000_000, 0) },
 		HookCommand: func(mode string) string { return "fake " + mode }, Env: []string{}}
 }
 
@@ -264,5 +265,23 @@ func TestRedactScrubsLocalPathsAnywhere(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "{{TMP}}") {
 		t.Fatalf("nothing was replaced:\n%s", out)
+	}
+}
+
+func TestLiveProbeIsRefusedWithoutAnAPIKeyAndRunsNothing(t *testing.T) {
+	f := &fakeAgent{version: "2.1.999"}
+	o := opts(f)
+	o.APIKeyAuth = false
+	_, err := Run(context.Background(), o)
+	if !errors.Is(err, ErrLiveNeedsAPIKey) || !strings.Contains(err.Error(), "trove hooks verify") {
+		t.Fatalf("err = %v", err)
+	}
+	if f.calls != 0 {
+		t.Fatalf("a refused live probe ran %d sessions", f.calls)
+	}
+	// The documentation-only probe needs no key and still works.
+	o.Live = false
+	if _, err := Run(context.Background(), o); err != nil {
+		t.Fatal(err)
 	}
 }

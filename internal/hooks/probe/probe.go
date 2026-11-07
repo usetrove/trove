@@ -12,8 +12,11 @@
 // it on every new agent release: `trove hooks probe --live` or
 // `go run ./scripts/hookprobe --live`.
 //
-// The probe runs the user's own `claude` with the user's own login. It never
-// reads, copies or stores credentials, and it makes no network calls itself.
+// A live probe starts model requests on its own, so it runs only when the caller
+// has evidence that the agent uses the user's own API key (Options.APIKeyAuth) and
+// is refused otherwise. For a Claude.ai login there is the session check in
+// session.go, where the user starts the session and Trove starts nothing. Neither
+// reads, copies or stores credentials, and neither makes network calls itself.
 package probe
 
 import (
@@ -57,13 +60,24 @@ func (osExec) Run(ctx context.Context, dir string, env []string, name string, ar
 	return out.Bytes(), err
 }
 
+// ErrLiveNeedsAPIKey is why a live probe was refused.
+var ErrLiveNeedsAPIKey = errors.New("a live probe starts its own Claude Code sessions, so it runs only when Claude Code uses your own API key; " +
+	"Trove never starts model requests on a Claude.ai login (Free, Pro, Max, Ultra, Team or Enterprise). " +
+	"Nothing was run. Test hook rewriting inside a session you start yourself instead: `trove hooks verify`. " +
+	"If you do use an API key, set ANTHROPIC_API_KEY in this shell (or add `plan = \"api_key\"` under [history] in config.toml) and try again")
+
 // Options configure a probe run.
 type Options struct {
-	Claude string   // agent binary; default "claude"
-	Live   bool     // run real sessions; otherwise report only what the docs say
-	MaxUSD float64  // total spend cap for a live run; required when Live
-	Model  string   // model for the sessions; default "claude-haiku-5-5"
-	Tools  []string // default DefaultTools
+	Claude string // agent binary; default "claude"
+	Live   bool   // run real sessions; otherwise report only what the docs say
+	// APIKeyAuth says the caller found evidence that the agent authenticates with an
+	// API key. A live run starts extra model requests on its own, which Trove does
+	// only on the user's own metered key and never on a Claude.ai login (Free, Pro,
+	// Max, Ultra, Team or Enterprise). Without it a live run is refused.
+	APIKeyAuth bool
+	MaxUSD     float64  // total spend cap for a live run; required when Live
+	Model      string   // model for the sessions; default "claude-haiku-5-5"
+	Tools      []string // default DefaultTools
 	// HookCommand returns the shell command the agent runs for a probe hook. mode
 	// is "pre" or "post".
 	HookCommand func(mode string) string
@@ -105,6 +119,9 @@ func Run(ctx context.Context, o Options) (Report, error) {
 		o.Env = os.Environ()
 	}
 	if o.Live {
+		if !o.APIKeyAuth {
+			return Report{}, ErrLiveNeedsAPIKey
+		}
 		if o.MaxUSD <= 0 {
 			return Report{}, errors.New("a live probe runs real agent sessions and costs money; pass a spending cap, for example --max-usd 0.25")
 		}

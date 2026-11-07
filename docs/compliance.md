@@ -528,7 +528,7 @@ searching for it, not a proof of absence.
 |---|---|
 | Handling of subscription credentials or session tokens | The gateway classifies every request in one place, `internal/gateway/auth/auth.go`, called at `internal/gateway/proxy.go:66` before the body is read or anything is forwarded. It refuses claude.ai logins (an `anthropic-beta` value containing "oauth"; a bearer with no `x-api-key`; a different bearer; the `sk-ant-oat` prefix), JWT-shaped OpenAI bearers, and Bedrock SigV4. The reply is HTTP 401 with a message that names all claude.ai plans and ChatGPT logins. Credentials are not in the header allowlist (`proxy.go:285`) that later code sees; the log line on refusal holds the provider and a credential-free reason. Trove never opens `~/.claude.json`, `.credentials.json` or `auth.json` (they are on the refuse lists in `internal/fixer/paths.go` and `internal/mcp/root/sensitive.go`). **Unresolved:** a subscription user who sets only `ANTHROPIC_BASE_URL` sends their OAuth token to the local gateway before the 401 (question 1). The `sk-ant-oat` prefix and the JWT shape are assumptions (open item 4 above) |
 | Scraping of provider web pages | None found. No usage-meter scrapers, cookies or browser automation. The only fetches of provider pages are the maintainer script `scripts/pricing-update.sh`, which downloads official docs pages as text for a person to read and never edits prices, and the bench Docker image, which runs the vendor's own install script |
-| Decompiling or probing agent internals beyond documented interfaces | No decompiling, binary reading or `strings` on binaries found. `trove hooks probe --live` (`internal/hooks/probe`) runs the user's own `claude -p` with documented flags to test whether hook rewrites take effect. `internal/logs/cchistory` reads Claude Code's session files read-only (`docs/logs.md`; the schema was confirmed by inspecting local files, which is observation of an unstable format). `internal/logs/cxhistory` reads Codex rollout files whose format OpenAI does not document (its header says "UNVERIFIED ON REAL INSTALLS"); this is the weakest item |
+| Decompiling or probing agent internals beyond documented interfaces | No decompiling, binary reading or `strings` on binaries found. `trove hooks probe --live` (`internal/hooks/probe`) runs the user's own `claude -p` with documented flags to test whether hook rewrites take effect, and is refused unless there is evidence Claude Code uses an API key (2026-11-06). `trove hooks verify` tests the same thing in a session the user starts, with no Trove-started request. `internal/logs/cchistory` reads Claude Code's session files read-only (`docs/logs.md`; the schema was confirmed by inspecting local files, which is observation of an unstable format). `internal/logs/cxhistory` reads Codex rollout files whose format OpenAI does not document (its header says "UNVERIFIED ON REAL INSTALLS"); this is the weakest item |
 | Model output used to train a model | None found. No training or fine-tuning code. Bench transcripts (`agent_stdout.txt` and friends) are redacted, written under `bench/results/` which is git-ignored, and read only by humans and the report. The recommender is rules (`internal/recommend/recommend.go`). A future `Provider` interface for a hosted settings bundle is mentioned in a comment and not implemented |
 | Resale or intermediation of usage | None found. The gateway binds to loopback only (`internal/cli/gateway.go`), forwards the caller's own key, and holds no key of its own; it refuses to hold AWS credentials to re-sign requests. `trove probe --live` spends the user's own money under a cap they set |
 | Outbound calls | Only four allowlisted files may reach the network, enforced by `internal/egress/static_test.go`: the gateway's forwarding to the configured upstream (`gateway/proxy.go`, `gateway/server.go`), a loopback-only health probe (`cli/gateway.go`), the opt-in summary upload and the one delete request only `trove contribute delete` makes (`contribute/upload.go`; CLAUDE.md rule 1, parts b and c, amended 2026-11-06). On Linux a second test traces real commands with strace; it does not run on macOS or Windows. See [data.md](data.md) |
@@ -570,8 +570,11 @@ Kept on purpose, each a name the integrated agent or provider dictates or a plai
 2. Read GitHub Terms of Service sections L.3 to S, the OpenCode Privacy Policy and its brand page.
 3. The Usage Policy's effective date (Nov 12, 2026) is six days away. Re-read it on or after that date.
 4. ~~The mitigation for question 1~~ Done 2026-11-06: `trove setup` refuses to point Claude Code at the gateway without evidence of an API key (`internal/cli/setup.go` `claudeNeedsAPIKey`). The residual case (endpoint set by hand) remains in question 1.
-5. `trove hooks probe --live` runs the user's own `claude -p`, possibly under a subscription login. It is user-started,
-   capped to a few cents and uses documented flags, but it is automated use of that login; see question for Anthropic 4.
+5. ~~`trove hooks probe --live` under a subscription login~~ Done 2026-11-06: `--live` is refused unless there is evidence of an API
+   key (`internal/hooks/probe` `Options.APIKeyAuth`; the CLI uses the same evidence as `trove setup`). Subscription users get
+   `trove hooks verify`, where the user starts the session and Trove starts no model request, so the only place Trove itself
+   starts model requests is now API-key only. Residual: the evidence is a heuristic, like the gateway's (a stale `ANTHROPIC_API_KEY`
+   in the shell with a Claude.ai login in use elsewhere would pass it).
 6. The Codex session-file reader depends on an undocumented format; verify on a real install or remove it.
 7. Retention gap closed today: before this update only six tables were pruned and only while the gateway ran; see
    [data.md](data.md).
@@ -589,8 +592,9 @@ Kept on purpose, each a name the integrated agent or provider dictates or a plai
     GDPR or US state laws, given a random install id and coarse counts? See [privacy-law.md](privacy-law.md).
 12. For a future team edition: what notice, consent and aggregation does employee-monitoring law require in each region?
     See [privacy-law.md](privacy-law.md).
-13. Does the Consumer Terms ban on "automated or non-human means" apply to a user who runs `trove hooks probe --live`
-    under a Pro or Max login?
+13. ~~Does the "automated or non-human means" ban apply to `trove hooks probe --live` under a Pro or Max login?~~ No longer needed: that
+    path is refused without an API key. Still worth asking: is a hook that rewrites one tool call in a session the user started
+    (`trove hooks verify`) within the terms?
 
 ### Questions for Anthropic
 

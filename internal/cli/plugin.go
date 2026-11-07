@@ -155,7 +155,7 @@ func pluginCapabilityCheck(a *App, dir string, st *pluginState) string {
 	}
 	hadLive := false
 	for _, e := range hooks.LoadCapabilities(dir).Entries {
-		if e.Agent == "claude" && e.Method == "live" {
+		if e.Agent == "claude" && (e.Method == "live" || e.Method == "session") {
 			hadLive = true
 		}
 	}

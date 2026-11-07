@@ -70,8 +70,10 @@ Whether a hook may *rewrite* a tool call is a fact about the installed Claude Co
 ([hooks.md](hooks.md), "What your agent version allows"). On each session start the plugin compares
 `claude --version` with the version the record was made for. When it changed (an update), the record is replaced
 by a documentation-only one: nothing is run, nothing costs money, and every rewriting optimizer drops to shadow
-until a live probe passes. You are told once. To re-test: `/trove:setup` (runs `trove hooks probe --live
---max-usd 0.25` on your own login, only if you agree; a few cents or a small slice of plan usage).
+until a test passes. You are told once. To re-test, run `/trove:setup`, which shows `trove hooks verify`: Trove writes a
+settings file and a short prompt, you start `claude --settings <file>` yourself and paste the prompt, and Trove starts
+no model request. That works on any plan. `trove hooks probe --live` (Trove runs the sessions for you, a few cents) is
+refused unless Claude Code uses your own API key.
 
 ## Uninstall
 
