@@ -52,7 +52,7 @@ func newHooks(a *App) *cobra.Command {
 		Long: "Hooks are small commands Claude Code and Codex CLI run around tool calls and when a session ends. They work\n" +
 			"without the gateway, so they also help if you use a subscription. See docs/hooks.md.",
 	}
-	c.AddCommand(newHooksInstall(a), newHooksUninstall(a), newHooksStatus(a), newHooksSync(a), newHooksProbe(a))
+	c.AddCommand(newHooksInstall(a), newHooksUninstall(a), newHooksStatus(a), newHooksSync(a), newHooksProbe(a), newHooksVerify(a))
 	return c
 }
 

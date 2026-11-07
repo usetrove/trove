@@ -10,8 +10,9 @@ import (
 // something to assume: a release has shipped where PostToolUse output was
 // silently ignored for some built-in tools. So a rewrite is only emitted for an
 // agent and tool that a probe (`trove hooks probe`, scripts/hookprobe) has seen
-// work. Anything unknown counts as unsupported; the optimizer then stays in
-// shadow and `trove doctor` says why.
+// work, either in a live probe on the user's API key or in a session the user
+// started themselves (`trove hooks verify`). Anything unknown counts as
+// unsupported; the optimizer then stays in shadow and `trove doctor` says why.
 
 // Capability results.
 const (
@@ -27,7 +28,9 @@ type Capability struct {
 	Tool          string `json:"tool"`
 	InputRewrite  string `json:"input_rewrite"`
 	OutputRewrite string `json:"output_rewrite"`
-	// Method is "live" (a real session showed the model the rewritten value) or
+	// Method is "live" (Trove ran an agent session on the user's API key and it showed
+	// the model the rewritten value), "session" (the user ran the test in their own
+	// session with `trove hooks verify`; the output result is what they reported) or
 	// "docs" (the agent's documentation says so; nothing was run).
 	Method   string `json:"method"`
 	Evidence string `json:"evidence"`
@@ -76,7 +79,7 @@ const (
 )
 
 // Supports reports whether a hook may rewrite the given tool's input or output
-// for the agent. Only a "yes" from a live probe counts.
+// for the agent. Only a "yes" from a live probe or a verified session counts.
 func (c Capabilities) Supports(agent, tool, kind string) bool {
 	for _, e := range c.Entries {
 		if e.Agent != agent || e.Tool != tool {
@@ -85,7 +88,7 @@ func (c Capabilities) Supports(agent, tool, kind string) bool {
 		// Codex is not available to probe, and its documentation states Bash input
 		// rewriting (learn.chatgpt.com/docs/hooks, read 2026-11-04), so a docs
 		// result counts there for input only. Everything else needs a live probe.
-		if e.Method != "live" && (e.Method != "docs" || agent != "codex" || kind != RewriteInput) {
+		if e.Method != "live" && e.Method != "session" && (e.Method != "docs" || agent != "codex" || kind != RewriteInput) {
 			continue
 		}
 		switch kind {

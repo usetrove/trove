@@ -10,6 +10,7 @@ trove hooks status       # where they are installed and what they did
 trove hooks uninstall    # removes only Trove's entries (same as `trove undo`)
 trove hooks sync         # refresh what the hooks read after editing config.toml
 trove hooks probe        # check which tool calls your agent version lets hooks rewrite
+trove hooks verify       # the same check inside a Claude Code session you start yourself (any plan)
 trove hooks install --rewrite   # also install the hooks that rewrite tool input and output
 ```
 
@@ -99,9 +100,25 @@ check this on Go, Python, Jest, Cargo and Maven output. The shortened text is a 
 ### What your agent version allows
 
 A release of an agent can ship with a hook field ignored for some tool, and a value in the wrong shape is
-ignored with no error. So Trove does not assume: `trove hooks probe --live --max-usd 0.25` (or
-`go run ./scripts/hookprobe --live --max-usd 0.25`) runs one tiny `claude -p` session per tool (Bash, Read,
-Grep, Glob) in a throwaway folder, with your own login, and checks that
+ignored with no error. So Trove does not assume. There are two ways to test, and Trove starts a model request
+itself in only one of them:
+
+- **`trove hooks verify` (any plan, including Claude.ai logins).** Trove runs nothing. It writes a settings file and one
+  short prompt per tool; you start `claude --settings <file>` yourself, paste the prompts and approve each call. The
+  test hooks in that file (written in the documented exec form, `command` plus `args`, so there is no shell quoting to get
+  wrong on Windows) rewrite that one call and record what the agent did, and switch themselves off after an hour. The
+  hooks reference (read 2026-11-06) does not say two things this relies on, so the first real run must confirm them:
+  whether hooks in a `--settings` file are added to your other hooks or replace them for that session (either is
+  harmless for the test), and that a PostToolUse hook's `tool_input` is the rewritten input (the earlier live probe on
+  Claude Code 2.1.318 saw it; see `docs/hook-capabilities.json`).
+  `trove hooks verify --finish --saw-output Bash,Read=no` reads the record. The input result is observed. A hook cannot see
+  what the model was shown, so the output result is **what you report** about the model's reply, and it is stored as
+  `method: session` with that said in the evidence. A tool you do not answer for keeps its output result untested.
+- **`trove hooks probe --live --max-usd 0.25`** (or `go run ./scripts/hookprobe --live --max-usd 0.25`) runs one tiny
+  `claude -p` session per tool (Bash, Read, Grep, Glob) in a throwaway folder. Because Trove starts those requests, it is
+  **refused unless there is evidence Claude Code uses your own API key** (the same non-credential signals `trove setup`
+  uses; `ANTHROPIC_API_KEY` for the script), and never runs on a Claude.ai login (Free, Pro, Max, Ultra, Team,
+  Enterprise). It checks that
 
 - the tool really ran with the rewritten input (the `PostToolUse` hook is told what it ran with), and
 - the model's reply contains the replacement output.

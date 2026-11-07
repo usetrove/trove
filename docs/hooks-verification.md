@@ -73,7 +73,7 @@ probe result in `docs/hook-capabilities.json` was for 2.1.318 (input rewriting a
 Bash, Read, Grep and Glob). A rerun on 2026-11-05 stopped because `ANTHROPIC_API_KEY` was rejected ("Invalid API
 key"); it cost about $0.00 and changed nothing. Both steps spend real money on your own API key.
 
-1. [ ] Use a valid API key (not a subscription login) and check the version: `claude --version` must print `2.1.318`.
+1. [ ] Use a valid API key (`ANTHROPIC_API_KEY` set; the live probe is refused without one) and check the version: `claude --version` must print `2.1.318`.
    The probe is the only step that needs the exact installed version to match the pin.
 2. [ ] Run the probe, capped at $0.25 (the last run cost about $0.016):
    `go run ./scripts/hookprobe --live --max-usd 0.25 --out probe.json`

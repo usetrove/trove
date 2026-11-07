@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -20,7 +21,19 @@ func runProbeHook(args []string, stdin io.Reader, stdout io.Writer) bool {
 	if len(args) == 0 || (args[0] != "probe_pre" && args[0] != "probe_post") {
 		return false
 	}
-	hookprobe.HookMain(strings.TrimPrefix(args[0], "probe_"), stdin, stdout, os.Getenv)
+	getenv := os.Getenv
+	for i := 1; i+1 < len(args); i++ {
+		if args[i] == "--state" {
+			state := args[i+1]
+			getenv = func(k string) string {
+				if k == hookprobe.StateEnv {
+					return state
+				}
+				return os.Getenv(k)
+			}
+		}
+	}
+	hookprobe.HookMain(strings.TrimPrefix(args[0], "probe_"), stdin, stdout, getenv)
 	return true
 }
 
@@ -41,7 +54,9 @@ func newHooksProbe(a *App) *cobra.Command {
 		Long: "Hooks can change a tool's input before it runs and its output before the model sees it, but an agent version can\n" +
 			"silently ignore either for some tools. The probe finds out. Without --live it only reads the version and reports what\n" +
 			"the documentation says; nothing is run. With --live it runs one tiny Claude Code session per tool (a few cents on a\n" +
-			"small model, capped by --max-usd) in a throwaway folder, with your own login, and records the result.\n" +
+			"small model, capped by --max-usd) in a throwaway folder and records the result. --live starts model requests by itself, so it runs only when\n" +
+			"Claude Code uses your own API key and is refused on a Claude.ai login (Free, Pro, Max, Ultra, Team, Enterprise).\n" +
+			"On a Claude.ai plan run `trove hooks verify` instead: you start the session and Trove starts nothing.\n" +
 			"Until a tool has passed, Trove's rewriting optimizers stay in shadow mode for it. Run it again after each agent update.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error { return runHooksProbe(cmd.Context(), a, fl) },
@@ -56,7 +71,7 @@ func newHooksProbe(a *App) *cobra.Command {
 }
 
 func runHooksProbe(ctx context.Context, a *App, fl hooksProbeFlags) error {
-	dir, _, err := loadConfig(a)
+	dir, cfg, err := loadConfig(a)
 	if err != nil {
 		return err
 	}
@@ -67,8 +82,18 @@ func runHooksProbe(ctx context.Context, a *App, fl hooksProbeFlags) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	apiKey := false
+	if fl.live {
+		// Same evidence `trove setup` requires before it touches Claude Code; no credential is read.
+		home, herr := a.HomeDir()
+		if herr != nil {
+			return errors.New("cannot find your home directory; set HOME and try again")
+		}
+		apiKey = claudeNeedsAPIKey(a, supportedAgents[0].configDir(a, home), cfg.History.Plan) == ""
+	}
 	rep, err := hookprobe.Run(ctx, hookprobe.Options{
-		Claude: fl.claude, Live: fl.live, MaxUSD: fl.maxUSD, Model: fl.model, Tools: fl.tools, RecordDir: fl.recordDir,
+		APIKeyAuth: apiKey,
+		Claude:     fl.claude, Live: fl.live, MaxUSD: fl.maxUSD, Model: fl.model, Tools: fl.tools, RecordDir: fl.recordDir,
 		HookCommand: func(mode string) string { return shellQuote(bin) + " hook probe_" + mode },
 	})
 	if err != nil {
@@ -145,14 +170,14 @@ func hookRewritesCheck(a *App, dir string, optimizerState func(string) string) c
 		return check{name, statusInfo, "no hook rewriting optimizer is turned on", ""}
 	case len(blocked) > 0:
 		return check{name, statusWarn, "these optimizers stay in shadow mode for hooks because the agent has not been seen to honour the rewrite: " + strings.Join(blocked, "; "),
-			"run `trove hooks probe --live --max-usd 0.25` (runs a few tiny sessions on your own login)"}
+			"run `trove hooks verify` (you start one session of your own and Trove starts nothing); on an API key, `trove hooks probe --live --max-usd 0.25` does it for you"}
 	}
 	d := "every enabled rewrite has been seen to work"
 	if v := installedClaudeVersion(a); v != "" {
 		for _, e := range caps.Entries {
-			if e.Agent == "claude" && e.Method == "live" && e.AgentVersion != v {
-				return check{name, statusWarn, fmt.Sprintf("probed on Claude Code %s, but %s is installed now; an update can change what hooks may rewrite", e.AgentVersion, v),
-					"run `trove hooks probe --live --max-usd 0.25` again"}
+			if e.Agent == "claude" && (e.Method == "live" || e.Method == "session") && e.AgentVersion != v {
+				return check{name, statusWarn, fmt.Sprintf("tested on Claude Code %s, but %s is installed now; an update can change what hooks may rewrite", e.AgentVersion, v),
+					"run `trove hooks verify` again"}
 			}
 		}
 	}
@@ -164,8 +189,8 @@ func capReason(c hooks.Capabilities, tool string) string {
 	switch {
 	case !ok:
 		return "never probed on this machine"
-	case e.Method != "live":
-		return "only the documentation was read; no live probe yet"
+	case e.Method != "live" && e.Method != "session":
+		return "only the documentation was read; no test in a real session yet"
 	}
 	return e.Evidence
 }

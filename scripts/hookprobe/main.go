@@ -6,8 +6,9 @@
 //	go run ./scripts/hookprobe --live --max-usd 0.25            # real sessions; costs a few cents
 //	go run ./scripts/hookprobe --live --max-usd 0.25 --record-dir internal/hooks/testdata/recorded
 //
-// It runs your own `claude` with your own login and never reads credentials. The
-// same code backs `trove hooks probe`; this is the version that needs no built
+// --live runs your own `claude`, and it is refused unless ANTHROPIC_API_KEY is set:
+// Trove does not start model requests on a Claude.ai login. It never reads the key.
+// The same code backs `trove hooks probe`; this is the version that needs no built
 // trove binary.
 package main
 
@@ -44,7 +45,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	rep, err := probe.Run(ctx, probe.Options{
-		Claude: *claude, Live: *live, MaxUSD: *maxUSD, Model: *model, Tools: strings.Split(*tools, ","), RecordDir: *record,
+		// A live run starts model requests by itself, so it needs an API key in the environment.
+		APIKeyAuth: os.Getenv("ANTHROPIC_API_KEY") != "",
+		Claude:     *claude, Live: *live, MaxUSD: *maxUSD, Model: *model, Tools: strings.Split(*tools, ","), RecordDir: *record,
 		HookCommand: func(mode string) string { return fmt.Sprintf("%q __hook %s", self, mode) },
 	})
 	if err != nil {

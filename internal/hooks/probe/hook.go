@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // setup creates the throwaway project for one tool and returns the prompt that
@@ -68,9 +69,16 @@ func HookMain(mode string, stdin io.Reader, stdout io.Writer, getenv func(string
 		Input    json.RawMessage `json:"tool_input"`
 		Response json.RawMessage `json:"tool_response"`
 	}
-	pb, perr := os.ReadFile(filepath.Join(state, "plan.json")) //nolint:gosec // our own temp dir
+	if json.Unmarshal(raw, &in) != nil || !toolNameRe.MatchString(in.Tool) || expired(state) {
+		return 0
+	}
+	// A verify session has one plan per tool; a throwaway live probe has one plan.
+	pb, perr := os.ReadFile(filepath.Join(state, "plan-"+in.Tool+".json")) //nolint:gosec // our own state dir, tool name checked above
+	if perr != nil {
+		pb, perr = os.ReadFile(filepath.Join(state, "plan.json")) //nolint:gosec // our own temp dir
+	}
 	var p plan
-	if json.Unmarshal(raw, &in) != nil || perr != nil || json.Unmarshal(pb, &p) != nil || in.Tool != p.Tool {
+	if perr != nil || json.Unmarshal(pb, &p) != nil || in.Tool != p.Tool {
 		return 0
 	}
 	s := seen{Mode: mode, Tool: in.Tool, Input: in.Input, Raw: raw}
@@ -101,6 +109,24 @@ func HookMain(mode string, stdin io.Reader, stdout io.Writer, getenv func(string
 		_, _ = stdout.Write(out)
 	}
 	return 0
+}
+
+var toolNameRe = regexp.MustCompile(`^[A-Za-z]{1,32}$`)
+
+// expired reports whether the verify session in state has run out. A verify
+// session's hooks go inert by themselves, so a settings file left behind cannot
+// keep rewriting tool calls. A live probe has no session.json and never expires.
+func expired(state string) bool {
+	b, err := os.ReadFile(filepath.Join(state, "session.json")) //nolint:gosec // our own state dir
+	if err != nil {
+		return false
+	}
+	var s sessionFile
+	if json.Unmarshal(b, &s) != nil {
+		return true
+	}
+	t, err := time.Parse(time.RFC3339, s.Expires)
+	return err != nil || time.Now().After(t)
 }
 
 // rewriteInput builds the probe's replacement input: the whole object with one
