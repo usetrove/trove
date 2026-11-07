@@ -3,6 +3,7 @@ package gateway
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -32,11 +33,19 @@ const (
 	leakOpenAIKey    = "sk-proj-LEAKTESTOPENAIKEY0123456789abcdefghij"
 	leakOAuthToken   = "LEAKTESTOAUTHBEARERTOKEN0123456789"
 	leakJWTSecret    = "LEAKTESTJWTPAYLOAD0123456789"
+	leakPAT          = "pat_LEAKTESTCODEXPERSONALACCESSTOKEN0123456789"
+	leakAccountID    = "LEAKTESTCHATGPTACCOUNTID0123456789"
 	leakPrompt       = "LEAKTESTPROMPT-please-refactor-/home/alice/secret-project/payroll.go"
 )
 
+// leakChatGPTLogin is shaped like what Codex sends after "Sign in with ChatGPT": a JWT
+// whose payload carries OpenAI's namespaced claims. The values are made up.
+var leakChatGPTLogin = "eyJhbGciOiJub25lIn0." + base64.RawURLEncoding.EncodeToString(
+	[]byte(`{"iss":"https://auth.openai.com","https://api.openai.com/auth":{"chatgpt_user_id":"LEAKTESTCHATGPTUSER0123456789"}}`)) + ".LEAKTESTCHATGPTSIGNATURE0123456789"
+
 var leakCredentials = []string{
-	leakAnthropicKey, leakOpenAIKey, leakOAuthToken, leakJWTSecret,
+	leakAnthropicKey, leakOpenAIKey, leakOAuthToken, leakJWTSecret, leakChatGPTLogin, leakPAT, leakAccountID,
+	"LEAKTESTCHATGPTUSER", "LEAKTESTCHATGPTSIGNATURE", "LEAKTESTCODEXPERSONAL",
 	"LEAKTESTANTHROPICKEY", "LEAKTESTOPENAIKEY", // a truncated copy must not survive either
 }
 
@@ -119,6 +128,15 @@ func TestNoCredentialOrPromptReachesLogsResponsesOrDisk(t *testing.T) {
 		map[string]string{"x-api-key": "sk-ant-oat01-" + leakOAuthToken, "Content-Type": "application/json"}, body, 401)
 	send("openai jwt session token", "POST", "/openai/v1/responses",
 		map[string]string{"Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI" + leakJWTSecret + "In0.c2lnbmF0dXJl", "Content-Type": "application/json"}, body, 401)
+	// Codex logins other than an API key: refused, never forwarded, never echoed, logged or stored.
+	send("chatgpt login token", "POST", "/openai/v1/responses",
+		map[string]string{"Authorization": "Bearer " + leakChatGPTLogin, "chatgpt-account-id": leakAccountID, "originator": "codex_cli_rs", "Content-Type": "application/json"}, body, 401)
+	send("chatgpt login token, no account header", "POST", "/openai/v1/responses",
+		map[string]string{"Authorization": "Bearer " + leakChatGPTLogin, "Content-Type": "application/json"}, body, 401)
+	send("codex personal access token", "POST", "/openai/v1/responses",
+		map[string]string{"Authorization": "Bearer " + leakPAT, "Content-Type": "application/json"}, body, 401)
+	send("unknown credential type with a key-like name", "POST", "/openai/v1/responses",
+		map[string]string{"Authorization": "Bearer " + leakPAT, "chatgpt-account-id": leakAccountID, "Content-Type": "application/json"}, body, 401)
 	if calls != forwarded {
 		t.Errorf("a refused request reached the provider (%d calls, want %d)", calls, forwarded)
 	}

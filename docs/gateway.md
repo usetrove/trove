@@ -30,8 +30,16 @@ response is modified in this mode; Trove only records metadata.
 - Anthropic: the credential must be in `x-api-key`. An `Authorization` header is allowed only if it
   repeats the same value (Claude Code's `apiKeyHelper` sends both). A bearer-only request, a different
   bearer, or an OAuth value in `anthropic-beta` is refused.
-- OpenAI: `Authorization: Bearer <key>`. A JWT-shaped token (a ChatGPT/OAuth session token) is refused.
-  This is a heuristic; API keys are not documented to be JWTs.
+- OpenAI (an allow-list; it fails closed): only `Authorization: Bearer sk-...` is accepted. Everything else is
+  refused with 401, including a ChatGPT or Codex login (Sign in with ChatGPT, a Codex access token, an agent
+  identity, a personal access token, anything from `~/.codex/auth.json`), any JWT, the `chatgpt-account-id` header,
+  a claude.ai token, and any credential type Trove does not recognise (reason `unrecognized_credential`). OpenAI
+  does not document its key formats, so the `sk-` prefix is a heuristic: if OpenAI changes the format, a real key is
+  refused (never a login accepted). `trove setup` also refuses to point Codex at the gateway unless `OPENAI_API_KEY`
+  is set or `[history] plan = "api_key"`, and Trove never opens `~/.codex/auth.json` to find out.
+- `/compat/...` also refuses a JWT whose claims say OpenAI issued it (an `iss` naming openai.com, or a claim under
+  `https://api.openai.com/`), so a Codex ChatGPT login pointed at a compat route is not sent to a third-party server.
+  Other JWTs are fine there, because other servers' keys may be JWTs.
 - Enterprise and Team organizations: supported when developers use an API key (a Claude Console key,
   `ANTHROPIC_API_KEY`, or `apiKeyHelper`), because that is an ordinary `x-api-key` request. Developers who
   sign in to Claude Code with a claude.ai account use an OAuth login, even on Enterprise, and are refused.
