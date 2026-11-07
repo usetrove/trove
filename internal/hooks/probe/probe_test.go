@@ -285,3 +285,45 @@ func TestLiveProbeIsRefusedWithoutAnAPIKeyAndRunsNothing(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// recorder wraps an Executor and remembers every program the probe started.
+type recorder struct {
+	inner Executor
+	calls [][]string
+}
+
+func (r *recorder) Run(ctx context.Context, dir string, env []string, name string, args ...string) ([]byte, error) {
+	r.calls = append(r.calls, append([]string{name}, args...))
+	return r.inner.Run(ctx, dir, env, name, args...)
+}
+
+// Codex CLI is never run for a model request by the probe, with or without --live:
+// the only thing it does with `codex` is ask for its version. Codex also has no
+// live path, so there is nothing that could use a ChatGPT login (CLAUDE.md rules 3
+// and 10). If a live Codex probe is ever added it must require an OpenAI API key
+// the way the Claude one requires APIKeyAuth, and this test must be updated with it.
+func TestProbeOnlyEverAsksCodexForItsVersion(t *testing.T) {
+	for _, live := range []bool{false, true} {
+		f := &fakeAgent{version: "2.1.999"}
+		rec := &recorder{inner: f}
+		o := opts(f)
+		o.Exec = rec
+		o.Live = live
+		if _, err := Run(context.Background(), o); err != nil {
+			t.Fatal(err)
+		}
+		saw := false
+		for _, c := range rec.calls {
+			if c[0] != "codex" && !strings.HasSuffix(c[0], "codex") {
+				continue
+			}
+			saw = true
+			if len(c) != 2 || c[1] != "--version" {
+				t.Errorf("live=%v: the probe ran codex with %v; it may only ask for --version", live, c[1:])
+			}
+		}
+		if !saw {
+			t.Errorf("live=%v: the probe never asked codex for its version; the check proves nothing", live)
+		}
+	}
+}

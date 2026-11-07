@@ -50,7 +50,7 @@ Trove's provider entry reads the key from `OPENAI_API_KEY`.
 
 - Anthropic Commercial Terms, Consumer Terms and Usage Policy in full (only the Claude Code page above).
 - OpenAI terms for Codex CLI and the API. Same question applies to ChatGPT-login traffic; Trove rejects
-  JWT-shaped bearer tokens as a heuristic (`internal/gateway/auth`).
+  every credential that is not an `sk-` key, and any OpenAI-issued JWT on compat routes (`internal/gateway/auth`).
 
 ## Update 2026-10-31 (OpenAI pages read)
 

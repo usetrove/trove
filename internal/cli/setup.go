@@ -65,6 +65,21 @@ func claudeNeedsAPIKey(a *App, cfgDir, planOverride string) string {
 		"If you use a Claude.ai plan, use the Trove plugin instead; it needs no gateway."
 }
 
+// codexNeedsAPIKey is the Codex counterpart of claudeNeedsAPIKey. Trove cannot tell a ChatGPT login from an API key
+// without opening ~/.codex/auth.json, which it never does, so the only evidence it accepts is OPENAI_API_KEY being set
+// or the user's own `plan = "api_key"` in config.toml. Anything else is refused: the provider setup writes tells Codex
+// to read its key from OPENAI_API_KEY, and with no key there Trove will not guess.
+func codexNeedsAPIKey(a *App, planOverride string) string {
+	if logs.DetectCodexPlan(a.Getenv, planOverride).Plan == logs.PlanAPIKey {
+		return ""
+	}
+	return "Not changed. Nothing says Codex CLI here uses an OpenAI API key, and if you use Sign in with ChatGPT (or a Codex access token), " +
+		"Trove never handles that login: the gateway refuses it and Trove will not read ~/.codex/auth.json to find out. " +
+		"If you use an API key, set OPENAI_API_KEY in the environment you start Codex from and run `trove setup` again; " +
+		"if you set the key some other way, add `plan = \"api_key\"` under [history] in config.toml. " +
+		"If you use a ChatGPT plan, Trove's gateway cannot help; use the Trove hooks and MCP tools instead."
+}
+
 func newSetup(a *App) *cobra.Command {
 	var yes, statusLine bool
 	c := &cobra.Command{
@@ -105,6 +120,13 @@ func runSetup(a *App, yes, statusLine bool) error {
 		var perr error
 		if spec.binary == "codex" {
 			e, perr = setup.PlanCodex(cfgDir, cfg.Gateway.Port)
+			if perr == nil && !e.NoOp {
+				// Same rule as Claude Code below: no sign of an OpenAI API key, no change (rules 3 and 10).
+				if why := codexNeedsAPIKey(a, cfg.History.Plan); why != "" {
+					rep.Plans = append(rep.Plans, setupPlanJSON{Agent: spec.name, Problem: why})
+					continue
+				}
+			}
 		} else {
 			e, perr = setup.PlanClaudeCode(cfgDir, cfg.Gateway.Port, cfg.Upstreams.Anthropic)
 			if perr == nil && !e.NoOp {

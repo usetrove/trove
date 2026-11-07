@@ -126,7 +126,8 @@ What the text says (quoted from the copied pages; section numbers are theirs):
   Account or any End User Account." Customers may not "buy, sell, or transfer API keys from, to, or with a third
   party." Trove runs locally for the person who owns the key, keeps the key in memory only, and does not transfer
   it. The consumer Terms of Use similarly say "You may not share your account credentials"; Trove never touches
-  ChatGPT credentials and rejects JWT-shaped bearer tokens (heuristic, F-4 above).
+  ChatGPT credentials, and the OpenAI route accepts only `sk-` bearer keys and refuses every other credential type
+  (allow-list, F-4 and the 2026-11-06 update below).
 - *Limits and extraction (Services Agreement 3.3(f), (h), (i)).* Customers may not "circumvent any rate limits or
   restrictions", "violate or circumvent Usage Limits or otherwise configure the Services to avoid Usage Limits",
   or "extract data from the Services other than as permitted through the Services". Trove forwards the user's own
@@ -191,7 +192,8 @@ future effective date, so OpenAI's pages may change again soon. Re-read before e
 - *Trove:* adds a provider named `trove` with `base_url` on loopback and `env_key = "OPENAI_API_KEY"`, and does
   not set `requires_openai_auth`, so Codex uses the API key from the environment and not a ChatGPT login. If a user
   sets `requires_openai_auth = true` on that provider, Codex would send its ChatGPT-login token to the gateway;
-  Trove rejects JWT-shaped bearer tokens as a heuristic, which is **not a documented format** (finding F-4).
+  the gateway refuses it (it accepts only `sk-` keys; see the 2026-11-06 update below). `trove setup` also refuses to
+  write the Codex provider unless `OPENAI_API_KEY` is set or the user says `plan = "api_key"`.
   Trove never opens `~/.codex/auth.json` (it is on the fixer's refuse list).
 - *Not found:* the sessions/rollout files Trove parses for history (`~/.codex/sessions`) are not described on the
   pages read (only `history.jsonl` is). Trove's parser is based on observed files; the Codex hooks page says the
@@ -613,3 +615,41 @@ Kept on purpose, each a name the integrated agent or provider dictates or a plai
    under the Usage Policy or Commercial Terms?
 7. Which of the pages above (Usage Policy, Consumer Terms) governs a Team or Enterprise seat's Claude Code use, given
    the Claude Code legal page says Commercial Terms apply to Team, Enterprise and API users?
+
+
+## Update 2026-11-06: OpenAI and Codex credentials in the gateway
+
+What was read (2026-11-06; summaries are marked, and the part of the learn.chatgpt.com page after about 40,000
+characters reached us only as a model summary):
+
+- learn.chatgpt.com/docs/auth: Codex signs in "with ChatGPT for subscription access" or "with an API key for usage-based
+  access"; device-code and access-token logins also exist (summary); "Use API key authentication for programmatic Codex
+  CLI workflows, such as CI/CD jobs." The page says to treat `~/.codex/auth.json` "like a password" (summary).
+- github.com/openai/codex source (not documentation): credentials live in `$CODEX_HOME/auth.json` or the OS keyring
+  ("Codex Auth"); `auth.json` fields include `auth_mode`, `OPENAI_API_KEY`, `tokens`, `agent_identity`,
+  `personal_access_token`; ChatGPT-style modes use base URL `https://chatgpt.com/backend-api/codex`, API-key mode uses
+  `https://api.openai.com/v1`; the ChatGPT access token is a JWT, and the login JWT carries `https://api.openai.com/auth`
+  and `https://api.openai.com/profile` claims.
+- developers.openai.com/api/reference/overview: bearer API keys, admin keys, and workload-identity access tokens;
+  "Changing the length or format of opaque strings" is listed as a backwards-compatible change. No `sk-` prefix is
+  documented.
+
+Not found: the header names a ChatGPT login sends (`chatgpt-account-id` was not seen in the files read), the format of a
+personal access token or agent identity, and any OpenAI term that forbids third-party tools from handling these tokens.
+
+What changed: the gateway's OpenAI route is now an allow-list (`sk-` bearer keys only) instead of a blocklist, so a
+credential type that did not exist when the code was written is refused, not forwarded. Compat routes refuse a JWT that
+OpenAI's claims identify. `trove setup` gates Codex on API-key evidence like Claude Code. Tests:
+`TestOpenAIRouteFailsClosedOnEverythingThatIsNotAnAPIKey`, `TestCompatRefusesAnOpenAILoginTokenButNotAnotherServersJWT`,
+the leak test with planted ChatGPT and Codex tokens, `TestSetupRefusesCodexWithoutAnAPIKeyAndLeavesItUntouched`.
+
+Audit, same date: no shipped Go file opens `auth.json`, the keyring entry, or the Codex token environment variables
+(`internal/credguard` fails the build if one does). The only mentions are two deny-lists, a comment and a refusal
+message. `~/.codex/sessions` is read read-only for history; `~/.codex` itself is never listed. The only process Trove
+starts for Codex is `codex --version`. The benchmark lab has no Codex adapter (it raises), requires `ANTHROPIC_API_KEY`
+for Claude Code runs, hands containers only that key by name, and mounts no host folder
+(`bench/tests/test_no_subscription_login.py`).
+
+Residual risks: the `sk-` check cannot tell a platform key from another token that also begins `sk-` (no such Codex token
+is documented); a legitimate key in a future format is refused until the allow-list is updated; the claims check is
+based on source we read, not on a real token (Trove never opens one).

@@ -111,3 +111,49 @@ func TestSetupAlreadyConfiguredIsNotARefusal(t *testing.T) {
 		t.Errorf("an already configured setup should say so, not refuse:\n%s", h2.out)
 	}
 }
+
+// The same for Codex CLI: without OPENAI_API_KEY (or the user's own statement) Trove cannot tell a ChatGPT login from
+// a key, and it will not open ~/.codex/auth.json to find out, so it changes nothing.
+func TestSetupRefusesCodexWithoutAnAPIKeyAndLeavesItUntouched(t *testing.T) {
+	for name, tc := range map[string]struct {
+		env     map[string]string
+		config  string
+		applies bool
+	}{
+		"no key":                  {map[string]string{"OPENAI_API_KEY": ""}, "", false},
+		"OPENAI_API_KEY set":      {map[string]string{"OPENAI_API_KEY": "x"}, "", true},
+		"codex access token only": {map[string]string{"OPENAI_API_KEY": "", "CODEX_ACCESS_TOKEN": "t"}, "", false},
+		"the user says so":        {map[string]string{"OPENAI_API_KEY": ""}, "[history]\nplan = \"api_key\"\n", true},
+		"user says subscription":  {map[string]string{"OPENAI_API_KEY": "x"}, "[history]\nplan = \"subscription\"\n", false},
+	} {
+		tc.env["TROVE_DATA_DIR"] = ""
+		h := newHarness(t, map[string]string{"OPENAI_API_KEY": tc.env["OPENAI_API_KEY"], "CODEX_ACCESS_TOKEN": tc.env["CODEX_ACCESS_TOKEN"]}, "codex")
+		if tc.config != "" {
+			dir, _ := h.app.ResolveDataDir()
+			if err := os.MkdirAll(dir, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(tc.config), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		home, _ := h.app.HomeDir()
+		cfgPath := filepath.Join(home, ".codex", "config.toml")
+		if code := h.run("setup", "--yes"); code != 0 {
+			t.Fatalf("%s: exit %d: %s %s", name, code, h.out, h.err)
+		}
+		_, err := os.Stat(cfgPath)
+		changed := err == nil
+		if changed != tc.applies {
+			t.Errorf("%s: codex config changed = %v, want %v\n%s", name, changed, tc.applies, h.out)
+		}
+		if !tc.applies {
+			out := h.out.String()
+			for _, want := range []string{"Sign in with ChatGPT", "OPENAI_API_KEY", "never handles that login"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("%s: the refusal must say %q:\n%s", name, want, out)
+				}
+			}
+		}
+	}
+}

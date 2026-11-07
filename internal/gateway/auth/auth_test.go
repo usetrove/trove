@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/base64"
 	"net/http"
 	"strings"
 	"testing"
@@ -47,8 +48,11 @@ func TestOpenAI(t *testing.T) {
 		ok     bool
 		reason string
 	}{
-		{"bearer key", hdr("Authorization", "Bearer FAKE-KEY"), true, ""},
-		{"lowercase scheme", hdr("Authorization", "bearer FAKE-KEY"), true, ""},
+		{"project key", hdr("Authorization", "Bearer sk-proj-FAKE"), true, ""},
+		{"legacy key shape", hdr("Authorization", "Bearer sk-FAKE"), true, ""},
+		{"lowercase scheme", hdr("Authorization", "bearer sk-proj-FAKE"), true, ""},
+		{"project and org headers are fine", hdr("Authorization", "Bearer sk-proj-FAKE", "OpenAI-Project", "proj_x", "OpenAI-Organization", "org_x", "originator", "codex_cli_rs"), true, ""},
+		{"opaque token of an unknown type", hdr("Authorization", "Bearer FAKE-KEY"), false, "unrecognized_credential"},
 		{"jwt session token", hdr("Authorization", "Bearer eyJhbGciOi.eyJzdWIiOi.c2ln"), false, "session_token"},
 		{"basic", hdr("Authorization", "Basic abc"), false, "unknown_scheme"},
 		{"empty bearer", hdr("Authorization", "Bearer "), false, "unknown_scheme"},
@@ -157,6 +161,83 @@ func TestDecisionNeverContainsCredential(t *testing.T) {
 	} {
 		if d.Reason == "" || len(d.Reason) > 20 {
 			t.Errorf("reason should be a short label: %q", d.Reason)
+		}
+	}
+}
+
+func fakeJWT(payload string) string {
+	enc := base64.RawURLEncoding.EncodeToString
+	return enc([]byte(`{"alg":"none"}`)) + "." + enc([]byte(payload)) + "." + enc([]byte("sig"))
+}
+
+// Every way Codex CLI can sign in other than an API key (Sign in with ChatGPT, a
+// Codex access token for CI, an agent identity, a personal access token; learn.chatgpt.com/docs/auth
+// and codex-rs/login, read 2026-11-06), and anything we have never heard of, must
+// be refused on the OpenAI route. The values are made up.
+func TestOpenAIRouteFailsClosedOnEverythingThatIsNotAnAPIKey(t *testing.T) {
+	login := fakeJWT(`{"iss":"https://auth.openai.com","https://api.openai.com/auth":{"chatgpt_plan_type":"plus"}}`)
+	for name, h := range map[string]http.Header{
+		"chatgpt login access token (jwt)":  hdr("Authorization", "Bearer "+login),
+		"chatgpt login with account header": hdr("Authorization", "Bearer sk-proj-FAKE", "chatgpt-account-id", "acct"),
+		"codex access token (jwt)":          hdr("Authorization", "Bearer "+fakeJWT(`{"sub":"x"}`)),
+		"personal access token, opaque":     hdr("Authorization", "Bearer pat_FAKE0123456789"),
+		"agent identity, opaque":            hdr("Authorization", "Bearer agent_FAKE0123456789"),
+		"realtime ephemeral secret":         hdr("Authorization", "Bearer ek_FAKE0123456789"),
+		"claude.ai setup token":             hdr("Authorization", "Bearer sk-ant-oat01-FAKE"),
+		"claude.ai login beta flag":         hdr("Authorization", "Bearer sk-proj-FAKE", "anthropic-beta", "oauth-2025-04-20"),
+		"key with a space in it":            hdr("Authorization", "Bearer sk-proj-FAKE TAIL"),
+		"api-key header only (Azure style)": hdr("api-key", "FAKE"),
+		"x-api-key only":                    hdr("x-api-key", "sk-proj-FAKE"),
+		"basic":                             hdr("Authorization", "Basic c2stcHJvai1GQUtF"),
+		"bearer with nothing after it":      hdr("Authorization", "Bearer"),
+		"no credential at all":              hdr(),
+	} {
+		if d := OpenAI(h); d.OK || d.Reason == "" {
+			t.Errorf("%s: accepted or unexplained: %+v", name, d)
+		}
+	}
+}
+
+// A compat route can front any server, whose keys are opaque and may be JWTs, so a
+// JWT is refused there only when its claims say OpenAI's login issued it. Without
+// this, a Codex ChatGPT login pointed at /compat/<name> would send its token to a
+// third party.
+func TestCompatRefusesAnOpenAILoginTokenButNotAnotherServersJWT(t *testing.T) {
+	for name, h := range map[string]http.Header{
+		"openai issuer":        hdr("Authorization", "Bearer "+fakeJWT(`{"iss":"https://auth.openai.com/"}`)),
+		"api.openai.com claim": hdr("Authorization", "Bearer "+fakeJWT(`{"https://api.openai.com/auth":{}}`)),
+		"profile claim":        hdr("Authorization", "Bearer "+fakeJWT(`{"https://api.openai.com/profile":{"email":"x"}}`)),
+		"account header":       hdr("Authorization", "Bearer FAKE", "chatgpt-account-id", "acct"),
+	} {
+		if d := Compat(h, true); d.OK || d.Reason != "session_token" {
+			t.Errorf("%s: %+v", name, d)
+		}
+	}
+	for name, h := range map[string]http.Header{
+		"another issuer's jwt":  hdr("Authorization", "Bearer "+fakeJWT(`{"iss":"https://llm.example.com"}`)),
+		"opaque key":            hdr("Authorization", "Bearer FAKE"),
+		"jwt-shaped but broken": hdr("Authorization", "Bearer eyJ!!.eyJ!!.sig"),
+	} {
+		if d := Compat(h, false); !d.OK {
+			t.Errorf("%s was refused: %+v", name, d)
+		}
+	}
+}
+
+func TestMessageNamesChatGPTAndCodexLogins(t *testing.T) {
+	for _, want := range []string{"ChatGPT or Codex login", "auth.json", "only an OpenAI API key"} {
+		if !strings.Contains(Message, want) {
+			t.Errorf("Message lacks %q", want)
+		}
+	}
+}
+
+func TestOpenAIDecisionNeverContainsTheCredential(t *testing.T) {
+	const secret = "SECRETVALUE0123456789"
+	for _, tok := range []string{secret, "pat_" + secret, "sk-ant-oat01-" + secret, fakeJWT(`{"https://api.openai.com/auth":"` + secret + `"}`)} {
+		d := OpenAI(hdr("Authorization", "Bearer "+tok))
+		if d.OK || strings.Contains(d.Reason, secret) || len(d.Reason) > 24 {
+			t.Errorf("%+v", d)
 		}
 	}
 }

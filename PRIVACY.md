@@ -42,8 +42,10 @@ commands it starts (`claude mcp add`, `claude mcp remove`) and any command you a
   `TestWithoutCredentialsKeepsOnlyWhatLaterCodeNeeds`; `TestNoCredentialOrPromptReachesLogsResponsesOrDisk`
   scans logs, client responses and every byte of every data file]
 - **Subscription or OAuth credentials.** Such requests are refused with HTTP 401 and never forwarded.
-  Trove never opens `~/.claude.json`, `.credentials.json` or `auth.json`. [`gateway/auth`; `fixer/paths.go`
-  denylist; `TestNonAPIKeyAuthIsRejected`]
+  Trove never opens `~/.claude.json`, `.credentials.json` or `auth.json` (Codex's login file). The OpenAI route
+  accepts only `sk-` API keys and refuses ChatGPT and Codex logins and any unrecognised credential type.
+  [`gateway/auth`; `fixer/paths.go` denylist; `TestNonAPIKeyAuthIsRejected`; `internal/credguard` fails the build if
+  shipped code names these files]
 - **Prompt text, code, tool output or file contents in the database.** [`TestSchemaIsMetadataOnly` lists all
   26 tables and every column, and fails if a table or column is added without review]
 - **File paths in the database.** Files are identified by a hash (`history_files.file_key`, `fixes.path_hash`).

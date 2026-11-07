@@ -169,8 +169,10 @@ Open:
   First rated high; re-rated low. Anthropic's docs describe a claude.ai login as sending the token as a bearer
   with an OAuth `anthropic-beta` value, and Trove refuses both. Neither the Claude Code nor the gateway pages
   document a token prefix, and CLAUDE.md rule 8 forbids building on one from memory, so a prefix check was not added.
-  The JWT test for OpenAI is a heuristic and not a documented format; Codex sends a ChatGPT token only if the user
-  sets `requires_openai_auth = true`, which Trove's setup does not. Revisit if either provider documents formats.
+  OpenAI (updated 2026-11-06): the route is now an allow-list that accepts only `sk-` bearer keys and refuses every
+  other credential type, including ones not seen before; the `sk-` prefix is itself undocumented, so the failure mode is
+  a wrongly refused key, not an accepted login. Codex sends a ChatGPT token only if the user sets
+  `requires_openai_auth = true`, which Trove's setup does not. Revisit if either provider documents formats.
 - **F-16.** `golang.org/x/oauth2` is linked into the binary through the MCP SDK (`go list -deps ./cmd/trove`).
   Nothing in Trove calls it and the strace test would catch a connection; it is dormant network-capable code.
 - **F-22.** `net.Listen("tcp", "localhost:N")` follows whatever `localhost` resolves to; the CLI always uses `127.0.0.1`.

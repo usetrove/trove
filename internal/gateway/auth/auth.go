@@ -9,16 +9,26 @@
 //     sends both). Claude Code docs (code.claude.com/docs/en/llm-gateway-protocol,
 //     verified 2026-10-28) say a claude.ai login adds an OAuth capability to
 //     anthropic-beta; that value is refused.
-//   - OpenAI: the credential must be "Authorization: Bearer <token>". A token
-//     shaped like a JWT (three dot-separated segments starting "eyJ") is
-//     treated as a ChatGPT/OAuth session token. This is a heuristic: API keys
-//     are not documented to be JWTs, but that is not guaranteed forever.
+//   - OpenAI: an allow-list, because OpenAI documents neither its key formats
+//     nor a complete list of credential types. Codex CLI can sign in with ChatGPT
+//     (a JWT access token), an access token for CI, an agent identity or a
+//     personal access token, and ChatGPT-login traffic goes to
+//     chatgpt.com/backend-api/codex, not api.openai.com (codex-rs
+//     model-provider-info, read 2026-11-06). The gateway accepts only
+//     "Authorization: Bearer sk-..." and refuses everything else, including any
+//     credential type it does not recognise (reason "unrecognized_credential").
+//     The "sk-" prefix is a heuristic that can wrongly refuse a real key if
+//     OpenAI changes the format (it fails closed, never open), and it cannot
+//     tell a key from some other token that also starts "sk-"; the JWT, header
+//     and claim checks below catch the documented OAuth shapes first.
 //
 // Credentials are only compared, never copied, logged or returned.
 package auth
 
 import (
 	"crypto/subtle"
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"strings"
 )
@@ -26,7 +36,9 @@ import (
 // Message is what the client is told when a request is refused.
 const Message = "Trove's gateway is for API-key authentication only. " +
 	"Gateway mode needs an API key or a cloud credential (Console key, Vertex, Foundry or Bedrock key). " +
-	"A claude.ai login on any plan (Free, Pro, Max, Ultra, Team or Enterprise) is not supported, and neither is a ChatGPT login. " +
+	"A claude.ai login on any plan (Free, Pro, Max, Ultra, Team or Enterprise) is not supported, and neither is a ChatGPT or Codex login " +
+	"(Sign in with ChatGPT, a Codex access token, or anything from ~/.codex/auth.json). " +
+	"On the OpenAI route only an OpenAI API key (sk-...) is accepted; any other kind of credential is refused. " +
 	"To use a subscription, remove the custom endpoint setting " +
 	"(ANTHROPIC_BASE_URL for Claude Code, or the trove provider in ~/.codex/config.toml) " +
 	"or run `trove undo`, and use the Trove plugin instead. Trove never handles subscription credentials."
@@ -76,7 +88,12 @@ func Anthropic(h http.Header) Decision {
 	return ok
 }
 
-// OpenAI classifies a request bound for the OpenAI API.
+// openAIKeyPrefix starts OpenAI platform API keys (sk-proj-..., sk-svcacct-...,
+// and older sk-...). It is the allow-list entry for the OpenAI route.
+const openAIKeyPrefix = "sk-"
+
+// OpenAI classifies a request bound for the OpenAI API. It fails closed: a
+// credential is accepted only if it is recognisably an API key.
 func OpenAI(h http.Header) Decision {
 	authz := strings.TrimSpace(h.Get("Authorization"))
 	if authz == "" {
@@ -86,8 +103,14 @@ func OpenAI(h http.Header) Decision {
 	if !isBearer || tok == "" {
 		return reject("unknown_scheme")
 	}
-	if looksLikeJWT(tok) || h.Get("Chatgpt-Account-Id") != "" {
-		return reject("session_token")
+	if d, bad := chatGPTLogin(h, tok, false); bad {
+		return d
+	}
+	if d, bad := claudeLogin(h); bad { // never forward a claude.ai token to OpenAI either
+		return d
+	}
+	if !strings.HasPrefix(tok, openAIKeyPrefix) || strings.ContainsAny(tok, " 	") {
+		return reject("unrecognized_credential")
 	}
 	return ok
 }
@@ -144,13 +167,14 @@ func Bedrock(h http.Header) Decision {
 // and may be JWTs, so only explicit ChatGPT or claude.ai signals are refused.
 // With allowNone, a request without any credential is accepted (open servers).
 func Compat(h http.Header, allowNone bool) Decision {
-	if h.Get("Chatgpt-Account-Id") != "" {
-		return reject("session_token")
+	authz := strings.TrimSpace(h.Get("Authorization"))
+	tok, _ := bearer(authz)
+	if d, bad := chatGPTLogin(h, tok, true); bad {
+		return d
 	}
 	if d, bad := claudeLogin(h); bad {
 		return d
 	}
-	authz := strings.TrimSpace(h.Get("Authorization"))
 	if authz == "" {
 		if allowNone {
 			return ok
@@ -161,6 +185,55 @@ func Compat(h http.Header, allowNone bool) Decision {
 		return reject("unknown_scheme")
 	}
 	return ok
+}
+
+// chatGPTLogin reports whether the request carries a ChatGPT or Codex login
+// credential. tok is the bearer token, or "" if there is none. jwtMayBeKey is
+// true on routes where a JWT can be an ordinary key. The signals are
+// the chatgpt-account-id header (not confirmed in Codex's source, kept because
+// it is cheap) and a JWT. On the OpenAI route any JWT is refused, since API keys
+// are not JWTs. A third-party server behind a compat route may issue JWT keys,
+// so there a JWT is refused only if its claims say OpenAI issued it (see
+// openAIIssued). The token is decoded in memory and never kept or logged.
+func chatGPTLogin(h http.Header, tok string, jwtMayBeKey bool) (Decision, bool) {
+	if h.Get("Chatgpt-Account-Id") != "" {
+		return reject("session_token"), true
+	}
+	if looksLikeJWT(tok) && (!jwtMayBeKey || openAIIssued(tok)) {
+		return reject("session_token"), true
+	}
+	return Decision{}, false
+}
+
+// openAIIssued reports whether a JWT's payload says OpenAI's own login issued it:
+// an "iss" naming openai.com, or a claim in the "https://api.openai.com/" namespace
+// (Codex's token_data.rs parses "https://api.openai.com/auth" and
+// "https://api.openai.com/profile" from its login JWT, read 2026-11-06; whether
+// every Codex token carries them is not confirmed). The signature is not
+// checked and nothing from the payload is returned.
+func openAIIssued(tok string) bool {
+	parts := strings.Split(tok, ".")
+	if len(parts) != 3 {
+		return false
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimRight(parts[1], "="))
+	if err != nil {
+		return false
+	}
+	var claims map[string]json.RawMessage
+	if json.Unmarshal(raw, &claims) != nil {
+		return false
+	}
+	for k := range claims {
+		if strings.HasPrefix(k, "https://api.openai.com/") {
+			return true
+		}
+	}
+	var iss string
+	if b, found := claims["iss"]; found && json.Unmarshal(b, &iss) == nil {
+		return strings.Contains(strings.ToLower(iss), "openai.com")
+	}
+	return false
 }
 
 // claudeLogin reports whether the headers carry a claude.ai login, on any
