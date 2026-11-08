@@ -62,6 +62,7 @@ func NewRoot(a *App) *cobra.Command {
 		newReport(a),
 		newLogs(a),
 		newBudget(a),
+		newBench(a),
 		newReceipts(a),
 		newStatusLine(a),
 		newFix(a),
