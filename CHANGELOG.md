@@ -49,4 +49,3 @@ The first release will include everything below. Nothing has been published.
 - Real-agent verification checklists are still pending for most features; see [docs/supported-agents.md](docs/supported-agents.md).
 - Codex CLI history parsing has not been verified on a real install.
 - macOS and Linux have not yet been tested by hand; automated tests so far ran on Windows and in CI.
-- `trove config get|set` is not implemented.

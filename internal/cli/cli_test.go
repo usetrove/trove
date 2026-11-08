@@ -72,30 +72,19 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestStubsPrintNotImplemented(t *testing.T) {
-	cmds := [][]string{
-		{"config", "get"}, {"config", "get", "gateway.port"},
-		{"config", "set", "gateway.port", "9000"},
-	}
-	for _, c := range cmds {
+// `trove config` was removed until it is built for real. It must be an unknown
+// command, not a stub that pretends to work.
+func TestConfigCommandIsNotRegistered(t *testing.T) {
+	for _, c := range [][]string{{"config"}, {"config", "get"}, {"config", "set", "gateway.port", "9000"}} {
 		h := newHarness(t, nil)
-		if code := h.run(c...); code != 0 {
-			t.Errorf("%v: exit %d, %s", c, code, h.err)
-		}
-		if !strings.Contains(h.out.String(), "not implemented yet") {
-			t.Errorf("%v: output %q", c, h.out)
-		}
-		h = newHarness(t, nil)
-		h.run(append(append([]string{}, c...), "--json")...)
-		var v map[string]string
-		if err := json.Unmarshal(h.out.Bytes(), &v); err != nil || v["status"] != "not_implemented" {
-			t.Errorf("%v --json: %q (%v)", c, h.out, err)
+		if code := h.run(c...); code != 1 || !strings.HasPrefix(h.err.String(), "Error: ") {
+			t.Errorf("%v: exit %d, stderr %q; want an unknown-command error", c, code, h.err)
 		}
 	}
 }
 
 func TestUnknownCommandAndFlagFail(t *testing.T) {
-	for _, args := range [][]string{{"bogus"}, {"version", "--nope"}, {"config", "set", "onlykey"}} {
+	for _, args := range [][]string{{"bogus"}, {"version", "--nope"}, {"config", "get"}} {
 		h := newHarness(t, nil)
 		if code := h.run(args...); code != 1 || !strings.HasPrefix(h.err.String(), "Error: ") {
 			t.Errorf("%v: exit %d, stderr %q", args, code, h.err)
