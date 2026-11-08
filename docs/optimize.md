@@ -196,8 +196,9 @@ memo only saves time and never changes output (`TestMemoNeverChangesOutput`).
 - The cache-breakpoint decision depends on prompt size. It cannot flip back
   within a session, but the request on which it first turns on has a different
   prefix from the one before it.
-- Automatic rollback on guardrail trips needs the measurement package (Prompt 6);
-  today failures are only recorded.
+- Guardrail trips roll the optimizer back to shadow automatically. The gateway
+  checks every 5 minutes (`measure.Run` in `internal/cli/gateway.go`), so a trip
+  takes effect within that interval. See [measurement.md](measurement.md) section 4.
 - Stored `shadow_savings` rows written before these optimizers existed use the
   provisional names `dedupe_tool_results`, `strip_noise` and
   `truncate_oversized_output`.
