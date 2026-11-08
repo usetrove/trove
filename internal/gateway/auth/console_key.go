@@ -8,7 +8,7 @@ import (
 // Reasons a key is refused. They are short labels for logs and messages; a key
 // value is never part of a reason.
 const (
-	ReasonOAuthToken = "oauth_token"             // sk-ant-oat...: a claude.ai login or setup-token
+	ReasonOAuthToken = "oauth_token"             //nolint:gosec // G101: a refusal label, not a credential; sk-ant-oat... is a claude.ai login or setup-token
 	ReasonAdminKey   = "admin_key"               // sk-ant-admin...: an Admin API key
 	ReasonUnknown    = "unrecognized_credential" // anything else, including OpenAI keys and unknown sk-ant- prefixes
 	ReasonEmpty      = "no_credential"

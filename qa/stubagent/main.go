@@ -22,7 +22,7 @@ func main() {
 	// reaching the child process.
 	if exe, err := os.Executable(); err == nil {
 		p := filepath.Join(filepath.Dir(exe), "stubagent-args.log")
-		if f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
+		if f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil { //nolint:gosec // QA stub: writes its own log beside its own executable
 			_, _ = f.WriteString(strings.Join(os.Args[1:], "\x1f") + "\n")
 			_ = f.Close()
 		}
