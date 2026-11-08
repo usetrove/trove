@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -146,7 +147,10 @@ func Run(ctx context.Context, o Options) (Report, error) {
 		rep.Notes = append(rep.Notes, "Nothing was run. Use --live with --max-usd to test the installed version for real.")
 		return rep, nil
 	}
-	per := o.MaxUSD / float64(len(o.Tools))
+	per, err := perToolCap(o.MaxUSD, len(o.Tools))
+	if err != nil {
+		return rep, err
+	}
 	for _, t := range o.Tools {
 		c, spent, err := probeTool(ctx, o, ver, t, per, now)
 		rep.SpentUSD += spent
@@ -368,4 +372,18 @@ func inputApplied(p plan, in json.RawMessage) bool {
 	default:
 		return strings.Contains(s, p.MarkerIn)
 	}
+}
+
+// perToolCap splits a live run's cap across the probed tools in whole cents, rounding each share down. Rounding
+// each share to the nearest cent could add up to more than the cap: $0.10 over four tools would be 4 x $0.03.
+// A cap too small to give every tool a cent is refused, not silently raised.
+func perToolCap(maxUSD float64, tools int) (float64, error) {
+	if tools < 1 {
+		return 0, errors.New("no tools to probe")
+	}
+	cents := math.Floor(maxUSD/float64(tools)*100 + 1e-9)
+	if cents < 1 {
+		return 0, fmt.Errorf("a cap of $%.2f cannot give each of %d tools at least one cent; raise --max-usd", maxUSD, tools)
+	}
+	return cents / 100, nil
 }
