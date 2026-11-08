@@ -25,3 +25,13 @@ bench/cache/
 server/worker/wrangler.local.toml
 .wrangler/
 server/worker/.dev.vars
+
+# QA campaign: generated results and scratch homes (scripts in qa/ are tracked)
+qa/results/
+qa/scratch/
+qa/bin/
+
+# Local exports and share summaries from `trove data export` and `trove share`
+# (may hold real usage data; anchored to the repo root on purpose)
+/trove-export-*/
+/trove-*.json
