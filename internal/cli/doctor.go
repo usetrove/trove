@@ -2,9 +2,11 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/usetrove/trove/internal/optimize"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/redact"
 	"github.com/usetrove/trove/internal/store"
@@ -104,6 +107,7 @@ func runDoctor(a *App) doctorReport {
 	cs = append(cs, checkConfig(a, dir))
 	cs = append(cs, checkPricing(time.Now()))
 	cs = append(cs, checkAgents(a)...)
+	cs = append(cs, checkGatewayPointer(a))
 	if cfg, err := config.Load(dir, a.Getenv); err == nil {
 		cs = append(cs, hookRewritesCheck(a, dir, cfg.OptimizerState))
 	}
@@ -217,6 +221,52 @@ func checkAgents(a *App) []check {
 		}
 	}
 	return out
+}
+
+// checkGatewayPointer warns when ANTHROPIC_BASE_URL, from the environment or Claude Code's settings, points at a
+// local address where no Trove gateway is answering: Claude Code's requests would fail there. Only the scheme,
+// host and port are shown, never a path or any credential.
+func checkGatewayPointer(a *App) check {
+	const name = "gateway address"
+	value, source := a.Getenv("ANTHROPIC_BASE_URL"), "the ANTHROPIC_BASE_URL environment variable"
+	if value == "" {
+		if home, err := a.HomeDir(); err == nil {
+			path := filepath.Join(supportedAgents[0].configDir(a, home), "settings.json")
+			if b, err := os.ReadFile(path); err == nil { //nolint:gosec // the user's own Claude Code settings file
+				var doc struct {
+					Env map[string]string `json:"env"`
+				}
+				if json.Unmarshal(b, &doc) == nil {
+					value, source = doc.Env["ANTHROPIC_BASE_URL"], "Claude Code's settings ("+path+")"
+				}
+			}
+		}
+	}
+	if value == "" {
+		return check{name, statusOK, "ANTHROPIC_BASE_URL is not set", ""}
+	}
+	u, err := url.Parse(value)
+	if err != nil || u.Host == "" {
+		return check{name, statusInfo, "ANTHROPIC_BASE_URL is set to a value Trove cannot read (" + source + ")", ""}
+	}
+	host, port := u.Hostname(), u.Port()
+	if host != "127.0.0.1" && host != "localhost" && host != "::1" {
+		return check{name, statusInfo, "ANTHROPIC_BASE_URL points at " + u.Scheme + "://" + u.Host + ", not a local gateway (" + source + ")", ""}
+	}
+	if port == "" {
+		return check{name, statusInfo, "ANTHROPIC_BASE_URL points at a local address with no port (" + source + ")", ""}
+	}
+	ip := host
+	if host == "localhost" {
+		ip = "127.0.0.1"
+	}
+	addr := net.JoinHostPort(ip, port)
+	if _, up := probe(addr); up {
+		return check{name, statusOK, "points at the running Trove gateway on " + addr + " (" + source + ")", ""}
+	}
+	return check{name, statusWarn,
+		"ANTHROPIC_BASE_URL points at " + addr + " (" + source + "), but no Trove gateway answers there, so Claude Code's requests will fail",
+		"run `trove gateway start`, or `trove undo` to put back the setting Trove changed"}
 }
 
 func dirExists(p string) bool {
