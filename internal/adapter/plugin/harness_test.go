@@ -46,7 +46,7 @@ func TestHelloSaysWhichProtocolItSpeaks(t *testing.T) {
 
 func TestServerPinsStatesPerSessionAndPluginSendsNone(t *testing.T) {
 	calls := 0
-	s := serverWith(t, Options{Resolver: func(key string) map[string]string {
+	s := serverWith(t, Options{Resolver: func(_ string) map[string]string {
 		calls++
 		return map[string]string{"noise_normalizer": "on"}
 	}})

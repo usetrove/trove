@@ -192,21 +192,29 @@ func isFailure(l string) bool {
 	if len(l) > 400 { // optimize.IsFailureLine ignores long lines
 		return false
 	}
-	if !(nonASCII(l) || strings.Contains(l, "FAIL") || strings.Contains(l, "ERR") || strings.Contains(l, "rror") ||
-		strings.Contains(l, "panic") || strings.Contains(l, "fatal") || strings.Contains(l, "Traceback") ||
-		strings.Contains(l, "xception") || strings.Contains(l, "E   ")) {
+	if !hasFailureMarker(l) {
 		return false
 	}
 	return optimize.IsFailureLine(l)
 }
 
+func hasFailureMarker(l string) bool {
+	return nonASCII(l) || strings.Contains(l, "FAIL") || strings.Contains(l, "ERR") || strings.Contains(l, "rror") ||
+		strings.Contains(l, "panic") || strings.Contains(l, "fatal") || strings.Contains(l, "Traceback") ||
+		strings.Contains(l, "xception") || strings.Contains(l, "E   ")
+}
+
 func isFrame(l string) bool {
-	if !(strings.Contains(l, " at ") || strings.Contains(l, ".go:") || strings.Contains(l, "File \"") || strings.Contains(l, ".rs:") ||
-		strings.Contains(l, ".java:") || strings.Contains(l, ".kt:") || strings.Contains(l, ".py:") ||
-		strings.Contains(l, ".js:") || strings.Contains(l, ".ts:")) {
+	if !hasFrameMarker(l) {
 		return false
 	}
 	return frameRe.MatchString(l)
+}
+
+func hasFrameMarker(l string) bool {
+	return strings.Contains(l, " at ") || strings.Contains(l, ".go:") || strings.Contains(l, "File \"") || strings.Contains(l, ".rs:") ||
+		strings.Contains(l, ".java:") || strings.Contains(l, ".kt:") || strings.Contains(l, ".py:") ||
+		strings.Contains(l, ".js:") || strings.Contains(l, ".ts:")
 }
 
 func round2(f float64) float64 { return float64(int(f*100+0.5)) / 100 }
