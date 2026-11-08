@@ -19,7 +19,7 @@ no account, no update check, and no telemetry unless the user opts in to the ano
 | **The local database** | `~/.trove/trove.db` (+ `-wal`, `-shm`) | Usage metadata. Not secret in itself, but reveals what the user works on and when. |
 | **The recovery store** | `~/.trove/recovery/` | The one place raw tool output is written. May hold secrets that appeared in command output. |
 | **Users' config files** | `~/.claude/settings.json`, `~/.codex/config.toml`, `~/.codex/hooks.json`, project `.mcp.json` and `.claude/settings.local.json` | Trove edits them. A bad edit breaks the agent; a malicious edit runs code. Backups in `~/.trove/backups/` hold full copies, which can contain keys. |
-| **The binary itself** | Installed by `install.sh`, `npx trove-cli`, or Homebrew | It runs with the user's full privileges and is started by their agents. |
+| **The binary itself** | Installed by `install.sh` or Homebrew | It runs with the user's full privileges and is started by their agents. |
 | **The user's agent sessions** | Claude Code / Codex CLI, reached through the gateway, hooks and MCP | Whatever steers the agent can use Trove's tools. |
 
 ## Trust assumptions
@@ -84,7 +84,7 @@ agent into calling Trove's tools or runs when a tool opens it.
 | A dependency phones home or exfiltrates | Six direct dependencies, all pure Go, pinned in `go.sum`. A test fails if shipped code outside a four-file allowlist can dial or build an HTTP client, or imports a network-capable package; another fails on telemetry libraries in `go.mod`; a Linux test runs the real binary under `strace` and fails on any non-loopback `connect`/`send` | `internal/egress` tests; CI job `privacy` |
 | Known vulnerabilities | `govulncheck ./...` in CI (pinned to v1.9.0). It found 10 reachable standard-library issues on Go 1.27.0; `go.mod` now requires 1.27.3, and the scan is clean | CI job `vulncheck`; [finding F-12](security-findings.md) |
 | A tampered GitHub Action or tool in the build | Actions are pinned to commit SHAs; `govulncheck` is pinned; test and build jobs use the Go version from `go.mod` | `.github/workflows/*.yml` |
-| A tampered release archive | `checksums.txt` is signed with keyless cosign and every archive has an SPDX SBOM. `install.sh` and the npm wrapper check the archive's SHA-256 against `checksums.txt` from the same release before running anything. **They do not verify the cosign signature**, so they do not protect against a compromised release, only against corruption or a bad mirror. See R3 | `.goreleaser.yaml`; `npm/test`, `install_test.sh` |
+| A tampered release archive | `checksums.txt` is signed with keyless cosign and every archive has an SPDX SBOM. `install.sh` checks the archive's SHA-256 against `checksums.txt` from the same release before running anything. **They do not verify the cosign signature**, so they do not protect against a compromised release, only against corruption or a bad mirror. See R3 | `.goreleaser.yaml`; `install_test.sh` |
 | A non-reproducible build hides a swap | The release stamps the commit date, not the build time, sets `-buildvcs=false` and a fixed file time. Reproducibility has **not been demonstrated** by rebuilding and comparing | `.goreleaser.yaml` |
 | An unexpected network-capable module linked in | `golang.org/x/oauth2` is linked into the binary through the MCP SDK. No Trove code calls it; the strace test would catch a connection. See R4 | `go list -deps ./cmd/trove` |
 

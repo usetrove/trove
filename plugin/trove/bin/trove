@@ -67,7 +67,7 @@ case "$cpu" in
   arm64 | aarch64) arch=arm64 ;;
   *) give_up "${1:-}" "unsupported CPU '$cpu'. Trove supports x86_64 and arm64." ;;
 esac
-command -v curl >/dev/null 2>&1 || give_up "${1:-}" "curl is required to fetch the trove program. Install curl, or install trove yourself (brew, npm or install.sh) at version $ver."
+command -v curl >/dev/null 2>&1 || give_up "${1:-}" "curl is required to fetch the trove program. Install curl, or install trove yourself (brew or install.sh) at version $ver."
 
 # One downloader at a time: the MCP server and the session-start command both
 # call this at the start of a session. The other waits for the first to finish.

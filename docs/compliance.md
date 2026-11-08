@@ -546,8 +546,8 @@ Changed today, because the rule lists "package": `internal/logs/claudecode` is n
 `internal/fixer/codexmodel_test.go` is `cxmodel_test.go`, and `bench/trovebench/agent/claude_code.py` is `cc.py`
 (class `CcAgent`).
 
-Clean already: the Go module `github.com/usetrove/trove`, the plugin and marketplace name `trove`, the npm package
-`trove-cli`, the OpenCode plugin `trove-opencode`, the pip package `trovebench`, every `trove` subcommand, the MCP tools
+Clean already: the Go module `github.com/usetrove/trove`, the plugin and marketplace name `trove`, 
+the OpenCode plugin `trove-opencode`, the pip package `trovebench`, every `trove` subcommand, the MCP tools
 (`trove_read`, `trove_search`, `trove_run`, `trove_fetch_full`), the subagents (`trove-scout`, `trove-cascade`) and the
 plugin commands.
 

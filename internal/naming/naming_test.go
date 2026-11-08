@@ -124,7 +124,7 @@ func readJSON(t *testing.T, path string) map[string]any {
 func TestNoBannedWordInPackageAndPluginNames(t *testing.T) {
 	root := repoRoot(t)
 	names := map[string]string{}
-	for _, f := range []string{"plugin/trove/.claude-plugin/plugin.json", "npm/package.json", "plugins/opencode/package.json", ".claude-plugin/marketplace.json"} {
+	for _, f := range []string{"plugin/trove/.claude-plugin/plugin.json", "plugins/opencode/package.json", ".claude-plugin/marketplace.json"} {
 		m := readJSON(t, filepath.Join(root, filepath.FromSlash(f)))
 		names[f+" name"], _ = m["name"].(string)
 		if ps, ok := m["plugins"].([]any); ok {

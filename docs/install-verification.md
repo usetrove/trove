@@ -2,14 +2,13 @@
 
 Run this on a clean machine for each row, using only the README. Record real results; leave a cell blank until it has been measured. A "clean" machine means no Go toolchain needed, no earlier `~/.trove`, and no Trove config in any agent.
 
-Automated checks already cover the install script and the npm wrapper (`sh install_test.sh`, `node --test "npm/test/*.test.js"`); this page is the by-hand check on real systems.
+Automated checks already cover the install script (`sh install_test.sh`); this page is the by-hand check on real systems.
 
 ## Matrix
 
 | Install path | macOS (arm64) | macOS (amd64) | Linux (amd64) | Linux (arm64) |
 |---|---|---|---|---|
 | Homebrew | | | n/a unless Linuxbrew | n/a unless Linuxbrew |
-| `npx trove-cli doctor` | | | | |
 | `install.sh` | | | | |
 | Direct download + manual checksum | | | | |
 
@@ -46,10 +45,10 @@ Do this on the same machine, after using Trove for real: `trove setup`, one `tro
 2. `trove uninstall --purge-data`.
 3. Agent config files match the saved copies byte for byte (or, if you had edited them since, only Trove's lines are gone).
 4. Nothing is left of: `~/.trove`, the background service (`launchctl list | grep -i trove` on macOS, `systemctl --user list-units | grep -i trove` on Linux), the MCP registration (`claude mcp list`), hooks and `statusLine` entries.
-5. Remove the program: `brew uninstall trove`, or delete the binary the install script placed. For `npx` users, delete `~/.cache/trove-cli`.
+5. Remove the program: `brew uninstall trove`, or delete the binary the install script placed.
 6. Check no listener remains: nothing on the gateway port.
 
-`trove uninstall` does not remove the program itself or the npm cache; the README says so. If any other trace is found, it is a bug: file it and fix it before release.
+`trove uninstall` does not remove the program itself; the README says so. If any other trace is found, it is a bug: file it and fix it before release.
 
 ## Results log
 

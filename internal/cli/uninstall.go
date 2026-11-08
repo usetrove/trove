@@ -182,7 +182,7 @@ func runUninstall(a *App, purge, yes, dry bool) error {
 	rep.Applied = true
 
 	if exe, err := troveBinary(a); err == nil && exe != "trove" {
-		rep.Next = append(rep.Next, "Finally remove the program itself: "+exe+" (or `brew uninstall trove`, or `npm uninstall -g trove-cli`, if you installed it that way).")
+		rep.Next = append(rep.Next, "Finally remove the program itself: "+exe+" (or `brew uninstall trove`, if you installed it that way).")
 	}
 	if len(rep.Undone) > 0 {
 		// Only when an agent's settings were actually changed back: nothing to restart for otherwise.
