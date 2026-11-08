@@ -200,6 +200,15 @@ func (e *Engine) TransformToolInput(ctx context.Context, call ToolCall, s Sessio
 // TransformToolOutput is TransformToolInput for a tool's output.
 func (e *Engine) TransformToolOutput(ctx context.Context, call ToolCall, out ToolOutput, s Session) (ToolOutput, []Report) {
 	cur := out
+	// Keep what the tool produced, before any optimizer rewrites it, so a
+	// stored original is the real output and not a normalized copy.
+	parts := out.Parts
+	s.Raw = func(i int) string {
+		if i < 0 || i >= len(parts) {
+			return ""
+		}
+		return parts[i].Text
+	}
 	var reps []Report
 	ctx, cancel := context.WithTimeout(ctx, e.budget)
 	defer cancel()

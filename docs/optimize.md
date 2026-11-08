@@ -92,8 +92,11 @@ marker naming the line count and the output's ID (the first 16 hex characters of
 the sha256 of the full output). Before a trimmed request is forwarded, the gateway
 saves the full output in the local recovery store (`~/.trove/recovery`, owner-only
 files, 200 MB and 7 days by default; see `[recovery]` in `config.toml`), and the
-agent gets it back with the `trove_fetch_full` tool of the Trove MCP server. If the
-output cannot be saved, the request is forwarded unchanged.
+agent gets it back with the `trove_fetch_full` tool of the Trove MCP server. The saved
+copy is the output exactly as the tool printed it, byte for byte. When an earlier optimizer
+such as `noise_normalizer` has cleaned the text the model sees, the stored copy and the
+marker's hash still name the raw output. If the output cannot be saved, the request is
+forwarded unchanged.
 
 The trimmer can be `on` only when the MCP server is registered with an agent
 (`trove mcp install`; see `docs/mcp.md`). Until then `on` runs as `shadow`, which

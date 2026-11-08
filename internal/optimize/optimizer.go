@@ -63,6 +63,13 @@ type Session struct {
 	// it from the session's pin; nil means every optimizer uses its shipped values.
 	// It never changes during a session.
 	Tuning Tuning
+	// Raw returns the text of span i (a request's text span, or a tool output's
+	// part) as it was BEFORE any optimizer ran. The engine sets it. An optimizer
+	// that stores what it shortens must store Raw(i), the text the tool actually
+	// produced, and not its input, which an earlier optimizer may already have
+	// changed (for example by removing ANSI codes). Nil means the optimizer's own
+	// input is the original.
+	Raw func(i int) string
 }
 
 // SessionTransformer is implemented by optimizers whose request-level transform

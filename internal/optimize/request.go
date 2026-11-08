@@ -355,6 +355,20 @@ func (r *Request) Apply(edits []Edit) (*Request, error) {
 // DecodeString decodes the JSON string at sp.
 func (r *Request) DecodeString(sp Span) (string, bool) { return decodeString(r.Raw[sp.S:sp.E]) }
 
+// textSpans lists every text span in request order. Index i names the same span
+// in any version of the request that differs only inside its spans, so the
+// engine can find the original text of span i after another optimizer has
+// rewritten the request. Listing spans does not decode them.
+func (r *Request) textSpans() []Span {
+	var out []Span
+	for _, m := range r.Messages {
+		for _, b := range m.Blocks {
+			out = append(out, b.Texts...)
+		}
+	}
+	return out
+}
+
 // internStr decodes a short JSON string that is almost always one of a few known
 // words (block types, roles), without allocating for those.
 func internStr(b []byte) string {
@@ -559,5 +573,20 @@ func walkArray(b []byte, i int, fn func(elemStart int) (int, error)) (int, error
 		default:
 			return 0, errMalformed
 		}
+	}
+}
+
+// originalSpanText returns Session.Raw for a request: span i decoded from the
+// request as it arrived, before any optimizer changed it. Spans are listed once;
+// a span is decoded only when an optimizer asks for it.
+func originalSpanText(orig *Request) func(int) string {
+	spans := orig.textSpans()
+	raw := orig.Raw
+	return func(i int) string {
+		if i < 0 || i >= len(spans) {
+			return ""
+		}
+		s, _ := decodeString(raw[spans[i].S:spans[i].E])
+		return s
 	}
 }

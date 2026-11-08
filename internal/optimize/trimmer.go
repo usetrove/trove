@@ -117,6 +117,11 @@ var (
 // is forwarded (Report.Originals), and the agent gets it back with the MCP tool
 // trove_fetch_full. Without the store, or without the MCP server registered, the
 // engine clamps "on" to "shadow", which only estimates and changes nothing.
+//
+// The stored original is the output exactly as the tool produced it, byte for
+// byte, even when an earlier optimizer (noise_normalizer) has already changed the
+// text the model sees. The marker's hash names that same original. A fetch
+// therefore returns what the tool printed, not a cleaned copy.
 type OutputTrimmer struct{}
 
 // Name implements Optimizer.
@@ -135,8 +140,9 @@ func (OutputTrimmer) Points() []Point { return []Point{PointRequest, PointToolOu
 func (OutputTrimmer) OverheadTokens() int { return 0 }
 
 // TransformOutput implements ToolOutputOptimizer, using the same trimOutput as
-// the request-level Transform. The full text of anything shortened goes in
-// Report.Originals; the engine stores it before the shortened text is returned.
+// the request-level Transform. The output as the tool produced it goes in
+// Report.Originals (see sourceText); the engine stores it before the shortened
+// text is returned.
 func (OutputTrimmer) TransformOutput(ctx context.Context, _ ToolCall, out ToolOutput, s Session) (ToolOutput, Report) {
 	th := TrimThresholdsFrom(s.Tuning)
 	res := ToolOutput{Parts: make([]Part, len(out.Parts)), IsError: out.IsError}
@@ -149,12 +155,26 @@ func (OutputTrimmer) TransformOutput(ctx context.Context, _ ToolCall, out ToolOu
 		if ctx.Err() != nil {
 			return out, Report{Err: "time budget exceeded"}
 		}
-		if trimmed, changed := trimWith(p.Text, th); changed {
+		own, at := p.Text, i
+		origin := func() string { return sourceText(s.Raw, at, own) }
+		if trimmed, changed := trimWithSource(p.Text, origin, th); changed {
 			res.Parts[i] = Part{Text: trimmed}
-			originals = append(originals, p.Text)
+			originals = append(originals, origin())
 		}
 	}
 	return res, Report{Name: "output_trimmer", Originals: originals}
+}
+
+// sourceText is the text the tool produced for span i: the engine's pre-pipeline
+// copy when it provided one, otherwise the optimizer's own input. It is called
+// only for spans that are actually shortened, so the engine decodes nothing else.
+func sourceText(raw func(int) string, i int, own string) string {
+	if raw != nil {
+		if s := raw(i); s != "" {
+			return s
+		}
+	}
+	return own
 }
 
 // Applies implements Optimizer: any large tool result.
@@ -187,22 +207,26 @@ func (OutputTrimmer) TransformSession(ctx context.Context, r *Request, s Session
 	}
 	var edits []Edit
 	var originals []string
+	idx := -1 // index of the current span, counting every span, as SpanTexts does
 	for _, m := range r.Messages {
 		for _, b := range m.Blocks {
 			for _, sp := range b.Texts {
+				idx++
 				if sp.Len() < th.MinBytes {
 					continue
 				}
 				if ctx.Err() != nil {
 					return r, Report{Err: "time budget exceeded"}
 				}
-				s, ok := r.DecodeString(sp)
+				text, ok := r.DecodeString(sp)
 				if !ok {
 					continue
 				}
-				if trimmed, changed := trimWith(s, th); changed {
+				own, at := text, idx
+				origin := func() string { return sourceText(s.Raw, at, own) }
+				if trimmed, changed := trimWithSource(text, origin, th); changed {
 					edits = append(edits, Edit{Span: sp, New: EncodeString(trimmed)})
-					originals = append(originals, s)
+					originals = append(originals, origin())
 				}
 			}
 		}
@@ -221,6 +245,15 @@ func trimOutput(text string) (string, bool) { return trimWith(text, DefaultTrimT
 
 // trimWith is trimOutput with explicit thresholds.
 func trimWith(text string, th TrimThresholds) (string, bool) {
+	return trimWithSource(text, func() string { return text }, th)
+}
+
+// trimWithSource trims text, and names the full output by the hash of source(),
+// which is called only when a marker is written. source is the output as the
+// tool produced it; text may be a copy an earlier optimizer already normalized.
+// The marker must name the source, because the source is what the recovery
+// store keeps and what trove_fetch_full returns.
+func trimWithSource(text string, source func() string, th TrimThresholds) (string, bool) {
 	if len(text) < th.MinBytes {
 		return text, false
 	}
@@ -238,7 +271,7 @@ func trimWith(text string, th TrimThresholds) (string, bool) {
 		return text, false
 	}
 
-	return collapseRuns(text, lines, keepLines(lines, th), th.MinTrimmedLines)
+	return collapseRunsFrom(text, source, lines, keepLines(lines, th), th.MinTrimmedLines)
 }
 
 // keepLines marks the lines worth keeping: the head and tail, every failure or
@@ -281,8 +314,13 @@ func keepLines(lines []string, th TrimThresholds) []bool {
 // collapseRuns replaces each run of unkept lines with one marker line. It reports
 // false, returning text unchanged, when fewer than minTrimmed lines go.
 func collapseRuns(text string, lines []string, keep []bool, minTrimmed int) (string, bool) {
+	return collapseRunsFrom(text, func() string { return text }, lines, keep, minTrimmed)
+}
+
+// collapseRunsFrom is collapseRuns with the marker's hash taken from source.
+func collapseRunsFrom(text string, source func() string, lines []string, keep []bool, minTrimmed int) (string, bool) {
 	var out []string
-	hash := sha256.Sum256([]byte(text))
+	hash := sha256.Sum256([]byte(source()))
 	short := hex.EncodeToString(hash[:8])
 	trimmed := 0
 	for i := 0; i < len(lines); {
