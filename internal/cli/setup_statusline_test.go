@@ -23,7 +23,7 @@ func setupHarness(t *testing.T, input string) (*harness, string) {
 
 func TestSetupOffersStatusLineAsASeparateStepAndUndoRemovesBoth(t *testing.T) {
 	h, settings := setupHarness(t, "y\ny\n")
-	if code := h.run("setup"); code != 0 {
+	if code := h.run("setup", "--gateway"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
 	got, _ := os.ReadFile(settings)
@@ -64,7 +64,7 @@ func TestSetupOffersStatusLineAsASeparateStepAndUndoRemovesBoth(t *testing.T) {
 func TestSetupStatusLineNeedsItsOwnConsent(t *testing.T) {
 	// "y" for the gateway, "n" for the status line.
 	h, settings := setupHarness(t, "y\nn\n")
-	h.run("setup")
+	h.run("setup", "--gateway")
 	got, _ := os.ReadFile(settings)
 	if strings.Contains(string(got), "statusLine") || !strings.Contains(string(got), "ANTHROPIC_BASE_URL") {
 		t.Errorf("only the gateway edit should be applied:\n%s", got)
@@ -75,7 +75,7 @@ func TestSetupStatusLineNeedsItsOwnConsent(t *testing.T) {
 
 	// --yes agrees to the gateway change only.
 	h, settings = setupHarness(t, "")
-	h.run("setup", "--yes")
+	h.run("setup", "--gateway", "--yes")
 	if got, _ := os.ReadFile(settings); strings.Contains(string(got), "statusLine") {
 		t.Errorf("--yes alone must not add the status line:\n%s", got)
 	}
@@ -83,12 +83,12 @@ func TestSetupStatusLineNeedsItsOwnConsent(t *testing.T) {
 	// --status-line is the explicit opt-in for scripts, and works when the
 	// gateway is already set up.
 	h, settings = setupHarness(t, "")
-	h.run("setup", "--yes", "--status-line")
+	h.run("setup", "--gateway", "--yes", "--status-line")
 	if got, _ := os.ReadFile(settings); !strings.Contains(string(got), "statusLine") {
 		t.Errorf("--status-line did not add it:\n%s", got)
 	}
 	h.out.Reset()
-	if code := h.run("setup", "--status-line"); code != 0 || !strings.Contains(h.out.String(), "already shows Trove") {
+	if code := h.run("setup", "--gateway", "--status-line"); code != 0 || !strings.Contains(h.out.String(), "already shows Trove") {
 		t.Errorf("second run: exit %d\n%s", code, h.out)
 	}
 }
@@ -99,7 +99,7 @@ func TestSetupNeverReplacesAnExistingStatusLine(t *testing.T) {
 	if err := os.WriteFile(settings, []byte(mine), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if code := h.run("setup"); code != 0 {
+	if code := h.run("setup", "--gateway"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
 	got, _ := os.ReadFile(settings)
@@ -113,7 +113,7 @@ func TestSetupNeverReplacesAnExistingStatusLine(t *testing.T) {
 
 func TestSetupEndsWithAnExplanation(t *testing.T) {
 	h, _ := setupHarness(t, "y\nn\n")
-	h.run("setup")
+	h.run("setup", "--gateway")
 	out := h.out.String()
 	i := strings.Index(out, "What happens next:")
 	if i < 0 {
@@ -127,7 +127,7 @@ func TestSetupEndsWithAnExplanation(t *testing.T) {
 	}
 
 	h, _ = setupHarness(t, "")
-	h.run("setup", "--json", "--yes")
+	h.run("setup", "--gateway", "--json", "--yes")
 	var rep setupReport
 	if err := json.Unmarshal(h.out.Bytes(), &rep); err != nil || len(rep.Explain) == 0 {
 		t.Errorf("--json lacks the explanation: %v %q", err, h.out)

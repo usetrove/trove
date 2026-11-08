@@ -104,23 +104,28 @@ func codexNeedsAPIKey(a *App, planOverride string) string {
 }
 
 func newSetup(a *App) *cobra.Command {
-	var yes, statusLine bool
+	var yes, statusLine, gateway bool
 	c := &cobra.Command{
 		Use:   "setup",
-		Short: "Point your coding agents at the Trove gateway (shows the change first; asks before applying)",
-		Long: "Detects Claude Code and Codex CLI, shows the exact change needed to route each through the local gateway, and applies it\n" +
-			"only with your consent. The original file is backed up and `trove undo` reverses everything.\n" +
+		Short: "Find your coding agents and, with --gateway, point them at the Trove gateway (shows the change first; asks before applying)",
+		Long: "Detects Claude Code and Codex CLI. Pointing them at the Trove gateway is opt-in: it happens only with --gateway,\n" +
+			"and then Trove shows the exact change and applies it only with your consent. The original file is backed up and\n" +
+			"`trove undo` reverses everything. Without --gateway, setup changes no agent's gateway setting.\n" +
 			"Shell rc files are never touched. Trove never reads or writes your API keys.\n" +
 			"For Claude Code it then offers, as a separate step, to show your spend and budget pace in the status line.",
 		Args: cobra.NoArgs,
-		RunE: func(*cobra.Command, []string) error { return runSetup(a, yes, statusLine) },
+		RunE: func(*cobra.Command, []string) error { return runSetup(a, yes, statusLine, gateway) },
 	}
 	c.Flags().BoolVar(&yes, "yes", false, "apply the changes shown without asking")
 	c.Flags().BoolVar(&statusLine, "status-line", false, "also add Trove to Claude Code's status line without asking (--yes alone does not)")
+	c.Flags().BoolVar(&gateway, "gateway", false, "opt in to pointing Claude Code and Codex CLI at the Trove gateway (required; without it setup changes no gateway setting)")
 	return c
 }
 
-func runSetup(a *App, yes, statusLine bool) error {
+// gatewayNotSelected is the message shown for each installed agent when setup runs without --gateway.
+const gatewayNotSelected = "not pointed at the gateway: the gateway is opt-in. To point it at the gateway, run `trove setup --gateway`"
+
+func runSetup(a *App, yes, statusLine, gateway bool) error {
 	dir, cfg, err := loadConfig(a)
 	if err != nil {
 		return err
@@ -138,6 +143,15 @@ func runSetup(a *App, yes, statusLine bool) error {
 		_, statErr := os.Stat(cfgDir)
 		if onPath != nil && statErr != nil {
 			continue // not installed
+		}
+		if !gateway {
+			// Opt-in: no gateway setting is planned unless the user asked for it. Claude Code's
+			// folder is still recorded, because the separate status-line step uses it.
+			rep.Plans = append(rep.Plans, setupPlanJSON{Agent: spec.name, Problem: gatewayNotSelected})
+			if spec.binary != "codex" {
+				claudeDir = cfgDir
+			}
+			continue
 		}
 		var e *setup.Edit
 		var perr error
@@ -398,7 +412,7 @@ func turnOffSteps() []string {
 	return []string{
 		"To turn it off:",
 		"  trove undo             restores the files Trove changed, exactly as they were",
-		"  trove gateway stop     stops the gateway (agents pointed at it will fail until you undo)",
+		"  trove gateway stop     stops the gateway and puts back the gateway setting it changed (agents go straight to their providers)",
 	}
 }
 

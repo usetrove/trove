@@ -27,8 +27,18 @@ import (
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/service"
+	"github.com/usetrove/trove/internal/setup"
 	"github.com/usetrove/trove/internal/store"
 )
+
+// gatewayRestoreNotes says, for each gateway setting `gateway stop` put back, what it did.
+func gatewayRestoreNotes(restored []setup.UndoResult) []string {
+	var out []string
+	for _, r := range restored {
+		out = append(out, "Put back the gateway setting in "+r.Path+": "+r.Detail+".")
+	}
+	return out
+}
 
 // pidFile records the running gateway so stop and status can find it.
 type pidFile struct {
@@ -353,13 +363,27 @@ func newGatewayStop(a *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Stopping must not leave agents pointed at a dead port: put back the gateway settings Trove
+			// changed, the same way `trove undo` does for them. This runs even if the gateway was not
+			// running, so a stale setting is cleared too.
+			restored, rerr := setup.UndoGateway(dir)
+			notes = append(notes, gatewayRestoreNotes(restored)...)
+			var msg string
 			switch state {
 			case gwNotRunning:
-				return a.emit(map[string]any{"stopped": false, "notes": notes}, joinLines(append([]string{"The gateway is not running."}, notes...)))
+				msg = "The gateway is not running."
 			case gwStale:
-				return a.emit(map[string]any{"stopped": false, "notes": notes}, joinLines(append([]string{"The gateway was not running (stale record cleaned up)."}, notes...)))
+				msg = "The gateway was not running (stale record cleaned up)."
+			default:
+				msg = "The gateway has stopped."
 			}
-			return a.emit(map[string]any{"stopped": true, "notes": notes}, joinLines(append([]string{"The gateway has stopped."}, notes...)))
+			if rerr != nil {
+				notes = append(notes, "Could not put back the agent's gateway setting: "+rerr.Error()+". Run `trove undo` to reverse it.")
+			}
+			if err := a.emit(map[string]any{"stopped": state == gwStopped, "notes": notes}, joinLines(append([]string{msg}, notes...))); err != nil {
+				return err
+			}
+			return rerr
 		},
 	}
 	c.Flags().BoolVar(&removeService, "remove-service", false, "also remove the background service definition")
