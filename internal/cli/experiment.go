@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -40,14 +41,20 @@ func experimentStatusCmd(ctx context.Context, a *App) error {
 	if err != nil {
 		return err
 	}
+	// A fresh install has no database yet. That means no A/B results, not an error
+	// (report and status-line behave the same way).
+	var res []experiment.Result
 	db, err := store.OpenReadOnly(dir)
-	if err != nil {
+	switch {
+	case os.IsNotExist(err):
+	case err != nil:
 		return err
-	}
-	defer func() { _ = db.Close() }()
-	res, err := experiment.Evaluate(ctx, db, cfg.Experiment, experiment.DefaultPriors())
-	if err != nil {
-		return fmt.Errorf("could not read A/B results: %v. Run `trove doctor` or check %s", err, dir)
+	default:
+		defer func() { _ = db.Close() }()
+		res, err = experiment.Evaluate(ctx, db, cfg.Experiment, experiment.DefaultPriors())
+		if err != nil {
+			return fmt.Errorf("could not read A/B results: %v. Run `trove doctor` or check %s", err, dir)
+		}
 	}
 	out := experimentStatusOut{Enabled: cfg.Experiment.Enabled, Results: res, ConfigAt: filepath.Join(dir, config.FileName)}
 	if res == nil {
