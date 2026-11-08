@@ -17,31 +17,46 @@ Trove is the efficiency layer for AI coding agents. It reads the session history
 
 1. Install Trove. Every path checks the download against the release's SHA-256 checksums before it runs anything.
 
-    **macOS/Linux (Recommended):**
+    **macOS/Linux (supported):**
     ```bash
-    curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | sh
+    curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | TROVE_VERSION=0.1.0-beta.1 sh
     ```
+    During the beta, pin the version as shown: a `-beta` release is a pre-release, so "latest" does not pick it.
 
     **Homebrew (macOS/Linux):**
     ```bash
     brew install usetrove/trove/trove
     ```
 
-    **No install (Node.js):**
-    ```bash
-    npx trove-cli doctor
+    **Windows (experimental):** download the `trove_<version>_windows_amd64.zip` from the release page, check it, then unzip it. In PowerShell (replace the version with your release's):
+    ```powershell
+    $v = "0.1.0-beta.1"
+    Invoke-WebRequest "https://github.com/usetrove/trove/releases/download/v$v/trove_${v}_windows_amd64.zip" -OutFile trove.zip
+    Invoke-WebRequest "https://github.com/usetrove/trove/releases/download/v$v/checksums.txt" -OutFile checksums.txt
+    $want = (Select-String -Path checksums.txt -Pattern "trove_${v}_windows_amd64.zip").Line.Split(" ")[0]
+    if ((Get-FileHash trove.zip -Algorithm SHA256).Hash.ToLower() -ne $want.ToLower()) { throw "checksum mismatch: do not use this file" }
+    Expand-Archive trove.zip -DestinationPath "$HOME\trove"
+    & "$HOME\trove\trove.exe" doctor
+    ```
+    The Claude Code plugin's hooks on Windows also need `sh` (Git Bash) on your `PATH`; `trove doctor` warns when it is missing.
+
+2. Install the Claude Code plugin, then start a session and run **`/trove:setup`**:
+
+    ```
+    claude plugin marketplace add usetrove/trove
+    claude plugin install trove@trove
     ```
 
-    **Windows:** release builds are not part of 0.1.0. See [try it from source](#try-it-from-source).
+    `/trove:setup` shows each change, says what it costs, and asks before anything is turned on. **Rewriting stays off until you opt in:** the hooks are installed and only record what happens, and no tool call, file or output is changed until you choose a mode (shadow, which only estimates, or on) in `/trove:setup`.
 
-2. Run it:
+3. Run the report from a terminal:
 
     ```bash
     trove          # your report, from the history your agent already keeps
     trove fix      # evidence-based fixes with estimated savings; changes nothing
     ```
 
-That is all you need to start. You do not need the gateway for this, and it works if you use a subscription plan. Every number is labeled **measured** (counted from usage the provider reported) or **estimated** (derived from list prices or an assumption). Dollar figures are estimates, not invoices.
+That is all you need to start. You do not need the gateway for this, and it works if you use a subscription plan. The gateway is an optional extra, turned on only with `trove setup --gateway`. Every number is labeled **measured** (counted from usage the provider reported) or **estimated** (derived from list prices or an assumption). Dollar figures are estimates, not invoices.
 
 To apply a fix, run `trove fix <id> --apply`; you see the exact diff and are asked first.
 
@@ -112,7 +127,7 @@ trove uninstall                # stops the gateway, restores every agent file, r
 trove uninstall --purge-data   # also deletes what Trove stored in ~/.trove
 ```
 
-Then remove the program itself: `brew uninstall trove`, or delete the binary the install script placed on your `PATH`. If you ran it with `npx`, delete `~/.cache/trove-cli`. Trove never deletes data if an agent file could not be restored, because the backups are then still needed.
+Then remove the program itself: `brew uninstall trove`, or delete the binary the install script placed on your `PATH`. Trove never deletes data if an agent file could not be restored, because the backups are then still needed.
 
 ## Reporting bugs
 

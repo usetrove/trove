@@ -108,6 +108,7 @@ func runDoctor(a *App) doctorReport {
 	cs = append(cs, checkPricing(time.Now()))
 	cs = append(cs, checkAgents(a)...)
 	cs = append(cs, checkGatewayPointer(a))
+	cs = append(cs, checkPluginShell(a))
 	if cfg, err := config.Load(dir, a.Getenv); err == nil {
 		cs = append(cs, hookRewritesCheck(a, dir, cfg.OptimizerState))
 	}
@@ -269,6 +270,19 @@ func checkGatewayPointer(a *App) check {
 	return check{name, statusWarn,
 		"ANTHROPIC_BASE_URL points at " + addr + " (" + source + "), but no Trove gateway answers there, so Claude Code's requests will fail",
 		"run `trove gateway start`, or `trove undo` to put back the setting Trove changed"}
+}
+
+// checkPluginShell warns when `sh` is not on PATH. The Claude Code plugin runs every hook through `sh`, so without
+// it the hooks do nothing, silently. macOS and Linux always have it. On Windows it comes from Git Bash, which is
+// why the warning matters there.
+func checkPluginShell(a *App) check {
+	const name = "plugin shell"
+	if _, err := a.LookPath("sh"); err == nil {
+		return check{name, statusOK, "`sh` is on PATH, so the Claude Code plugin's hooks can run", ""}
+	}
+	return check{name, statusWarn,
+		"`sh` is not on PATH. The Claude Code plugin runs its hooks through `sh`, so they will do nothing until it is found",
+		"on Windows, install Git for Windows (it includes Git Bash) and put its bin folder on PATH, then open a new terminal; on macOS or Linux, install a POSIX shell"}
 }
 
 func dirExists(p string) bool {

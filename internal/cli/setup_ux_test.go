@@ -98,7 +98,7 @@ func TestDoctorDoesNotSayNoProblemsWhenThereAreWarnings(t *testing.T) {
 // On a fresh install the missing data folder and database are expected, so they are information, and
 // doctor reports no problems.
 func TestDoctorFreshInstallHasNoWarnings(t *testing.T) {
-	h := newHarness(t, nil)
+	h := newHarness(t, nil, "sh") // sh is present; without it doctor warns, which TestDoctorWarnsWhenShIsMissing covers
 	dir := t.TempDir() + "/fresh"
 	if code := h.run("doctor", "--data-dir", dir); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
