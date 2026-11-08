@@ -19,6 +19,16 @@ jobs:
         with:
           go-version: stable
           check-latest: true
+      # The Claude Code plugin reads its version from plugin/trove/VERSION. A release must pin it to the tag;
+      # "dev" means a source checkout, and the plugin would then accept any trove on PATH. Fail before publishing.
+      - name: Check the plugin version matches the tag
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          got="$(tr -d ' \r\n' < plugin/trove/VERSION)"
+          if [ "$got" != "$want" ]; then
+            echo "plugin/trove/VERSION is '$got' but the tag is '$want'. Set VERSION to $want, commit it, then tag again." >&2
+            exit 1
+          fi
       # Warn (never fail) when any bundled price was last verified over 30 days ago.
       - name: Check pricing freshness
         run: go run ./scripts/pricingage
