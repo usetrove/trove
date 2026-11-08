@@ -124,7 +124,7 @@ func TestDoctorFreshDirWarnsButPasses(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
 	r := decodeDoctor(t, h)
-	if !r.OK || find(r, "data directory").Status != statusWarn || find(r, "database").Status != statusWarn {
+	if !r.OK || find(r, "data directory").Status != statusInfo || find(r, "database").Status != statusInfo {
 		t.Errorf("report %+v", r)
 	}
 	if _, err := os.Stat(dir); err == nil {

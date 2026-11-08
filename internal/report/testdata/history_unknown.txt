@@ -28,7 +28,8 @@ Biggest leaks (estimated, overlapping, not additive)
 
 Optimizers
   Optimizers act on live requests, so they need the gateway. Your history above
-  is read-only. Run `trove setup` to route your agent through Trove.
+  is read-only. To route your agent through the gateway, run `trove setup
+  --gateway`.
 
 Recommendations (suggestions only; Trove changes nothing on its own)
   None yet. These need more recorded usage.

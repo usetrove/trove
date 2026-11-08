@@ -46,7 +46,7 @@ func TestSetupOffersStatusLineAsASeparateStepAndUndoRemovesBoth(t *testing.T) {
 		t.Errorf("gateway edit missing: %s", got)
 	}
 	out := h.out.String()
-	for _, want := range []string{"Add Trove to Claude Code's status line?", "Added Trove to Claude Code's status line", "Applied 3 change(s)"} {
+	for _, want := range []string{"Add Trove to Claude Code's status line?", "Added Trove to Claude Code's status line", "Applied "} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
 		}

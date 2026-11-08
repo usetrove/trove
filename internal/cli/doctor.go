@@ -147,7 +147,8 @@ func checkDataDir(dir string) []check {
 	fi, err := os.Stat(dir)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
-		return []check{{"data directory", statusWarn, dir + " does not exist yet", "it is created automatically the first time Trove stores data (for example `trove setup`)"}}
+		// Expected on a fresh install, so information rather than a warning.
+		return []check{{"data directory", statusInfo, dir + " does not exist yet", "it is created automatically the first time Trove stores data (for example by `trove` or the gateway)"}}
 	case err != nil:
 		return []check{{"data directory", statusFail, fmt.Sprintf("cannot read %s: %v", dir, err), "check the folder's permissions"}}
 	case !fi.IsDir():
@@ -163,7 +164,8 @@ func checkDatabase(dir string) check {
 	const name = "database"
 	path := filepath.Join(dir, store.DBFileName)
 	if _, err := os.Stat(path); err != nil {
-		return check{name, statusWarn, "no database yet at " + path, "it is created on first use"}
+		// Expected until Trove first stores data, so information rather than a warning.
+		return check{name, statusInfo, "no database yet at " + path, "it is created on first use"}
 	}
 	db, err := store.OpenNoMigrate(dir)
 	if err != nil {
@@ -288,10 +290,19 @@ func (r doctorReport) text(a *App) string {
 			fmt.Fprintf(&b, "       what to do: %s\n", c.Fix)
 		}
 	}
-	if r.OK {
-		b.WriteString("\nNo problems found.")
-	} else {
+	warnings := 0
+	for _, c := range r.Checks {
+		if c.Status == statusWarn {
+			warnings++
+		}
+	}
+	switch {
+	case !r.OK:
 		b.WriteString("\nProblems found.")
+	case warnings > 0:
+		fmt.Fprintf(&b, "\nNo failures, but %d warning(s) to look at.", warnings)
+	default:
+		b.WriteString("\nNo problems found.")
 	}
 	return b.String()
 }

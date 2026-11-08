@@ -25,6 +25,9 @@ type setupPlanJSON struct {
 	Note        string `json:"note,omitempty"`
 	AlreadyDone bool   `json:"already_configured,omitempty"`
 	Problem     string `json:"problem,omitempty"`
+	// Optional is set for an agent that is installed but not pointed at the gateway, because the user did
+	// not ask for it. It is information, not a problem.
+	Optional string `json:"optional,omitempty"`
 }
 
 type setupReport struct {
@@ -122,8 +125,9 @@ func newSetup(a *App) *cobra.Command {
 	return c
 }
 
-// gatewayNotSelected is the message shown for each installed agent when setup runs without --gateway.
-const gatewayNotSelected = "not pointed at the gateway: the gateway is opt-in. To point it at the gateway, run `trove setup --gateway`"
+// gatewayOptional is shown for each installed agent when setup runs without --gateway. The gateway is an
+// extra the user can add, not a step that failed.
+const gatewayOptional = "Optional: route this agent through the Trove gateway with `trove setup --gateway`. Nothing is changed unless you ask."
 
 func runSetup(a *App, yes, statusLine, gateway bool) error {
 	dir, cfg, err := loadConfig(a)
@@ -147,7 +151,7 @@ func runSetup(a *App, yes, statusLine, gateway bool) error {
 		if !gateway {
 			// Opt-in: no gateway setting is planned unless the user asked for it. Claude Code's
 			// folder is still recorded, because the separate status-line step uses it.
-			rep.Plans = append(rep.Plans, setupPlanJSON{Agent: spec.name, Problem: gatewayNotSelected})
+			rep.Plans = append(rep.Plans, setupPlanJSON{Agent: spec.name, Optional: gatewayOptional})
 			if spec.binary != "codex" {
 				claudeDir = cfgDir
 			}
@@ -202,13 +206,32 @@ func runSetup(a *App, yes, statusLine, gateway bool) error {
 	}
 	rep.Options = optionsNotes() // also in --json output that makes no change
 	if pending == 0 {
-		rep.Verify, rep.TurnOff = verifySteps(cfg.Gateway.Port), turnOffSteps()
-		rep.Explain, rep.Options = explainSteps(dir, cfg), optionsNotes()
+		// The gateway guidance is shown only when an agent is actually pointed at it (an edit is
+		// in place, either already or from this run). Otherwise setup only says what it did not change.
+		gatewayUp := len(edits) > 0
+		if gatewayUp {
+			rep.Verify, rep.TurnOff = verifySteps(cfg.Gateway.Port), turnOffSteps()
+			rep.Explain, rep.Options = explainSteps(dir, cfg), optionsNotes()
+		}
+		summary := "Nothing to change."
+		if p := problemSummary(rep.Plans); p != "" {
+			summary = "Nothing to change: " + p
+		}
+		if !a.JSON {
+			fmt.Fprintln(a.Out, summary+"\n")
+		}
 		statusText, err := statusLineStep(a, &rep, dir, claudeDir, statusLine)
 		if err != nil {
 			return err
 		}
-		return a.emit(rep, "Nothing to change: "+problemSummary(rep.Plans)+"\n\n"+statusText+strings.Join(rep.Verify, "\n")+"\n\n"+strings.Join(rep.Explain, "\n")+"\n\n"+strings.Join(rep.Options, "\n"))
+		if a.JSON {
+			return a.emit(rep, "")
+		}
+		fmt.Fprint(a.Out, statusText)
+		if gatewayUp {
+			fmt.Fprint(a.Out, gatewayGuidance(rep))
+		}
+		return nil
 	}
 	consent := yes
 	if !consent && !a.JSON {
@@ -229,16 +252,22 @@ func runSetup(a *App, yes, statusLine, gateway bool) error {
 	}
 	rep.Verify, rep.TurnOff = verifySteps(cfg.Gateway.Port), turnOffSteps()
 	rep.Explain, rep.Options = explainSteps(dir, cfg), optionsNotes()
+	// The gateway edit is in place now, so the guidance below is true. Say what was applied first, then
+	// offer the optional status line, so the prompt does not come before the result.
+	if !a.JSON {
+		fmt.Fprintf(a.Out, "Applied %d change(s). Backups are in %s.\n\n", len(rep.Changes), filepath.Join(dir, "backups"))
+	}
 	statusText, err := statusLineStep(a, &rep, dir, claudeDir, statusLine)
 	if err != nil {
 		_ = a.emit(rep, "")
 		return fmt.Errorf("%v. Run `trove undo` to reverse anything already applied", err)
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "Applied %d change(s). Backups are in %s.\n\n", len(rep.Changes), filepath.Join(dir, "backups"))
-	b.WriteString(statusText)
-	b.WriteString(strings.Join(rep.Verify, "\n") + "\n\n" + strings.Join(rep.TurnOff, "\n") + "\n\n" + strings.Join(rep.Explain, "\n") + "\n\n" + strings.Join(rep.Options, "\n"))
-	return a.emit(rep, b.String())
+	if a.JSON {
+		return a.emit(rep, "")
+	}
+	fmt.Fprint(a.Out, statusText)
+	fmt.Fprint(a.Out, gatewayGuidance(rep))
+	return nil
 }
 
 // explainSteps is the closing note of setup: what is recorded, where it stays,
@@ -351,6 +380,8 @@ func statusLineStepRetry(a *App, rep *setupReport, dir, claudeDir string, flag b
 	return "Added Trove to Claude Code's status line. It appears after your next reply.\n\n", nil
 }
 
+// problemSummary lists what stopped setup from pointing an agent at the gateway, or "" when nothing did.
+// An optional, not-requested gateway is not a problem and is not listed.
 func problemSummary(ps []setupPlanJSON) string {
 	var parts []string
 	for _, p := range ps {
@@ -361,7 +392,16 @@ func problemSummary(ps []setupPlanJSON) string {
 			parts = append(parts, p.Agent+" is already pointed at the gateway")
 		}
 	}
+	if len(parts) == 0 {
+		return ""
+	}
 	return strings.Join(parts, "; ") + "."
+}
+
+// gatewayGuidance is the verify, turn-off and explanation text. It is shown only once the gateway is set up.
+func gatewayGuidance(rep setupReport) string {
+	return "\n" + strings.Join(rep.Verify, "\n") + "\n\n" + strings.Join(rep.TurnOff, "\n") + "\n\n" +
+		strings.Join(rep.Explain, "\n") + "\n\n" + strings.Join(rep.Options, "\n") + "\n"
 }
 
 func (a *App) printPlans(ps []setupPlanJSON) {
@@ -370,6 +410,8 @@ func (a *App) printPlans(ps []setupPlanJSON) {
 		switch {
 		case p.Problem != "":
 			_, _ = fmt.Fprintf(a.Out, "  cannot set up: %s\n\n", p.Problem)
+		case p.Optional != "":
+			_, _ = fmt.Fprintf(a.Out, "  %s\n\n", p.Optional)
 		case p.AlreadyDone:
 			_, _ = fmt.Fprintf(a.Out, "  already pointed at the gateway (%s)\n\n", p.Path)
 		default:

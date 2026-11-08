@@ -119,8 +119,19 @@ func runUninstall(a *App, purge, yes, dry bool) error {
 		return a.emit(rep, text+"\n\nDry run: nothing was changed.")
 	}
 	if !yes {
-		if a.JSON || !a.confirm(text+"\n\nGo ahead?") {
+		if a.JSON {
 			return a.emit(rep, text+"\n\nNothing was changed. Run again with --yes to apply.")
+		}
+		// Show the plan once, then ask once. With no answer possible (no terminal, or stdin at end of file),
+		// say so and change nothing, rather than treating the silence as a refusal.
+		fmt.Fprintln(a.Out, text+"\n")
+		ok, err := confirmUninstall(a)
+		if err != nil {
+			return errors.New("Nothing was changed. Uninstall needs your confirmation, and no answer could be read (there is no terminal to ask). " +
+				"Run `trove uninstall --yes` to apply the plan above, or run it in a terminal.")
+		}
+		if !ok {
+			return a.emit(rep, "Nothing was changed. Run again with --yes to apply.")
 		}
 	}
 
@@ -173,7 +184,10 @@ func runUninstall(a *App, purge, yes, dry bool) error {
 	if exe, err := troveBinary(a); err == nil && exe != "trove" {
 		rep.Next = append(rep.Next, "Finally remove the program itself: "+exe+" (or `brew uninstall trove`, or `npm uninstall -g trove-cli`, if you installed it that way).")
 	}
-	rep.Next = append(rep.Next, "Restart Claude Code and Codex CLI so they stop using the old settings.")
+	if len(rep.Undone) > 0 {
+		// Only when an agent's settings were actually changed back: nothing to restart for otherwise.
+		rep.Next = append(rep.Next, "Restart Claude Code and Codex CLI so they stop using the old settings.")
+	}
 
 	var b strings.Builder
 	for _, r := range rep.Undone {
