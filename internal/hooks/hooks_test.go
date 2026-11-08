@@ -181,7 +181,19 @@ func TestRepeatReadOfUnchangedFileIsDenied(t *testing.T) {
 	}
 }
 
+// noCallClock lifts the per-call hook deadline for one test. A denial test is about
+// the decision, not the speed of the machine: under parallel load a hook can pass
+// the 150 ms safety net, fail open, and let a read through that the test expects
+// to be denied. TestCallDeadlineLetsTheAgentThroughWhenAHookIsSlow keeps the real deadline covered.
+func noCallClock(t *testing.T) {
+	t.Helper()
+	old := callDeadline
+	callDeadline = time.Minute
+	t.Cleanup(func() { callDeadline = old })
+}
+
 func TestRetryAfterBlockGoesThroughAndIsCounted(t *testing.T) {
+	noCallClock(t)
 	r := newRig(t, on)
 	p := r.file("a.go", "package a\n")
 	r.start()
