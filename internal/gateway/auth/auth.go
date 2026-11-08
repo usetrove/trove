@@ -4,9 +4,9 @@
 // The rules combine header checks with a key-shape check:
 //
 //   - Anthropic: the credential must be in x-api-key, and it must have the shape
-//     of a Claude Console API key (IsConsoleAPIKey). Anything else in that
-//     header (OAuth tokens sk-ant-oat..., admin keys, unknown prefixes) is
-//     refused with reason "unrecognized_credential". An Authorization header
+//     of an accepted Claude Console API key (see ClassifyAnthropicKey). OAuth
+//     tokens (sk-ant-oat...) and admin keys are refused with their own reasons;
+//     any other value is refused with "unrecognized_credential". An Authorization header
 //     is allowed only if it repeats the same value (Claude Code's apiKeyHelper
 //     sends both). Claude Code docs (code.claude.com/docs/en/llm-gateway-protocol,
 //     verified 2026-10-28) say a claude.ai login adds an OAuth capability to
@@ -81,8 +81,8 @@ func Anthropic(h http.Header) Decision {
 		}
 		return reject("no_credential")
 	}
-	if !IsConsoleAPIKey(key) {
-		return reject("unrecognized_credential")
+	if ok, reason := ClassifyAnthropicKey(key); !ok {
+		return reject(reason)
 	}
 	if authz != "" {
 		tok, isBearer := bearer(authz)

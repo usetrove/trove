@@ -95,7 +95,8 @@ func runHooksProbe(ctx context.Context, a *App, fl hooksProbeFlags) error {
 		// before anything starts. The key's value is never printed or stored.
 		if key := a.Getenv("ANTHROPIC_API_KEY"); key != "" && !auth.IsConsoleAPIKey(key) {
 			return errors.New("ANTHROPIC_API_KEY is not a Claude Console API key, so the live probe will not run. " +
-				"Trove accepts only keys that look like sk-ant-api03-... (create one in the Console, then set it for this shell). " +
+				"Trove accepts only Console API keys (sk-ant-api03-... or sk-ant-usr-...); OAuth tokens (sk-ant-oat...) are refused. " +
+				"Create a key in the Console and set it for this shell. " +
 				"Nothing was run")
 		}
 		apiKey = auth.IsConsoleAPIKey(a.Getenv("ANTHROPIC_API_KEY")) &&

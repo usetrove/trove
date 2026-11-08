@@ -203,7 +203,7 @@ func TestNonAPIKeyAuthIsRejected(t *testing.T) {
 	}{
 		{"anthropic bearer only", "/anthropic/v1/messages", map[string]string{"Authorization": "Bearer " + fakeKey}},
 		{"anthropic oauth beta", "/anthropic/v1/messages", map[string]string{"x-api-key": fakeKey, "anthropic-beta": "oauth-2025-04-20"}},
-		{"anthropic key with an unknown prefix", "/anthropic/v1/messages", map[string]string{"x-api-key": "sk-ant-usr01-FAKEUSRKEYFORTESTS0123456789abcdefghijk"}},
+		{"anthropic key with an unknown prefix", "/anthropic/v1/messages", map[string]string{"x-api-key": "sk-ant-zzz01-FAKEZZZKEYFORTESTS0123456789abcdefghijk"}},
 		{"anthropic oauth token in x-api-key", "/anthropic/v1/messages", map[string]string{"x-api-key": "sk-ant-oat01-FAKEOAUTHKEYFORTESTS0123456789abcdefgh"}},
 		{"openai jwt", "/openai/v1/responses", map[string]string{"Authorization": "Bearer eyJhbGciOi.eyJzdWIi" + fakeKey + ".c2ln"}},
 		{"openai none", "/openai/v1/responses", nil},

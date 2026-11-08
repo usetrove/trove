@@ -37,8 +37,9 @@ func TestAnthropic(t *testing.T) {
 		{"nothing", hdr(), false, "no_credential"},
 		// The key-shape gate: each kind of credential that is not a Console API key is refused.
 		{"oauth token (setup-token) in x-api-key", hdr("x-api-key", "sk-ant-oat01-FAKEOAUTHFORTESTS0123456789abcdefgh"), false, "oauth_token"},
-		{"admin key in x-api-key", hdr("x-api-key", "sk-ant-admin01-FAKEADMINFORTESTS0123456789abcdefgh"), false, "unrecognized_credential"},
-		{"unknown prefix sk-ant-usr", hdr("x-api-key", "sk-ant-usr01-FAKEUSRFORTESTS0123456789abcdefghijk"), false, "unrecognized_credential"},
+		{"admin key in x-api-key", hdr("x-api-key", "sk-ant-admin01-FAKEADMINFORTESTS0123456789abcdefgh"), false, "admin_key"},
+		{"personal key sk-ant-usr is accepted", hdr("x-api-key", "sk-ant-usr01-FAKEUSRFORTESTS0123456789abcdefghijk"), true, ""},
+		{"unknown sk-ant- prefix", hdr("x-api-key", "sk-ant-zzz01-FAKEZZZFORTESTS0123456789abcdefghijk"), false, "unrecognized_credential"},
 		{"console prefix but too short", hdr("x-api-key", "sk-ant-api03-SHORT"), false, "unrecognized_credential"},
 		{"console prefix, space inside", hdr("x-api-key", "sk-ant-api03-FAKEKEY FORTESTS0123456789abcdefghijk"), false, "unrecognized_credential"},
 		{"no version digits", hdr("x-api-key", "sk-ant-api-FAKEKEYFORTESTS0123456789abcdefghijk"), false, "unrecognized_credential"},

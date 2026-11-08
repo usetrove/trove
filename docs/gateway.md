@@ -28,9 +28,12 @@ response is modified in this mode; Trove only records metadata.
 
 ## API keys only
 - Anthropic: the credential must be in `x-api-key`, and it must have the shape of a Claude Console API key:
-  `sk-ant-api` plus two digits, a dash, then at least 32 key characters (Anthropic's get-api-key page shows
-  `sk-ant-api03-...`, read 2026-11-07). Any other key is refused, including OAuth tokens (`sk-ant-oat...`),
-  admin keys and unknown prefixes such as `sk-ant-usr`. An `Authorization` header is allowed only if it
+  `sk-ant-api` plus two digits and a dash (`sk-ant-api03-...`), or `sk-ant-usr` and a dash for an identity-backed
+  personal key, then at least 32 key characters. Anthropic's get-api-key and authentication pages (read
+  2026-11-07) show `sk-ant-api03-...` and describe personal keys, but do not give the `sk-ant-usr` prefix. That
+  prefix is accepted on the project owner's statement and is unverified against the docs. Any other key is
+  refused: OAuth tokens (`sk-ant-oat...`, reason `oauth_token`), admin keys (`sk-ant-admin...`, reason
+  `admin_key`), and anything else (`unrecognized_credential`), including OpenAI keys and unknown `sk-ant-` prefixes. An `Authorization` header is allowed only if it
   repeats the same value (Claude Code's `apiKeyHelper` sends both). A bearer-only request, a different
   bearer, or an OAuth value in `anthropic-beta` is refused. `trove hooks probe --live` applies the same check to
   `ANTHROPIC_API_KEY` before it starts any run.

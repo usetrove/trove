@@ -12,6 +12,7 @@ import (
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/fixer"
+	"github.com/usetrove/trove/internal/gateway/auth"
 	"github.com/usetrove/trove/internal/logs"
 	"github.com/usetrove/trove/internal/setup"
 )
@@ -50,6 +51,16 @@ type setupReport struct {
 // settings), or the user's own statement in config.toml ([history] plan = "api_key"). A bearer-only
 // ANTHROPIC_AUTH_TOKEN is not enough: the gateway refuses a bearer without an x-api-key.
 func claudeNeedsAPIKey(a *App, cfgDir, planOverride string) string {
+	// A key that is set must be an accepted Console key, the same check the gateway and the live probe use.
+	// A key of another kind (an OAuth token, an admin key, an unknown prefix) is refused with the reason, and
+	// the key's value is never printed.
+	if key := a.Getenv("ANTHROPIC_API_KEY"); key != "" {
+		if ok, reason := auth.ClassifyAnthropicKey(key); !ok {
+			return "Not changed. ANTHROPIC_API_KEY is set, but Trove does not accept it: " + keyRefusal(reason) +
+				" Trove accepts Claude Console API keys (sk-ant-api03-... or sk-ant-usr-...). " +
+				"Set a Console key in the environment you start Claude Code from and run `trove setup` again."
+		}
+	}
 	res := logs.DetectClaudeCodePlan(a.Getenv, cfgDir, planOverride)
 	if res.Plan == logs.PlanAPIKey {
 		for _, ev := range res.Evidence {
@@ -63,6 +74,18 @@ func claudeNeedsAPIKey(a *App, cfgDir, planOverride string) string {
 		"If you use an API key, set ANTHROPIC_API_KEY in the environment you start Claude Code from (or an apiKeyHelper in its settings) and run `trove setup` again; " +
 		"if you set the key some other way, add `plan = \"api_key\"` under [history] in config.toml. " +
 		"If you use a Claude.ai plan, use the Trove plugin instead; it needs no gateway."
+}
+
+// keyRefusal says, in plain English, why a key was refused. It never includes the key.
+func keyRefusal(reason string) string {
+	switch reason {
+	case auth.ReasonOAuthToken:
+		return "it is an OAuth token (sk-ant-oat...), the kind a claude.ai login uses, and Trove never handles those."
+	case auth.ReasonAdminKey:
+		return "it is an Admin API key, which is not for Claude Code."
+	default:
+		return "its format is not one Trove recognises."
+	}
 }
 
 // codexNeedsAPIKey is the Codex counterpart of claudeNeedsAPIKey. Trove cannot tell a ChatGPT login from an API key

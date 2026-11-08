@@ -9,7 +9,8 @@ import (
 // Every key below is a fake; none is a real credential.
 func TestLiveProbeRefusesEveryKeyThatIsNotAConsoleKey(t *testing.T) {
 	refused := map[string]string{
-		"an unknown prefix (sk-ant-usr)":        "sk-ant-usr01-FAKEUSRKEYFORTESTS0123456789abcdefghijk",
+		"an unknown sk-ant- prefix":             "sk-ant-zzz01-FAKEZZZKEYFORTESTS0123456789abcdefghijk",
+		"a personal key that is too short":      "sk-ant-usr-SHORT",
 		"an OAuth token (sk-ant-oat)":           "sk-ant-oat01-FAKEOAUTHKEYFORTESTS0123456789abcdefgh",
 		"an admin key (sk-ant-admin)":           "sk-ant-admin01-FAKEADMINKEYFORTESTS0123456789abcdef",
 		"a Console prefix that is too short":    "sk-ant-api03-SHORT",
@@ -50,6 +51,18 @@ func TestLiveProbeAcceptsAConsoleKeyAndGetsToTheAgent(t *testing.T) {
 	}
 	if strings.Contains(h.out.String()+h.err.String(), consoleKey) {
 		t.Error("the key value was printed")
+	}
+}
+
+// The personal-key format (sk-ant-usr-) passes the same gate as a Console key.
+func TestLiveProbePassesThePersonalKeyFormatThroughTheGate(t *testing.T) {
+	const personalKey = "sk-ant-usr01-FAKEPERSONALKEYFORTESTS0123456789abcdefghijk"
+	h := newHarness(t, map[string]string{"ANTHROPIC_API_KEY": personalKey}, "claude")
+	if code := h.run("hooks", "probe", "--live", "--max-usd", "0.25", "--claude", "/nonexistent/claude"); code == 0 {
+		t.Fatal("expected the run to fail at the missing agent binary")
+	}
+	if !strings.Contains(h.err.String(), "cannot run") {
+		t.Errorf("a personal key should pass the gate and fail only at the agent: %q", h.err)
 	}
 }
 
