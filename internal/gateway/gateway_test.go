@@ -207,6 +207,8 @@ func TestNonAPIKeyAuthIsRejected(t *testing.T) {
 		{"anthropic oauth token in x-api-key", "/anthropic/v1/messages", map[string]string{"x-api-key": "sk-ant-oat01-FAKEOAUTHKEYFORTESTS0123456789abcdefgh"}},
 		{"openai jwt", "/openai/v1/responses", map[string]string{"Authorization": "Bearer eyJhbGciOi.eyJzdWIi" + fakeKey + ".c2ln"}},
 		{"openai none", "/openai/v1/responses", nil},
+		{"openai chatgpt login with its account header", "/openai/v1/responses", map[string]string{"Authorization": "Bearer sk-proj-" + strings.Repeat("FAKE", 4), "chatgpt-account-id": "acct_fake"}},
+		{"openai opaque token of an unknown type", "/openai/v1/responses", map[string]string{"Authorization": "Bearer pat_FAKE0123456789"}},
 	}
 	for _, tc := range cases {
 		resp, body := do(t, "POST", g.gw.URL+tc.path, tc.hdr, []byte(`{}`))
