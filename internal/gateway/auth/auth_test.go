@@ -15,6 +15,9 @@ func hdr(kv ...string) http.Header {
 	return h
 }
 
+// fakeConsoleKey has the Console shape and is not a real credential.
+const fakeConsoleKey = "sk-ant-api03-FAKEKEYFORTESTS0123456789abcdefghijk"
+
 func TestAnthropic(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -22,16 +25,26 @@ func TestAnthropic(t *testing.T) {
 		ok     bool
 		reason string
 	}{
-		{"x-api-key", hdr("x-api-key", "FAKE-KEY"), true, ""},
-		{"apiKeyHelper sends both, same value", hdr("x-api-key", "FAKE-KEY", "Authorization", "Bearer FAKE-KEY"), true, ""},
+		{"x-api-key", hdr("x-api-key", fakeConsoleKey), true, ""},
+		{"apiKeyHelper sends both, same value", hdr("x-api-key", fakeConsoleKey, "Authorization", "Bearer "+fakeConsoleKey), true, ""},
 		// An Enterprise org's Console-issued key (usage-billed) is an ordinary API key on the wire.
-		{"enterprise console key, same shape", hdr("x-api-key", "FAKE-ENTERPRISE-KEY", "anthropic-beta", "claude-code-20250219"), true, ""},
-		{"api key with benign betas", hdr("x-api-key", "FAKE-KEY", "anthropic-beta", "interleaved-thinking-2025-05-14,effort-2025-11-24"), true, ""},
-		{"bearer only (auth token or oauth)", hdr("Authorization", "Bearer FAKE-TOKEN"), false, "bearer_only"},
-		{"oauth beta flag", hdr("x-api-key", "FAKE-KEY", "anthropic-beta", "foo,oauth-2025-04-20"), false, "oauth_beta"},
-		{"different bearer and key", hdr("x-api-key", "FAKE-KEY", "Authorization", "Bearer OTHER"), false, "mixed_credentials"},
-		{"non-bearer scheme beside key", hdr("x-api-key", "FAKE-KEY", "Authorization", "Basic abc"), false, "mixed_credentials"},
+		{"enterprise console key, same shape", hdr("x-api-key", fakeConsoleKey, "anthropic-beta", "claude-code-20250219"), true, ""},
+		{"api key with benign betas", hdr("x-api-key", fakeConsoleKey, "anthropic-beta", "interleaved-thinking-2025-05-14,effort-2025-11-24"), true, ""},
+		{"bearer only (auth token or oauth)", hdr("Authorization", "Bearer "+fakeConsoleKey), false, "bearer_only"},
+		{"oauth beta flag", hdr("x-api-key", fakeConsoleKey, "anthropic-beta", "foo,oauth-2025-04-20"), false, "oauth_beta"},
+		{"different bearer and key", hdr("x-api-key", fakeConsoleKey, "Authorization", "Bearer sk-ant-api03-OTHERKEYFORTESTS0123456789abcdefgh"), false, "mixed_credentials"},
+		{"non-bearer scheme beside key", hdr("x-api-key", fakeConsoleKey, "Authorization", "Basic abc"), false, "mixed_credentials"},
 		{"nothing", hdr(), false, "no_credential"},
+		// The key-shape gate: each kind of credential that is not a Console API key is refused.
+		{"oauth token (setup-token) in x-api-key", hdr("x-api-key", "sk-ant-oat01-FAKEOAUTHFORTESTS0123456789abcdefgh"), false, "oauth_token"},
+		{"admin key in x-api-key", hdr("x-api-key", "sk-ant-admin01-FAKEADMINFORTESTS0123456789abcdefgh"), false, "unrecognized_credential"},
+		{"unknown prefix sk-ant-usr", hdr("x-api-key", "sk-ant-usr01-FAKEUSRFORTESTS0123456789abcdefghijk"), false, "unrecognized_credential"},
+		{"console prefix but too short", hdr("x-api-key", "sk-ant-api03-SHORT"), false, "unrecognized_credential"},
+		{"console prefix, space inside", hdr("x-api-key", "sk-ant-api03-FAKEKEY FORTESTS0123456789abcdefghijk"), false, "unrecognized_credential"},
+		{"no version digits", hdr("x-api-key", "sk-ant-api-FAKEKEYFORTESTS0123456789abcdefghijk"), false, "unrecognized_credential"},
+		{"an OpenAI key in x-api-key", hdr("x-api-key", "sk-proj-FAKEKEYFORTESTS0123456789abcdefghijk"), false, "unrecognized_credential"},
+		{"a bare word", hdr("x-api-key", "test-value-not-a-key"), false, "unrecognized_credential"},
+		{"a future version still recognised", hdr("x-api-key", "sk-ant-api04-FAKEKEYFORTESTS0123456789abcdefghijk"), true, ""},
 	}
 	for _, tc := range tests {
 		got := Anthropic(tc.h)

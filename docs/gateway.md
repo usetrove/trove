@@ -27,9 +27,13 @@ response is modified in this mode; Trove only records metadata.
   request with an `Origin` header (web pages).
 
 ## API keys only
-- Anthropic: the credential must be in `x-api-key`. An `Authorization` header is allowed only if it
+- Anthropic: the credential must be in `x-api-key`, and it must have the shape of a Claude Console API key:
+  `sk-ant-api` plus two digits, a dash, then at least 32 key characters (Anthropic's get-api-key page shows
+  `sk-ant-api03-...`, read 2026-11-07). Any other key is refused, including OAuth tokens (`sk-ant-oat...`),
+  admin keys and unknown prefixes such as `sk-ant-usr`. An `Authorization` header is allowed only if it
   repeats the same value (Claude Code's `apiKeyHelper` sends both). A bearer-only request, a different
-  bearer, or an OAuth value in `anthropic-beta` is refused.
+  bearer, or an OAuth value in `anthropic-beta` is refused. `trove hooks probe --live` applies the same check to
+  `ANTHROPIC_API_KEY` before it starts any run.
 - OpenAI (an allow-list; it fails closed): only `Authorization: Bearer sk-...` is accepted. Everything else is
   refused with 401, including a ChatGPT or Codex login (Sign in with ChatGPT, a Codex access token, an agent
   identity, a personal access token, anything from `~/.codex/auth.json`), any JWT, the `chatgpt-account-id` header,

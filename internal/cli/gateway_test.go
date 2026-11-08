@@ -170,7 +170,7 @@ func TestGatewayEndToEnd(t *testing.T) {
 		t.Fatal("gateway did not come up")
 	}
 	req, _ := http.NewRequest("POST", "http://"+addr+"/anthropic/v1/messages", strings.NewReader(`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"hi"}]}`))
-	req.Header.Set("x-api-key", "FAKE-KEY-DO-NOT-LEAK")
+	req.Header.Set("x-api-key", "sk-ant-api03-FAKEKEYDONOTLEAK0123456789abcdefgh")
 	req.Header.Set("anthropic-version", "2023-06-01")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != 200 {
@@ -197,7 +197,7 @@ func TestGatewayEndToEnd(t *testing.T) {
 	if _, ok := readPID(data); ok {
 		t.Error("the pid record should be removed on exit")
 	}
-	if strings.Contains(h.err.String(), "FAKE-KEY-DO-NOT-LEAK") || strings.Contains(h.out.String(), "FAKE-KEY-DO-NOT-LEAK") {
+	if strings.Contains(h.err.String(), "sk-ant-api03-FAKEKEYDONOTLEAK0123456789abcdefgh") || strings.Contains(h.out.String(), "sk-ant-api03-FAKEKEYDONOTLEAK0123456789abcdefgh") {
 		t.Error("a credential reached the command output")
 	}
 

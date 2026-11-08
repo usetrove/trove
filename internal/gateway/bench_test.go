@@ -38,7 +38,7 @@ var benchBody = []byte(`{"model":"claude-opus-5-5","system":"s","messages":[{"ro
 // roundTrip returns total latency and time to the first response byte.
 func roundTrip(tb testing.TB, c *http.Client, url string) (total, ttfb time.Duration) {
 	req, _ := http.NewRequest("POST", url+"/v1/messages", bytes.NewReader(benchBody))
-	req.Header.Set("x-api-key", "FAKE-KEY")
+	req.Header.Set("x-api-key", fakeKey)
 	t0 := time.Now()
 	resp, err := c.Do(req)
 	if err != nil {
