@@ -218,7 +218,7 @@ func runSetup(a *App, yes, statusLine, gateway bool) error {
 			summary = "Nothing to change: " + p
 		}
 		if !a.JSON {
-			fmt.Fprintln(a.Out, summary+"\n")
+			_, _ = fmt.Fprintln(a.Out, summary+"\n")
 		}
 		statusText, err := statusLineStep(a, &rep, dir, claudeDir, statusLine)
 		if err != nil {
@@ -227,9 +227,9 @@ func runSetup(a *App, yes, statusLine, gateway bool) error {
 		if a.JSON {
 			return a.emit(rep, "")
 		}
-		fmt.Fprint(a.Out, statusText)
+		_, _ = fmt.Fprint(a.Out, statusText)
 		if gatewayUp {
-			fmt.Fprint(a.Out, gatewayGuidance(rep))
+			_, _ = fmt.Fprint(a.Out, gatewayGuidance(rep))
 		}
 		return nil
 	}
@@ -255,7 +255,7 @@ func runSetup(a *App, yes, statusLine, gateway bool) error {
 	// The gateway edit is in place now, so the guidance below is true. Say what was applied first, then
 	// offer the optional status line, so the prompt does not come before the result.
 	if !a.JSON {
-		fmt.Fprintf(a.Out, "Applied %d change(s). Backups are in %s.\n\n", len(rep.Changes), filepath.Join(dir, "backups"))
+		_, _ = fmt.Fprintf(a.Out, "Applied %d change(s). Backups are in %s.\n\n", len(rep.Changes), filepath.Join(dir, "backups"))
 	}
 	statusText, err := statusLineStep(a, &rep, dir, claudeDir, statusLine)
 	if err != nil {
@@ -265,8 +265,8 @@ func runSetup(a *App, yes, statusLine, gateway bool) error {
 	if a.JSON {
 		return a.emit(rep, "")
 	}
-	fmt.Fprint(a.Out, statusText)
-	fmt.Fprint(a.Out, gatewayGuidance(rep))
+	_, _ = fmt.Fprint(a.Out, statusText)
+	_, _ = fmt.Fprint(a.Out, gatewayGuidance(rep))
 	return nil
 }
 

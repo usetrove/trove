@@ -124,7 +124,7 @@ func runUninstall(a *App, purge, yes, dry bool) error {
 		}
 		// Show the plan once, then ask once. With no answer possible (no terminal, or stdin at end of file),
 		// say so and change nothing, rather than treating the silence as a refusal.
-		fmt.Fprintln(a.Out, text+"\n")
+		_, _ = fmt.Fprintln(a.Out, text+"\n")
 		ok, err := confirmUninstall(a)
 		if err != nil {
 			return errors.New("Nothing was changed. Uninstall needs your confirmation, and no answer could be read (there is no terminal to ask). " +

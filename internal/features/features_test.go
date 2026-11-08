@@ -142,15 +142,19 @@ func TestToolResultIsBoundedAndFast(t *testing.T) {
 	r := ToolResult("", big)
 	// The first call includes cold-start and GC cost, which made this flaky on shared CI runners.
 	// Take the best of several runs: a real slowdown shows up in every run, noise does not.
-	if d := bestOf(5, func() { ToolResult("", big) }); d > 50*time.Millisecond {
-		t.Errorf("extraction took %v for %d bytes at best; the budget is 50ms at the scan limits (about 6ms when measured)", d, len(big))
+	if !testing.Short() { // skipped under -short (see below)
+		if d := bestOf(5, func() { ToolResult("", big) }); d > 50*time.Millisecond {
+			t.Errorf("extraction took %v for %d bytes at best; the budget is 50ms at the scan limits (about 6ms when measured)", d, len(big))
+		}
 	}
 	if !r.Truncated || r.SizeBytes != len(big) || r.Lines > MaxScanLines {
 		t.Errorf("limits not applied: %+v", r)
 	}
 	typical := []byte(strings.Repeat("ok  \tpkg/x\t0.123s\n", 400))
-	if d := bestOf(5, func() { ToolResult("", typical) }); d > 10*time.Millisecond {
-		t.Errorf("a typical output took %v at best", d)
+	if !testing.Short() { // skipped under -short: the race detector slows this several times over, so the budget is measured in the non-race job
+		if d := bestOf(5, func() { ToolResult("", typical) }); d > 10*time.Millisecond {
+			t.Errorf("a typical output took %v at best", d)
+		}
 	}
 }
 

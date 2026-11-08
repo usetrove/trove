@@ -17,13 +17,13 @@ func confirmUninstall(a *App) (bool, error) {
 	if a.In == nil {
 		return false, errNoAnswer
 	}
-	fmt.Fprint(a.Out, "Go ahead? [y/N] ")
+	_, _ = fmt.Fprint(a.Out, "Go ahead? [y/N] ")
 	if a.inReader == nil || a.inSource != a.In { // one reader per input, as App.confirm does
 		a.inReader, a.inSource = bufio.NewReader(a.In), a.In
 	}
 	line, err := a.inReader.ReadString('\n')
 	if err != nil && line == "" {
-		fmt.Fprintln(a.Out)
+		_, _ = fmt.Fprintln(a.Out)
 		return false, errNoAnswer
 	}
 	switch strings.ToLower(strings.TrimSpace(line)) {
