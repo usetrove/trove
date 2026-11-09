@@ -93,6 +93,47 @@ Two layers; you can use the first without the second.
 
 Principles that hold everywhere: local-first (everything lives in `~/.trove`; nothing is sent unless you opt in to the anonymous weekly summary), API keys pass through and are never logged or stored, metadata only (no prompts, code, paths or tool output in the database), fail open (an internal error forwards your request unchanged), and prove before acting (every optimization is opt-in, estimated in shadow mode first, measured once on, and rolled back if guardrails trip; see [measurement](docs/measurement.md)).
 
+## Measured results
+
+Trove's benchmark harness (`bench/`) runs real coding tasks in Docker with your own API key. For each run it records whether the task passed and what it cost. Each study is pre-registered: the question, the decision rule and the budget are locked before the first run.
+
+**Bottom line:** Trove has not yet shown that it saves money. In the latest pre-registered study, the optional gateway's safe optimizers changed the cost by a median of **−3.0%**, but the interval runs from −9.5% to +3.7%. It could be a saving, a loss, or nothing, and the data cannot tell these apart yet. Tasks passed in every run under both settings. Trove makes no savings promise.
+
+**The question:** does the optional gateway, with every safe optimizer turned on (`all_safe`), cost less than the same gateway with every optimizer off (`passthrough`)?
+
+**Setup (study `gateway-cost-2`, locked 2026-11-09)**
+
+- 30 Python exercises from Aider's polyglot benchmark, drawn with seed 20261108. Nine also appear in the earlier study, so the set is not fully held out.
+- Model `claude-haiku-5-5`, Claude Code 2.1.318, API-key authentication.
+- Three repeats per task per condition: 180 runs, 90 pairs. A pair is the same task and repeat under both conditions.
+- Caps: $0.50 per run, $10 for the batch. Total spend was $0.46.
+
+**Results**
+
+| | `passthrough` (baseline) | `all_safe` |
+|---|---:|---:|
+| Runs | 90 | 90 |
+| Tasks passed | 90 of 90 | 90 of 90 |
+| Mean cost per run, estimated | $0.0026 | $0.0025 |
+
+Median paired cost change, `all_safe` against `passthrough`: **−3.0%**, 95% interval **−9.5% to +3.7%**. Success difference: 0 points. Median wall-time difference: −0.1 seconds. Adjusted p-value for the cost change: 0.22.
+
+**Decision rule.** Trove recommends an optimizer for automatic use only if its cost reduction is at least 5% and the whole 95% interval lies at or below −5%, with the success rate not falling by more than 5 points. This study does not meet the rule, and the verdict is **NEED MORE DATA**.
+
+**What this means**
+
+- The result is consistent with no saving. A saving of 5% or more is not ruled out, and neither is a small loss.
+- Costs are estimated: list price applied to the token counts the agent reports. They are not an invoice.
+- Each task costs about a quarter of a cent, so the differences are small and noisy.
+
+**Caveats**
+
+- One model and one Claude Code version. Results may differ for other models, versions or longer sessions.
+- The study covers only the gateway. It does not test the Claude Code plugin's hooks, the path most people will use.
+- An earlier 10-task study (2026-11-08, 30 pairs) showed a median cost change of +9.7%, in the other direction. The two studies together show how wide the noise is.
+
+To reproduce, fetch the tasks with `python -m trovebench fetch polyglot -n 30 --seed 20261108`, then from `bench/` run `python -m trovebench run --study studies/gateway-cost-2.yaml --tasks <that folder> --batch <folder> --yes`. The study file and its lock are committed in `bench/studies/`. The method is in [benchmark methodology](docs/benchmark-methodology.md).
+
 ## What Trove changes, and how to undo it
 
 Nothing changes until you approve it. Each change is shown first, the original file is backed up, and one command reverses it.
