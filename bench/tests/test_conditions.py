@@ -61,6 +61,8 @@ def test_rendered_toml_parses_and_matches_golden(spec):
     text = render_config_toml(c)
     parsed = tomllib.loads(text)
     assert parsed["measure"] == {"baseline_days": 0, "baseline_sessions": 0, "interleave": False}
+    # The experiment assigner must be off, or sessions are sent to the "off" arm and "on" becomes shadow.
+    assert parsed["experiment"] == {"enabled": False}
     assert set(parsed["optimizers"]) == set(OPTIMIZERS)
     golden = GOLDEN / f"config_{c.name}.toml"
     assert text == golden.read_text(encoding="utf-8"), f"update {golden} if the change is intended"

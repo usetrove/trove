@@ -12,3 +12,6 @@ cache_breakpoints = "off"
 baseline_days = 0
 baseline_sessions = 0
 interleave = false
+
+[experiment]
+enabled = false
