@@ -61,7 +61,7 @@ func newTestGateway(rt http.RoundTripper, rec gateway.Recorder) (*httptest.Serve
 // messageRequest is the small request the gateway load sends.
 func messageRequest(base string) (*http.Request, error) {
 	body := []byte(`{"model":"claude-sonnet-5-5","max_tokens":64,"messages":[{"role":"user","content":"Reply with the word ok."}]}`)
-	req, err := http.NewRequest(http.MethodPost, base+"/anthropic/v1/messages", bytes.NewReader(body))
+	req, err := newRequest(http.MethodPost, base+"/anthropic/v1/messages", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -186,7 +186,7 @@ func (e *env) loadGateway(lr *LayerResult) {
 		return
 	}
 	defer srv.Close()
-	client := &http.Client{Timeout: 15 * time.Second, Transport: &http.Transport{MaxIdleConnsPerHost: e.p.concurrency}}
+	client := loopbackClient(15*time.Second, e.p.concurrency)
 	deadline := time.Now().Add(e.p.loadDur)
 	var mu sync.Mutex
 	var lat []time.Duration
@@ -307,7 +307,7 @@ func (e *env) soak(lr *LayerResult) {
 		return
 	}
 	defer srv.Close()
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := loopbackClient(10*time.Second, 0)
 
 	var samples []heapPoint
 	var vs []Violation

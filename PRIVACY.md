@@ -24,7 +24,7 @@ Nothing else. Specifically, Trove does not send crash reports, version checks, o
 usage data unless you turned on the summary above.
 Prices are embedded in the binary.
 
-How this is checked: a test fails if shipped code outside four files can open a connection or build an HTTP
+How this is checked: a test fails if shipped code outside a short list of files (the gateway's forwarding, a loopback health probe, the opt-in upload, and a client that can only dial loopback addresses, used by `trove bench stress`) can open a connection or build an HTTP
 client, or if a telemetry library appears in `go.mod` [`internal/egress` `TestOnlyApprovedCodeCanReachTheNetwork`,
 `TestNoUnexpectedNetworkDependencies`]; and a Linux CI test runs the built binary under `strace` through the gateway
 and a set of commands and fails on any connection or send to a non-loopback address [`internal/egress`

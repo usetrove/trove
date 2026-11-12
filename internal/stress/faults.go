@@ -145,7 +145,7 @@ func (e *env) gatewayFault(m faultMode) []Violation {
 		return []Violation{{"gateway_start", err.Error()}}
 	}
 	defer srv.Close()
-	client := &http.Client{Timeout: 1500 * time.Millisecond}
+	client := loopbackClient(1500*time.Millisecond, 0)
 	req, _ := messageRequest(srv.URL)
 	if resp, err := client.Do(req); err == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)

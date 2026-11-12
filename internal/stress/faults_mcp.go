@@ -104,7 +104,7 @@ func (e *env) deadMCPFault() []Violation {
 		return append(vs, Violation{"gateway_start", err.Error()})
 	}
 	defer srv.Close()
-	client2 := &http.Client{Timeout: 5 * time.Second}
+	client2 := loopbackClient(5*time.Second, 0)
 	h, err := client2.Get(srv.URL + gateway.HealthPath)
 	if err != nil || h.StatusCode != http.StatusOK {
 		vs = append(vs, Violation{InvFailOpenOnError, "the gateway did not answer its health check while the MCP server was dead"})
