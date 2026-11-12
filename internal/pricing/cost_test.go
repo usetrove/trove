@@ -169,10 +169,52 @@ func TestWorkedExamples(t *testing.T) {
 			status: Priced, usd: "0.186",
 		},
 		{
-			name: "google gemini 3.5 flash-lite batch cache read is an absolute $0.02",
+			name: "google gemini 3.5 flash-lite batch cache read is half the standard $0.03 (page: $0.015)",
 			req:  Request{Provider: Google, Model: "gemini-3.5-flash-lite", Time: at("2026-08-01"), Batch: true, Usage: Usage{CacheRead: 1_000_000}},
-			// 1,000,000x0.02 = 0.02
-			status: Priced, usd: "0.02",
+			// 1,000,000x0.03x0.5 = 0.015
+			status: Priced, usd: "0.015",
+		},
+		{
+			name: "anthropic fable 5.2",
+			req:  Request{Provider: Anthropic, Model: "claude-fable-5-2", Time: at("2026-11-10"), Usage: Usage{UncachedInput: 100_000, CacheRead: 1_000_000, Output: 10_000}},
+			// 100,000x8 = 0.80; 1,000,000x0.20 = 0.20; 10,000x40 = 0.40 -> 1.40
+			status: Priced, usd: "1.40",
+		},
+		{
+			name: "anthropic fable 5.2 fast",
+			req:  Request{Provider: Anthropic, Model: "claude-fable-5-2", Time: at("2026-11-10"), ServiceTier: "fast", Usage: Usage{UncachedInput: 100_000, Output: 10_000}},
+			// 100,000x16 = 1.60; 10,000x80 = 0.80 -> 2.40
+			status: Priced, usd: "2.40",
+		},
+		{
+			name: "google gemini 4 carbon, introductory price",
+			req:  Request{Provider: Google, Model: "gemini-4-carbon", Time: at("2026-11-20"), Usage: Usage{UncachedInput: 1_000_000, Output: 100_000}},
+			// 1,000,000x2 = 2.00; 100,000x10 = 1.00 -> 3.00
+			status: Priced, usd: "3.00",
+		},
+		{
+			name: "google gemini 4 carbon after the 2026-12-01 increase",
+			req:  Request{Provider: Google, Model: "gemini-4-carbon", Time: at("2026-12-02"), Usage: Usage{UncachedInput: 1_000_000, Output: 100_000}},
+			// 1,000,000x4 = 4.00; 100,000x20 = 2.00 -> 6.00
+			status: Priced, usd: "6.00",
+		},
+		{
+			name: "google gemini 4 hydrogen",
+			req:  Request{Provider: Google, Model: "gemini-4-hydrogen", Time: at("2026-11-13"), Usage: Usage{UncachedInput: 1_000_000, Output: 100_000}},
+			// 1,000,000x1.50 = 1.50; 100,000x7.50 = 0.75 -> 2.25
+			status: Priced, usd: "2.25",
+		},
+		{
+			name: "google gemini 2.5 pro before it is routed to 3.8 flash rates",
+			req:  Request{Provider: Google, Model: "gemini-2.5-pro", Time: at("2026-11-30"), Usage: Usage{UncachedInput: 100_000, Output: 100_000}},
+			// 100,000x1.25 = 0.125; 100,000x10 = 1.00 -> 1.125 (a prompt this size is below the 200k threshold)
+			status: Priced, usd: "1.125",
+		},
+		{
+			name: "google gemini 2.5 pro after 2026-12-01 is billed at 3.8 flash rates",
+			req:  Request{Provider: Google, Model: "gemini-2.5-pro", Time: at("2026-12-02"), Usage: Usage{UncachedInput: 1_000_000, Output: 200_000}},
+			// 1,000,000x0.75 = 0.75; 200,000x3.75 = 0.75 -> 1.50
+			status: Priced, usd: "1.50",
 		},
 		{
 			name: "google argon, last second before the scheduled doubling",
@@ -320,12 +362,6 @@ func TestWorkedExamples(t *testing.T) {
 			status: Priced, usd: "0.14",
 		},
 		{
-			name: "openai o4-mini",
-			req:  Request{Provider: OpenAI, Model: "o4-mini", Time: at("2025-05-01"), Usage: Usage{UncachedInput: 1_000_000, Output: 100_000}},
-			// 1,000,000x1.10 = 1.10; 100,000x4.40 = 0.44 -> 1.54
-			status: Priced, usd: "1.54",
-		},
-		{
 			name: "anthropic mythos 5.1 with its cheaper cache reads",
 			req:  Request{Provider: Anthropic, Model: "claude-mythos-5-1", Time: at("2026-10-01"), Usage: Usage{UncachedInput: 100_000, CacheRead: 1_000_000, Output: 10_000}},
 			// 100,000x10 = 1.00; 1,000,000x0.25 = 0.25; 10,000x50 = 0.50 -> 1.75
@@ -370,6 +406,9 @@ func TestUnpriced(t *testing.T) {
 		{"o3 before its 2025-06-10 price cut", Request{Provider: OpenAI, Model: "o3", Time: at("2025-06-09"), Usage: u}, "not priced before 2025-06-10"},
 		{"flex on a model without it", Request{Provider: Anthropic, Model: "claude-opus-5-5", Time: at("2026-10-20"), ServiceTier: "flex", Usage: u}, "no flex price"},
 		{"batch on a model without batch prices", Request{Provider: OpenAI, Model: "gpt-5.3-codex", Time: at("2026-10-20"), Batch: true, Usage: u}, "batch"},
+		{"o4-mini is no longer on the pricing page and was removed", Request{Provider: OpenAI, Model: "o4-mini", Time: at("2026-10-20"), Usage: u}, "no price on file"},
+		{"flex on gemini 3.5 flash-lite, whose flex cache price differs from batch", Request{Provider: Google, Model: "gemini-3.5-flash-lite", Time: at("2026-10-20"), ServiceTier: "flex", Usage: u}, "no flex price"},
+		{"gemini 2.5 pro batch after it is routed to 3.8 flash (batch not stated)", Request{Provider: Google, Model: "gemini-2.5-pro", Time: at("2026-12-02"), Batch: true, Usage: u}, "batch"},
 		{"negative tokens", Request{Provider: Anthropic, Model: "claude-haiku-4-5", Time: at("2026-10-20"), Usage: Usage{Output: -1}}, "negative"},
 	}
 	for _, tt := range tests {

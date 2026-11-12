@@ -27,7 +27,7 @@ historical costs stay correct. Per entry:
 
 Prices are JSON **strings** (`"0.30"`), never numbers, so no float touches a price.
 
-## Pages used (read 2026-10-28)
+## Pages used (read 2026-11-12)
 
 | Provider | Prices | Dates |
 | --- | --- | --- |
@@ -120,9 +120,15 @@ checked by this script; the review in step 2 of the checklist covers them.
 - GPT-5.6 Sol, Terra and Luna had price cuts (Sol 2026-08-21; Terra and Luna 2026-07-30). OpenAI
   states only rounded percentages and the earlier prices appear on no official page, so requests
   from launch (2026-07-09) to the cut are unpriced. Sol's price is promotional "at least through
-  2026-11-21": re-check it after that date.
-- o3 and o4-mini: flex input and output equal batch but flex cached input differs, so flex cache
-  reads are unpriced; their batch cache reads are unpriced too (no batch cached price listed).
+  2026-11-21" in the changelog and "until November 30, 2026" on the pricing page (read 2026-11-12): re-check it after 2026-11-30.
+- o3: flex input and output equal batch but flex cached input differs, so flex cache
+  reads are unpriced; its batch cache reads are unpriced too (no batch cached price listed).
+- o4-mini was removed on 2026-11-12: it is no longer on the OpenAI pricing page, so it cannot be
+  verified and now comes back unpriced.
+- Gemini 3.5 Flash-Lite: batch cache reads are $0.015 but flex cache reads are $0.02 (read 2026-11-12), so
+  flex requests are unpriced. Gemini 2.5 Pro and 2.5 Flash are deprecated; from 2026-12-01 the
+  2026-11-02 release notes say requests are routed to Gemini 3.8 Flash and 3.5 Flash-Lite and billed at
+  their rates, so future-dated entries carry only standard prices for those models.
 - gpt-5.5-pro lists batch/flex prices only up to 272K tokens (`no_long_context`); above that they
   are unpriced.
 - Claude Sonnet 4.5 and Opus 4.5: the current page lists no long-context premium; the old
