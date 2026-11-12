@@ -56,18 +56,13 @@ func NewRoot(a *App) *cobra.Command {
 	f.BoolVar(&a.Verbose, "verbose", false, "print debug logs to stderr")
 	f.BoolVar(&a.NoHistory, "no-history", false, "do not read your agent's local session history for this run")
 
-	cfg := &cobra.Command{Use: "config", Short: "Read or change Trove settings", Args: cobra.NoArgs, RunE: func(c *cobra.Command, _ []string) error { return c.Help() }}
-	cfg.AddCommand(
-		stubArgCmd(a, "get [key]", "Show a setting (or all settings)", "config get", cobra.MaximumNArgs(1)),
-		stubArgCmd(a, "set <key> <value>", "Change a setting", "config set", cobra.ExactArgs(2)),
-	)
-
 	root.AddCommand(
 		newSetup(a),
 		newGateway(a),
 		newReport(a),
 		newLogs(a),
 		newBudget(a),
+		newBench(a),
 		newReceipts(a),
 		newStatusLine(a),
 		newFix(a),
@@ -75,7 +70,6 @@ func NewRoot(a *App) *cobra.Command {
 		newTasks(a),
 		newUndo(a),
 		newShare(a),
-		cfg,
 		newDoctor(a),
 		newPricing(a),
 		newOptimize(a),
@@ -96,14 +90,4 @@ func NewRoot(a *App) *cobra.Command {
 		newUninstall(a),
 	)
 	return root
-}
-
-func stub(a *App, name string) func(*cobra.Command, []string) error {
-	return func(*cobra.Command, []string) error {
-		return a.emit(map[string]string{"command": name, "status": "not_implemented"}, "trove "+name+": not implemented yet")
-	}
-}
-
-func stubArgCmd(a *App, use, short, name string, args cobra.PositionalArgs) *cobra.Command {
-	return &cobra.Command{Use: use, Short: short, Args: args, RunE: stub(a, name)}
 }

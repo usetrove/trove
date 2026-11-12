@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/usetrove/trove/internal/gateway/auth"
 	"github.com/usetrove/trove/internal/hooks"
 	hookprobe "github.com/usetrove/trove/internal/hooks/probe"
 )
@@ -89,7 +90,17 @@ func runHooksProbe(ctx context.Context, a *App, fl hooksProbeFlags) error {
 		if herr != nil {
 			return errors.New("cannot find your home directory; set HOME and try again")
 		}
-		apiKey = claudeNeedsAPIKey(a, supportedAgents[0].configDir(a, home), cfg.History.Plan) == ""
+		// A live run spends money on the key in ANTHROPIC_API_KEY. Only a recognised Console API key
+		// is accepted; a key of any other kind (an OAuth token, an admin key, an unknown prefix) is refused
+		// before anything starts. The key's value is never printed or stored.
+		if key := a.Getenv("ANTHROPIC_API_KEY"); key != "" && !auth.IsConsoleAPIKey(key) {
+			return errors.New("ANTHROPIC_API_KEY is not a Claude Console API key, so the live probe will not run. " +
+				"Trove accepts only Console API keys (sk-ant-api03-... or sk-ant-usr-...); OAuth tokens (sk-ant-oat...) are refused. " +
+				"Create a key in the Console and set it for this shell. " +
+				"Nothing was run")
+		}
+		apiKey = auth.IsConsoleAPIKey(a.Getenv("ANTHROPIC_API_KEY")) &&
+			claudeNeedsAPIKey(a, supportedAgents[0].configDir(a, home), cfg.History.Plan) == ""
 	}
 	rep, err := hookprobe.Run(ctx, hookprobe.Options{
 		APIKeyAuth: apiKey,

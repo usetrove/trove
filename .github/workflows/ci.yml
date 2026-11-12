@@ -68,12 +68,6 @@ jobs:
       - name: No Claude, Anthropic, Codex or OpenAI in our own names (rule 13)
         run: go test -count=1 ./internal/naming
 
-  npm-wrapper:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - run: node --test "npm/test/*.test.js"
-
   # The OpenCode plugin: strict typecheck, then its tests against a real `trove engine serve`
   # built from this checkout. Serial: each test file builds or starts the program.
   opencode-plugin:

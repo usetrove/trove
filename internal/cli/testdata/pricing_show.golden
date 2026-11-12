@@ -1,65 +1,72 @@
 PROVIDER   MODEL                   FROM        INPUT  OUTPUT  CACHE READ  CACHE WRITE         VERIFIED
-anthropic  claude-fable-5          2026-06-09  10     50      1           5m=12.5 1h=20       2026-10-28
-anthropic  claude-fable-5-1        2026-09-01  10     50      0.25        5m=12.5 1h=20       2026-10-28
-anthropic  claude-haiku-4-5        2025-10-15  1      5       0.1         5m=1.25 1h=2        2026-10-28
-anthropic  claude-haiku-5-5        2026-10-07  0.1    0.5     0.01        5m=0.125 1h=0.2     2026-10-28
-anthropic  claude-mythos-5         2026-06-09  10     50      1           5m=12.5 1h=20       2026-10-28
-anthropic  claude-mythos-5-1       2026-09-01  10     50      0.25        5m=12.5 1h=20       2026-10-28
-anthropic  claude-opus-4-5         2025-11-24  5      25      0.5         5m=6.25 1h=10       2026-10-28
-anthropic  claude-opus-4-6         2026-02-05  5      25      0.5         5m=6.25 1h=10       2026-10-28
-anthropic  claude-opus-4-7         2026-04-16  5      25      0.5         5m=6.25 1h=10       2026-10-28
-anthropic  claude-opus-4-8         2026-05-28  5      25      0.5         5m=6.25 1h=10       2026-10-28
-anthropic  claude-opus-5           2026-07-24  5      25      0.5         5m=6.25 1h=10       2026-10-28
-anthropic  claude-opus-5-5         2026-09-22  4      20      0.2         5m=5 1h=8           2026-10-28
-anthropic  claude-sonnet-4-5       2025-09-29  3      15      0.3         5m=3.75 1h=6        2026-10-28
-anthropic  claude-sonnet-4-6       2026-02-17  3      15      0.3         5m=3.75 1h=6        2026-10-28
-anthropic  claude-sonnet-5         2026-06-30  2      10      0.2         5m=2.5 1h=4         2026-10-28
-anthropic  claude-sonnet-5-5       2026-09-28  2      10      0.2         5m=2.5 1h=4         2026-10-28
-anthropic  claude-sonnet-5-5       2026-10-07  2      10      0.1         5m=2.5 1h=4         2026-10-28
-google     gemini-2.5-flash        2025-06-17  0.3    2.5     0.03        -                   2026-10-28
-google     gemini-2.5-flash-lite   2025-07-22  0.1    0.4     0.01        -                   2026-10-28
-google     gemini-2.5-pro          2025-06-17  1.25   10      0.125       -                   2026-10-28
-google     gemini-3-flash-preview  2025-12-17  0.5    3       0.05        -                   2026-10-28
-google     gemini-3.1-flash-lite   2026-05-07  0.25   1.5     0.025       -                   2026-10-28
-google     gemini-3.1-pro-preview  2026-02-19  2      12      0.2         -                   2026-10-28
-google     gemini-3.5-flash-lite   2026-07-21  0.3    2.5     0.03        -                   2026-10-28
-google     gemini-3.6-flash        2026-07-21  0.75   3.75    0.075       -                   2026-10-28
-google     gemini-3.6-flash        2027-01-01  1.5    7.5     0.15        -                   2026-10-28
-google     gemini-3.8-flash        2026-09-02  0.75   3.75    0.075       -                   2026-10-28
-google     gemini-3.8-flash        2027-01-01  1.5    7.5     0.15        -                   2026-10-28
-google     gemini-4-argon          2026-10-13  2      10      0.1         -                   2026-10-28
-google     gemini-4-argon          2026-12-01  4      20      0.2         -                   2026-10-28
-openai     gpt-5                   2025-08-07  1.25   10      0.125       -                   2026-10-28
-openai     gpt-5-mini              2025-08-07  0.25   2       0.025       -                   2026-10-28
-openai     gpt-5-nano              2025-08-07  0.05   0.4     0.005       -                   2026-10-28
-openai     gpt-5-pro               2025-10-06  15     120     -           -                   2026-10-28
-openai     gpt-5.1                 2025-11-13  1.25   10      0.125       -                   2026-10-28
-openai     gpt-5.2                 2025-12-11  1.75   14      0.175       -                   2026-10-28
-openai     gpt-5.3-codex           2026-02-24  1.75   14      0.175       -                   2026-10-28
-openai     gpt-5.4                 2026-03-05  2.5    15      0.25        -                   2026-10-28
-openai     gpt-5.4-mini            2026-03-17  0.75   4.5     0.075       -                   2026-10-28
-openai     gpt-5.4-nano            2026-03-17  0.2    1.25    0.02        -                   2026-10-28
-openai     gpt-5.4-pro             2026-03-05  30     180     -           -                   2026-10-28
-openai     gpt-5.5                 2026-04-24  5      30      0.5         -                   2026-10-28
-openai     gpt-5.5-pro             2026-04-24  30     180     -           -                   2026-10-28
-openai     gpt-5.6-luna            2026-07-30  0.2    1.2     0.02        30m=0.25 12h=0.5    2026-10-28
-openai     gpt-5.6-sol             2026-08-21  4      20      0.4         30m=5 12h=10        2026-10-28
-openai     gpt-5.6-terra           2026-07-30  2      12      0.2         30m=2.5 12h=5       2026-10-28
-openai     gpt-6-astra             2026-09-03  10     50      1           30m=12.5 12h=25     2026-10-28
-openai     gpt-6-luna              2026-09-22  0.1    0.5     0.01        30m=0.125 12h=0.25  2026-10-28
-openai     gpt-6-sol               2026-09-22  2      10      0.2         30m=2.5 12h=5       2026-10-28
-openai     gpt-6.1-sol             2026-09-29  2      10      0.1         30m=2.5 12h=5       2026-10-28
-openai     gpt-6.1-terra           2026-10-26  1      5       0.05        30m=1.25 12h=2.5    2026-10-28
-openai     o3                      2025-06-10  2      8       0.5         -                   2026-10-28
-openai     o3-pro                  2025-06-10  20     80      -           -                   2026-10-28
-openai     o4-mini                 2025-04-16  1.1    4.4     0.275       -                   2026-10-28
+anthropic  claude-fable-5          2026-06-09  10     50      1           5m=12.5 1h=20       2026-11-12
+anthropic  claude-fable-5-1        2026-09-01  10     50      0.25        5m=12.5 1h=20       2026-11-12
+anthropic  claude-fable-5-2        2026-11-09  8      40      0.2         5m=10 1h=16         2026-11-12
+anthropic  claude-haiku-4-5        2025-10-15  1      5       0.1         5m=1.25 1h=2        2026-11-12
+anthropic  claude-haiku-5-5        2026-10-07  0.1    0.5     0.01        5m=0.125 1h=0.2     2026-11-12
+anthropic  claude-mythos-5         2026-06-09  10     50      1           5m=12.5 1h=20       2026-11-12
+anthropic  claude-mythos-5-1       2026-09-01  10     50      0.25        5m=12.5 1h=20       2026-11-12
+anthropic  claude-mythos-5-2       2026-11-09  8      40      0.2         5m=10 1h=16         2026-11-12
+anthropic  claude-opus-4-5         2025-11-24  5      25      0.5         5m=6.25 1h=10       2026-11-12
+anthropic  claude-opus-4-6         2026-02-05  5      25      0.5         5m=6.25 1h=10       2026-11-12
+anthropic  claude-opus-4-7         2026-04-16  5      25      0.5         5m=6.25 1h=10       2026-11-12
+anthropic  claude-opus-4-8         2026-05-28  5      25      0.5         5m=6.25 1h=10       2026-11-12
+anthropic  claude-opus-5           2026-07-24  5      25      0.5         5m=6.25 1h=10       2026-11-12
+anthropic  claude-opus-5-5         2026-09-22  4      20      0.2         5m=5 1h=8           2026-11-12
+anthropic  claude-sonnet-4-5       2025-09-29  3      15      0.3         5m=3.75 1h=6        2026-11-12
+anthropic  claude-sonnet-4-6       2026-02-17  3      15      0.3         5m=3.75 1h=6        2026-11-12
+anthropic  claude-sonnet-5         2026-06-30  2      10      0.2         5m=2.5 1h=4         2026-11-12
+anthropic  claude-sonnet-5-5       2026-09-28  2      10      0.2         5m=2.5 1h=4         2026-11-12
+anthropic  claude-sonnet-5-5       2026-10-07  2      10      0.1         5m=2.5 1h=4         2026-11-12
+google     gemini-2.5-flash        2025-06-17  0.3    2.5     0.03        -                   2026-11-12
+google     gemini-2.5-flash        2026-12-01  0.3    2.5     0.03        -                   2026-11-12
+google     gemini-2.5-flash-lite   2025-07-22  0.1    0.4     0.01        -                   2026-11-12
+google     gemini-2.5-pro          2025-06-17  1.25   10      0.125       -                   2026-11-12
+google     gemini-2.5-pro          2026-12-01  0.75   3.75    0.075       -                   2026-11-12
+google     gemini-2.5-pro          2027-01-01  1.5    7.5     0.15        -                   2026-11-12
+google     gemini-3-flash-preview  2025-12-17  0.5    3       0.05        -                   2026-11-12
+google     gemini-3.1-flash-lite   2026-05-07  0.25   1.5     0.025       -                   2026-11-12
+google     gemini-3.1-pro-preview  2026-02-19  2      12      0.2         -                   2026-11-12
+google     gemini-3.5-flash-lite   2026-07-21  0.3    2.5     0.03        -                   2026-11-12
+google     gemini-3.6-flash        2026-07-21  0.75   3.75    0.075       -                   2026-11-12
+google     gemini-3.6-flash        2027-01-01  1.5    7.5     0.15        -                   2026-11-12
+google     gemini-3.8-flash        2026-09-02  0.75   3.75    0.075       -                   2026-11-12
+google     gemini-3.8-flash        2027-01-01  1.5    7.5     0.15        -                   2026-11-12
+google     gemini-4-argon          2026-10-13  2      10      0.1         -                   2026-11-12
+google     gemini-4-argon          2026-12-01  4      20      0.2         -                   2026-11-12
+google     gemini-4-carbon         2026-11-10  2      10      0.1         -                   2026-11-12
+google     gemini-4-carbon         2026-12-01  4      20      0.2         -                   2026-11-12
+google     gemini-4-hydrogen       2026-11-12  1.5    7.5     0.075       -                   2026-11-12
+openai     gpt-5                   2025-08-07  1.25   10      0.125       -                   2026-11-12
+openai     gpt-5-mini              2025-08-07  0.25   2       0.025       -                   2026-11-12
+openai     gpt-5-nano              2025-08-07  0.05   0.4     0.005       -                   2026-11-12
+openai     gpt-5-pro               2025-10-06  15     120     -           -                   2026-11-12
+openai     gpt-5.1                 2025-11-13  1.25   10      0.125       -                   2026-11-12
+openai     gpt-5.2                 2025-12-11  1.75   14      0.175       -                   2026-11-12
+openai     gpt-5.3-codex           2026-02-24  1.75   14      0.175       -                   2026-11-12
+openai     gpt-5.4                 2026-03-05  2.5    15      0.25        -                   2026-11-12
+openai     gpt-5.4-mini            2026-03-17  0.75   4.5     0.075       -                   2026-11-12
+openai     gpt-5.4-nano            2026-03-17  0.2    1.25    0.02        -                   2026-11-12
+openai     gpt-5.4-pro             2026-03-05  30     180     -           -                   2026-11-12
+openai     gpt-5.5                 2026-04-24  5      30      0.5         -                   2026-11-12
+openai     gpt-5.5-pro             2026-04-24  30     180     -           -                   2026-11-12
+openai     gpt-5.6-luna            2026-07-30  0.2    1.2     0.02        30m=0.25 12h=0.5    2026-11-12
+openai     gpt-5.6-sol             2026-08-21  4      20      0.4         30m=5 12h=10        2026-11-12
+openai     gpt-5.6-terra           2026-07-30  2      12      0.2         30m=2.5 12h=5       2026-11-12
+openai     gpt-6-astra             2026-09-03  10     50      1           30m=12.5 12h=25     2026-11-12
+openai     gpt-6-luna              2026-09-22  0.1    0.5     0.01        30m=0.125 12h=0.25  2026-11-12
+openai     gpt-6-sol               2026-09-22  2      10      0.2         30m=2.5 12h=5       2026-11-12
+openai     gpt-6.1-sol             2026-09-29  2      10      0.1         30m=2.5 12h=5       2026-11-12
+openai     gpt-6.1-terra           2026-10-26  1      5       0.05        30m=1.25 12h=2.5    2026-11-12
+openai     o3                      2025-06-10  2      8       0.5         -                   2026-11-12
+openai     o3-pro                  2025-06-10  20     80      -           -                   2026-11-12
 
-Prices are estimated: published list prices, USD per million tokens. Data version 2026-10-28.3.
+Prices are estimated: published list prices, USD per million tokens. Data version 2026-11-12.1.
 Standard (non-batch) prices shown; long-context, batch, service-tier, regional and tool-fee prices are in --json.
 A request dated before a model's FROM date is reported as unpriced, never guessed.
 - All prices are USD per million tokens (tool fees per 1,000 calls) from the providers' published list prices. Values derived from them are estimates, not invoices.
 - Service tiers: Request.ServiceTier accepts fast (OpenAI, Anthropic Opus), ultrafast (OpenAI), priority (Gemini) and flex (OpenAI, Gemini; priced like batch). Premium tiers cannot be combined with batch. Adapters map each provider's own field value onto these names.
 - Not priced: audio input; cache-storage fees; OpenAI regional (data-residency) uplift, because eligibility is per model and not machine-readable; Gemini Contributor tier.
-- Retired models and older families (for example Claude Opus 4/4.1, Sonnet 4, Haiku 3.5, OpenAI o1, o3-mini, GPT-4.x and gpt-5.2-pro (no official launch date), cyber and research-program models, Gemini 2.0 and Gemini 3.7 Flash (not on the pricing page)) are not included and come back unpriced.
+- Retired models and older families (for example Claude Opus 4/4.1, Sonnet 4, Haiku 3.5, OpenAI o1, o3-mini, o4-mini (no longer on the pricing page as of 2026-11-12), GPT-4.x and gpt-5.2-pro (no official launch date), cyber and research-program models, Gemini 2.0 and Gemini 3.7 Flash (not on the pricing page)) are not included and come back unpriced.
 - effective_from is the launch date or the date of an announced price change, taken from the provider's release notes or changelog. A request dated before it is unpriced rather than guessed.
 - No tokenizer differences between model generations are published on the OpenAI or Google pricing pages; only Anthropic documents one (Claude 4.7 and later, about 30% more tokens for the same text).

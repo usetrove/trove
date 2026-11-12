@@ -533,7 +533,7 @@ searching for it, not a proof of absence.
 | Decompiling or probing agent internals beyond documented interfaces | No decompiling, binary reading or `strings` on binaries found. `trove hooks probe --live` (`internal/hooks/probe`) runs the user's own `claude -p` with documented flags to test whether hook rewrites take effect, and is refused unless there is evidence Claude Code uses an API key (2026-11-06). `trove hooks verify` tests the same thing in a session the user starts, with no Trove-started request. `internal/logs/cchistory` reads Claude Code's session files read-only (`docs/logs.md`; the schema was confirmed by inspecting local files, which is observation of an unstable format). `internal/logs/cxhistory` reads Codex rollout files whose format OpenAI does not document (its header says "UNVERIFIED ON REAL INSTALLS"); this is the weakest item |
 | Model output used to train a model | None found. No training or fine-tuning code. Bench transcripts (`agent_stdout.txt` and friends) are redacted, written under `bench/results/` which is git-ignored, and read only by humans and the report. The recommender is rules (`internal/recommend/recommend.go`). A future `Provider` interface for a hosted settings bundle is mentioned in a comment and not implemented |
 | Resale or intermediation of usage | None found. The gateway binds to loopback only (`internal/cli/gateway.go`), forwards the caller's own key, and holds no key of its own; it refuses to hold AWS credentials to re-sign requests. `trove probe --live` spends the user's own money under a cap they set |
-| Outbound calls | Only four allowlisted files may reach the network, enforced by `internal/egress/static_test.go`: the gateway's forwarding to the configured upstream (`gateway/proxy.go`, `gateway/server.go`), a loopback-only health probe (`cli/gateway.go`), the opt-in summary upload and the one delete request only `trove contribute delete` makes (`contribute/upload.go`; CLAUDE.md rule 1, parts b and c, amended 2026-11-06). On Linux a second test traces real commands with strace; it does not run on macOS or Windows. See [data.md](data.md) |
+| Outbound calls | Only allowlisted files may reach the network, enforced by `internal/egress/static_test.go` (the four below, plus `internal/stress/loopback.go` for `trove bench stress` and the QA-only `qa/loadtest`, both of which can only dial loopback addresses): the gateway's forwarding to the configured upstream (`gateway/proxy.go`, `gateway/server.go`), a loopback-only health probe (`cli/gateway.go`), the opt-in summary upload and the one delete request only `trove contribute delete` makes (`contribute/upload.go`; CLAUDE.md rule 1, parts b and c, amended 2026-11-06). On Linux a second test traces real commands with strace; it does not run on macOS or Windows. See [data.md](data.md) |
 
 ### Naming (rule 13)
 
@@ -546,8 +546,8 @@ Changed today, because the rule lists "package": `internal/logs/claudecode` is n
 `internal/fixer/codexmodel_test.go` is `cxmodel_test.go`, and `bench/trovebench/agent/claude_code.py` is `cc.py`
 (class `CcAgent`).
 
-Clean already: the Go module `github.com/usetrove/trove`, the plugin and marketplace name `trove`, the npm package
-`trove-cli`, the OpenCode plugin `trove-opencode`, the pip package `trovebench`, every `trove` subcommand, the MCP tools
+Clean already: the Go module `github.com/usetrove/trove`, the plugin and marketplace name `trove`, 
+the OpenCode plugin `trove-opencode`, the pip package `trovebench`, every `trove` subcommand, the MCP tools
 (`trove_read`, `trove_search`, `trove_run`, `trove_fetch_full`), the subagents (`trove-scout`, `trove-cascade`) and the
 plugin commands.
 

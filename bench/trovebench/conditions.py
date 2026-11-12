@@ -143,5 +143,10 @@ def render_config_toml(cond: Condition, *, retention_days: int = 3650) -> str:
         "baseline_sessions = 0",
         "interleave = false",
         "",
+        # The experiment assigner would send half the sessions to the "off" arm, which the gate
+        # turns into shadow. A condition must hold exactly its listed states, so it is switched off.
+        "[experiment]",
+        "enabled = false",
+        "",
     ]
     return "\n".join(lines)

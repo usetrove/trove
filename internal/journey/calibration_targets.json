@@ -1,0 +1,52 @@
+{
+  "source": "one developer's Claude Code sessions (Windows); 210 session files",
+  "log_files": 210,
+  "tool_results": 13165,
+  "split": "files sorted by path; even index fits the generator, odd index is the holdout the gate checks",
+  "fit": {
+    "Bash": {
+      "n": 2895,
+      "median_bytes": 610,
+      "p90_bytes": 5232,
+      "color_code_share": 0.0017271157167530224,
+      "repeated_line_share": 0.15675195332148487
+    },
+    "Grep": {
+      "n": 454,
+      "median_bytes": 973,
+      "p90_bytes": 3794,
+      "color_code_share": 0,
+      "repeated_line_share": 0.010159965412883701
+    },
+    "Read": {
+      "n": 1068,
+      "median_bytes": 2869,
+      "p90_bytes": 9120,
+      "color_code_share": 0,
+      "repeated_line_share": 0
+    }
+  },
+  "holdout": {
+    "Bash": {
+      "n": 2996,
+      "median_bytes": 643,
+      "p90_bytes": 5577,
+      "color_code_share": 0.003671562082777036,
+      "repeated_line_share": 0.16449941698277515
+    },
+    "Grep": {
+      "n": 329,
+      "median_bytes": 1124,
+      "p90_bytes": 5039,
+      "color_code_share": 0,
+      "repeated_line_share": 0.01338766006984866
+    },
+    "Read": {
+      "n": 864,
+      "median_bytes": 3113,
+      "p90_bytes": 9710,
+      "color_code_share": 0,
+      "repeated_line_share": 0
+    }
+  }
+}

@@ -4,7 +4,7 @@
 agent: claude_code
 
 # Exact Claude Code version installed in every container (from `claude --version`).
-claude_version: "2.1.318"
+claude_version: "2.1.319"
 
 # Pin an explicit model ID, never an alias, so results are reproducible.
 # The model must have a price in internal/pricing/pricing.json.

@@ -92,8 +92,11 @@ marker naming the line count and the output's ID (the first 16 hex characters of
 the sha256 of the full output). Before a trimmed request is forwarded, the gateway
 saves the full output in the local recovery store (`~/.trove/recovery`, owner-only
 files, 200 MB and 7 days by default; see `[recovery]` in `config.toml`), and the
-agent gets it back with the `trove_fetch_full` tool of the Trove MCP server. If the
-output cannot be saved, the request is forwarded unchanged.
+agent gets it back with the `trove_fetch_full` tool of the Trove MCP server. The saved
+copy is the output exactly as the tool printed it, byte for byte. When an earlier optimizer
+such as `noise_normalizer` has cleaned the text the model sees, the stored copy and the
+marker's hash still name the raw output. If the output cannot be saved, the request is
+forwarded unchanged.
 
 The trimmer can be `on` only when the MCP server is registered with an agent
 (`trove mcp install`; see `docs/mcp.md`). Until then `on` runs as `shadow`, which
@@ -196,8 +199,9 @@ memo only saves time and never changes output (`TestMemoNeverChangesOutput`).
 - The cache-breakpoint decision depends on prompt size. It cannot flip back
   within a session, but the request on which it first turns on has a different
   prefix from the one before it.
-- Automatic rollback on guardrail trips needs the measurement package (Prompt 6);
-  today failures are only recorded.
+- Guardrail trips roll the optimizer back to shadow automatically. The gateway
+  checks every 5 minutes (`measure.Run` in `internal/cli/gateway.go`), so a trip
+  takes effect within that interval. See [measurement.md](measurement.md) section 4.
 - Stored `shadow_savings` rows written before these optimizers existed use the
   provisional names `dedupe_tool_results`, `strip_noise` and
   `truncate_oversized_output`.

@@ -212,7 +212,7 @@ func (e *Engine) TransformRequest(ctx context.Context, rq RequestIn, s Session) 
 
 	ctx, cancel := context.WithTimeout(ctx, e.budget)
 	defer cancel()
-	sess := Session{Key: in.SessionKey, Agent: in.Agent, Custom: pin.customFor(in.Agent)}
+	sess := Session{Key: in.SessionKey, Agent: in.Agent, Custom: pin.customFor(in.Agent), Raw: originalSpanText(cur)}
 
 	for _, o := range e.pipeline {
 		state := pin.States[o.Name()]

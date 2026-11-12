@@ -1,10 +1,12 @@
 // Package auth decides whether a request carries an API key. The gateway only
 // handles API-key traffic; subscription or OAuth credentials are refused.
 //
-// The rules are header-shaped, not prefix-based, because key formats are not
-// part of the providers' documented contract:
+// The rules combine header checks with a key-shape check:
 //
-//   - Anthropic: the credential must be in x-api-key. An Authorization header
+//   - Anthropic: the credential must be in x-api-key, and it must have the shape
+//     of an accepted Claude Console API key (see ClassifyAnthropicKey). OAuth
+//     tokens (sk-ant-oat...) and admin keys are refused with their own reasons;
+//     any other value is refused with "unrecognized_credential". An Authorization header
 //     is allowed only if it repeats the same value (Claude Code's apiKeyHelper
 //     sends both). Claude Code docs (code.claude.com/docs/en/llm-gateway-protocol,
 //     verified 2026-10-28) say a claude.ai login adds an OAuth capability to
@@ -78,6 +80,9 @@ func Anthropic(h http.Header) Decision {
 			return reject("bearer_only")
 		}
 		return reject("no_credential")
+	}
+	if ok, reason := ClassifyAnthropicKey(key); !ok {
+		return reject(reason)
 	}
 	if authz != "" {
 		tok, isBearer := bearer(authz)

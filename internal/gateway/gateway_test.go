@@ -22,7 +22,7 @@ import (
 	"github.com/usetrove/trove/internal/store"
 )
 
-const fakeKey = "FAKE-KEY-DO-NOT-LEAK-123"
+const fakeKey = "sk-ant-api03-FAKEKEYDONOTLEAK0123456789abcdefgh"
 
 type memRecorder struct {
 	mu   sync.Mutex
@@ -203,8 +203,12 @@ func TestNonAPIKeyAuthIsRejected(t *testing.T) {
 	}{
 		{"anthropic bearer only", "/anthropic/v1/messages", map[string]string{"Authorization": "Bearer " + fakeKey}},
 		{"anthropic oauth beta", "/anthropic/v1/messages", map[string]string{"x-api-key": fakeKey, "anthropic-beta": "oauth-2025-04-20"}},
+		{"anthropic key with an unknown prefix", "/anthropic/v1/messages", map[string]string{"x-api-key": "sk-ant-zzz01-FAKEZZZKEYFORTESTS0123456789abcdefghijk"}},
+		{"anthropic oauth token in x-api-key", "/anthropic/v1/messages", map[string]string{"x-api-key": "sk-ant-oat01-FAKEOAUTHKEYFORTESTS0123456789abcdefgh"}},
 		{"openai jwt", "/openai/v1/responses", map[string]string{"Authorization": "Bearer eyJhbGciOi.eyJzdWIi" + fakeKey + ".c2ln"}},
 		{"openai none", "/openai/v1/responses", nil},
+		{"openai chatgpt login with its account header", "/openai/v1/responses", map[string]string{"Authorization": "Bearer sk-proj-" + strings.Repeat("FAKE", 4), "chatgpt-account-id": "acct_fake"}},
+		{"openai opaque token of an unknown type", "/openai/v1/responses", map[string]string{"Authorization": "Bearer pat_FAKE0123456789"}},
 	}
 	for _, tc := range cases {
 		resp, body := do(t, "POST", g.gw.URL+tc.path, tc.hdr, []byte(`{}`))

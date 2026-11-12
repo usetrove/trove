@@ -467,6 +467,43 @@ func UndoSelected(dataDir string, ids []string) ([]UndoResult, error) {
 	return out, nil
 }
 
+// IsGatewayChange reports whether a recorded change is one of the gateway
+// settings Trove wrote: Claude Code's ANTHROPIC_BASE_URL or Codex's base URL,
+// pointing at a loopback gateway. Status-line and `trove fix` changes are not.
+func IsGatewayChange(c Change) bool {
+	if c.FixID != "" || !strings.HasPrefix(c.Value, "http://127.0.0.1:") {
+		return false
+	}
+	switch c.Agent {
+	case ClaudeCode:
+		return strings.HasSuffix(c.Value, "/anthropic")
+	case Codex:
+		return strings.HasSuffix(c.Value, "/openai/v1")
+	}
+	return false
+}
+
+// UndoGateway puts back the gateway settings Trove changed, exactly as `trove
+// undo` would for those changes: the value setup replaced is restored, or the key
+// is removed if there was none. Other recorded changes are left alone. It is a
+// no-op when no gateway change is recorded.
+func UndoGateway(dataDir string) ([]UndoResult, error) {
+	cs, err := LoadChanges(dataDir)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, c := range cs {
+		if IsGatewayChange(c) {
+			ids = append(ids, c.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	return UndoSelected(dataDir, ids)
+}
+
 // undoOne reverses one change. keep is true when the record must stay in the
 // manifest because nothing was reversed and it could still be.
 func undoOne(c Change) (UndoResult, bool, error) {

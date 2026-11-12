@@ -179,7 +179,7 @@ func TestGatewayOnlyTalksToItsConfiguredUpstream(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		req, _ := http.NewRequest("POST", base+"/anthropic/v1/messages", strings.NewReader(`{"model":"claude-sonnet-4-5","max_tokens":5,"messages":[{"role":"user","content":"hello"}]}`))
-		req.Header.Set("x-api-key", "sk-ant-api03-EGRESSTESTKEY0123456789")
+		req.Header.Set("x-api-key", "sk-ant-api03-EGRESSTESTKEY0123456789abcdefghijklmnop") // a fake in the accepted shape
 		req.Header.Set("anthropic-version", "2023-06-01")
 		req.Header.Set("content-type", "application/json")
 		resp, err := http.DefaultClient.Do(req)

@@ -94,6 +94,10 @@ ttl_days = 7
 An output that cannot be stored is not shortened. An ID that has expired or been evicted returns a clear
 message.
 
+What is stored is the tool's own output, byte for byte, even when the text the model sees has been
+cleaned by `noise_normalizer` (for example, ANSI codes removed). `trove_fetch_full` returns what the tool
+printed. The marker's hash is the hash of that same raw output, so the ID in a marker always resolves to it.
+
 ## Turning on the output trimmer for gateway users
 
 `output_trimmer` (see `docs/optimize.md`) shortens large test and build output in requests that pass

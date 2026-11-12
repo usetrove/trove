@@ -40,7 +40,7 @@ func TestPricingShowShowsVerifiedDatesAndLabels(t *testing.T) {
 	h := newHarness(t, nil)
 	h.run("pricing", "show")
 	out := h.out.String()
-	for _, want := range []string{"VERIFIED", "claude-sonnet-5-5", "gpt-5.5", "gemini-2.5-pro", "2026-10-28", "estimated", pricing.DataVersion} {
+	for _, want := range []string{"VERIFIED", "claude-sonnet-5-5", "gpt-5.5", "gemini-2.5-pro", "2026-11-12", "estimated", pricing.DataVersion} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q", want)
 		}

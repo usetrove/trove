@@ -602,7 +602,7 @@ func Load(dataDir string, getenv func(string) string) (Config, error) {
 			var sm *toml.StrictMissingError
 			switch {
 			case errors.As(err, &sm):
-				return cfg, fmt.Errorf("%s has an unknown setting:\n%s\nCheck the spelling against `trove config get`, or delete the line.", path, sm.String())
+				return cfg, fmt.Errorf("%s has an unknown setting:\n%s\nCheck the spelling of that setting name, or delete the line.", path, sm.String())
 			case errors.As(err, &de):
 				row, col := de.Position()
 				return cfg, fmt.Errorf("%s is not valid at line %d, column %d: %s. Fix that line or delete the file to use defaults.", path, row, col, de.Error())

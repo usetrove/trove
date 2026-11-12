@@ -1,0 +1,62 @@
+name: bench-swebench
+
+# Scripted benchmark of the Trove gateway on SWE-bench Verified tasks, under Claude Code, using the repository's
+# API-key secret. It spends real money, so it runs only when started by hand. The report goes to the job summary.
+# Nothing is uploaded, and no key, prompt or task text is written to the summary.
+#
+# Before the first run: the study file studies/swebench-nightly.yaml must exist and be pre-registered
+# (python -m trovebench prereg), and the Console key must have a spending limit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tasks:
+        description: "How many SWE-bench tasks to fetch (only validated ones are run)"
+        default: "4"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  swebench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - name: Install the bench
+        shell: bash
+        run: python -m pip install -e "bench[report,dev]"
+      - name: Fetch and validate tasks
+        shell: bash
+        working-directory: bench
+        run: |
+          python -m trovebench fetch swebench -n "${{ inputs.tasks }}" --seed 20261109 --out tasks/swebench-ci
+          # Validation rejects tasks whose environment cannot be built or whose tests do not prove the fix.
+          # Keep only the tasks that passed, because the harness refuses to run unvalidated tasks.
+          python -m trovebench validate --tasks tasks/swebench-ci || true
+          for d in tasks/swebench-ci/*/; do
+            if ! grep -q '"ok": *true' "$d"/validation.json 2>/dev/null; then rm -rf "$d"; fi
+          done
+          n=$(ls tasks/swebench-ci | wc -l)
+          echo "Validated tasks: $n"
+          if [ "$n" -eq 0 ]; then echo "No task passed validation; not spending anything." >&2; exit 1; fi
+      - name: Run the pre-registered study
+        shell: bash
+        working-directory: bench
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python -m trovebench run --study studies/swebench-nightly.yaml --tasks tasks/swebench-ci --batch results/ci --yes
+      - name: Publish the report
+        if: always()
+        shell: bash
+        working-directory: bench
+        run: |
+          if [ -f results/ci/report.md ]; then cat results/ci/report.md >> "$GITHUB_STEP_SUMMARY"; fi

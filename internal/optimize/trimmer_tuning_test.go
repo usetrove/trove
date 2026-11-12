@@ -18,8 +18,7 @@ func tune(kv ...any) Tuning {
 }
 
 func TestTrimParamsMatchTheShippedDefaults(t *testing.T) {
-	var got TrimThresholds
-	got = TrimThresholdsFrom(nil)
+	got := TrimThresholdsFrom(nil)
 	if got != DefaultTrimThresholds {
 		t.Fatalf("no tuning must give the shipped values: %+v vs %+v", got, DefaultTrimThresholds)
 	}

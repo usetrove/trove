@@ -121,7 +121,7 @@ func Render(r Report, o Options) string {
 
 	b.WriteString("\n" + heading("Optimizers"))
 	if r.History != nil && !r.History.GatewaySeen {
-		b.WriteString(wrap("Optimizers act on live requests, so they need the gateway. Your history above is read-only. Run `trove setup` to route your agent through Trove.", o.width(), "  ", "  ") + "\n")
+		b.WriteString(wrap("Optimizers act on live requests, so they need the gateway. Your history above is read-only. To route your agent through the gateway, run `trove setup --gateway`.", o.width(), "  ", "  ") + "\n")
 	} else {
 		renderOptimizers(&b, r.Optimizers, o)
 	}

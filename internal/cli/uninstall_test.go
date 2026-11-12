@@ -112,16 +112,17 @@ func TestUninstallKeepsDataByDefault(t *testing.T) {
 func TestUninstallWithoutYesOrTerminalChangesNothing(t *testing.T) {
 	h, home, _, _ := installEverything(t)
 	installed := snapshot(t, home)
-	if code := h.run("uninstall", "--purge-data"); code != 0 {
-		t.Fatalf("exit %d: %s", code, h.err)
+	// No answer can be read, so uninstall must say so and exit non-zero, not refuse silently.
+	if code := h.run("uninstall", "--purge-data"); code == 0 {
+		t.Fatalf("uninstall without --yes or an answer should exit non-zero")
+	}
+	if !strings.Contains(h.err.String(), "trove uninstall --yes") || !strings.Contains(h.err.String(), "Nothing was changed") {
+		t.Errorf("the error should say what to do: %q", h.err)
 	}
 	for p, want := range snapshot(t, home) {
 		if installed[p] != want {
 			t.Errorf("%s changed without consent", p)
 		}
-	}
-	if !strings.Contains(h.out.String(), "Nothing was changed") {
-		t.Errorf("did not say nothing changed:\n%s", h.out)
 	}
 }
 

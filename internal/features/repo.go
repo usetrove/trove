@@ -158,7 +158,7 @@ func detectFramework(root string) TestFramework {
 	case exists(root, "pom.xml"), exists(root, "build.gradle"), exists(root, "build.gradle.kts"):
 		return TestJUnit
 	}
-	if f, err := os.Open(filepath.Join(root, "package.json")); err == nil {
+	if f, err := os.Open(filepath.Join(root, "package.json")); err == nil { //nolint:gosec // root is the user's own repo; the file name is fixed
 		defer func() { _ = f.Close() }()
 		buf := make([]byte, maxPkgJSON)
 		n, _ := f.Read(buf)
@@ -180,7 +180,7 @@ func detectFramework(root string) TestFramework {
 		}
 	}
 	if exists(root, "pyproject.toml") {
-		if b, err := os.ReadFile(filepath.Join(root, "pyproject.toml")); err == nil && strings.Contains(string(b), "pytest") {
+		if b, err := os.ReadFile(filepath.Join(root, "pyproject.toml")); err == nil && strings.Contains(string(b), "pytest") { //nolint:gosec // root is the user's own repo; the file name is fixed
 			return TestPytest
 		}
 	}

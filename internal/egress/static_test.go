@@ -20,6 +20,8 @@ var allowedSites = map[string]string{
 	"internal/gateway/proxy.go":     "ReverseProxy: forwards the user's own API request to the configured provider",
 	"internal/gateway/server.go":    "clones http.DefaultTransport for that same upstream connection",
 	"internal/cli/gateway.go":       "2 s health probe of the local gateway; the address is checked to be loopback first",
+	"internal/stress/loopback.go":   "`trove bench stress` only: the one place the stress suite builds an HTTP client or request. Its dialer refuses any address that is not a loopback IP, and the suite talks only to a gateway it starts itself with a fake upstream, so nothing leaves the machine",
+	"qa/loadtest/main.go":           "QA tooling, not part of the shipped binary: a load generator whose dialer refuses any address that is not loopback; it measures the local gateway or a local fake upstream",
 	"internal/contribute/upload.go": "opt-in anonymous summary upload (runs only after `trove contribute enable` and with contribute.endpoint set; sends exactly the text `trove contribute` shows) and the one DELETE request that only `trove contribute delete` makes (CLAUDE.md rule 1, parts b and c)",
 }
 

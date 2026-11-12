@@ -27,7 +27,8 @@ func newHarness(t *testing.T, env map[string]string, binaries ...string) *harnes
 	// the temporary home unless the test chose one.
 	// A fake API key is present by default because `trove setup` refuses to point Claude Code at the gateway
 	// without evidence of one (see setup_apikey_test.go); tests that need it absent pass "" for it.
-	all := map[string]string{"TROVE_DATA_DIR": filepath.Join(home, ".trove"), "ANTHROPIC_API_KEY": "test-value-not-a-key", "OPENAI_API_KEY": "test-value-not-a-key"}
+	// The Anthropic default is a fake in the accepted Console format, so the key checks pass by default.
+	all := map[string]string{"TROVE_DATA_DIR": filepath.Join(home, ".trove"), "ANTHROPIC_API_KEY": "sk-ant-api03-FAKEHARNESSKEYFORTESTS0123456789abcdefgh", "OPENAI_API_KEY": "test-value-not-a-key"}
 	for k, v := range env {
 		all[k] = v
 	}
@@ -72,30 +73,19 @@ func TestVersion(t *testing.T) {
 	}
 }
 
-func TestStubsPrintNotImplemented(t *testing.T) {
-	cmds := [][]string{
-		{"config", "get"}, {"config", "get", "gateway.port"},
-		{"config", "set", "gateway.port", "9000"},
-	}
-	for _, c := range cmds {
+// `trove config` was removed until it is built for real. It must be an unknown
+// command, not a stub that pretends to work.
+func TestConfigCommandIsNotRegistered(t *testing.T) {
+	for _, c := range [][]string{{"config"}, {"config", "get"}, {"config", "set", "gateway.port", "9000"}} {
 		h := newHarness(t, nil)
-		if code := h.run(c...); code != 0 {
-			t.Errorf("%v: exit %d, %s", c, code, h.err)
-		}
-		if !strings.Contains(h.out.String(), "not implemented yet") {
-			t.Errorf("%v: output %q", c, h.out)
-		}
-		h = newHarness(t, nil)
-		h.run(append(append([]string{}, c...), "--json")...)
-		var v map[string]string
-		if err := json.Unmarshal(h.out.Bytes(), &v); err != nil || v["status"] != "not_implemented" {
-			t.Errorf("%v --json: %q (%v)", c, h.out, err)
+		if code := h.run(c...); code != 1 || !strings.HasPrefix(h.err.String(), "Error: ") {
+			t.Errorf("%v: exit %d, stderr %q; want an unknown-command error", c, code, h.err)
 		}
 	}
 }
 
 func TestUnknownCommandAndFlagFail(t *testing.T) {
-	for _, args := range [][]string{{"bogus"}, {"version", "--nope"}, {"config", "set", "onlykey"}} {
+	for _, args := range [][]string{{"bogus"}, {"version", "--nope"}, {"config", "get"}} {
 		h := newHarness(t, nil)
 		if code := h.run(args...); code != 1 || !strings.HasPrefix(h.err.String(), "Error: ") {
 			t.Errorf("%v: exit %d, stderr %q", args, code, h.err)
@@ -134,7 +124,7 @@ func TestDoctorFreshDirWarnsButPasses(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
 	r := decodeDoctor(t, h)
-	if !r.OK || find(r, "data directory").Status != statusWarn || find(r, "database").Status != statusWarn {
+	if !r.OK || find(r, "data directory").Status != statusInfo || find(r, "database").Status != statusInfo {
 		t.Errorf("report %+v", r)
 	}
 	if _, err := os.Stat(dir); err == nil {

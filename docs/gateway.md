@@ -1,8 +1,10 @@
 # Gateway (pass-through mode)
 
-`trove gateway start` runs an opt-in local gateway on 127.0.0.1. `trove setup` points Claude Code and
-Codex CLI at it (with your consent); `trove undo` reverses that exactly. Nothing in the request or
-response is modified in this mode; Trove only records metadata.
+`trove gateway start` runs an opt-in local gateway on 127.0.0.1. Pointing Claude Code and Codex CLI at it is
+opt-in too: only `trove setup --gateway` does it, and only with your consent. `trove undo` reverses that exactly,
+and `trove gateway stop` puts back the gateway setting Trove changed (the previous value, or no value if there
+was none). `trove doctor` warns if a local gateway address is set and nothing is listening there. Nothing in the
+request or response is modified in this mode; Trove only records metadata.
 
 ## Routes
 - `/anthropic/...` forwards to `upstreams.anthropic`, `/openai/...` to `upstreams.openai`. Any path
@@ -27,9 +29,20 @@ response is modified in this mode; Trove only records metadata.
   request with an `Origin` header (web pages).
 
 ## API keys only
-- Anthropic: the credential must be in `x-api-key`. An `Authorization` header is allowed only if it
-  repeats the same value (Claude Code's `apiKeyHelper` sends both). A bearer-only request, a different
-  bearer, or an OAuth value in `anthropic-beta` is refused.
+- Anthropic: the credential must be in `x-api-key`, and it must have the shape of a Claude Console API key:
+  `sk-ant-api` plus two digits and a dash (`sk-ant-api03-...`), or `sk-ant-usr-` for an identity-backed
+  personal key, then at least 32 key characters. The `sk-ant-usr-` prefix is confirmed by a live run: a
+  106-character `sk-ant-usr-` key was accepted by Anthropic's API on 2026-11-07 (`trove hooks probe --live`).
+  The get-api-key and authentication pages (read 2026-11-07) show `sk-ant-api03-...` and describe personal keys,
+  but do not list the `sk-ant-usr-` prefix. Any other key is refused: OAuth tokens (`sk-ant-oat...`, reason
+  `oauth_token`), admin keys (`sk-ant-admin...`, reason `admin_key`), and anything else
+  (`unrecognized_credential`), including OpenAI keys and unknown `sk-ant-` prefixes. An `Authorization` header is
+  allowed only if it repeats the same value (Claude Code's `apiKeyHelper` sends both). A bearer-only request, a
+  different bearer, or an OAuth value in `anthropic-beta` is refused. `trove hooks probe --live` applies the same
+  check to `ANTHROPIC_API_KEY` before it starts any run.
+- `trove setup` checks the key only when it is in `ANTHROPIC_API_KEY`. A key supplied through Claude Code's
+  `apiKeyHelper` is not validated by setup: setup cannot read the helper's output, so it accepts the helper's
+  presence as evidence. The gateway still checks every request's key, so a non-Console key fails closed there.
 - OpenAI (an allow-list; it fails closed): only `Authorization: Bearer sk-...` is accepted. Everything else is
   refused with 401, including a ChatGPT or Codex login (Sign in with ChatGPT, a Codex access token, an agent
   identity, a personal access token, anything from `~/.codex/auth.json`), any JWT, the `chatgpt-account-id` header,

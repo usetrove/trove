@@ -117,7 +117,117 @@ var (
 // is forwarded (Report.Originals), and the agent gets it back with the MCP tool
 // trove_fetch_full. Without the store, or without the MCP server registered, the
 // engine clamps "on" to "shadow", which only estimates and changes nothing.
-type OutputTrimmer struct{}
+//
+// The stored original is the output exactly as the tool produced it, byte for
+// byte, even when an earlier optimizer (noise_normalizer) has already changed the
+// text the model sees. The marker's hash names that same original. A fetch
+// therefore returns what the tool printed, not a cleaned copy.
+//
+// Trimming is a pure function of the text, so the trimmer remembers what it did
+// for each text it has seen (trimSpan). An agent resends its history on every
+// request, so most outputs are not new; they cost a lookup, not a rescan.
+type OutputTrimmer struct {
+	// memo maps the hash of (thresholds, text) to the trimmed text, with the
+	// source's hash left as a placeholder. Nil (the zero value) disables it.
+	memo *spanMemo
+	// placeholder is the source hash the memo stores in place of the real one.
+	placeholder string
+}
+
+// placeholderSource is a fixed string whose hash stands in for the real source
+// in memoized trims. It never reaches a request: fillMarkers replaces it.
+const placeholderSource = "trove-trimmer-placeholder-source"
+
+// markerHashPrefix is the text before the hash in every trim marker.
+const markerHashPrefix = "full output sha256:"
+
+// newOutputTrimmer returns a trimmer with its memo, as the pipelines use it.
+func newOutputTrimmer() OutputTrimmer {
+	return OutputTrimmer{memo: newSpanMemo(), placeholder: recoveryID(placeholderSource)}
+}
+
+// trimSpan is trimWithSource, memoized by content. A memo hit fills in the real
+// source hash, so the result is exactly what trimWithSource would give. When the
+// template cannot be filled safely (the text already contains the placeholder or
+// a marker of its own), it falls back to computing directly.
+func (t OutputTrimmer) trimSpan(text string, origin func() string, th TrimThresholds) (string, bool) {
+	if t.memo == nil || t.placeholder == "" || len(text) < memoMinSpan {
+		return trimWithSource(text, origin, th)
+	}
+	h := sha256.New()
+	_, _ = fmt.Fprint(h, th)
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(text))
+	var key [sha256.Size]byte
+	copy(key[:], h.Sum(nil))
+
+	if repl, known := t.memo.get(key); known {
+		if repl == nil {
+			return text, false
+		}
+		return fillMarkers(string(repl), t.placeholder, origin()), true
+	}
+	tmpl, changed := trimWithSource(text, func() string { return placeholderSource }, th)
+	if !changed {
+		t.memo.put(key, nil)
+		return text, false
+	}
+	markers := strings.Count(tmpl, markerHashPrefix)
+	if strings.Count(tmpl, markerHashPrefix+t.placeholder) != markers || strings.Count(tmpl, t.placeholder) != markers {
+		return trimWithSource(text, origin, th) // not safe to template: compute directly
+	}
+	t.memo.put(key, []byte(tmpl))
+	return fillMarkers(tmpl, t.placeholder, origin()), true
+}
+
+// trimRaw is trimSpan for a request span, keyed by the span's raw JSON bytes. The
+// same text escaped the same way has the same bytes, so a hit is exact; a different
+// escaping of the same text is only a miss. decode runs only on a miss. It reports
+// ok=false when the span cannot be decoded, which leaves it unchanged.
+func (t OutputTrimmer) trimRaw(raw []byte, th TrimThresholds, decode func() (string, bool), origin func() string) (string, bool, bool) {
+	if t.memo == nil || t.placeholder == "" || len(raw) < memoMinSpan {
+		text, ok := decode()
+		if !ok {
+			return "", false, false
+		}
+		tr, changed := trimWithSource(text, origin, th)
+		return tr, changed, true
+	}
+	h := sha256.New()
+	_, _ = fmt.Fprint(h, th)
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write(raw)
+	var key [sha256.Size]byte
+	copy(key[:], h.Sum(nil))
+
+	if repl, known := t.memo.get(key); known {
+		if repl == nil {
+			return "", false, true
+		}
+		return fillMarkers(string(repl), t.placeholder, origin()), true, true
+	}
+	text, ok := decode()
+	if !ok {
+		return "", false, false
+	}
+	tmpl, changed := trimWithSource(text, func() string { return placeholderSource }, th)
+	if !changed {
+		t.memo.put(key, nil)
+		return "", false, true
+	}
+	markers := strings.Count(tmpl, markerHashPrefix)
+	if strings.Count(tmpl, markerHashPrefix+t.placeholder) != markers || strings.Count(tmpl, t.placeholder) != markers {
+		tr, ch := trimWithSource(text, origin, th) // not safe to template: compute directly
+		return tr, ch, true
+	}
+	t.memo.put(key, []byte(tmpl))
+	return fillMarkers(tmpl, t.placeholder, origin()), true, true
+}
+
+// fillMarkers writes the real source's hash into every marker of a template.
+func fillMarkers(tmpl, placeholder, source string) string {
+	return strings.ReplaceAll(tmpl, markerHashPrefix+placeholder, markerHashPrefix+recoveryID(source))
+}
 
 // Name implements Optimizer.
 func (OutputTrimmer) Name() string { return "output_trimmer" }
@@ -135,9 +245,10 @@ func (OutputTrimmer) Points() []Point { return []Point{PointRequest, PointToolOu
 func (OutputTrimmer) OverheadTokens() int { return 0 }
 
 // TransformOutput implements ToolOutputOptimizer, using the same trimOutput as
-// the request-level Transform. The full text of anything shortened goes in
-// Report.Originals; the engine stores it before the shortened text is returned.
-func (OutputTrimmer) TransformOutput(ctx context.Context, _ ToolCall, out ToolOutput, s Session) (ToolOutput, Report) {
+// the request-level Transform. The output as the tool produced it goes in
+// Report.Originals (see sourceText); the engine stores it before the shortened
+// text is returned.
+func (t OutputTrimmer) TransformOutput(ctx context.Context, _ ToolCall, out ToolOutput, s Session) (ToolOutput, Report) {
 	th := TrimThresholdsFrom(s.Tuning)
 	res := ToolOutput{Parts: make([]Part, len(out.Parts)), IsError: out.IsError}
 	var originals []string
@@ -149,12 +260,26 @@ func (OutputTrimmer) TransformOutput(ctx context.Context, _ ToolCall, out ToolOu
 		if ctx.Err() != nil {
 			return out, Report{Err: "time budget exceeded"}
 		}
-		if trimmed, changed := trimWith(p.Text, th); changed {
+		own, at := p.Text, i
+		origin := func() string { return sourceText(s.Raw, at, own) }
+		if trimmed, changed := t.trimSpan(p.Text, origin, th); changed {
 			res.Parts[i] = Part{Text: trimmed}
-			originals = append(originals, p.Text)
+			originals = append(originals, origin())
 		}
 	}
 	return res, Report{Name: "output_trimmer", Originals: originals}
+}
+
+// sourceText is the text the tool produced for span i: the engine's pre-pipeline
+// copy when it provided one, otherwise the optimizer's own input. It is called
+// only for spans that are actually shortened, so the engine decodes nothing else.
+func sourceText(raw func(int) string, i int, own string) string {
+	if raw != nil {
+		if s := raw(i); s != "" {
+			return s
+		}
+	}
+	return own
 }
 
 // Applies implements Optimizer: any large tool result.
@@ -180,29 +305,36 @@ func (t OutputTrimmer) Transform(ctx context.Context, r *Request) (*Request, Rep
 
 // TransformSession implements SessionTransformer: Transform with the session's
 // pinned tuning. It is a pure function of the request and that tuning.
-func (OutputTrimmer) TransformSession(ctx context.Context, r *Request, s Session) (*Request, Report) {
+func (t OutputTrimmer) TransformSession(ctx context.Context, r *Request, s Session) (*Request, Report) {
 	th := TrimThresholdsFrom(s.Tuning)
 	if err := r.Ensure(); err != nil {
 		return r, Report{Err: err.Error()}
 	}
 	var edits []Edit
 	var originals []string
+	idx := -1 // index of the current span, counting every span, as SpanTexts does
 	for _, m := range r.Messages {
 		for _, b := range m.Blocks {
 			for _, sp := range b.Texts {
+				idx++
 				if sp.Len() < th.MinBytes {
 					continue
 				}
 				if ctx.Err() != nil {
 					return r, Report{Err: "time budget exceeded"}
 				}
-				s, ok := r.DecodeString(sp)
+				// The span is decoded only when the memo does not know it: an
+				// unchanged span costs one hash of its raw bytes, not a decode.
+				at := idx
+				decode := func() (string, bool) { return r.DecodeString(sp) }
+				origin := func() string { text, _ := r.DecodeString(sp); return sourceText(s.Raw, at, text) }
+				trimmed, changed, ok := t.trimRaw(r.Raw[sp.S:sp.E], th, decode, origin)
 				if !ok {
 					continue
 				}
-				if trimmed, changed := trimWith(s, th); changed {
+				if changed {
 					edits = append(edits, Edit{Span: sp, New: EncodeString(trimmed)})
-					originals = append(originals, s)
+					originals = append(originals, origin())
 				}
 			}
 		}
@@ -221,6 +353,15 @@ func trimOutput(text string) (string, bool) { return trimWith(text, DefaultTrimT
 
 // trimWith is trimOutput with explicit thresholds.
 func trimWith(text string, th TrimThresholds) (string, bool) {
+	return trimWithSource(text, func() string { return text }, th)
+}
+
+// trimWithSource trims text, and names the full output by the hash of source(),
+// which is called only when a marker is written. source is the output as the
+// tool produced it; text may be a copy an earlier optimizer already normalized.
+// The marker must name the source, because the source is what the recovery
+// store keeps and what trove_fetch_full returns.
+func trimWithSource(text string, source func() string, th TrimThresholds) (string, bool) {
 	if len(text) < th.MinBytes {
 		return text, false
 	}
@@ -238,7 +379,7 @@ func trimWith(text string, th TrimThresholds) (string, bool) {
 		return text, false
 	}
 
-	return collapseRuns(text, lines, keepLines(lines, th), th.MinTrimmedLines)
+	return collapseRunsFrom(text, source, lines, keepLines(lines, th), th.MinTrimmedLines)
 }
 
 // keepLines marks the lines worth keeping: the head and tail, every failure or
@@ -281,8 +422,13 @@ func keepLines(lines []string, th TrimThresholds) []bool {
 // collapseRuns replaces each run of unkept lines with one marker line. It reports
 // false, returning text unchanged, when fewer than minTrimmed lines go.
 func collapseRuns(text string, lines []string, keep []bool, minTrimmed int) (string, bool) {
+	return collapseRunsFrom(text, func() string { return text }, lines, keep, minTrimmed)
+}
+
+// collapseRunsFrom is collapseRuns with the marker's hash taken from source.
+func collapseRunsFrom(text string, source func() string, lines []string, keep []bool, minTrimmed int) (string, bool) {
 	var out []string
-	hash := sha256.Sum256([]byte(text))
+	hash := sha256.Sum256([]byte(source()))
 	short := hex.EncodeToString(hash[:8])
 	trimmed := 0
 	for i := 0; i < len(lines); {

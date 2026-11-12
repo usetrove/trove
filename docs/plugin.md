@@ -24,7 +24,7 @@ allows up to 90 s once. If your Claude Code version does not show the message, t
 (estimate only) or `on` in `config.toml`. `/trove:setup` walks you through each choice, says what it costs, and
 changes nothing without your yes.
 
-macOS and Linux only for now (the wrapper is a POSIX shell script; Windows is a later item).
+macOS and Linux are the supported platforms. On Windows the plugin is experimental: its wrapper and every hook are POSIX shell commands, so the hooks need `sh` on your `PATH`, which Git for Windows provides through Git Bash. `trove doctor` warns when `sh` is missing, and then the hooks do nothing (silently, by design: they never block the agent).
 
 ## What is in it
 
@@ -56,7 +56,7 @@ Plugin hooks and MCP processes do not get the plugin's `bin/` on PATH (docs, 202
 `sh "${CLAUDE_PLUGIN_ROOT}/bin/trove"`. The wrapper runs, in order:
 
 1. the copy it downloaded earlier into `${CLAUDE_PLUGIN_DATA}` (pinned to the plugin's `VERSION`);
-2. a `trove` on PATH that reports exactly that version (so a Homebrew or npm install is reused);
+2. a `trove` on PATH that reports exactly that version (so a Homebrew install is reused);
 3. a download of that version from the GitHub release, **SHA-256 checked against the release's
    `checksums.txt`** (the same check as `install.sh`; a mismatch installs nothing).
 
@@ -88,7 +88,7 @@ A plugin uninstall cannot run code, so do it in two steps:
 Do step 1 first. If you only run step 2, the plugin's hooks and commands are gone and your own settings are
 untouched, but anything you approved in `/trove:setup` stays behind (the status line, an MCP registration, the
 scout subagent, config edits), and the downloaded program that could undo it went with the plugin's data folder.
-To finish: install `trove` again (brew, npm or `install.sh`) and run `trove uninstall`, or delete the
+To finish: install `trove` again (Homebrew or `install.sh`) and run `trove uninstall`, or delete the
 `statusLine` entry from `~/.claude/settings.json`, run `claude mcp remove trove`, and delete
 `.claude/agents/trove-scout.md` by hand. If you never approved those items there is nothing left behind.
 

@@ -56,13 +56,16 @@ const (
 	// maxHashBytes is the largest file the repeat-read hook will hash. Bigger
 	// files are always allowed, which keeps the hook fast.
 	maxHashBytes = optimize.MaxHashBytes
-	// callDeadline is the safety net for the per-call hooks. They normally take a
-	// few milliseconds; past this the agent is let through.
-	callDeadline = 150 * time.Millisecond
 	// endDeadline fits inside the 3 s timeout the installer sets on SessionEnd
 	// (Claude Code's default budget is 1.5 s, Codex's 1 s with a 3 s maximum).
 	endDeadline = 2500 * time.Millisecond
 )
+
+// callDeadline is the safety net for the per-call hooks. They normally take a
+// few milliseconds; past this the agent is let through (fail open). It is a
+// variable only so that tests which are about the hook's decision, not its
+// speed, can lift it on a loaded machine; TestCallDeadlineLetsTheAgentThroughWhenAHookIsSlow keeps the real behavior covered.
+var callDeadline = 150 * time.Millisecond
 
 // postDeadline is the safety net for post_tool_output. It is longer than
 // callDeadline because shortening output writes the full text to the recovery

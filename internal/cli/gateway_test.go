@@ -41,7 +41,7 @@ func TestSetupNeedsConsentThenUndoRestoresEverything(t *testing.T) {
 	before := map[string]string{cPath: claudeSettings, xPath: "model = \"gpt-5\"\n"}
 
 	// No terminal and no --yes: show the plan, change nothing.
-	if code := h.run("setup"); code != 0 {
+	if code := h.run("setup", "--gateway"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
 	for _, want := range []string{"ANTHROPIC_BASE_URL", "model_providers.trove", "No changes made"} {
@@ -59,14 +59,14 @@ func TestSetupNeedsConsentThenUndoRestoresEverything(t *testing.T) {
 	h = newHarness(t, map[string]string{"TROVE_DATA_DIR": data}, "claude", "codex")
 	h.app.HomeDir = func() (string, error) { return filepath.Dir(filepath.Dir(cPath)), nil }
 	h.app.In = strings.NewReader("n\n")
-	h.run("setup")
+	h.run("setup", "--gateway")
 	if got, _ := os.ReadFile(cPath); string(got) != claudeSettings {
 		t.Fatal("answering n must not change anything")
 	}
 	h = newHarness(t, map[string]string{"TROVE_DATA_DIR": data}, "claude", "codex")
 	h.app.HomeDir = func() (string, error) { return filepath.Dir(filepath.Dir(cPath)), nil }
 	h.app.In = strings.NewReader("y\n")
-	if code := h.run("setup"); code != 0 {
+	if code := h.run("setup", "--gateway"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
 	if got, _ := os.ReadFile(cPath); !strings.Contains(string(got), "http://127.0.0.1:8787/anthropic") {
@@ -105,7 +105,7 @@ func TestSetupJSONWithoutYesAppliesNothing(t *testing.T) {
 	h := newHarness(t, map[string]string{"TROVE_DATA_DIR": data}, "claude")
 	cPath, _ := agentHome(t, h)
 	h.app.In = strings.NewReader("y\n") // even a waiting "y" is ignored in --json mode
-	if code := h.run("setup", "--json"); code != 0 {
+	if code := h.run("setup", "--gateway", "--json"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
 	var rep setupReport
@@ -170,7 +170,7 @@ func TestGatewayEndToEnd(t *testing.T) {
 		t.Fatal("gateway did not come up")
 	}
 	req, _ := http.NewRequest("POST", "http://"+addr+"/anthropic/v1/messages", strings.NewReader(`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"hi"}]}`))
-	req.Header.Set("x-api-key", "FAKE-KEY-DO-NOT-LEAK")
+	req.Header.Set("x-api-key", "sk-ant-api03-FAKEKEYDONOTLEAK0123456789abcdefgh")
 	req.Header.Set("anthropic-version", "2023-06-01")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil || resp.StatusCode != 200 {
@@ -197,7 +197,7 @@ func TestGatewayEndToEnd(t *testing.T) {
 	if _, ok := readPID(data); ok {
 		t.Error("the pid record should be removed on exit")
 	}
-	if strings.Contains(h.err.String(), "FAKE-KEY-DO-NOT-LEAK") || strings.Contains(h.out.String(), "FAKE-KEY-DO-NOT-LEAK") {
+	if strings.Contains(h.err.String(), "sk-ant-api03-FAKEKEYDONOTLEAK0123456789abcdefgh") || strings.Contains(h.out.String(), "sk-ant-api03-FAKEKEYDONOTLEAK0123456789abcdefgh") {
 		t.Error("a credential reached the command output")
 	}
 

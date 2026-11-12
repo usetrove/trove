@@ -156,7 +156,7 @@ type ToolOutputOptimizer interface {
 // ToolPipeline returns the tool-level optimizers in run order. The request-level
 // Pipeline is separate because its order is a byte-level cache contract.
 func ToolPipeline() []Base {
-	return []Base{NoiseNormalizer{}, OutputTrimmer{}, RepeatRead{}, ReadLimit{}, QuietCommands{}, LargeOutputAdvice{}}
+	return []Base{NoiseNormalizer{}, newOutputTrimmer(), RepeatRead{}, ReadLimit{}, QuietCommands{}, LargeOutputAdvice{}}
 }
 
 // TransformToolInput runs the tool-input optimizers on one call. It never
@@ -200,6 +200,15 @@ func (e *Engine) TransformToolInput(ctx context.Context, call ToolCall, s Sessio
 // TransformToolOutput is TransformToolInput for a tool's output.
 func (e *Engine) TransformToolOutput(ctx context.Context, call ToolCall, out ToolOutput, s Session) (ToolOutput, []Report) {
 	cur := out
+	// Keep what the tool produced, before any optimizer rewrites it, so a
+	// stored original is the real output and not a normalized copy.
+	parts := out.Parts
+	s.Raw = func(i int) string {
+		if i < 0 || i >= len(parts) {
+			return ""
+		}
+		return parts[i].Text
+	}
 	var reps []Report
 	ctx, cancel := context.WithTimeout(ctx, e.budget)
 	defer cancel()

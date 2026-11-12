@@ -1,0 +1,33 @@
+# Study (c): gateway with all safe optimizers vs gateway with every optimizer off, on SWE-bench Verified tasks
+# that pass validation. Run by .github/workflows/bench-swebench.yml (started by hand).
+#
+# Register before running:   python -m trovebench prereg bench/studies/swebench-nightly.yaml
+# Plan (spends nothing):     python -m trovebench plan --study bench/studies/swebench-nightly.yaml
+#
+# This file is the first pilot: 2 tasks, 1 repeat. Each run that changes the task count or repeats needs a new lock.
+
+id: swebench-nightly
+title: "SWE-bench Verified: gateway with all safe optimizers vs gateway with every optimizer off"
+hypothesis: >
+  Turning on every safe gateway optimizer lowers the billed cost per SWE-bench task under Claude Code, without
+  lowering the share of tasks that pass.
+primary_metric: billed_cost_usd
+secondary_metrics: [success_rate, latency_s]
+baseline_condition: passthrough
+conditions: [passthrough, all_safe]
+tasks: tasks/swebench-ci
+repeats: 1
+order_seed: 20261109
+cost_basis: agent
+analysis:
+  alpha: 0.05
+  bootstrap_resamples: 10000
+  bootstrap_seed: 20261109
+  multiple_comparison: holm
+ship_rule:
+  min_cost_reduction_pct: 5      # the cost-change interval must be entirely at or below -5%
+  success_margin_pts: 5          # the success difference interval must stay above -5 points
+  min_pairs: 30
+budget:
+  batch_cap_usd: 10.0
+  run_cap_usd: 1.50

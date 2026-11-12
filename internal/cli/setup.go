@@ -12,6 +12,7 @@ import (
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/fixer"
+	"github.com/usetrove/trove/internal/gateway/auth"
 	"github.com/usetrove/trove/internal/logs"
 	"github.com/usetrove/trove/internal/setup"
 )
@@ -24,6 +25,9 @@ type setupPlanJSON struct {
 	Note        string `json:"note,omitempty"`
 	AlreadyDone bool   `json:"already_configured,omitempty"`
 	Problem     string `json:"problem,omitempty"`
+	// Optional is set for an agent that is installed but not pointed at the gateway, because the user did
+	// not ask for it. It is information, not a problem.
+	Optional string `json:"optional,omitempty"`
 }
 
 type setupReport struct {
@@ -50,6 +54,16 @@ type setupReport struct {
 // settings), or the user's own statement in config.toml ([history] plan = "api_key"). A bearer-only
 // ANTHROPIC_AUTH_TOKEN is not enough: the gateway refuses a bearer without an x-api-key.
 func claudeNeedsAPIKey(a *App, cfgDir, planOverride string) string {
+	// A key that is set must be an accepted Console key, the same check the gateway and the live probe use.
+	// A key of another kind (an OAuth token, an admin key, an unknown prefix) is refused with the reason, and
+	// the key's value is never printed.
+	if key := a.Getenv("ANTHROPIC_API_KEY"); key != "" {
+		if ok, reason := auth.ClassifyAnthropicKey(key); !ok {
+			return "Not changed. ANTHROPIC_API_KEY is set, but Trove does not accept it: " + keyRefusal(reason) +
+				" Trove accepts Claude Console API keys (sk-ant-api03-... or sk-ant-usr-...). " +
+				"Set a Console key in the environment you start Claude Code from and run `trove setup` again."
+		}
+	}
 	res := logs.DetectClaudeCodePlan(a.Getenv, cfgDir, planOverride)
 	if res.Plan == logs.PlanAPIKey {
 		for _, ev := range res.Evidence {
@@ -63,6 +77,18 @@ func claudeNeedsAPIKey(a *App, cfgDir, planOverride string) string {
 		"If you use an API key, set ANTHROPIC_API_KEY in the environment you start Claude Code from (or an apiKeyHelper in its settings) and run `trove setup` again; " +
 		"if you set the key some other way, add `plan = \"api_key\"` under [history] in config.toml. " +
 		"If you use a Claude.ai plan, use the Trove plugin instead; it needs no gateway."
+}
+
+// keyRefusal says, in plain English, why a key was refused. It never includes the key.
+func keyRefusal(reason string) string {
+	switch reason {
+	case auth.ReasonOAuthToken:
+		return "it is an OAuth token (sk-ant-oat...), the kind a claude.ai login uses, and Trove never handles those."
+	case auth.ReasonAdminKey:
+		return "it is an Admin API key, which is not for Claude Code."
+	default:
+		return "its format is not one Trove recognises."
+	}
 }
 
 // codexNeedsAPIKey is the Codex counterpart of claudeNeedsAPIKey. Trove cannot tell a ChatGPT login from an API key
@@ -81,23 +107,29 @@ func codexNeedsAPIKey(a *App, planOverride string) string {
 }
 
 func newSetup(a *App) *cobra.Command {
-	var yes, statusLine bool
+	var yes, statusLine, gateway bool
 	c := &cobra.Command{
 		Use:   "setup",
-		Short: "Point your coding agents at the Trove gateway (shows the change first; asks before applying)",
-		Long: "Detects Claude Code and Codex CLI, shows the exact change needed to route each through the local gateway, and applies it\n" +
-			"only with your consent. The original file is backed up and `trove undo` reverses everything.\n" +
+		Short: "Find your coding agents and, with --gateway, point them at the Trove gateway (shows the change first; asks before applying)",
+		Long: "Detects Claude Code and Codex CLI. Pointing them at the Trove gateway is opt-in: it happens only with --gateway,\n" +
+			"and then Trove shows the exact change and applies it only with your consent. The original file is backed up and\n" +
+			"`trove undo` reverses everything. Without --gateway, setup changes no agent's gateway setting.\n" +
 			"Shell rc files are never touched. Trove never reads or writes your API keys.\n" +
 			"For Claude Code it then offers, as a separate step, to show your spend and budget pace in the status line.",
 		Args: cobra.NoArgs,
-		RunE: func(*cobra.Command, []string) error { return runSetup(a, yes, statusLine) },
+		RunE: func(*cobra.Command, []string) error { return runSetup(a, yes, statusLine, gateway) },
 	}
 	c.Flags().BoolVar(&yes, "yes", false, "apply the changes shown without asking")
 	c.Flags().BoolVar(&statusLine, "status-line", false, "also add Trove to Claude Code's status line without asking (--yes alone does not)")
+	c.Flags().BoolVar(&gateway, "gateway", false, "opt in to pointing Claude Code and Codex CLI at the Trove gateway (required; without it setup changes no gateway setting)")
 	return c
 }
 
-func runSetup(a *App, yes, statusLine bool) error {
+// gatewayOptional is shown for each installed agent when setup runs without --gateway. The gateway is an
+// extra the user can add, not a step that failed.
+const gatewayOptional = "Optional: route this agent through the Trove gateway with `trove setup --gateway`. Nothing is changed unless you ask."
+
+func runSetup(a *App, yes, statusLine, gateway bool) error {
 	dir, cfg, err := loadConfig(a)
 	if err != nil {
 		return err
@@ -115,6 +147,15 @@ func runSetup(a *App, yes, statusLine bool) error {
 		_, statErr := os.Stat(cfgDir)
 		if onPath != nil && statErr != nil {
 			continue // not installed
+		}
+		if !gateway {
+			// Opt-in: no gateway setting is planned unless the user asked for it. Claude Code's
+			// folder is still recorded, because the separate status-line step uses it.
+			rep.Plans = append(rep.Plans, setupPlanJSON{Agent: spec.name, Optional: gatewayOptional})
+			if spec.binary != "codex" {
+				claudeDir = cfgDir
+			}
+			continue
 		}
 		var e *setup.Edit
 		var perr error
@@ -165,13 +206,32 @@ func runSetup(a *App, yes, statusLine bool) error {
 	}
 	rep.Options = optionsNotes() // also in --json output that makes no change
 	if pending == 0 {
-		rep.Verify, rep.TurnOff = verifySteps(cfg.Gateway.Port), turnOffSteps()
-		rep.Explain, rep.Options = explainSteps(dir, cfg), optionsNotes()
+		// The gateway guidance is shown only when an agent is actually pointed at it (an edit is
+		// in place, either already or from this run). Otherwise setup only says what it did not change.
+		gatewayUp := len(edits) > 0
+		if gatewayUp {
+			rep.Verify, rep.TurnOff = verifySteps(cfg.Gateway.Port), turnOffSteps()
+			rep.Explain, rep.Options = explainSteps(dir, cfg), optionsNotes()
+		}
+		summary := "Nothing to change."
+		if p := problemSummary(rep.Plans); p != "" {
+			summary = "Nothing to change: " + p
+		}
+		if !a.JSON {
+			_, _ = fmt.Fprintln(a.Out, summary+"\n")
+		}
 		statusText, err := statusLineStep(a, &rep, dir, claudeDir, statusLine)
 		if err != nil {
 			return err
 		}
-		return a.emit(rep, "Nothing to change: "+problemSummary(rep.Plans)+"\n\n"+statusText+strings.Join(rep.Verify, "\n")+"\n\n"+strings.Join(rep.Explain, "\n")+"\n\n"+strings.Join(rep.Options, "\n"))
+		if a.JSON {
+			return a.emit(rep, "")
+		}
+		_, _ = fmt.Fprint(a.Out, statusText)
+		if gatewayUp {
+			_, _ = fmt.Fprint(a.Out, gatewayGuidance(rep))
+		}
+		return nil
 	}
 	consent := yes
 	if !consent && !a.JSON {
@@ -192,16 +252,22 @@ func runSetup(a *App, yes, statusLine bool) error {
 	}
 	rep.Verify, rep.TurnOff = verifySteps(cfg.Gateway.Port), turnOffSteps()
 	rep.Explain, rep.Options = explainSteps(dir, cfg), optionsNotes()
+	// The gateway edit is in place now, so the guidance below is true. Say what was applied first, then
+	// offer the optional status line, so the prompt does not come before the result.
+	if !a.JSON {
+		_, _ = fmt.Fprintf(a.Out, "Applied %d change(s). Backups are in %s.\n\n", len(rep.Changes), filepath.Join(dir, "backups"))
+	}
 	statusText, err := statusLineStep(a, &rep, dir, claudeDir, statusLine)
 	if err != nil {
 		_ = a.emit(rep, "")
 		return fmt.Errorf("%v. Run `trove undo` to reverse anything already applied", err)
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "Applied %d change(s). Backups are in %s.\n\n", len(rep.Changes), filepath.Join(dir, "backups"))
-	b.WriteString(statusText)
-	b.WriteString(strings.Join(rep.Verify, "\n") + "\n\n" + strings.Join(rep.TurnOff, "\n") + "\n\n" + strings.Join(rep.Explain, "\n") + "\n\n" + strings.Join(rep.Options, "\n"))
-	return a.emit(rep, b.String())
+	if a.JSON {
+		return a.emit(rep, "")
+	}
+	_, _ = fmt.Fprint(a.Out, statusText)
+	_, _ = fmt.Fprint(a.Out, gatewayGuidance(rep))
+	return nil
 }
 
 // explainSteps is the closing note of setup: what is recorded, where it stays,
@@ -314,6 +380,8 @@ func statusLineStepRetry(a *App, rep *setupReport, dir, claudeDir string, flag b
 	return "Added Trove to Claude Code's status line. It appears after your next reply.\n\n", nil
 }
 
+// problemSummary lists what stopped setup from pointing an agent at the gateway, or "" when nothing did.
+// An optional, not-requested gateway is not a problem and is not listed.
 func problemSummary(ps []setupPlanJSON) string {
 	var parts []string
 	for _, p := range ps {
@@ -324,7 +392,16 @@ func problemSummary(ps []setupPlanJSON) string {
 			parts = append(parts, p.Agent+" is already pointed at the gateway")
 		}
 	}
+	if len(parts) == 0 {
+		return ""
+	}
 	return strings.Join(parts, "; ") + "."
+}
+
+// gatewayGuidance is the verify, turn-off and explanation text. It is shown only once the gateway is set up.
+func gatewayGuidance(rep setupReport) string {
+	return "\n" + strings.Join(rep.Verify, "\n") + "\n\n" + strings.Join(rep.TurnOff, "\n") + "\n\n" +
+		strings.Join(rep.Explain, "\n") + "\n\n" + strings.Join(rep.Options, "\n") + "\n"
 }
 
 func (a *App) printPlans(ps []setupPlanJSON) {
@@ -333,6 +410,8 @@ func (a *App) printPlans(ps []setupPlanJSON) {
 		switch {
 		case p.Problem != "":
 			_, _ = fmt.Fprintf(a.Out, "  cannot set up: %s\n\n", p.Problem)
+		case p.Optional != "":
+			_, _ = fmt.Fprintf(a.Out, "  %s\n\n", p.Optional)
 		case p.AlreadyDone:
 			_, _ = fmt.Fprintf(a.Out, "  already pointed at the gateway (%s)\n\n", p.Path)
 		default:
@@ -375,7 +454,7 @@ func turnOffSteps() []string {
 	return []string{
 		"To turn it off:",
 		"  trove undo             restores the files Trove changed, exactly as they were",
-		"  trove gateway stop     stops the gateway (agents pointed at it will fail until you undo)",
+		"  trove gateway stop     stops the gateway and puts back the gateway setting it changed (agents go straight to their providers)",
 	}
 }
 

@@ -26,7 +26,7 @@ func setupWith(t *testing.T, env map[string]string, settings string) (h *harness
 func TestSetupRefusesClaudeCodeWithoutAnAPIKeyAndLeavesItUntouched(t *testing.T) {
 	h, claudePath := setupWith(t, map[string]string{"ANTHROPIC_API_KEY": ""}, "")
 	before, _ := os.ReadFile(claudePath)
-	if code := h.run("setup", "--yes"); code != 0 {
+	if code := h.run("setup", "--gateway", "--yes"); code != 0 {
 		t.Fatalf("exit %d: %s %s", code, h.out, h.err)
 	}
 	after, _ := os.ReadFile(claudePath)
@@ -50,14 +50,14 @@ func TestSetupAcceptsOnlyRealEvidenceOfAnAPIKey(t *testing.T) {
 		config   string
 		applies  bool
 	}{
-		{"ANTHROPIC_API_KEY set", map[string]string{"ANTHROPIC_API_KEY": "x"}, "", "", true},
+		{"ANTHROPIC_API_KEY set", map[string]string{"ANTHROPIC_API_KEY": "sk-ant-api03-FAKESETUPKEYFORTESTS0123456789abcdefgh"}, "", "", true},
 		{"apiKeyHelper in settings", map[string]string{"ANTHROPIC_API_KEY": ""}, apiKeyHelper, "", true},
 		{"console login forced", map[string]string{"ANTHROPIC_API_KEY": ""}, `{"forceLoginMethod": "console"}` + "\n", "", true},
 		{"the user says so in config.toml", map[string]string{"ANTHROPIC_API_KEY": ""}, "", "[history]\nplan = \"api_key\"\n", true},
 		{"nothing at all", map[string]string{"ANTHROPIC_API_KEY": ""}, "", "", false},
 		{"a bearer-only auth token is not an API key", map[string]string{"ANTHROPIC_API_KEY": "", "ANTHROPIC_AUTH_TOKEN": "t"}, "", "", false},
 		{"Claude.ai login forced", map[string]string{"ANTHROPIC_API_KEY": ""}, `{"forceLoginMethod": "claudeai"}` + "\n", "", false},
-		{"Claude.ai login forced even with a key in the environment", map[string]string{"ANTHROPIC_API_KEY": "x"}, `{"forceLoginMethod": "claudeai"}` + "\n", "", false},
+		{"Claude.ai login forced even with a key in the environment", map[string]string{"ANTHROPIC_API_KEY": "sk-ant-api03-FAKESETUPKEYFORTESTS0123456789abcdefgh"}, `{"forceLoginMethod": "claudeai"}` + "\n", "", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -69,7 +69,7 @@ func TestSetupAcceptsOnlyRealEvidenceOfAnAPIKey(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if code := h.run("setup", "--yes"); code != 0 {
+			if code := h.run("setup", "--gateway", "--yes"); code != 0 {
 				t.Fatalf("exit %d: %s %s", code, h.out, h.err)
 			}
 			got, _ := os.ReadFile(claudePath)
@@ -85,7 +85,7 @@ func TestSetupAcceptsOnlyRealEvidenceOfAnAPIKey(t *testing.T) {
 func TestSetupStillConfiguresCodexWhenClaudeCodeIsRefused(t *testing.T) {
 	h := newHarness(t, map[string]string{"ANTHROPIC_API_KEY": ""}, "claude", "codex")
 	claudePath, codexPath := agentHome(t, h)
-	if code := h.run("setup", "--yes"); code != 0 {
+	if code := h.run("setup", "--gateway", "--yes"); code != 0 {
 		t.Fatalf("exit %d: %s %s", code, h.out, h.err)
 	}
 	if got, _ := os.ReadFile(claudePath); strings.Contains(string(got), "ANTHROPIC_BASE_URL") {
@@ -98,13 +98,13 @@ func TestSetupStillConfiguresCodexWhenClaudeCodeIsRefused(t *testing.T) {
 
 // Re-running setup on a machine that is already set up is not blocked, so `trove undo` and status keep working.
 func TestSetupAlreadyConfiguredIsNotARefusal(t *testing.T) {
-	h, _ := setupWith(t, map[string]string{"ANTHROPIC_API_KEY": "x"}, "")
-	if code := h.run("setup", "--yes"); code != 0 {
+	h, _ := setupWith(t, map[string]string{"ANTHROPIC_API_KEY": "sk-ant-api03-FAKESETUPKEYFORTESTS0123456789abcdefgh"}, "")
+	if code := h.run("setup", "--gateway", "--yes"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
 	h2 := newHarness(t, map[string]string{"TROVE_DATA_DIR": h.app.Getenv("TROVE_DATA_DIR"), "ANTHROPIC_API_KEY": ""}, "claude")
 	h2.app.HomeDir = h.app.HomeDir
-	if code := h2.run("setup", "--yes"); code != 0 {
+	if code := h2.run("setup", "--gateway", "--yes"); code != 0 {
 		t.Fatalf("exit %d: %s %s", code, h2.out, h2.err)
 	}
 	if strings.Contains(h2.out.String(), "Claude.ai login") {
@@ -139,7 +139,7 @@ func TestSetupRefusesCodexWithoutAnAPIKeyAndLeavesItUntouched(t *testing.T) {
 		}
 		home, _ := h.app.HomeDir()
 		cfgPath := filepath.Join(home, ".codex", "config.toml")
-		if code := h.run("setup", "--yes"); code != 0 {
+		if code := h.run("setup", "--gateway", "--yes"); code != 0 {
 			t.Fatalf("%s: exit %d: %s %s", name, code, h.out, h.err)
 		}
 		_, err := os.Stat(cfgPath)

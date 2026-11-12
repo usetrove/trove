@@ -17,31 +17,46 @@ Trove is the efficiency layer for AI coding agents. It reads the session history
 
 1. Install Trove. Every path checks the download against the release's SHA-256 checksums before it runs anything.
 
-    **macOS/Linux (Recommended):**
+    **macOS/Linux (supported):**
     ```bash
-    curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | sh
+    curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | TROVE_VERSION=0.1.0-beta.1 sh
     ```
+    During the beta, pin the version as shown: a `-beta` release is a pre-release, so "latest" does not pick it.
 
     **Homebrew (macOS/Linux):**
     ```bash
     brew install usetrove/trove/trove
     ```
 
-    **No install (Node.js):**
-    ```bash
-    npx trove-cli doctor
+    **Windows (experimental):** download the `trove_<version>_windows_amd64.zip` from the release page, check it, then unzip it. In PowerShell (replace the version with your release's):
+    ```powershell
+    $v = "0.1.0-beta.1"
+    Invoke-WebRequest "https://github.com/usetrove/trove/releases/download/v$v/trove_${v}_windows_amd64.zip" -OutFile trove.zip
+    Invoke-WebRequest "https://github.com/usetrove/trove/releases/download/v$v/checksums.txt" -OutFile checksums.txt
+    $want = (Select-String -Path checksums.txt -Pattern "trove_${v}_windows_amd64.zip").Line.Split(" ")[0]
+    if ((Get-FileHash trove.zip -Algorithm SHA256).Hash.ToLower() -ne $want.ToLower()) { throw "checksum mismatch: do not use this file" }
+    Expand-Archive trove.zip -DestinationPath "$HOME\trove"
+    & "$HOME\trove\trove.exe" doctor
+    ```
+    The Claude Code plugin's hooks on Windows also need `sh` (Git Bash) on your `PATH`; `trove doctor` warns when it is missing.
+
+2. Install the Claude Code plugin, then start a session and run **`/trove:setup`**:
+
+    ```
+    claude plugin marketplace add usetrove/trove
+    claude plugin install trove@trove
     ```
 
-    **Windows:** release builds are not part of 0.1.0. See [try it from source](#try-it-from-source).
+    `/trove:setup` shows each change, says what it costs, and asks before anything is turned on. **Rewriting stays off until you opt in:** the hooks are installed and only record what happens, and no tool call, file or output is changed until you choose a mode (shadow, which only estimates, or on) in `/trove:setup`.
 
-2. Run it:
+3. Run the report from a terminal:
 
     ```bash
     trove          # your report, from the history your agent already keeps
     trove fix      # evidence-based fixes with estimated savings; changes nothing
     ```
 
-That is all you need to start. You do not need the gateway for this, and it works if you use a subscription plan. Every number is labeled **measured** (counted from usage the provider reported) or **estimated** (derived from list prices or an assumption). Dollar figures are estimates, not invoices.
+That is all you need to start. You do not need the gateway for this, and it works if you use a subscription plan. The gateway is an optional extra, turned on only with `trove setup --gateway`. Every number is labeled **measured** (counted from usage the provider reported) or **estimated** (derived from list prices or an assumption). Dollar figures are estimates, not invoices.
 
 To apply a fix, run `trove fix <id> --apply`; you see the exact diff and are asked first.
 
@@ -78,6 +93,47 @@ Two layers; you can use the first without the second.
 
 Principles that hold everywhere: local-first (everything lives in `~/.trove`; nothing is sent unless you opt in to the anonymous weekly summary), API keys pass through and are never logged or stored, metadata only (no prompts, code, paths or tool output in the database), fail open (an internal error forwards your request unchanged), and prove before acting (every optimization is opt-in, estimated in shadow mode first, measured once on, and rolled back if guardrails trip; see [measurement](docs/measurement.md)).
 
+## Measured results
+
+Trove's benchmark harness (`bench/`) runs real coding tasks in Docker with your own API key. For each run it records whether the task passed and what it cost. Each study is pre-registered: the question, the decision rule and the budget are locked before the first run.
+
+**Bottom line:** Trove has not yet shown that it saves money. In the latest pre-registered study, the optional gateway's safe optimizers changed the cost by a median of **−3.0%**, but the interval runs from −9.5% to +3.7%. It could be a saving, a loss, or nothing, and the data cannot tell these apart yet. Tasks passed in every run under both settings. Trove makes no savings promise.
+
+**The question:** does the optional gateway, with every safe optimizer turned on (`all_safe`), cost less than the same gateway with every optimizer off (`passthrough`)?
+
+**Setup (study `gateway-cost-2`, locked 2026-11-09)**
+
+- 30 Python exercises from Aider's polyglot benchmark, drawn with seed 20261108. Nine also appear in the earlier study, so the set is not fully held out.
+- Model `claude-haiku-5-5`, Claude Code 2.1.318, API-key authentication.
+- Three repeats per task per condition: 180 runs, 90 pairs. A pair is the same task and repeat under both conditions.
+- Caps: $0.50 per run, $10 for the batch. Total spend was $0.46.
+
+**Results**
+
+| | `passthrough` (baseline) | `all_safe` |
+|---|---:|---:|
+| Runs | 90 | 90 |
+| Tasks passed | 90 of 90 | 90 of 90 |
+| Mean cost per run, estimated | $0.0026 | $0.0025 |
+
+Median paired cost change, `all_safe` against `passthrough`: **−3.0%**, 95% interval **−9.5% to +3.7%**. Success difference: 0 points. Median wall-time difference: −0.1 seconds. Adjusted p-value for the cost change: 0.22.
+
+**Decision rule.** Trove recommends an optimizer for automatic use only if its cost reduction is at least 5% and the whole 95% interval lies at or below −5%, with the success rate not falling by more than 5 points. This study does not meet the rule, and the verdict is **NEED MORE DATA**.
+
+**What this means**
+
+- The result is consistent with no saving. A saving of 5% or more is not ruled out, and neither is a small loss.
+- Costs are estimated: list price applied to the token counts the agent reports. They are not an invoice.
+- Each task costs about a quarter of a cent, so the differences are small and noisy.
+
+**Caveats**
+
+- One model and one Claude Code version. Results may differ for other models, versions or longer sessions.
+- The study covers only the gateway. It does not test the Claude Code plugin's hooks, the path most people will use.
+- An earlier 10-task study (2026-11-08, 30 pairs) showed a median cost change of +9.7%, in the other direction. The two studies together show how wide the noise is.
+
+To reproduce, fetch the tasks with `python -m trovebench fetch polyglot -n 30 --seed 20261108`, then from `bench/` run `python -m trovebench run --study studies/gateway-cost-2.yaml --tasks <that folder> --batch <folder> --yes`. The study file and its lock are committed in `bench/studies/`. The method is in [benchmark methodology](docs/benchmark-methodology.md).
+
 ## What Trove changes, and how to undo it
 
 Nothing changes until you approve it. Each change is shown first, the original file is backed up, and one command reverses it.
@@ -112,7 +168,7 @@ trove uninstall                # stops the gateway, restores every agent file, r
 trove uninstall --purge-data   # also deletes what Trove stored in ~/.trove
 ```
 
-Then remove the program itself: `brew uninstall trove`, or delete the binary the install script placed on your `PATH`. If you ran it with `npx`, delete `~/.cache/trove-cli`. Trove never deletes data if an agent file could not be restored, because the backups are then still needed.
+Then remove the program itself: `brew uninstall trove`, or delete the binary the install script placed on your `PATH`. Trove never deletes data if an agent file could not be restored, because the backups are then still needed.
 
 ## Reporting bugs
 

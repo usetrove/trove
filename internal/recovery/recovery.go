@@ -11,6 +11,7 @@ package recovery
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -33,9 +34,11 @@ const (
 
 var idRe = regexp.MustCompile(`^[0-9a-f]{16}$`)
 
-// ErrNotFound is returned for an ID that was never stored, has expired, or was
-// evicted to stay under the size cap.
-var ErrNotFound = errors.New("no stored output with that ID; it may have expired or been removed to stay under the size limit")
+// ErrNotFound is returned for an ID that was never stored, has expired, was
+// evicted to stay under the size cap, or whose stored bytes no longer hash to
+// the ID (the file is removed). Callers report the output as unavailable; they
+// never substitute empty text.
+var ErrNotFound = errors.New("the stored output is not available: no output is stored under that ID, or it expired, was removed to stay under the size limit, or failed its integrity check and was discarded")
 
 // Options configures a Store. Zero values pick the defaults.
 type Options struct {
@@ -80,6 +83,12 @@ func Open(dir string, o Options) (*Store, error) {
 func ID(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])[:idLen]
+}
+
+// matchesID reports whether data hashes to id. It hashes every byte, not a prefix, and compares the two IDs in
+// constant time, so the check does not leak how much of an ID matched.
+func matchesID(data []byte, id string) bool {
+	return subtle.ConstantTimeCompare([]byte(ID(data)), []byte(id)) == 1
 }
 
 // ValidID reports whether id has the shape of an ID. Every lookup checks this
@@ -147,6 +156,13 @@ func (s *Store) Get(id string, start, end int) (string, int, error) {
 	}
 	b, err := os.ReadFile(p) //nolint:gosec // p is built from a ValidID-checked id under the recovery directory
 	if err != nil {
+		return "", 0, ErrNotFound
+	}
+	if !matchesID(b, id) {
+		// The file no longer holds the bytes that were stored under this ID: bit rot, a damaged write, or an
+		// edit. It is not returned as the tool's output. It is removed, so later calls do not keep reading it,
+		// and the caller reports the output as unavailable.
+		_ = os.Remove(p)
 		return "", 0, ErrNotFound
 	}
 	text := string(b)

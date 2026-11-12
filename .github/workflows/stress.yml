@@ -1,0 +1,76 @@
+name: stress
+
+# Stress suite for the optimizer engine and gateway (`trove bench stress`). Offline: no provider call, no spend.
+#
+#   smoke    every push and pull request, Windows and Linux. --strict: fails if any layer or check is skipped.
+#   race     every push and pull request, Linux. The Go race detector over the stress package.
+#   nightly  every night and on demand, Windows and Linux. Full mode with a 60-minute soak.
+#
+# Reports are written to the job summary. Nothing is uploaded and nothing leaves the runner.
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "23 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: github.event_name != 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - name: Stress smoke (strict)
+        shell: bash
+        run: go run ./cmd/trove bench stress --mode smoke --strict --out stress-out
+      - name: Publish the report
+        if: always()
+        shell: bash
+        run: |
+          if [ -f stress-out/stress.md ]; then cat stress-out/stress.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+  race:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - name: Race detector over the stress package
+        run: go test -race -count=1 -timeout 30m ./internal/stress/
+
+  nightly:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - name: Stress full (strict, 60-minute soak)
+        shell: bash
+        run: go run ./cmd/trove bench stress --mode full --strict --soak 60m --out stress-full
+      - name: Publish the report
+        if: always()
+        shell: bash
+        run: |
+          if [ -f stress-full/stress.md ]; then cat stress-full/stress.md >> "$GITHUB_STEP_SUMMARY"; fi
