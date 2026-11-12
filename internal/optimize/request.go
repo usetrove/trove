@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"sync/atomic"
 )
 
 // This file is a small, byte-preserving view of an Anthropic Messages request.
@@ -105,9 +106,80 @@ func (r *Request) HasCacheControl() bool {
 
 var errMalformed = errors.New("malformed request")
 
-// ParseRequest scans body. It does not validate JSON in full; anything it
-// cannot walk returns an error and the caller forwards the original request.
+// MaxNestingDepth bounds how deeply a request may nest arrays and objects. The Messages API nests a few levels
+// and tool inputs rarely pass a dozen, so the limit is generous. A deeper body is not a request the engine
+// touches: it is forwarded unchanged.
+const MaxNestingDepth = 128
+
+// validations counts full JSON validations. Tests use it to pin how often a request is validated.
+var validations atomic.Int64
+
+// ParseRequest validates body once and scans it into a Request. The body must be valid JSON by encoding/json's
+// rule (the provider applies the same rule) and nest no deeper than MaxNestingDepth. Anything else returns an
+// error, and the caller forwards the original bytes.
 func ParseRequest(body []byte) (*Request, error) {
+	if err := validateBody(body); err != nil {
+		return nil, err
+	}
+	return scanRequest(body)
+}
+
+// validateBody is the full validation of a request. It runs once on the input and once more on the output
+// when an optimizer changed it. Edits between optimizers are only scanned (see Ensure), not revalidated.
+func validateBody(body []byte) error {
+	validations.Add(1)
+	if !json.Valid(body) {
+		return fmt.Errorf("%w: body is not valid JSON", errMalformed)
+	}
+	if d := maxDepth(body); d > MaxNestingDepth {
+		return fmt.Errorf("%w: body nests %d levels deep; the limit is %d", errMalformed, d, MaxNestingDepth)
+	}
+	return nil
+}
+
+// maxDepth returns the deepest nesting of arrays and objects, ignoring brackets inside strings. It is one linear
+// pass over the bytes and never recurses, so it cannot exhaust the stack.
+func maxDepth(b []byte) int {
+	depth, deepest := 0, 0
+	for i := 0; i < len(b); i++ {
+		switch b[i] {
+		case '"':
+			i = skipString(b, i+1) // the index of the closing quote, or len(b) if unterminated
+		case '{', '[':
+			depth++
+			if depth > deepest {
+				deepest = depth
+			}
+		case '}', ']':
+			depth--
+		}
+	}
+	return deepest
+}
+
+// skipString returns the index of the quote that closes a string whose body starts at i. A quote preceded by an
+// odd number of backslashes is escaped and does not close it. Whole runs between quotes are skipped with
+// IndexByte, which is vectorized, so the cost is dominated by the search rather than a byte-by-byte state machine.
+func skipString(b []byte, i int) int {
+	for {
+		j := bytes.IndexByte(b[i:], '"')
+		if j < 0 {
+			return len(b)
+		}
+		k := i + j
+		backslashes := 0
+		for p := k - 1; p >= i && b[p] == '\\'; p-- {
+			backslashes++
+		}
+		if backslashes%2 == 0 {
+			return k
+		}
+		i = k + 1
+	}
+}
+
+// scanRequest scans body without validating it in full. Callers must have validated the bytes already.
+func scanRequest(body []byte) (*Request, error) {
 	r := &Request{Raw: body}
 	i := skipWS(body, 0)
 	if i >= len(body) || body[i] != '{' {
@@ -154,7 +226,7 @@ func (r *Request) Ensure() error {
 	if r.parsed {
 		return nil
 	}
-	p, err := ParseRequest(r.Raw)
+	p, err := scanRequest(r.Raw)
 	if err != nil {
 		return err
 	}

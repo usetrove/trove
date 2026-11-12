@@ -175,7 +175,7 @@ func Pipeline() []Optimizer {
 	return []Optimizer{
 		VolatilePrefixMover{},
 		NoiseNormalizer{memo: newSpanMemo()},
-		OutputTrimmer{},
+		newOutputTrimmer(),
 		DuplicateCollapser{},
 		CacheBreakpoints{},
 	}
