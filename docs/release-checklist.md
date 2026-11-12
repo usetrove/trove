@@ -25,7 +25,7 @@ Do not tag until every box required for the release is ticked, with a date and i
 - [ ] Local note: `golangci-lint` is blind on Go 1.27.3 locally, so rely on CI for lint
 - [ ] Version in `CHANGELOG.md` moved from "not yet released" to the release date
 - [ ] `go run ./scripts/checkclaims --publish` passes on `docs/launch/*.md` (every figure cites an existing source file)
-- [ ] Plugin: `plugin/trove/VERSION` set to the release version (no `v`, same as the archive names) and committed to the default branch before tagging. The marketplace installs from the default branch, and `release.yml` fails the release if VERSION does not match the tag. `claude plugin validate plugin/trove --strict` passes; [plugin-verification.md](plugin-verification.md) run on a real login on macOS or Linux
+- [ ] Plugin: `plugin.ManifestVersion` in `internal/plugin/plugin.go` (it renders `plugin.json`; run `go test ./internal/cli -run TestPluginDerivedFiles -update`) and `plugin/trove/VERSION` set to the release version (no `v`, same as the archive names) and committed to the default branch before tagging. The marketplace installs from the default branch, and `release.yml` fails the release if VERSION does not match the tag. `claude plugin validate plugin/trove --strict` passes; [plugin-verification.md](plugin-verification.md) run on a real login on macOS or Linux
 
 ## 4. Dry run
 

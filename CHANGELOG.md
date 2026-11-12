@@ -4,7 +4,9 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
-Preparing 0.1.0, the first public release. See [docs/release-checklist.md](docs/release-checklist.md).
+## [0.2.2] - 2026-11-12
+
+Published as a regular release, not a pre-release. The release checklist ([docs/release-checklist.md](docs/release-checklist.md)) still has open items, listed under "Known gaps in this release" below. The notes under 0.1.0 were written before the earlier 0.2.0 and 0.2.1 tags and are folded into this release.
 
 ### Added
 - Data controls: `trove data export` (every table as CSV plus Trove's own files, never the backups; recovery store only with `--include-recovery`) and `trove data delete` (usage data; keeps what `trove undo` needs; prints the request that asks the sharing receiver to delete a contributed summary, and sends nothing). `trove uninstall --purge-data` now also removes the consent record.
@@ -18,6 +20,10 @@ Preparing 0.1.0, the first public release. See [docs/release-checklist.md](docs/
 - README rewrite and new docs: measurement method, supported agents, beta checklist, install verification, release checklist, launch drafts.
 - Claude Code plugin (`plugin/trove`, marketplace in `.claude-plugin`): hooks, `/trove:report`, `/trove:status`, `/trove:setup`, `/trove:uninstall`, a first-run report, and a capability check after Claude Code updates. Works with every login type; nothing is enabled without approval. New `trove plugin start|status|status-line`. `trove hooks install` refuses to double-register when the plugin is enabled. See [docs/plugin.md](docs/plugin.md). No `/trove:handoff` yet.
 - OpenCode plugin (`plugins/opencode`, TypeScript; not published): runs the optimizer engine inside OpenCode through `trove engine serve`, for both plugin APIs OpenCode ships (1.x and 2.x). Works with an API key or a GitHub Copilot login; ChatGPT and other subscription logins are shadow-only. Request-level transforms on 2.x for Anthropic bodies; tool-level on both. Engine protocol gains `hello` (version handshake), `session`, `observe`, a harness and login label, what-the-harness-cannot-do, and recording into the new `adapter_events` table; `trove report` shows a Harness plugins section. See [docs/opencode.md](docs/opencode.md). Not yet run on a real OpenCode.
+- `trove bench stress`: a five-layer offline stress suite for the optimizer engine and the gateway (invariants, fuzzing, fault injection, load, realism), with a nightly workflow and [docs/stress.md](docs/stress.md). It runs against a fake upstream and makes no provider call. Its only HTTP client can dial loopback addresses only.
+- `trove bench journeys`: an offline user-journey simulation with a calibration gate.
+- `measure.NetGuard`: a rule that switches an optimizer off for later sessions when its net saving (tokens removed minus its declared overhead) is negative or its outcomes worsen, applied only at session boundaries.
+- Prices re-verified on 2026-11-12 against the official pages (data version 2026-11-12.1). Added Claude Fable 5.2 and Mythos 5.2 (with fast mode), Gemini 4 Carbon and Hydrogen, and future-dated entries for Gemini 2.5 Pro and Flash, which are billed at newer models' rates from 2026-12-01.
 
 ### Changed
 - **Behavior change: the gateway is opt-in through `trove setup --gateway`.** A plain `trove setup` no longer points Claude Code or Codex CLI at the gateway; it reports that the gateway is opt-in and changes no gateway setting. Subscription users are never pointed at it by default. `trove gateway stop` now puts back the gateway setting Trove changed (the previous value, or no value if there was none), the same as `trove undo` does for that setting. `trove doctor` warns with a "gateway address" check when `ANTHROPIC_BASE_URL` points at a local address where no gateway is running. **If you ran `trove setup` before this release,** run `trove doctor`. If it flags the gateway address, run `trove gateway stop` (or `trove undo` to reverse every change Trove made). Then run `trove setup --gateway` only if you want the gateway.
@@ -26,11 +32,23 @@ Preparing 0.1.0, the first public release. See [docs/release-checklist.md](docs/
 - `trove setup` no longer points Claude Code at the gateway unless there is evidence it will use an API key (`ANTHROPIC_API_KEY` set, an `apiKeyHelper`, a Console login, or `plan = "api_key"` in config.toml), so a Claude.ai login token is never sent to the gateway by setup. Codex CLI is unaffected.
 - `trove data delete` keeps the hook state files (`hooks/config.json`, `hooks/capabilities.json`) so the hooks do not quietly revert to defaults.
 - Retention now covers every table that holds history, not four of fifteen, and runs from the session-end hook and `trove report` as well as the gateway, so it no longer needs the gateway (closes finding F-8). Tables that are current state are kept and listed with the reason.
+- The engine validates a request's JSON once (and the output once if an optimizer changed it) and forwards unchanged any body that is not valid JSON or nests deeper than 128 levels. The output trimmer remembers what it did for each text it has seen, so a resent history costs a lookup, not a rescan.
+- Recovery: a stored output whose bytes no longer hash to its ID is discarded and reported as unavailable, never returned as the tool's output.
+- Prices: `o4-mini` is removed because it is no longer on OpenAI's pricing page and cannot be verified (it now comes back unpriced). Gemini 3.5 Flash-Lite batch cache reads are $0.015, not $0.02, and its flex requests are unpriced because flex cache reads differ from batch.
+- The egress allowlist gains `internal/stress/loopback.go` and the QA-only `qa/loadtest`; both can only dial loopback addresses. PRIVACY.md, the threat model and the compliance notes say so.
 - Internal renames for the naming rule: `internal/logs/claudecode` is `cchistory`, `internal/logs/codex` is `cxhistory`, and the benchmark agent module is `trovebench.agent.cc`. No user-visible command, config key or route changed.
+
+### Known gaps in this release
+- Install, uninstall, Homebrew and `install.sh` have not been verified by hand on clean macOS or Linux machines ([docs/install-verification.md](docs/install-verification.md) is still blank). Automated tests run on Windows locally and on Linux in CI.
+- The Claude Code plugin has not been run end to end on a real login on macOS or Linux, and the OpenCode plugin has not been run on a real OpenCode.
+- `cosign verify-blob` has not been run against the published release, and the Homebrew formula has not been installed from the tap. The install script and the npm wrapper check the SHA-256 only, not the signature.
+- The compliance, legal and agent-integration documents were last re-checked on 2026-11-06 and were not re-checked for this release.
+- Prices were compared with the official pages on 2026-11-12. OpenAI's own policy pages cannot be read by automated tools.
+- No benchmark run has been completed, so no savings claims are made. Codex CLI history parsing has not been verified on a real install.
 
 ## [0.1.0] - not yet released
 
-The first release will include everything below. Nothing has been published.
+The stable release will include everything above and below. Nothing below was published on its own.
 
 ### Added
 - Local gateway (opt-in, `127.0.0.1`) for API-key use with Claude Code and Codex CLI; `trove setup` and `trove undo` with backups.

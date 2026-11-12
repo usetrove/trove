@@ -29,6 +29,11 @@ jobs:
             echo "plugin/trove/VERSION is '$got' but the tag is '$want'. Set VERSION to $want, commit it, then tag again." >&2
             exit 1
           fi
+          manifest="$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' plugin/trove/.claude-plugin/plugin.json)"
+          if [ "$manifest" != "$want" ]; then
+            echo "plugin/trove/.claude-plugin/plugin.json version is '$manifest' but the tag is '$want'. Set it to $want, commit it, then tag again." >&2
+            exit 1
+          fi
       # Warn (never fail) when any bundled price was last verified over 30 days ago.
       - name: Check pricing freshness
         run: go run ./scripts/pricingage

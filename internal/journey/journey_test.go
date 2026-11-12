@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/usetrove/trove/internal/optimize"
+	"github.com/usetrove/trove/internal/pricing"
 )
 
 func TestMedianAndQuartiles(t *testing.T) {
@@ -244,7 +245,7 @@ func TestMarkdownLabelsEstimatesAndKeepsLiveSeparate(t *testing.T) {
 		"## Measured savings (live tier)",
 		"**Label: measured.** Not run yet.",
 		"Not measured by this tier",
-		"2026-10-28.3",
+		pricing.DataVersion,
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown is missing %q", want)

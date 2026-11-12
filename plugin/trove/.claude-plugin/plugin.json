@@ -12,5 +12,6 @@
   ],
   "license": "Apache-2.0",
   "name": "trove",
-  "repository": "https://github.com/usetrove/trove"
+  "repository": "https://github.com/usetrove/trove",
+  "version": "0.2.2"
 }
