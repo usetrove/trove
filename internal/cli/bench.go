@@ -25,6 +25,7 @@ func newBench(a *App) *cobra.Command {
 			"list-price cost. The offline tier is deterministic and spends nothing; its numbers are estimates.",
 	}
 	c.AddCommand(newJourneys(a))
+	c.AddCommand(newStress(a))
 	return c
 }
 
@@ -36,16 +37,17 @@ type journeysOutput struct {
 
 func newJourneys(a *App) *cobra.Command {
 	var (
-		tier        string
-		seed        uint64
-		weeks       int
-		profiles    []string
-		list        bool
-		budgetMS    int
-		workers     int
-		sensitivity bool
-		calibrate   string
-		outDir      string
+		tier         string
+		seed         uint64
+		weeks        int
+		profiles     []string
+		list         bool
+		budgetMS     int
+		workers      int
+		systemTokens int
+		sensitivity  bool
+		calibrate    string
+		outDir       string
 	)
 	c := &cobra.Command{
 		Use:   "journeys",
@@ -55,7 +57,7 @@ func newJourneys(a *App) *cobra.Command {
 			"  trove bench journeys --tier offline --sensitivity --out ./proof\n" +
 			"  trove bench journeys --calibrate ~/.claude/projects --out ./proof",
 		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			if list {
 				return journeyList(a)
 			}
@@ -71,7 +73,7 @@ func newJourneys(a *App) *cobra.Command {
 			}
 			opts := journey.Options{
 				Seed: seed, Weeks: weeks, Profiles: profiles, MCPSchemaBytes: ver.Bytes,
-				BudgetMS: budgetMS, Workers: workers,
+				BudgetMS: budgetMS, Workers: workers, SystemTokens: systemTokens,
 			}
 			res, err := journey.Run(opts)
 			if err != nil {
@@ -83,7 +85,7 @@ func newJourneys(a *App) *cobra.Command {
 						return err
 					}
 					if !a.JSON {
-						fmt.Fprintf(a.Out, "Wrote %s and %s\n",
+						_, _ = fmt.Fprintf(a.Out, "Wrote %s and %s\n",
 							filepath.Join(outDir, "journeys.json"), filepath.Join(outDir, "journeys.md"))
 					}
 				}
@@ -110,6 +112,7 @@ func newJourneys(a *App) *cobra.Command {
 	f.BoolVar(&list, "list", false, "list the profiles and exit")
 	f.IntVar(&budgetMS, "budget-ms", 0, "optimizer time budget in ms (0 = the simulator's budget; production is 25)")
 	f.IntVar(&workers, "workers", 0, "sessions run at once (0 = every CPU)")
+	f.IntVar(&systemTokens, "system-tokens", 0, "base prompt per session in tokens (0 = the measured default, about 19000)")
 	f.BoolVar(&sensitivity, "sensitivity", false, "also run with the production 25 ms budget, one session at a time, and compare")
 	f.StringVar(&calibrate, "calibrate", "", "compare the generator with real Claude Code session logs in this folder (aggregates only)")
 	f.StringVar(&outDir, "out", "", "write the results and tables into this directory")
@@ -146,17 +149,17 @@ func journeyCalibrate(a *App, dir, outDir string) error {
 	st := journey.CheckCalibration(t, journey.DefaultTolerance)
 	md := journey.CalibrationMarkdown(t, st)
 	if outDir != "" {
-		if err := os.MkdirAll(outDir, 0o755); err != nil {
+		if err := os.MkdirAll(outDir, 0o750); err != nil {
 			return fmt.Errorf("could not create %s: %w", outDir, err)
 		}
 		b, err := json.MarshalIndent(t, "", "  ")
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(outDir, "calibration_targets.json"), append(b, '\n'), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(outDir, "calibration_targets.json"), append(b, '\n'), 0o600); err != nil {
 			return fmt.Errorf("could not write calibration_targets.json: %w", err)
 		}
-		if err := os.WriteFile(filepath.Join(outDir, "calibration.md"), []byte(md), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(outDir, "calibration.md"), []byte(md), 0o600); err != nil {
 			return fmt.Errorf("could not write calibration.md: %w", err)
 		}
 	}
@@ -169,7 +172,7 @@ func journeyCalibrate(a *App, dir, outDir string) error {
 // writeJourneyFiles writes the full result and the Markdown tables. Neither file
 // holds a path, a key or a timestamp, so both are safe to share.
 func writeJourneyFiles(dir string, res journey.Result, sens *journey.Result) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("could not create %s: %w", dir, err)
 	}
 	var payload any = res
@@ -182,10 +185,10 @@ func writeJourneyFiles(dir string, res journey.Result, sens *journey.Result) err
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "journeys.json"), append(b, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "journeys.json"), append(b, '\n'), 0o600); err != nil {
 		return fmt.Errorf("could not write journeys.json: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "journeys.md"), []byte(md), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "journeys.md"), []byte(md), 0o600); err != nil {
 		return fmt.Errorf("could not write journeys.md: %w", err)
 	}
 	return nil
