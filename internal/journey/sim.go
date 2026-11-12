@@ -44,8 +44,10 @@ type Arm struct {
 	Tokens   Tokens             `json:"tokens"`
 	CostUSD  map[string]float64 `json:"cost_usd"`  // by pinned model ID
 	FailOpen int                `json:"fail_open"` // requests the engine forwarded unchanged after a failure
-	Applied  map[string]int64   `json:"tokens_removed_by_optimizer,omitempty"`
-	Checks   Checks             `json:"checks"`
+	// FailOpenBy counts, per optimizer, the requests it failed in (timeout or error).
+	FailOpenBy map[string]int   `json:"fail_open_by_optimizer,omitempty"`
+	Applied    map[string]int64 `json:"tokens_removed_by_optimizer,omitempty"`
+	Checks     Checks           `json:"checks"`
 	// Hook-level only (subscription model). ContextTokens is the sum over requests
 	// of the context the agent processed, in estimated tokens. Denied counts reads
 	// the hooks blocked; Rewritten counts tool inputs the hooks would rewrite.
@@ -76,7 +78,6 @@ var simModels = []string{"claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5
 type sessionDriver struct {
 	profile Profile
 	table   *pricing.Table
-	header  []byte // model, system, tools (off arm)
 	system  string
 	toolPad string // padding for the agent's own tool definitions
 	trove   []byte // extra tool definition added in the on arm (MCP schema size)
@@ -84,9 +85,24 @@ type sessionDriver struct {
 }
 
 // newDriver prepares the constant parts of a profile's requests.
+// DefaultSystemTokens is the base prompt a real Claude Code session sends before its
+// first message: system prompt, tool definitions and project context. Measured in the
+// developer's session logs as the median first-request cache write (about 19,000 tokens).
+const DefaultSystemTokens = 19000
+
 func newDriver(p Profile, table *pricing.Table, mcpBytes int) *sessionDriver {
+	return newDriverWith(p, table, mcpBytes, DefaultSystemTokens)
+}
+
+// newDriverWith builds a driver whose base prompt is systemTokens (system prompt plus
+// the agent's own tool definitions, which are part of the same prefix).
+func newDriverWith(p Profile, table *pricing.Table, mcpBytes, systemTokens int) *sessionDriver {
 	d := &sessionDriver{profile: p, table: table}
-	d.system = fixedSystem(6000)
+	sysBytes := int(float64(systemTokens)*bytesPerToken) - p.ToolsDescBytes
+	if sysBytes < 1000 {
+		sysBytes = 1000
+	}
+	d.system = fixedSystem(sysBytes)
 	d.toolPad = pad(p.ToolsDescBytes)
 	if mcpBytes > 0 {
 		d.trove = []byte(fmt.Sprintf(`{"name":"trove_tools","description":%s,"input_schema":{"type":"object"}}`, jstr(pad(mcpBytes))))
@@ -174,6 +190,12 @@ func (d *sessionDriver) runArm(turns []Turn, sessionIndex int, withTrove bool) (
 			}, optimize.Session{Key: fmt.Sprintf("s%d-r%d", sessionIndex, k), Agent: "claude_code", TroveRun: true})
 			if len(res.Failures) > 0 {
 				arm.FailOpen++
+				if arm.FailOpenBy == nil {
+					arm.FailOpenBy = map[string]int{}
+				}
+				for _, fl := range res.Failures {
+					arm.FailOpenBy[fl.Optimizer]++
+				}
 			}
 			for _, rep := range res.Applied {
 				arm.Applied[rep.Name] += int64(rep.TokensRemoved)

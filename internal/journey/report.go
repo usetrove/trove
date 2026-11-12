@@ -22,6 +22,8 @@ func Markdown(r Result) string {
 	fmt.Fprintf(&b, "**Label: %s.** Not billed. Synthetic sessions that pass the calibration gate, seed %d, %d simulated week(s), optimizer budget %d ms. Prices: pinned table %s, as of %s. Pilot model: `%s`.\n\n",
 		r.Label, r.Seed, r.Weeks, r.BudgetMS, r.PricingVersion, r.PricingDate, r.PilotModel)
 
+	fmt.Fprintf(&b, "Base prompt per session: %d tokens (system prompt and tool definitions; measured first-request cache write in the developer's logs is about 19,000).\n\n", r.SystemTokens)
+
 	gateway := profilesOf(r, ModelGateway)
 	fmt.Fprintf(&b, "### API-key users: cost per session on `%s` (estimated, list price)\n\n", r.PilotModel)
 	b.WriteString("| Profile | N | Median turns | Median cost off → on | Saved, median per session (95% CI) | Within noise | Billed input tokens off → on | Saved, input tokens | Structure ok off / on | Verbatim recovery (on) | Trove tool overhead (tokens) |\n")
@@ -57,6 +59,26 @@ func Markdown(r Result) string {
 			h.SavedPctMedian, h.SavedPctCILow, h.SavedPctCIHigh, yesNo(h.WithinNoise),
 			fmtInt(int64(h.DeniedReads)), fmtInt(int64(h.RewrittenInput)),
 			pct(p.StructureOkOff), pct(p.StructureOkOn), verbatimCell(p))
+	}
+
+	b.WriteString("\n### Net-savings guard (estimated, API-key users)\n\n")
+	b.WriteString("Decided on the first simulated week, applied from the next session. An optimizer is switched off when its net saving is negative or more than 10% of its requests fall back to the original.\n\n")
+	for _, p := range gateway {
+		if len(p.Guard) == 0 {
+			fmt.Fprintf(&b, "- %s: no optimizer was switched off.\n", p.Name)
+			continue
+		}
+		for _, d := range p.Guard {
+			fmt.Fprintf(&b, "- %s: **%s switched off from session %d.** %s (measured over %d sessions, %d requests).\n",
+				p.Name, d.Optimizer, d.AppliedFromSession, d.Reason, d.WindowSessions, d.Requests)
+		}
+	}
+	b.WriteString("\n")
+	for _, p := range gateway {
+		if p.OverheadTokens > 0 {
+			fmt.Fprintf(&b, "- %s: Trove's tool list cost %s tokens, of which %s were on requests that fell back to the original.\n",
+				p.Name, fmtInt(p.OverheadTokens), fmtInt(p.FallbackOverheadTokens))
+		}
 	}
 
 	b.WriteString("\n### Not measured by this tier\n\n")
@@ -119,9 +141,14 @@ func writeCalibrationStatus(b *strings.Builder, st CalibrationStatus) {
 	fmt.Fprintf(b, "**Calibration: %s.** Source: %s. Split: %s. Gate: holdout half, sizes within ±%.0f%%, shares within ±%.0f points.\n\n",
 		verdict, st.Source, st.Split, (st.Tolerance.SizeRatio-1)*100, st.Tolerance.ShareAbs*100)
 	for _, c := range st.Checks {
-		res := "pass"
+		res := "pass, holdout-validated"
 		if !c.Pass {
 			res = "FAIL: " + c.Why
+		}
+		if c.Tool == "Grep" && c.Pass {
+			// Grep's tail was set between the two halves, so the holdout is not an
+			// independent check for it. Say so where the gate is printed.
+			res = "pass, calibrated (not holdout-validated: its tail was set between the halves)"
 		}
 		fmt.Fprintf(b, "- %s: %s\n", c.Tool, res)
 	}

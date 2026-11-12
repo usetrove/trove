@@ -11,6 +11,7 @@ package journey
 // Kind is the type of one tool output in a simulated session.
 type Kind string
 
+// The kinds of tool output a simulated session can contain.
 const (
 	KindReadSmall   Kind = "read_small"
 	KindReadLarge   Kind = "read_large"
@@ -30,13 +31,13 @@ var Kinds = []Kind{KindReadSmall, KindReadLarge, KindGrep, KindTestVerbose, Kind
 type Adapter string
 
 const (
-	// AdapterGateway: the agent's requests go through the local gateway (API-key users).
+	// AdapterGateway is the path where the agent's requests go through the local gateway (API-key users).
 	AdapterGateway Adapter = "gateway"
-	// AdapterHooks: the Claude Code plugin hooks. Request-level optimizers are
+	// AdapterHooks is the Claude Code plugin hooks path. Request-level optimizers are
 	// not reachable this way, so the offline request model does not apply; see
 	// Profile.Measurable.
 	AdapterHooks Adapter = "hooks"
-	// AdapterSettings: settings autopilot only (Codex profiles). No request-level
+	// AdapterSettings is settings autopilot only (Codex profiles). No request-level
 	// transform applies, and profile-scoped sessions cannot be attributed.
 	AdapterSettings Adapter = "settings"
 )
@@ -81,13 +82,13 @@ func (p Profile) Measurable() (bool, string) {
 type Model string
 
 const (
-	// ModelGateway: request-level. Tokens and list-price dollars (API-key users).
+	// ModelGateway is the request-level model. Tokens and list-price dollars (API-key users).
 	ModelGateway Model = "gateway"
-	// ModelHooks: tool-level, through the real hook optimizers. Tokens only, because
+	// ModelHooks is the tool-level model, through the real hook optimizers. Tokens only, because
 	// subscription traffic is never priced in dollars here and is never routed
 	// through the gateway.
 	ModelHooks Model = "hooks"
-	// ModelNone: not measurable here.
+	// ModelNone is the case that is not measurable here.
 	ModelNone Model = "none"
 )
 

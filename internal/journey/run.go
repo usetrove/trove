@@ -6,6 +6,9 @@ import (
 	"runtime"
 	"sync"
 
+	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/pricing"
 )
 
@@ -24,15 +27,18 @@ type Options struct {
 	// Table is the pricing table; nil uses the built-in table.
 	Table *pricing.Table
 	// MCPSchemaBytes is the size of Trove's tool definitions, sent with every
-	// request in the Trove arm. Measure it with mcp.MeasureSchema.
+	// request in the Trove arm while the trimmer (which needs them) is on. Measure
+	// it with mcp.MeasureSchema.
 	MCPSchemaBytes int
-	// BudgetMS is the engine's per-optimizer time budget. 0 uses the simulator's
+	// BudgetMS is the engine's per-request time budget. 0 uses the simulator's
 	// generous budget, so results depend only on the seed. The production default
 	// is 25 (see the sensitivity run).
 	BudgetMS int
-	// Workers is how many sessions run at once. 0 uses every CPU. Results do not
-	// depend on it unless BudgetMS is small enough for load to matter.
+	// Workers is how many sessions run at once. 0 uses every CPU.
 	Workers int
+	// SystemTokens is the base prompt a session starts with (system prompt, tool
+	// definitions, project context). 0 uses DefaultSystemTokens, the measured value.
+	SystemTokens int
 }
 
 // SessionRecord is one session run in both arms. Every session is kept.
@@ -41,6 +47,20 @@ type SessionRecord struct {
 	Subagent bool `json:"subagent"`
 	Off      Arm  `json:"off"`
 	On       Arm  `json:"on"`
+}
+
+// GuardDecision is one optimizer the net-savings guard switched off for a profile.
+type GuardDecision struct {
+	Optimizer string `json:"optimizer"`
+	// WindowSessions is how many sessions were measured before the decision.
+	WindowSessions int `json:"window_sessions"`
+	// AppliedFromSession is the first session that ran without the optimizer.
+	AppliedFromSession int     `json:"applied_from_session"`
+	Requests           int     `json:"requests"`
+	TokensRemoved      int64   `json:"tokens_removed"`
+	FailOpenRate       float64 `json:"fail_open_rate"`
+	NetTokens          int64   `json:"net_tokens"`
+	Reason             string  `json:"reason"`
 }
 
 // CostStat compares dollars per session on one pinned model.
@@ -114,11 +134,17 @@ type ProfileResult struct {
 	Cost []CostStat `json:"cost,omitempty"`
 	// Hook is the subscription result (hooks model only).
 	Hook *HookSummary `json:"hook,omitempty"`
-	// OverheadTokens is what Trove's own tool definitions cost in the Trove arm.
-	// It is already inside the Trove arm; this field shows it separately.
+	// OverheadTokens is what Trove's own tool definitions cost in the Trove arm,
+	// over every request while the trimmer is on: fallback requests included,
+	// because the tool list is sent whether or not the request was shortened.
 	OverheadTokens int64 `json:"overhead_tokens"`
+	// FallbackOverheadTokens is the part of OverheadTokens on requests that fell back
+	// to the original body.
+	FallbackOverheadTokens int64 `json:"fallback_overhead_tokens"`
 	// Applied is the estimated tokens removed per optimizer, summed over sessions.
 	Applied map[string]int64 `json:"tokens_removed_by_optimizer,omitempty"`
+	// Guard lists the optimizers the net-savings guard switched off for this profile.
+	Guard []GuardDecision `json:"guard_decisions,omitempty"`
 	// StructureOkOff and StructureOkOn are the share of sessions where every tool
 	// call kept its result. This is not a task-success measure.
 	StructureOkOff float64 `json:"structure_ok_off"`
@@ -142,6 +168,7 @@ type Result struct {
 	Seed           uint64          `json:"seed"`
 	Weeks          int             `json:"weeks"`
 	BudgetMS       int             `json:"optimizer_budget_ms"`
+	SystemTokens   int             `json:"base_prompt_tokens"`
 	PricingVersion string          `json:"pricing_version"`
 	PricingDate    string          `json:"pricing_date"`
 	PilotModel     string          `json:"pilot_model"`
@@ -157,13 +184,15 @@ type Result struct {
 // Caveats is printed with every offline result. They are the limits of the model.
 var Caveats = []string{
 	"Estimated, not billed. Tokens are bytes divided by a fixed bytes-per-token ratio; the provider's tokenizer will differ.",
-	"Synthetic sessions. Their shape is checked against real logs by the calibration step (`--calibrate`), but they are not your sessions.",
+	"Synthetic sessions. Their shape is checked against real logs by the calibration gate, but they are not your sessions. Grep is calibrated to the developer's logs, not holdout-validated: its tail was set between the two halves.",
+	"Base prompt: each session starts with about 19,000 tokens of system prompt and tool definitions (the measured first-request cache write). It is a parameter; the shipped default is the measured value.",
 	"Gateway profiles: request-level optimizers, priced in dollars. Hooks profiles (subscription): tool-level hooks only, in tokens only; no dollars and no cache model.",
 	"Hooks model: the agent is not modeled. A denied read is not retried, and rewritten tool inputs are counted but not re-executed, so their output is unchanged in this model.",
 	"Grep and Glob outputs are not transformed in the hooks model; only Bash outputs get the output hooks, as docs/hooks.md specifies for the trimmer.",
 	"Quality is not measured. Structure and recovery are checked; whether the agent finishes the task is only measurable in the live tier.",
 	"Cache model (gateway): the cached prefix is the bytes shared with the previous request. Rewriting earlier history costs cache writes, and that is charged.",
-	"output_trimmer declares 0 overhead (OverheadTokens) and that is undeclared. The simulator charges the measured size of Trove's MCP tool list on every request instead; the trimmer's tool list is charged by the simulator.",
+	"Net-savings guard: decided on the first simulated week and applied from the next session. Per-optimizer net is tokens removed minus declared overhead; an optimizer's cache effects are inside the arm totals, not attributed to it.",
+	"output_trimmer declares 0 overhead (OverheadTokens), which is undeclared. The simulator charges the measured size of Trove's MCP tool list on every request while the trimmer is on, including requests that fell back to the original.",
 	"Dollars are list prices from the pinned table at the pricing date.",
 }
 
@@ -185,6 +214,10 @@ func Run(opts Options) (Result, error) {
 	if budget <= 0 {
 		budget = simBudgetMS
 	}
+	sys := opts.SystemTokens
+	if sys <= 0 {
+		sys = DefaultSystemTokens
+	}
 	want := map[string]bool{}
 	for _, id := range opts.Profiles {
 		want[id] = true
@@ -199,7 +232,7 @@ func Run(opts Options) (Result, error) {
 		}
 	}
 	res := Result{
-		Label: Label, Tier: "offline", Seed: opts.Seed, Weeks: weeks, BudgetMS: budget,
+		Label: Label, Tier: "offline", Seed: opts.Seed, Weeks: weeks, BudgetMS: budget, SystemTokens: sys,
 		PricingVersion: table.Version(), PricingDate: PricingDate.Format("2006-01-02"),
 		PilotModel: simModels[0], BytesPerToken: bytesPerToken,
 		MCPSchemaBytes: opts.MCPSchemaBytes, Caveats: Caveats,
@@ -208,7 +241,7 @@ func Run(opts Options) (Result, error) {
 		if len(want) > 0 && !want[p.ID] {
 			continue
 		}
-		pr, err := runProfile(p, opts, weeks, table, budget)
+		pr, err := runProfile(p, opts, weeks, table, budget, sys)
 		if err != nil {
 			return Result{}, err
 		}
@@ -238,7 +271,7 @@ type part struct {
 	sub   bool
 }
 
-func runProfile(p Profile, opts Options, weeks int, table *pricing.Table, budgetMS int) (ProfileResult, error) {
+func runProfile(p Profile, opts Options, weeks int, table *pricing.Table, budgetMS, systemTokens int) (ProfileResult, error) {
 	out := ProfileResult{
 		ID: p.ID, Name: p.Name, Description: p.Description, Billing: p.Billing,
 		Adapter: string(p.Adapter), Applied: map[string]int64{}, Model: string(p.Model()),
@@ -250,11 +283,62 @@ func runProfile(p Profile, opts Options, weeks int, table *pricing.Table, budget
 		return out, nil
 	}
 	n := p.Sessions * weeks
-	drv := newDriver(p, table, opts.MCPSchemaBytes)
+	drv := newDriverWith(p, table, opts.MCPSchemaBytes, systemTokens)
 	drv.cfg.Optimize.BudgetMS = budgetMS
-	recs, err := runSessions(drv, p, opts.Seed, n, opts.Workers)
-	if err != nil {
-		return out, err
+
+	var recs []SessionRecord
+	trimmerOffFrom := -1 // first session whose trimmer was switched off; -1 if none
+	var err error
+	if p.Model() == ModelGateway {
+		// The net-savings guard: the first simulated week is the window. Its
+		// verdicts switch optimizers off for every later session, at the session
+		// boundary (CLAUDE.md rule 5). The window itself is not re-run.
+		window := p.Sessions
+		if window > n {
+			window = n
+		}
+		recs, err = runSessionsRange(drv, p, opts.Seed, 0, window, opts.Workers)
+		if err != nil {
+			return out, err
+		}
+		if window < n {
+			// Sessions after the window always run: with the guard's verdicts applied
+			// if any optimizer was switched off, otherwise unchanged.
+			restDrv := drv
+			decisions := guardWindow(recs, window)
+			if len(decisions) > 0 {
+				out.Guard = decisions
+				disabled := map[string]bool{}
+				for _, d := range decisions {
+					disabled[d.Optimizer] = true
+				}
+				// The MCP tool list is only needed by the trimmer. With it off, the
+				// later sessions send no Trove tool definitions at all.
+				mcp := opts.MCPSchemaBytes
+				if disabled[config.OptimizerOutputTrimmer] {
+					mcp = 0
+					trimmerOffFrom = window
+				}
+				restDrv = newDriverWith(p, table, mcp, systemTokens)
+				restDrv.cfg.Optimize.BudgetMS = budgetMS
+				for name := range disabled {
+					restDrv.cfg.Optimizers[name] = config.StateOff
+				}
+				for i := range out.Guard {
+					out.Guard[i].AppliedFromSession = window
+				}
+			}
+			rest, err := runSessionsRange(restDrv, p, opts.Seed, window, n, opts.Workers)
+			if err != nil {
+				return out, err
+			}
+			recs = append(recs, rest...)
+		}
+	} else {
+		recs, err = runSessionsRange(drv, p, opts.Seed, 0, n, opts.Workers)
+		if err != nil {
+			return out, err
+		}
 	}
 
 	var turns []float64
@@ -282,7 +366,14 @@ func runProfile(p Profile, opts Options, weeks int, table *pricing.Table, budget
 		for k, v := range on.Applied {
 			out.Applied[k] += v
 		}
-		out.OverheadTokens += int64(on.Requests) * tokens(opts.MCPSchemaBytes)
+		// The tool list is charged on every request of a session whose trimmer (the
+		// optimizer that needs it) was on, fallback requests included.
+		mcpBytes := opts.MCPSchemaBytes
+		if trimmerOffFrom >= 0 && rec.Index >= trimmerOffFrom {
+			mcpBytes = 0
+		}
+		out.OverheadTokens += int64(on.Requests) * tokens(mcpBytes)
+		out.FallbackOverheadTokens += int64(on.FailOpen) * tokens(mcpBytes)
 	}
 	out.N = n
 	out.MedianTurns = Median(turns)
@@ -306,10 +397,33 @@ func runProfile(p Profile, opts Options, weeks int, table *pricing.Table, budget
 	return out, nil
 }
 
+// guardWindow evaluates every request-level optimizer over the measured window.
+func guardWindow(recs []SessionRecord, window int) []GuardDecision {
+	var out []GuardDecision
+	for _, name := range optimize.PipelineNames {
+		var w measure.NetWindow
+		for _, r := range recs[:window] {
+			w.Requests += r.On.Requests
+			w.TokensRemoved += r.On.Applied[name]
+			w.FailOpen += r.On.FailOpenBy[name]
+		}
+		v := measure.DefaultNetGuard.Evaluate(w)
+		if !v.Disable {
+			continue
+		}
+		out = append(out, GuardDecision{
+			Optimizer: name, WindowSessions: window, Requests: w.Requests,
+			TokensRemoved: w.TokensRemoved, FailOpenRate: v.FailOpenRate, NetTokens: v.NetTokens,
+			Reason: v.Reason,
+		})
+	}
+	return out
+}
+
 // hookSummary compares context tokens per session. No dollars are computed.
 func hookSummary(p Profile, seed uint64, off, on []Arm) *HookSummary {
 	var pct []float64
-	h := &HookSummary{Label: Label, DeniedReads: 0, RewrittenInput: 0}
+	h := &HookSummary{Label: Label}
 	for i := range off {
 		o, n := off[i].ContextTokens, on[i].ContextTokens
 		h.ContextTokensOff += o
@@ -355,10 +469,11 @@ func costStat(model, profileID string, seed uint64, off, on []Arm) CostStat {
 	}
 }
 
-// runSessions runs sessions 0..n-1 of a profile on a worker pool. Each session
-// has its own engine and state, and each result goes to its own index, so the
-// output is the same as a serial run.
-func runSessions(drv *sessionDriver, p Profile, seed uint64, n, workers int) ([]SessionRecord, error) {
+// runSessionsRange runs sessions from..to-1 of a profile on a worker pool. Each
+// session has its own engine and state, and each result goes to its own index, so
+// the output is the same as a serial run.
+func runSessionsRange(drv *sessionDriver, p Profile, seed uint64, from, to, workers int) ([]SessionRecord, error) {
+	n := to - from
 	recs := make([]SessionRecord, n)
 	errs := make([]error, n)
 	if workers <= 0 {
@@ -373,13 +488,13 @@ func runSessions(drv *sessionDriver, p Profile, seed uint64, n, workers int) ([]
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for idx := range jobs {
-				recs[idx], errs[idx] = runSession(drv, p, seed, idx)
+			for i := range jobs {
+				recs[i], errs[i] = runSession(drv, p, seed, from+i)
 			}
 		}()
 	}
-	for idx := 0; idx < n; idx++ {
-		jobs <- idx
+	for i := 0; i < n; i++ {
+		jobs <- i
 	}
 	close(jobs)
 	wg.Wait()
@@ -453,6 +568,12 @@ func addArm(a, b Arm) Arm {
 	}
 	for k, v := range b.Applied {
 		a.Applied[k] += v
+	}
+	for k, v := range b.FailOpenBy {
+		if a.FailOpenBy == nil {
+			a.FailOpenBy = map[string]int{}
+		}
+		a.FailOpenBy[k] += v
 	}
 	a.Checks.Structure = a.Checks.Structure && b.Checks.Structure
 	a.Checks.VerbatimRecovered = a.Checks.VerbatimRecovered && b.Checks.VerbatimRecovered

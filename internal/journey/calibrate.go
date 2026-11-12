@@ -140,7 +140,7 @@ func CheckCalibration(t Targets, tol Tolerance) CalibrationStatus {
 	return st
 }
 
-func ratioOK(got, want, max float64) bool {
+func ratioOK(got, want, limit float64) bool {
 	if want == 0 || got == 0 {
 		return got == want
 	}
@@ -148,7 +148,7 @@ func ratioOK(got, want, max float64) bool {
 	if r < 1 {
 		r = 1 / r
 	}
-	return r <= max
+	return r <= limit
 }
 
 func absDiff(a, b float64) float64 {
@@ -210,7 +210,7 @@ func CalibrateLogs(dir string) (Targets, error) {
 // Unreadable files give nothing.
 func readLog(path string) map[string][]string {
 	out := map[string][]string{}
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // path is a session log the user chose to calibrate from
 	if err != nil {
 		return out
 	}

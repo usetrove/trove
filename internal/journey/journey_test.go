@@ -3,6 +3,7 @@ package journey
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"math/rand/v2"
 	"net/http"
@@ -407,5 +408,100 @@ func TestHookArmChargesMCPToolListOverhead(t *testing.T) {
 	}
 	if with.ContextTokens <= without.ContextTokens {
 		t.Errorf("the MCP tool list must add context: with=%d without=%d", with.ContextTokens, without.ContextTokens)
+	}
+}
+
+// Cache safety: a request's transformed bytes must still be the same bytes at the
+// start of the next request's transformed body, or the provider's cache would be
+// rewritten on every turn. Measured with a fresh engine per request, so it checks
+// the transform itself and not any memo.
+func TestCachedPrefixIsNotRewritten(t *testing.T) {
+	p := Profiles()[2]
+	drv := newDriver(p, nil, 9000)
+	sess := genSession(p, 20261108, 0)
+	bodies := drv.bodies(sess.Turns, simModels[0], true)
+	var prev []byte
+
+	for k, b := range bodies {
+		eng := optimize.New(optimize.Options{Config: drv.cfg, Getenv: func(string) string { return "" }, Recovery: newMemStore()})
+		res := eng.TransformRequest(context.Background(), optimize.RequestIn{Provider: "anthropic", Path: "/v1/messages", Header: http.Header{}, Body: b},
+			optimize.Session{Key: fmt.Sprintf("p%d", k), Agent: "claude_code", TroveRun: true})
+		if prev != nil {
+			// Every request ends in JSON framing ("]}") that the next request
+			// continues with a comma, so the last framing bytes always differ. That is
+			// not cache content: caches key on content blocks. Anything beyond the
+			// framing would be a real rewrite.
+			const framing = 2
+			lost := len(prev) - commonPrefix(prev, res.Body)
+			if lost > framing {
+				t.Fatalf("request %d rewrote %d bytes of the cached prefix (more than the %d framing bytes)", k, lost, framing)
+			}
+		}
+		prev = res.Body
+	}
+}
+
+// The guard switches off an optimizer only on enough data and only for a trigger.
+func TestGuardWindowDisablesOnlyTheTrippedOptimizer(t *testing.T) {
+	var recs []SessionRecord
+	for i := 0; i < 4; i++ {
+		on := newArm()
+		on.Requests = 10
+		on.Applied = map[string]int64{"noise_normalizer": 500, "output_trimmer": 100}
+		// Every output_trimmer request failed open; noise_normalizer never did.
+		on.FailOpenBy = map[string]int{"output_trimmer": 10}
+		recs = append(recs, SessionRecord{Index: i, On: on})
+	}
+	got := guardWindow(recs, len(recs))
+	if len(got) != 1 || got[0].Optimizer != "output_trimmer" {
+		t.Fatalf("only output_trimmer should be switched off, got %+v", got)
+	}
+	if got[0].Reason == "" || got[0].FailOpenRate < 0.9 {
+		t.Errorf("the decision must carry its reason and rate: %+v", got[0])
+	}
+}
+
+// Requests that fell back still carry Trove's tool list, so the overhead counts them.
+func TestFallbackRequestsAreChargedTheToolList(t *testing.T) {
+	res, err := Run(Options{Seed: 20261108, Weeks: 1, Profiles: []string{"light"}, MCPSchemaBytes: 9000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := res.Profiles[0]
+	if p.FallbackOverheadTokens > p.OverheadTokens {
+		t.Fatalf("fallback overhead %d cannot exceed total overhead %d", p.FallbackOverheadTokens, p.OverheadTokens)
+	}
+	var fallbacks int
+	for _, s := range p.Sessions {
+		fallbacks += s.On.FailOpen
+	}
+	if want := int64(fallbacks) * tokens(9000); p.FallbackOverheadTokens != want {
+		t.Errorf("fallback overhead = %d, want %d (%d fallback requests x tool list)", p.FallbackOverheadTokens, want, fallbacks)
+	}
+}
+
+// The base prompt is a parameter: a larger one puts more tokens at the start of every request.
+func TestBasePromptIsAParameter(t *testing.T) {
+	p := Profiles()[1]
+	small := newDriverWith(p, nil, 0, 6000)
+	large := newDriverWith(p, nil, 0, DefaultSystemTokens)
+	turns := genSession(p, 20261108, 0).Turns[:1]
+	a := tokens(len(small.bodies(turns, simModels[0], false)[0]))
+	b := tokens(len(large.bodies(turns, simModels[0], false)[0]))
+	if b-a < 10000 {
+		t.Fatalf("a %d-token base prompt should add about 13,000 tokens over 6,000; added %d", DefaultSystemTokens, b-a)
+	}
+}
+
+// Every planned session is kept, with or without the guard. A dropped session
+// would make N and the data disagree.
+func TestEveryPlannedSessionIsRun(t *testing.T) {
+	res, err := Run(Options{Seed: 20261108, Weeks: 2, Profiles: []string{"light"}, MCPSchemaBytes: 9000})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := res.Profiles[0]
+	if len(p.Sessions) != p.N || p.N != Profiles()[0].Sessions*2 {
+		t.Fatalf("ran %d sessions, planned %d", len(p.Sessions), p.N)
 	}
 }

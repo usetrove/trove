@@ -37,7 +37,7 @@ func newRand(seed uint64, parts ...string) *rand.Rand {
 		_, _ = h.Write([]byte(p))
 		_, _ = h.Write([]byte{0})
 	}
-	return rand.New(rand.NewPCG(seed, h.Sum64()))
+	return rand.New(rand.NewPCG(seed, h.Sum64())) //nolint:gosec // seeded simulation, reproducible by design, not security-sensitive
 }
 
 // genSession builds session idx of profile p for the run seed.

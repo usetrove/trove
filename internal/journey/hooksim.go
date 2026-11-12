@@ -61,10 +61,10 @@ func (d *sessionDriver) runHookArm(turns []Turn, sessionIndex int, dir string) (
 		}
 		written[rel] = true
 		abs := filepath.Join(dir, rel)
-		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(abs), 0o750); err != nil {
 			return arm, err
 		}
-		if err := os.WriteFile(abs, []byte(t.Output), 0o644); err != nil {
+		if err := os.WriteFile(abs, []byte(t.Output), 0o600); err != nil {
 			return arm, fmt.Errorf("could not write a fixture file: %w", err)
 		}
 	}
