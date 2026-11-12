@@ -149,7 +149,7 @@ func (e *env) loadEngine(lr *LayerResult) {
 		go func(w int) {
 			defer wg.Done()
 			spec := sampleSpec(e.opts.Seed, 1000+w, 20)
-			bodies := buildBodies(spec, genTurns(spec, e.opts.Seed+uint64(w)))
+			bodies := buildBodies(spec, genTurns(spec, e.opts.Seed+uint64(w))) //nolint:gosec // w is a small non-negative worker index
 			key := fmt.Sprintf("load-%d", w)
 			for i := 0; time.Now().Before(deadline) && len(bodies) > 0; i++ {
 				body := bodies[i%len(bodies)]

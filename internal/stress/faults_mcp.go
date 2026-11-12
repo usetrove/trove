@@ -42,7 +42,7 @@ func (e *env) deadMCPFault() []Violation {
 		return []Violation{{"setup", err.Error()}}
 	}
 
-	cmd := exec.Command(bin, "mcp", "--root", root)
+	cmd := exec.Command(bin, "mcp", "--root", root) //nolint:gosec // bin is the trove binary this suite built itself
 	cmd.Env = append(os.Environ(), "TROVE_DATA_DIR="+filepath.Join(e.dir, "mcp-data"))
 	transport := &sdk.CommandTransport{Command: cmd}
 	client := sdk.NewClient(&sdk.Implementation{Name: "trove-stress", Version: "0"}, nil)
@@ -73,7 +73,8 @@ func (e *env) deadMCPFault() []Violation {
 		_ = cmd.Process.Kill()
 	}
 	select {
-	case <-inFlight:
+	case err := <-inFlight:
+		_ = err // the call's own error is not the point; only that it returned
 		// Returned, whether it succeeded just before the kill or failed after it. Both are fine: the point is that
 		// it did not hang.
 	case <-time.After(10 * time.Second):

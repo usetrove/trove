@@ -11,6 +11,9 @@ import (
 
 // Layers 2 to 5 must never carry savings. This is the rule from the task, checked on the JSON a user sees.
 func TestOnlyRealismCarriesSavings(t *testing.T) {
+	if testing.Short() {
+		t.Skip("runs the invariants and faults layers in full (about 25 s, ten times that under -race); the nightly workflow runs it")
+	}
 	rep, err := Run(Options{Mode: ModeSmoke, Seed: 1, Layers: []string{LayerInvariants, LayerFaults}})
 	if err != nil {
 		t.Fatal(err)
@@ -28,8 +31,12 @@ func TestOnlyRealismCarriesSavings(t *testing.T) {
 
 // Same seed, same numbers. A short realism run is enough to show that the sampler and engine are deterministic.
 func TestRealismIsDeterministicForASeed(t *testing.T) {
+	samples := 6
+	if testing.Short() || raceEnabled {
+		samples = 2 // two runs of the same seed are still enough to show determinism; each sample is slow under -race
+	}
 	run := func() string {
-		rep, err := Run(Options{Mode: ModeSmoke, Seed: 20261108, Layers: []string{LayerRealism}, Samples: 6})
+		rep, err := Run(Options{Mode: ModeSmoke, Seed: 20261108, Layers: []string{LayerRealism}, Samples: samples, skipEdges: true})
 		if err != nil {
 			t.Fatal(err)
 		}

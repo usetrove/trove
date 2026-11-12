@@ -34,7 +34,7 @@ func newStress(a *App) *cobra.Command {
 			"  trove bench stress --mode full --soak 4h --out ./stress-nightly\n" +
 			"  trove bench stress --layers fuzz,faults --seed 20261108 --json",
 		Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			rep, err := stress.Run(stress.Options{
 				Mode: stress.Mode(mode), Seed: seed, Layers: layers, Soak: soak, Samples: sample, ReplayDir: replay,
 			})

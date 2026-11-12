@@ -28,7 +28,10 @@ jobs:
       - name: Build trove and the zero-spend stub agent
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
-          go build -o "$RUNNER_TEMP/bin/trove" ./cmd/trove
+          # Build with the plugin's pinned version, as a release build does. The wrapper accepts a trove on PATH
+          # only when `trove version` prints exactly that version (VERSION "dev" accepts any).
+          ver="$(tr -d ' \r\n' < plugin/trove/VERSION)"
+          go build -ldflags "-X github.com/usetrove/trove/internal/cli.Version=$ver" -o "$RUNNER_TEMP/bin/trove" ./cmd/trove
           go build -o "$RUNNER_TEMP/bin/stubagent" ./qa/stubagent
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 

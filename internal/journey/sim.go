@@ -84,12 +84,12 @@ type sessionDriver struct {
 	cfg     config.Config
 }
 
-// newDriver prepares the constant parts of a profile's requests.
 // DefaultSystemTokens is the base prompt a real Claude Code session sends before its
 // first message: system prompt, tool definitions and project context. Measured in the
 // developer's session logs as the median first-request cache write (about 19,000 tokens).
 const DefaultSystemTokens = 19000
 
+// newDriver prepares the constant parts of a profile's requests.
 func newDriver(p Profile, table *pricing.Table, mcpBytes int) *sessionDriver {
 	return newDriverWith(p, table, mcpBytes, DefaultSystemTokens)
 }

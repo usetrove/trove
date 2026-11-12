@@ -51,7 +51,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Race detector over the stress package
-        run: go test -race -count=1 ./internal/stress/
+        run: go test -race -count=1 -timeout 30m ./internal/stress/
 
   nightly:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

@@ -175,6 +175,9 @@ func (e *env) realism() LayerResult {
 	sv.Drivers = drivers(rows, e.opts.Seed)
 	sv.ByModel = byModel(rows)
 	for _, spec := range edges {
+		if e.opts.skipEdges {
+			break
+		}
 		so, err := runSession(spec, e.opts.Seed, tab)
 		if err != nil {
 			e.record(&lr, spec.Name, []Violation{{"run", err.Error()}}, nil)

@@ -28,6 +28,7 @@ import (
 // Mode selects the sample sizes and durations.
 type Mode string
 
+// The two run modes.
 const (
 	ModeSmoke Mode = "smoke" // for CI: well under a minute
 	ModeFull  Mode = "full"  // for nightly: thousands of samples, a longer soak
@@ -58,11 +59,15 @@ type Options struct {
 	ReplayDir string
 	// Now is for tests; nil uses time.Now.
 	Now func() time.Time
+	// skipEdges leaves out the fixed edge-case sessions of the realism layer. Tests set it to keep a run short;
+	// the command never does, so a user's run always includes them.
+	skipEdges bool
 }
 
 // Status is the outcome of one check or layer. A skipped layer is never counted as a pass.
 type Status string
 
+// The possible outcomes of a check or a layer.
 const (
 	Pass    Status = "pass"
 	Fail    Status = "fail"
@@ -255,7 +260,7 @@ func Run(o Options) (Report, error) {
 	if err != nil {
 		return Report{}, err
 	}
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 
 	start := o.Now()
 	rep := Report{Mode: o.Mode, Seed: o.Seed, GoOS: runtime.GOOS, GoArch: runtime.GOARCH,
@@ -337,7 +342,7 @@ func finish(lr *LayerResult) {
 
 // scratchDir makes a fresh temporary folder for this run. It refuses the real Trove data folder.
 func scratchDir() (string, error) {
-	real, err := config.ResolveDataDir("", os.Getenv)
+	realDir, err := config.ResolveDataDir("", os.Getenv)
 	if err != nil {
 		return "", err
 	}
@@ -345,9 +350,9 @@ func scratchDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not create a scratch folder for the stress run: %w", err)
 	}
-	if sameDir(dir, real) {
+	if sameDir(dir, realDir) {
 		_ = os.RemoveAll(dir)
-		return "", fmt.Errorf("the scratch folder resolved to your Trove data folder (%s); refusing to run", real)
+		return "", fmt.Errorf("the scratch folder resolved to your Trove data folder (%s); refusing to run", realDir)
 	}
 	return dir, nil
 }

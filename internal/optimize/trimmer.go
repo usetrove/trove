@@ -155,7 +155,7 @@ func (t OutputTrimmer) trimSpan(text string, origin func() string, th TrimThresh
 		return trimWithSource(text, origin, th)
 	}
 	h := sha256.New()
-	_, _ = h.Write([]byte(fmt.Sprint(th)))
+	_, _ = fmt.Fprint(h, th)
 	_, _ = h.Write([]byte{0})
 	_, _ = h.Write([]byte(text))
 	var key [sha256.Size]byte
@@ -194,7 +194,7 @@ func (t OutputTrimmer) trimRaw(raw []byte, th TrimThresholds, decode func() (str
 		return tr, changed, true
 	}
 	h := sha256.New()
-	_, _ = h.Write([]byte(fmt.Sprint(th)))
+	_, _ = fmt.Fprint(h, th)
 	_, _ = h.Write([]byte{0})
 	_, _ = h.Write(raw)
 	var key [sha256.Size]byte

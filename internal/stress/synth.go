@@ -118,9 +118,9 @@ func genOutput(name string, spec SessionSpec, r *rand.Rand) string {
 			}
 			b.WriteString(line)
 		case "Grep":
-			b.WriteString(fmt.Sprintf("src/pkg%d/file%d.go:%d: matches symbol%d%s", i%7, i%53, i*3, i%29, eol))
+			_, _ = fmt.Fprintf(&b, "src/pkg%d/file%d.go:%d: matches symbol%d%s", i%7, i%53, i*3, i%29, eol)
 		default:
-			b.WriteString(fmt.Sprintf("%5d  line %d of the file, nothing unusual here%s", i+1, i, eol))
+			_, _ = fmt.Fprintf(&b, "%5d  line %d of the file, nothing unusual here%s", i+1, i, eol)
 		}
 	}
 	return b.String()[:size]

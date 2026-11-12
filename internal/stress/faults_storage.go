@@ -79,12 +79,12 @@ func (e *env) corruptStoreFault() []Violation {
 	if err != nil {
 		return []Violation{{"setup", err.Error()}}
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // a file in the suite's own scratch folder
 	if err != nil {
 		return []Violation{{"setup", err.Error()}}
 	}
-	data[0] ^= 0xFF // same length, different content: a bit-rot or hostile edit
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	data[0] ^= 0xFF                                         // same length, different content: a bit-rot or hostile edit
+	if err := os.WriteFile(path, data, 0o600); err != nil { //nolint:gosec // a file in the suite's own scratch folder
 		return []Violation{{"setup", err.Error()}}
 	}
 	if got, _, err := rs.Get(id, 0, 0); err == nil && got != string(orig) {
@@ -130,7 +130,7 @@ func corruptDatabaseCheck(dir string) (out []Violation) {
 	_ = db.Close()
 
 	path := filepath.Join(dir, store.DBFileName)
-	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	f, err := os.OpenFile(path, os.O_RDWR, 0) //nolint:gosec // the database in the suite's own scratch folder
 	if err != nil {
 		return []Violation{{"setup", err.Error()}}
 	}
