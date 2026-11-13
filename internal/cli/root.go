@@ -39,6 +39,7 @@ func NewRoot(a *App) *cobra.Command {
 	// blow the status line's 50 ms budget, and Trove is a terminal tool.
 	cobra.MousetrapHelpText = ""
 	var rootPeriod periodFlags
+	var showVersion bool
 	root := &cobra.Command{
 		Use:           "trove",
 		Short:         "The efficiency layer for AI coding agents",
@@ -46,8 +47,15 @@ func NewRoot(a *App) *cobra.Command {
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		RunE:          func(*cobra.Command, []string) error { return runReport(a, rootPeriod) },
+		RunE: func(*cobra.Command, []string) error {
+			if showVersion {
+				return runVersion(a)
+			}
+			return runReport(a, rootPeriod)
+		},
 	}
+	// A local flag, not a persistent one, so `trove report --version` is still an error.
+	root.Flags().BoolVar(&showVersion, "version", false, "print the version and exit")
 	rootPeriod.add(root)
 	f := root.PersistentFlags()
 	f.BoolVar(&a.JSON, "json", false, "output machine-readable JSON")

@@ -50,26 +50,48 @@ func newHarness(t *testing.T, env map[string]string, binaries ...string) *harnes
 
 func (h *harness) run(args ...string) int { return Execute(h.app, args) }
 
+// `trove --version` is the documented spelling. The old `trove version` is a
+// hidden alias for one release, so both must print the same thing.
 func TestVersion(t *testing.T) {
-	h := newHarness(t, nil)
-	if code := h.run("version"); code != 0 {
-		t.Fatalf("exit %d: %s", code, h.err)
-	}
-	for _, want := range []string{"trove dev", "commit: none", "built: unknown", "pricing data: " + pricing.DataVersion} {
-		if !strings.Contains(h.out.String(), want) {
-			t.Errorf("missing %q in %q", want, h.out)
+	for _, spelling := range [][]string{{"--version"}, {"version"}} {
+		h := newHarness(t, nil)
+		if code := h.run(spelling...); code != 0 {
+			t.Fatalf("%v: exit %d: %s", spelling, code, h.err)
 		}
+		if first, _, _ := strings.Cut(h.out.String(), "\n"); first != "trove dev" {
+			t.Errorf("%v: first line %q; the plugin launcher compares it to \"trove <version>\"", spelling, first)
+		}
+		for _, want := range []string{"commit: none", "built: unknown", "pricing data: " + pricing.DataVersion} {
+			if !strings.Contains(h.out.String(), want) {
+				t.Errorf("%v: missing %q in %q", spelling, want, h.out)
+			}
+		}
+		h = newHarness(t, nil)
+		h.run(append(spelling, "--json")...)
+		var v map[string]string
+		if err := json.Unmarshal(h.out.Bytes(), &v); err != nil {
+			t.Fatal(err)
+		}
+		for _, k := range []string{"version", "commit", "build_date", "pricing_data_version"} {
+			if _, ok := v[k]; !ok {
+				t.Errorf("%v: json lacks %q", spelling, k)
+			}
+		}
+	}
+}
+
+func TestVersionIsOnlyAFlagOnTheRoot(t *testing.T) {
+	h := newHarness(t, nil)
+	if code := h.run("report", "--version"); code != 1 || !strings.HasPrefix(h.err.String(), "Error: ") {
+		t.Errorf("report --version: exit %d, stderr %q; want an unknown-flag error", code, h.err)
 	}
 	h = newHarness(t, nil)
-	h.run("version", "--json")
-	var v map[string]string
-	if err := json.Unmarshal(h.out.Bytes(), &v); err != nil {
-		t.Fatal(err)
+	h.run("--help")
+	if strings.Contains(h.out.String(), "Same as `trove --version`") {
+		t.Errorf("the hidden `version` command shows in --help:\n%s", h.out)
 	}
-	for _, k := range []string{"version", "commit", "build_date", "pricing_data_version"} {
-		if _, ok := v[k]; !ok {
-			t.Errorf("json lacks %q", k)
-		}
+	if !strings.Contains(h.out.String(), "--version") {
+		t.Errorf("--help does not list --version:\n%s", h.out)
 	}
 }
 

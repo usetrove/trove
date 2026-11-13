@@ -4,6 +4,9 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Changed
+- `trove --version` replaces `trove version` (same output, same `--json`). `trove version` still works as a hidden alias for one release. The plugin launcher tries `--version` first and falls back to `version`, so it still accepts a `trove` on PATH from an earlier release at the pinned version.
+
 ## [0.2.2] - 2026-11-12
 
 Published as a regular release, not a pre-release. The release checklist ([docs/release-checklist.md](docs/release-checklist.md)) still has open items, listed under "Known gaps in this release" below. The notes under 0.1.0 were written before the earlier 0.2.0 and 0.2.1 tags and are folded into this release.

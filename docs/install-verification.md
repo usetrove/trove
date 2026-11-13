@@ -12,13 +12,13 @@ Automated checks already cover the install script (`sh install_test.sh`); this p
 | `install.sh` | | | | |
 | Direct download + manual checksum | | | | |
 
-For each cell, write: date, OS version, pass/fail, and the seconds from the first command to `trove version` printing.
+For each cell, write: date, OS version, pass/fail, and the seconds from the first command to `trove --version` printing.
 
 ## Per-path steps
 
 1. Start from a fresh user account or VM snapshot.
 2. Run the README command for the path. Note the time.
-3. `trove version` prints the release version and a commit.
+3. `trove --version` prints the release version and a commit.
 4. **Checksum is enforced.** Tamper with the downloaded archive (change one byte) or `checksums.txt` and repeat the install. It must stop with a plain-English error and must not run or install the binary.
 5. **Signature (direct download).** Run the `cosign verify-blob` command from the README against the real release. It must succeed for the release tag and fail for a different tag in `--certificate-identity`.
 6. `trove doctor` has no failures. A pricing-age warning is a release blocker.
@@ -29,7 +29,7 @@ Use a machine with real Claude Code history on disk.
 
 | Step | Time (seconds) |
 |---|---|
-| Start of install to `trove version` | |
+| Start of install to `trove --version` | |
 | `trove` (history report) first output | |
 | Start of install to first report, total | |
 
