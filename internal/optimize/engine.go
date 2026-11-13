@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
@@ -39,6 +40,12 @@ type Options struct {
 	// ExtraStates returns the current states ("off" or "on") of third-party
 	// tools, keyed by optimizer name, each time a session starts. Nil means none.
 	ExtraStates func() map[string]string
+	// AutopilotStates returns the states Autopilot chose for optimizers the user left
+	// unset (see internal/autopilot). The engine calls it at most every few seconds
+	// and applies the answer only to sessions that start afterwards, because a
+	// session pins its states on its first request. Nil means no Autopilot. An error
+	// must return nil: every failure lowers states, never raises them.
+	AutopilotStates func() map[string]string
 }
 
 // RecoveryStore keeps full tool output so the agent can fetch it back with
@@ -62,6 +69,11 @@ type Engine struct {
 	gate     StateGate
 	recovery RecoveryStore
 	tools    []Base
+
+	apFn  func() map[string]string
+	apMu  sync.Mutex
+	apAt  time.Time
+	apCfg config.Config
 }
 
 // New returns an Engine.
@@ -72,6 +84,7 @@ func New(o Options) *Engine {
 	}
 	e.pins.recoverable = o.Recovery != nil
 	e.pins.extras = o.ExtraStates
+	e.apFn = o.AutopilotStates
 	e.tools = o.Tools
 	if e.tools == nil {
 		e.tools = ToolPipeline()
@@ -103,8 +116,9 @@ func New(o Options) *Engine {
 // is false the gateway skips the engine entirely, so a default install pays
 // nothing for the framework.
 func (e *Engine) Enabled() bool {
+	cfg := e.current()
 	for _, o := range e.pipeline {
-		if s := effectiveStateFor(o.Name(), e.cfg.OptimizerState(o.Name()), e.recovery != nil); s == config.StateShadow || s == config.StateOn {
+		if s := effectiveStateFor(o.Name(), cfg.OptimizerState(o.Name()), e.recovery != nil); s == config.StateShadow || s == config.StateOn {
 			return true
 		}
 	}
@@ -187,7 +201,7 @@ func (e *Engine) TransformRequest(ctx context.Context, rq RequestIn, s Session) 
 		return res
 	}
 
-	pin, err := e.pins.get(ctx, in.SessionKey, e.cfg, e.bpt, e.now(), e.gate)
+	pin, err := e.pins.get(ctx, in.SessionKey, e.current(), e.bpt, e.now(), e.gate)
 	if err != nil {
 		// The pin still works from memory; only restart-survival is at risk.
 		e.log.Warn("could not save the session's optimizer settings; continuing with them in memory", "err", err)
@@ -340,4 +354,23 @@ func guard(ctx context.Context, o Optimizer, r *Request, s Session) (*Request, R
 // String describes the engine for logs.
 func (e *Engine) String() string {
 	return fmt.Sprintf("optimize.Engine(%d optimizers)", len(e.pipeline))
+}
+
+// autopilotRefresh is how long the engine reuses Autopilot's last answer.
+const autopilotRefresh = 5 * time.Second
+
+// current returns the configuration for new sessions: the one the engine was
+// built with, plus Autopilot's states when AutopilotStates is set. It never
+// changes a session that already has a pin.
+func (e *Engine) current() config.Config {
+	if e.apFn == nil {
+		return e.cfg
+	}
+	e.apMu.Lock()
+	defer e.apMu.Unlock()
+	if now := e.now(); e.apAt.IsZero() || now.Sub(e.apAt) >= autopilotRefresh {
+		e.apCfg = e.cfg.WithAutopilotStates(e.apFn())
+		e.apAt = now
+	}
+	return e.apCfg
 }

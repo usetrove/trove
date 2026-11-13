@@ -19,6 +19,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/usetrove/trove/internal/analyze"
+	"github.com/usetrove/trove/internal/autopilot"
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/experiment"
 	"github.com/usetrove/trove/internal/external"
@@ -161,6 +162,13 @@ func runGateway(a *App, listen string) error {
 	opts := optimize.Options{
 		Config: cfg, Pins: db.Pins(), KillFile: optimize.KillFile(dir), Getenv: a.Getenv, Log: log,
 		Gate: gate.State,
+		AutopilotStates: func() map[string]string {
+			f, err := config.LoadAutopilot(dir)
+			if err != nil {
+				return nil // a damaged file means no Autopilot, which only lowers states
+			}
+			return f.States()
+		},
 		ExtraStates: func() map[string]string {
 			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 			defer cancel()
@@ -200,6 +208,22 @@ func runGateway(a *App, listen string) error {
 		for {
 			if _, err := external.GuardAll(ctx, db, dir, cfg.Measure, time.Now()); err != nil && ctx.Err() == nil {
 				log.Warn("could not check third-party tools; requests are unaffected", "err", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+			}
+		}
+	}()
+	// Autopilot: evaluate now and then. A change only reaches sessions that start
+	// afterwards, because the engine pins a session's states on its first request.
+	go func() {
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for {
+			if _, _, err := autopilot.Advance(ctx, db, dir, cfg, autopilot.DefaultPolicy(), time.Now()); err != nil && ctx.Err() == nil {
+				log.Warn("could not update Autopilot; requests are unaffected", "err", err)
 			}
 			select {
 			case <-ctx.Done():

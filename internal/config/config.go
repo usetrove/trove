@@ -42,6 +42,10 @@ type Config struct {
 	Recovery      Recovery          `toml:"recovery"`
 	Contribute    Contribute        `toml:"contribute"`
 	RetentionDays int               `toml:"retention_days"`
+
+	// autopilot holds the states Autopilot chose for optimizers the user did not set
+	// themselves (see autopilot.go). It is not part of config.toml.
+	autopilot map[string]string
 }
 
 // Contribute holds the setting for the optional anonymous summary upload (see
@@ -235,6 +239,9 @@ func Default() Config {
 // OptimizerState returns the state of the named optimizer; unlisted means off.
 func (c Config) OptimizerState(name string) string {
 	if s, ok := c.Optimizers[name]; ok {
+		return s
+	}
+	if s, ok := c.autopilot[name]; ok {
 		return s
 	}
 	return StateOff
@@ -622,6 +629,11 @@ func Load(dataDir string, getenv func(string) string) (Config, error) {
 	}
 	if err := cfg.Validate(); err != nil {
 		return cfg, fmt.Errorf("invalid configuration in %s (or TROVE_ environment variables):\n%w", path, err)
+	}
+	// Autopilot only ever supplies states for optimizers the user left unset. A damaged
+	// file means no Autopilot, never a failure to start.
+	if f, aerr := LoadAutopilot(dataDir); aerr == nil {
+		cfg = cfg.WithAutopilot(f)
 	}
 	return cfg, nil
 }

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/usetrove/trove/internal/autopilot"
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/external"
 	"github.com/usetrove/trove/internal/features"
@@ -242,6 +243,11 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	rolled, err := measure.Overrides(ctx, db)
 	if err != nil {
 		return fmt.Errorf("cannot read guardrail rollbacks: %v", err)
+	}
+	// Autopilot: promote or roll back at this session boundary. Best effort, and a failure
+	// leaves the saved states as they were, so it never turns anything on by accident.
+	if f, _, aerr := autopilot.Advance(ctx, db, dir, cfg, autopilot.DefaultPolicy(), now); aerr == nil {
+		cfg = cfg.WithAutopilot(f)
 	}
 	// Revert tuning that did not help before the snapshot is written, so the next
 	// session already starts with the defaults. Best effort: tuning must never stop
