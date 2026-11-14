@@ -38,7 +38,10 @@ def docker(*args: str, timeout: float | None = None, input: str | None = None, c
     except subprocess.TimeoutExpired as e:
         raise DockerError(f"docker {args[0]} timed out after {timeout:.0f}s.") from e
     if check and p.returncode != 0:
-        raise DockerError(redact(f"docker {args[0]} failed (exit {p.returncode}): {p.stderr.strip()[-800:]}", secrets))
+        detail = p.stderr.strip()[-800:]
+        if args[0] == "build":   # the legacy builder prints the failing step's output on stdout
+            detail += " | build output: " + p.stdout.strip()[-1500:]
+        raise DockerError(redact(f"docker {args[0]} failed (exit {p.returncode}): {detail}", secrets))
     return p
 
 

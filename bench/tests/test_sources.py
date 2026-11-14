@@ -71,7 +71,8 @@ def test_polyglot_empty_checkout(tmp_path):
 
 def swe_row(i, repo="psf/requests"):
     return {"repo": repo, "instance_id": f"{repo.replace('/', '__')}-{i}", "base_commit": f"{i:040d}", "patch": "gold\n",
-            "test_patch": DIFF, "problem_statement": f"problem {i}", "difficulty": "<15 min fix"}
+            "test_patch": DIFF, "problem_statement": f"problem {i}", "difficulty": "<15 min fix",
+            "created_at": "2022-03-03T15:14:54Z", "FAIL_TO_PASS": '["tests/test_app.py::test_a[x y]"]'}
 
 
 def fake_get(rows, shas):
@@ -101,9 +102,29 @@ def test_swebench_generate_filters_runners(tmp_path):
     tasks = swebench.generate(rows, "rev123", tmp_path, n=50, seed=1)
     assert len(tasks) == 5 and all("django" not in t.id and "sympy" not in t.id for t in tasks)
     t = load_tasks(tmp_path)[0]
-    assert t.dataset_commit == "rev123" and t.success_cmd.endswith("tests/test_app.py")
+    assert t.dataset_commit == "rev123" and t.success_cmd.endswith("'tests/test_app.py::test_a[x y]'")
     assert (tmp_path / t.id / "gold.patch").read_text() == "gold\n"
     assert t.id == t.id.lower() and t.source == "swebench"
+
+
+def test_swebench_environment_is_dated_to_the_pull_request(tmp_path):
+    t = swebench.generate([swe_row(1)], "rev", tmp_path, n=1, seed=1)[0]
+    assert "uv pip install --system --exclude-newer 2022-03-03 -e . pytest" in t.setup
+    assert any("locale-gen" in s for s in t.setup)
+
+
+def test_swebench_grading_falls_back_to_whole_files():
+    files = ["tests/test_app.py"]
+    base = swe_row(1)
+    for bad in (None, "", "[]", "not json"):
+        assert swebench.success_cmd({**base, "FAIL_TO_PASS": bad}, files).endswith("tests/test_app.py")
+    huge = '["' + "a" * (swebench.MAX_TEST_ARGS + 1) + '"]'
+    assert swebench.success_cmd({**base, "FAIL_TO_PASS": huge}, files).endswith("tests/test_app.py")
+
+
+def test_swebench_row_without_a_date_is_skipped(tmp_path):
+    row = {k: v for k, v in swe_row(1).items() if k != "created_at"}
+    assert swebench.generate([row], "rev", tmp_path, n=1, seed=1) == []
 
 
 # --- miner ----------------------------------------------------------------------
