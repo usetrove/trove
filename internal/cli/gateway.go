@@ -222,9 +222,10 @@ func runGateway(a *App, listen string) error {
 		t := time.NewTicker(time.Hour)
 		defer t.Stop()
 		for {
-			if _, _, err := autopilot.Advance(ctx, db, dir, cfg, autopilot.DefaultPolicy(), time.Now()); err != nil && ctx.Err() == nil {
+			if _, err := autopilot.Advance(ctx, db, dir, cfg, autopilot.DefaultPolicy(), time.Now()); err != nil && ctx.Err() == nil {
 				log.Warn("could not update Autopilot; requests are unaffected", "err", err)
 			}
+			_ = autopilot.Announce(dir, cfg.Notifications.Desktop, textNotifier())
 			select {
 			case <-ctx.Done():
 				return

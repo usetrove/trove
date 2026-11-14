@@ -22,13 +22,14 @@ func Enable(dir string, p Policy, now time.Time) (config.AutopilotFile, error) {
 	for _, name := range p.Eligible {
 		if _, ok := f.Entries[name]; !ok {
 			f.Entries[name] = config.AutopilotEntry{State: config.AutopilotShadow, SinceMS: now.UnixMilli(), Reason: "collecting shadow estimates"}
+			f.Record(config.AutopilotEvent{AtMS: now.UnixMilli(), Optimizer: name, From: config.AutopilotOff, To: config.AutopilotShadow, Reason: "Autopilot turned on"})
 		}
 	}
 	return f, config.SaveAutopilot(dir, f)
 }
 
-// Disable withdraws consent and forgets Autopilot's states. New sessions go back
-// to what config.toml says. Sessions already running keep their pinned states.
+// Disable withdraws consent and forgets Autopilot's states and plan. New sessions
+// go back to what config.toml says. Sessions already running keep their pins.
 func Disable(dir string) error {
 	return config.SaveAutopilot(dir, config.AutopilotFile{Entries: map[string]config.AutopilotEntry{}})
 }
@@ -43,32 +44,44 @@ func SetPaused(dir string, paused bool) (config.AutopilotFile, error) {
 	return f, config.SaveAutopilot(dir, f)
 }
 
-// Advance evaluates every eligible optimizer once and saves any change. Call it
-// at a session boundary (a session ending, or the gateway starting): the new
-// states only reach sessions that start afterwards, because the engine pins a
-// session's states on its first request. A failure leaves the saved states as
-// they were, so an error never turns anything on.
-func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p Policy, now time.Time) (config.AutopilotFile, bool, error) {
+// Result is what one Advance did.
+type Result struct {
+	File config.AutopilotFile
+	// Changed is true when autopilot.json was rewritten.
+	Changed bool
+	// Events are the state changes made in this call.
+	Events []config.AutopilotEvent
+}
+
+// Advance evaluates every eligible optimizer once, refreshes the shadow planner's
+// advice and saves any change. Call it at a session boundary (a session ending, or
+// the gateway running its hourly check): the new states only reach sessions that
+// start afterwards, because the engine and the hooks pin a session's states when
+// it starts. A failure leaves the saved states as they were, so an error never
+// turns anything on.
+func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p Policy, now time.Time) (Result, error) {
 	f, err := config.LoadAutopilot(dir)
 	if err != nil {
-		return f, false, err
+		return Result{File: f}, err
 	}
 	if !f.Active() {
-		return f, false, nil
+		return Result{File: f}, nil
 	}
 	base, rolled, err := measure.LoadStatus(ctx, db, cfg.Measure, now)
 	if err != nil {
-		return f, false, fmt.Errorf("cannot read the baseline status: %v", err)
+		return Result{File: f}, fmt.Errorf("cannot read the baseline status: %v", err)
 	}
 	w := measure.Window{From: now.AddDate(0, 0, -p.LookbackDays), To: now}
 	rows, err := measure.ShadowEstimates(ctx, db, w, cfg)
 	if err != nil {
-		return f, false, fmt.Errorf("cannot read shadow estimates: %v", err)
+		return Result{File: f}, fmt.Errorf("cannot read shadow estimates: %v", err)
 	}
 	byName := map[string]measure.ShadowRow{}
 	for _, r := range rows {
 		byName[r.Optimizer] = r
 	}
+	baselineDone := base.Phase == measure.PhaseActive
+	res := Result{File: f}
 	changed := false
 	for _, name := range p.Eligible {
 		if _, mine := cfg.Optimizers[name]; mine {
@@ -83,7 +96,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 		_, back := rolled[name]
 		row := byName[name]
 		ev := Evidence{
-			BaselineDone:   base.Phase == measure.PhaseActive,
+			BaselineDone:   baselineDone,
 			ShadowSessions: row.Sessions,
 			NetTokens:      int64(row.Tokens.Value) - p.OverheadTokens[name]*int64(row.Sessions),
 			RolledBack:     back,
@@ -91,19 +104,50 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 		d := p.Decide(cur, ev, now)
 		if d.ClearRollback {
 			if err := measure.ClearOverride(ctx, db, name, now); err != nil {
-				return f, false, fmt.Errorf("cannot lift the rollback of %s: %v", name, err)
+				return Result{File: f}, fmt.Errorf("cannot lift the rollback of %s: %v", name, err)
 			}
 		}
 		if d.Entry != cur {
 			f.Entries[name] = d.Entry
 			changed = true
 		}
+		if d.Entry.State != cur.State {
+			e := config.AutopilotEvent{AtMS: now.UnixMilli(), Optimizer: name, From: orOff(cur.State), To: d.Entry.State, Reason: d.Entry.Reason}
+			f.Record(e)
+			res.Events = append(res.Events, e)
+		}
+	}
+	// The shadow planner only writes advice. It never touches a state.
+	plan := p.Plan(byName, f.Entries, baselineDone)
+	if !samePlan(plan, f.Plan) {
+		f.Plan, f.PlannedMS = plan, now.UnixMilli()
+		changed = true
 	}
 	f.LastEvalMS = now.UnixMilli()
 	if changed {
 		if err := config.SaveAutopilot(dir, f); err != nil {
-			return f, false, fmt.Errorf("cannot save Autopilot's state: %v", err)
+			return Result{File: f}, fmt.Errorf("cannot save Autopilot's state: %v", err)
 		}
 	}
-	return f, changed, nil
+	res.File, res.Changed = f, changed
+	return res, nil
+}
+
+func orOff(s string) string {
+	if s == "" {
+		return config.AutopilotOff
+	}
+	return s
+}
+
+func samePlan(a, b []config.AutopilotPlanItem) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

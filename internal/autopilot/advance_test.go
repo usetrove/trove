@@ -87,11 +87,11 @@ func TestAdvanceWithoutEvidencePromotesNothing(t *testing.T) {
 	}
 	cfg := config.Default()
 	for i := 0; i < 5; i++ {
-		f, _, err := Advance(context.Background(), db, dir, cfg, DefaultPolicy(), t0.Add(time.Duration(i)*time.Hour))
+		res, err := Advance(context.Background(), db, dir, cfg, DefaultPolicy(), t0.Add(time.Duration(i)*time.Hour))
 		if err != nil {
 			t.Fatal(err)
 		}
-		for n, e := range f.Entries {
+		for n, e := range res.File.Entries {
 			if e.State == config.AutopilotOn || e.State == config.AutopilotCandidate {
 				t.Fatalf("%s reached %q with no shadow evidence", n, e.State)
 			}
@@ -101,9 +101,9 @@ func TestAdvanceWithoutEvidencePromotesNothing(t *testing.T) {
 
 func TestAdvanceDoesNothingUntilTheUserConsents(t *testing.T) {
 	db, dir := open(t)
-	f, changed, err := Advance(context.Background(), db, dir, config.Default(), DefaultPolicy(), t0)
-	if err != nil || changed || f.Active() {
-		t.Fatalf("active=%v changed=%v err=%v", f.Active(), changed, err)
+	res, err := Advance(context.Background(), db, dir, config.Default(), DefaultPolicy(), t0)
+	if err != nil || res.Changed || res.File.Active() {
+		t.Fatalf("active=%v changed=%v err=%v", res.File.Active(), res.Changed, err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, config.AutopilotFileName)); err == nil {
 		t.Error("Advance created autopilot.json without consent")
@@ -117,10 +117,11 @@ func TestAdvanceLeavesAnOptimizerTheUserSetAlone(t *testing.T) {
 	}
 	cfg := config.Default()
 	cfg.Optimizers = map[string]string{"noise_normalizer": config.StateOff}
-	f, changed, err := Advance(context.Background(), db, dir, cfg, DefaultPolicy(), t0.Add(time.Hour))
-	if err != nil || !changed {
-		t.Fatalf("changed=%v err=%v", changed, err)
+	res, err := Advance(context.Background(), db, dir, cfg, DefaultPolicy(), t0.Add(time.Hour))
+	if err != nil || !res.Changed {
+		t.Fatalf("changed=%v err=%v", res.Changed, err)
 	}
+	f := res.File
 	if _, has := f.Entries["noise_normalizer"]; has {
 		t.Error("Autopilot kept managing an optimizer the user set in config.toml")
 	}

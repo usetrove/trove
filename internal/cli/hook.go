@@ -17,7 +17,7 @@ func RunHook(args []string, stdin io.Reader, stdout io.Writer) int {
 	if runProbeHook(args, stdin, stdout) {
 		return 0
 	}
-	return hooks.Main(hooks.Env{Args: args, Stdin: stdin, Stdout: stdout, Getenv: os.Getenv, Notify: notifierSync()})
+	return hooks.Main(hooks.Env{Args: args, Stdin: stdin, Stdout: stdout, Getenv: os.Getenv, Notify: notifierSync(), NotifyText: textNotifierSync()})
 }
 
 // newHookCmd is the same entry point as a (hidden) cobra command, so

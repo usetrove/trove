@@ -1,0 +1,61 @@
+package autopilot
+
+import (
+	"sort"
+
+	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/optimize"
+)
+
+// Planner verdicts.
+const (
+	VerdictOn              = "on"
+	VerdictWouldTurnOn     = "would_turn_on"
+	VerdictNeedsYourChoice = "needs_your_choice"
+	VerdictCollecting      = "collecting"
+	VerdictNotWorthIt      = "not_worth_it"
+)
+
+// Tier says what kind of change an optimizer makes, from docs/optimize.md.
+func Tier(name string) string {
+	if name == config.OptimizerOutputTrimmer {
+		return "recoverable" // shortens output; the full text can be fetched back
+	}
+	return "lossless"
+}
+
+// Plan is the shadow planner. For every optimizer it says what Autopilot would do
+// with the evidence so far, including optimizers it may never turn on by itself.
+// It is advice only: it reads numbers and changes no setting and no request. It
+// is the second step of the build order in docs/autopilot.md; an active planner
+// needs a session-level A/B showing it beats the fixed list after its own
+// overhead, and none has been run.
+//
+// rows are the shadow estimates (each optimizer valued on its own, so they
+// overlap and must not be added together). entries are Autopilot's current states.
+func (p Policy) Plan(rows map[string]measure.ShadowRow, entries map[string]config.AutopilotEntry, baselineDone bool) []config.AutopilotPlanItem {
+	var out []config.AutopilotPlanItem
+	for _, name := range optimize.PipelineNames {
+		row := rows[name]
+		net := int64(row.Tokens.Value) - p.OverheadTokens[name]*int64(row.Sessions)
+		it := config.AutopilotPlanItem{Optimizer: name, Tier: Tier(name), Sessions: row.Sessions, NetTokens: net}
+		ok, why := p.ready(Evidence{BaselineDone: baselineDone, ShadowSessions: row.Sessions, NetTokens: net})
+		switch {
+		case entries[name].State == config.AutopilotOn:
+			it.Verdict, it.Reason = VerdictOn, "Autopilot turned it on"
+		case ok && p.IsEligible(name):
+			it.Verdict, it.Reason = VerdictWouldTurnOn, "enough shadow evidence; Autopilot turns it on at the next check"
+		case ok:
+			it.Verdict = VerdictNeedsYourChoice
+			it.Reason = "the evidence looks good, but Autopilot never turns this one on by itself; you can set it in config.toml"
+		case row.Sessions >= p.MinSessions && net <= 0:
+			it.Verdict, it.Reason = VerdictNotWorthIt, "estimated net saving is not positive after its own cost"
+		default:
+			it.Verdict, it.Reason = VerdictCollecting, why
+		}
+		out = append(out, it)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Optimizer < out[j].Optimizer })
+	return out
+}

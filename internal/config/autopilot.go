@@ -47,6 +47,13 @@ type AutopilotFile struct {
 	Entries      map[string]AutopilotEntry `json:"entries"`
 	LastEvalMS   int64                     `json:"last_eval_ms,omitempty"`
 	LastEvalNote string                    `json:"last_eval_note,omitempty"`
+	// History is the last AutopilotHistoryMax state changes, oldest first.
+	History []AutopilotEvent `json:"history,omitempty"`
+	// NotifiedMS is the time of the newest event a desktop notice was sent for.
+	NotifiedMS int64 `json:"notified_ms,omitempty"`
+	// Plan is the shadow planner's latest advice (see internal/autopilot/planner.go).
+	Plan      []AutopilotPlanItem `json:"plan,omitempty"`
+	PlannedMS int64               `json:"planned_ms,omitempty"`
 }
 
 // Active reports whether Autopilot may influence optimizer states: the user
@@ -150,4 +157,35 @@ func (c Config) AutopilotStates() map[string]string { return c.autopilot }
 func (c Config) WithAutopilotStates(states map[string]string) Config {
 	c.autopilot = states
 	return c
+}
+
+// AutopilotHistoryMax is how many state changes autopilot.json keeps.
+const AutopilotHistoryMax = 50
+
+// AutopilotEvent is one state change. Names, states, a time and a short reason.
+type AutopilotEvent struct {
+	AtMS      int64  `json:"at_ms"`
+	Optimizer string `json:"optimizer"`
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+// AutopilotPlanItem is one line of the shadow planner's output: what it would
+// choose for an optimizer. It is advice only and changes nothing.
+type AutopilotPlanItem struct {
+	Optimizer string `json:"optimizer"`
+	Tier      string `json:"tier"`    // lossless or recoverable
+	Verdict   string `json:"verdict"` // would_turn_on, needs_your_choice, collecting, not_worth_it
+	Sessions  int    `json:"shadow_sessions"`
+	NetTokens int64  `json:"est_net_tokens"` // estimated
+	Reason    string `json:"reason"`
+}
+
+// Record appends an event, keeping the newest AutopilotHistoryMax.
+func (f *AutopilotFile) Record(e AutopilotEvent) {
+	f.History = append(f.History, e)
+	if n := len(f.History); n > AutopilotHistoryMax {
+		f.History = append([]AutopilotEvent(nil), f.History[n-AutopilotHistoryMax:]...)
+	}
 }

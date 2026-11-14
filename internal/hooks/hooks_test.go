@@ -782,3 +782,23 @@ func TestHandlerTiming(t *testing.T) {
 		t.Errorf("with 8 hooks at once: p95 = %v, want under 100ms", loaded)
 	}
 }
+
+// Autopilot's states reach the snapshot, and the snapshot only reaches sessions
+// that start afterwards: SessionStart pins a session's states (see
+// TestStateIsPinnedForTheSession), so Autopilot cannot change one in progress.
+func TestAutopilotStatesReachTheSnapshot(t *testing.T) {
+	f := config.AutopilotFile{Enabled: true, Policy: config.AutopilotPolicy, Entries: map[string]config.AutopilotEntry{
+		config.OptimizerNoiseNormalizer: {State: config.AutopilotOn},
+		config.OptimizerOutputTrimmer:   {State: config.AutopilotCandidate},
+	}}
+	snap := BuildSnapshot(config.Default().WithAutopilot(f), nil, false, time.Now())
+	if got := snap.States[config.OptimizerNoiseNormalizer]; got != stateOn {
+		t.Errorf("noise_normalizer %q in the snapshot, want on", got)
+	}
+	if got := snap.States[config.OptimizerOutputTrimmer]; got != stateShadow {
+		t.Errorf("a candidate must run in shadow, got %q", got)
+	}
+	if got := snap.States[config.OptimizerHookRepeatRead]; got != stateOff {
+		t.Errorf("an optimizer Autopilot does not manage changed to %q", got)
+	}
+}
