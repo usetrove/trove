@@ -3,6 +3,8 @@ package external
 import (
 	"fmt"
 	"sort"
+
+	"github.com/usetrove/trove/internal/technique"
 )
 
 // exclusive categories allow at most one enabled tool.
@@ -47,7 +49,7 @@ func CheckEnable(want Manifest, enabled []Manifest, builtinsOn []string) []Confl
 				want.Name, o.Name, want.Category, o.Name)})
 		}
 	}
-	for _, b := range builtinOverlap[want.Category] {
+	for _, b := range overlapFor(want) {
 		if contains(builtinsOn, b) {
 			out = append(out, Conflict{want.Name, b, true, fmt.Sprintf(
 				"%s overlaps the built-in %s, which is on. Turn the built-in off (set its state to off in your Trove config) at a session boundary first.",
@@ -56,6 +58,17 @@ func CheckEnable(want Manifest, enabled []Manifest, builtinsOn []string) []Confl
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Other < out[j].Other })
 	return out
+}
+
+// overlapFor returns the built-in optimizers that do the same job as the tool.
+// The technique registry is the source: a tool it knows is answered from there, so
+// the list lives in one place. A tool the registry does not know yet falls back to
+// the category table above.
+func overlapFor(m Manifest) []string {
+	if _, ok := technique.Get(m.Name); ok {
+		return technique.OverlappingBuiltins(m.Name)
+	}
+	return builtinOverlap[m.Category]
 }
 
 func contains(xs []string, s string) bool {

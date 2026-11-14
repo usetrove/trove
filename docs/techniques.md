@@ -60,7 +60,8 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 | B5 | `cache_breakpoints`: place cache markers on the final layout | request | native | **yes** | no | custom agents only; at most 3 of the 4 allowed |
 | B6 | `hook_repeat_read`: deny a repeat read of an unchanged file | tool boundary | native | no | yes | S7 `PreToolUse` deny |
 | B7 | `hook_read_limit`: add `limit: 400` to a large read | tool boundary | native | no | yes | needs `updatedInput` (S7); it replaces the whole input |
-| B8 | `hook_quiet_commands`, `hook_large_output`: quieter flags, hint to use `trove_run` | tool boundary | native | no | yes | |
+| B8 | `hook_large_output`: hint to use `trove_run` for known-noisy commands | tool boundary | native | no | yes | needs the MCP server |
+| B15 | `hook_quiet_commands`: add one output-quieting flag to an allowlisted command | tool boundary | native | no | yes | rewrites the Bash command like RTK does but is not refused beside it today; whether it should be is open |
 | B9 | MCP tools `trove_read`, `trove_search`, `trove_run`, `trove_fetch_full` | tool boundary | native | no | yes | tool definitions are added to every request: an overhead (rule 15) |
 | B10 | `trove fix`: `mcp_prune`, `context_slim`, `cache_breaker_fix`, `model_default` | config | config | no | yes | diff and undo |
 | B13 | `trove fix` `settings_check`: flag and remove a cost-raising setting you already have (caching off, tool search off, a one-hour cache lifetime with one-hour writes in your history) | config | config | no | yes | suggestion only, never in `--all`, no saving figure; added 2026-11-13 |
@@ -158,12 +159,22 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 ## What "work together" requires
 
 1. **A registry entry per technique** with: layer, route, prefix flag, declared overhead (rule 15), conflicts,
-   whether it needs the gateway, the login types it works for, and its source and licence. This document's tables are
-   the first draft of those entries.
+   whether it needs the gateway, the login types it works for, and its source and licence. **Built 2026-11-13:**
+   `internal/technique` (`registry.go`) is the code form of this document's tables. Tests keep the two in step (same
+   IDs), tie every name to the code that implements it, and enforce the rules above: a technique that adds text
+   declares its overhead, only built, lossless, prefix-safe techniques are marked for Autopilot, vendored code is MIT or
+   Apache-2.0, and a candidate's name must not already exist in the code. `trove techniques` lists it.
 2. **A fixed, deterministic order** (rule 5). Layers 3 and 4 already have one (`docs/optimize.md`). Config and
    instruction techniques apply once, at session start.
 3. **One conflict check for everything.** Today `internal/external/conflict.go` covers wrapped tools. Extend it to
-   the built-in techniques so Autopilot can refuse an incompatible pair.
+   the built-in techniques so Autopilot can refuse an incompatible pair. **Built 2026-11-13:** `technique.Check` and
+   `technique.CanAdd` answer it for built-in and wrapped techniques alike, from claims on scarce resources (the
+   agent's API endpoint, who shortens shell output, who provides read and search tools, who asks for terse replies)
+   and explicit pairs. `trove external` now takes its built-in overlap from the registry, with a test that it still
+   refuses exactly what it refused before, and Autopilot holds an optimizer back, with the reason, when something
+   already on cannot run beside it. Not yet done: refusing `hook_quiet_commands` beside RTK (both rewrite the same
+   Bash input; `trove external` has never refused it, so the registry does not either until that is decided), and
+   checks for the pairs in the conflicts table that need measurement, not a rule.
 4. **Measurement of sets, not only of single optimizers.** `measure.NetGuard` judges one at a time. Sets need
    session-level A/B comparisons, and every number is labeled "measured" or "estimated" (rule 6).
 5. **A chooser** (the planner) that picks compatible sets, and acts only after such an A/B shows it beats the fixed
@@ -175,7 +186,7 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 
 1. **Done 2026-11-13 (one history):** the 5-minute and 1-hour cache-write split was measured (finding 2). It argues against a blanket TTL downgrade. The per-user estimate for C1 is now built as the `cache_ttl` suggestion (advice only).
 2. Config-route techniques. **Done 2026-11-13 (first pass):** the settings catalog now holds the verbatim entries for C9, C10, C11 and the cache lifetime keys, and `trove fix` has `settings_check` (B13). **Not done:** any profile that sets a number (needs a benchmark), and C1 as a recommendation (needs step 1). They help subscription users and need no proxy.
-3. Write the registry and the shared conflict check (requirements 1 and 3).
+3. **Done 2026-11-13:** the registry and the shared conflict check (requirements 1 and 3).
 4. Build the gateway-only techniques for API-key users, one at a time and shadow first: C3, C5, then C2.
 5. Decide W4 and W5 only after steps 1 to 4, from measured overlap with what already exists.
 6. Run the benchmark, then the A/B of sets, before an active planner.

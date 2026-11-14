@@ -4,10 +4,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/store"
 )
 
@@ -127,5 +129,66 @@ func TestAdvanceLeavesAnOptimizerTheUserSetAlone(t *testing.T) {
 	}
 	if _, has := f.Entries["duplicate_result_collapser"]; !has {
 		t.Error("Autopilot dropped an optimizer the user did not set")
+	}
+}
+
+// Something already on that cannot share the job holds the optimizer back, in the
+// state machine and in the shadow planner. The reason comes from the registry.
+func TestABlockedOptimizerIsHeldBackAtEveryStep(t *testing.T) {
+	p := DefaultPolicy()
+	ev := Evidence{BaselineDone: true, ShadowSessions: 50, NetTokens: 1e6, Blocked: "both shorten the same shell output"}
+	for _, state := range []string{config.AutopilotShadow, config.AutopilotCandidate} {
+		d := p.Decide(config.AutopilotEntry{State: state, SinceMS: t0.UnixMilli()}, ev, t0)
+		want := state
+		if state == config.AutopilotCandidate {
+			want = config.AutopilotShadow // the evidence did not hold, so it goes back
+		}
+		if d.Entry.State != want || !strings.Contains(d.Entry.Reason, "held back: both shorten the same shell output") {
+			t.Errorf("%s with a blocker -> %q (%q); want %q and the reason", state, d.Entry.State, d.Entry.Reason, want)
+		}
+	}
+	plan := p.Plan(map[string]measure.ShadowRow{"noise_normalizer": row(50, 1e6)}, nil, true, map[string]string{"noise_normalizer": "RTK is on"})
+	if v := verdicts(plan)["noise_normalizer"]; v != VerdictBlocked {
+		t.Errorf("planner verdict %q, want blocked", v)
+	}
+}
+
+// A wrapped shell compressor that is on keeps Autopilot from turning on the built-in
+// output optimizer. `trove external` refuses the reverse order; this closes the gap.
+func TestAutopilotDoesNotPromoteBesideAWrappedShellCompressor(t *testing.T) {
+	db, dir := open(t)
+	ctx := context.Background()
+	if _, err := Enable(dir, DefaultPolicy(), t0); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Default()
+	if r := blockedBy(onNow(ctx, db, cfg), "noise_normalizer"); r != "" {
+		t.Fatalf("nothing is on, yet it is blocked: %q", r)
+	}
+	if err := db.ExternalTools().Put(ctx, store.ExternalTool{Name: "rtk", Version: "1.1.0", State: "on", InstalledAt: t0, LicenseAckAt: t0}); err != nil {
+		t.Fatal(err)
+	}
+	r := blockedBy(onNow(ctx, db, cfg), "noise_normalizer")
+	if !strings.Contains(r, "shorten the same shell output") {
+		t.Fatalf("with RTK on, noise_normalizer is blocked by %q", r)
+	}
+	// duplicate_result_collapser works on a different job and is not in the way.
+	if r := blockedBy(onNow(ctx, db, cfg), "duplicate_result_collapser"); r != "" {
+		t.Errorf("duplicate_result_collapser was blocked: %q", r)
+	}
+	res, err := Advance(ctx, db, dir, cfg, DefaultPolicy(), t0.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := verdicts(res.File.Plan)
+	if got["noise_normalizer"] != VerdictBlocked || got["duplicate_result_collapser"] == VerdictBlocked {
+		t.Errorf("plan verdicts %v", got)
+	}
+	// A switched-off tool is not in the way.
+	if err := db.ExternalTools().Put(ctx, store.ExternalTool{Name: "rtk", Version: "1.1.0", State: "off", InstalledAt: t0, LicenseAckAt: t0}); err != nil {
+		t.Fatal(err)
+	}
+	if r := blockedBy(onNow(ctx, db, cfg), "noise_normalizer"); r != "" {
+		t.Errorf("a tool that is off blocked an optimizer: %q", r)
 	}
 }

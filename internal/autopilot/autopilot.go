@@ -72,6 +72,9 @@ type Evidence struct {
 	NetTokens int64
 	// RolledBack is true while a guardrail rollback to shadow is in effect.
 	RolledBack bool
+	// Blocked is a plain-English reason the technique registry gives when something that is
+	// already on cannot run beside this optimizer. Empty means nothing is in the way.
+	Blocked string
 }
 
 // Decision is Decide's answer.
@@ -84,6 +87,8 @@ type Decision struct {
 
 func (p Policy) ready(ev Evidence) (bool, string) {
 	switch {
+	case ev.Blocked != "":
+		return false, "held back: " + ev.Blocked
 	case !ev.BaselineDone:
 		return false, "waiting for the baseline period to finish"
 	case ev.ShadowSessions < p.MinSessions:

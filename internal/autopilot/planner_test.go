@@ -32,7 +32,7 @@ func TestPlannerVerdicts(t *testing.T) {
 		"volatile_prefix_mover":      row(20, -40),   // enough sessions, not positive
 	}
 	entries := map[string]config.AutopilotEntry{}
-	got := verdicts(p.Plan(rows, entries, true))
+	got := verdicts(p.Plan(rows, entries, true, nil))
 	want := map[string]string{
 		"noise_normalizer":           VerdictWouldTurnOn,
 		"duplicate_result_collapser": VerdictCollecting,
@@ -47,10 +47,10 @@ func TestPlannerVerdicts(t *testing.T) {
 	}
 
 	entries["noise_normalizer"] = config.AutopilotEntry{State: config.AutopilotOn}
-	if v := verdicts(p.Plan(rows, entries, true))["noise_normalizer"]; v != VerdictOn {
+	if v := verdicts(p.Plan(rows, entries, true, nil))["noise_normalizer"]; v != VerdictOn {
 		t.Errorf("an optimizer Autopilot already turned on is %q, want on", v)
 	}
-	if v := verdicts(p.Plan(rows, map[string]config.AutopilotEntry{}, false))["noise_normalizer"]; v != VerdictCollecting {
+	if v := verdicts(p.Plan(rows, map[string]config.AutopilotEntry{}, false, nil))["noise_normalizer"]; v != VerdictCollecting {
 		t.Errorf("before the baseline is done it is %q, want collecting", v)
 	}
 }
@@ -59,7 +59,7 @@ func TestPlannerChargesDeclaredOverhead(t *testing.T) {
 	p := DefaultPolicy()
 	p.OverheadTokens = map[string]int64{"noise_normalizer": 500}
 	// 9,000 removed over 20 sessions, minus 500 per session, is -1,000: not worth it.
-	plan := p.Plan(map[string]measure.ShadowRow{"noise_normalizer": row(20, 9000)}, nil, true)
+	plan := p.Plan(map[string]measure.ShadowRow{"noise_normalizer": row(20, 9000)}, nil, true, nil)
 	for _, it := range plan {
 		if it.Optimizer == "noise_normalizer" && (it.Verdict != VerdictNotWorthIt || it.NetTokens != -1000) {
 			t.Errorf("got %q with %d net tokens, want not_worth_it and -1000", it.Verdict, it.NetTokens)
@@ -68,7 +68,7 @@ func TestPlannerChargesDeclaredOverhead(t *testing.T) {
 }
 
 func TestPlannerCoversEveryOptimizerAndTiersTheTrimmer(t *testing.T) {
-	plan := DefaultPolicy().Plan(nil, nil, true)
+	plan := DefaultPolicy().Plan(nil, nil, true, nil)
 	if len(plan) < 5 {
 		t.Fatalf("plan lists %d optimizers", len(plan))
 	}

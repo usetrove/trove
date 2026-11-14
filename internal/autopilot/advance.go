@@ -3,11 +3,13 @@ package autopilot
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/store"
+	"github.com/usetrove/trove/internal/technique"
 )
 
 // Enable records the user's consent and starts every eligible optimizer in
@@ -81,6 +83,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 		byName[r.Optimizer] = r
 	}
 	baselineDone := base.Phase == measure.PhaseActive
+	on := onNow(ctx, db, cfg)
 	res := Result{File: f}
 	changed := false
 	for _, name := range p.Eligible {
@@ -100,6 +103,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 			ShadowSessions: row.Sessions,
 			NetTokens:      int64(row.Tokens.Value) - p.OverheadTokens[name]*int64(row.Sessions),
 			RolledBack:     back,
+			Blocked:        blockedBy(on, name),
 		}
 		d := p.Decide(cur, ev, now)
 		if d.ClearRollback {
@@ -118,7 +122,13 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 		}
 	}
 	// The shadow planner only writes advice. It never touches a state.
-	plan := p.Plan(byName, f.Entries, baselineDone)
+	blocked := map[string]string{}
+	for _, n := range optimizerNames() {
+		if r := blockedBy(on, n); r != "" {
+			blocked[n] = r
+		}
+	}
+	plan := p.Plan(byName, f.Entries, baselineDone, blocked)
 	if !samePlan(plan, f.Plan) {
 		f.Plan, f.PlannedMS = plan, now.UnixMilli()
 		changed = true
@@ -150,4 +160,57 @@ func samePlan(a, b []config.AutopilotPlanItem) bool {
 		}
 	}
 	return true
+}
+
+// permissive is the setup the conflict check assumes: Autopilot asks only whether
+// something already on gets in the way, not whether the user has the gateway or the
+// MCP server, so it hides every "not available here" answer.
+var permissive = technique.Context{Login: technique.LoginAPIKey, GatewayOn: true,
+	Have: []string{technique.CapMCPServer, technique.CapRecoveryStore, technique.CapCustomAgent}}
+
+// onNow lists, by name, every built-in optimizer set to on for new sessions
+// (including the ones Autopilot already turned on) and every wrapped tool that is
+// switched on.
+func onNow(ctx context.Context, db *store.DB, cfg config.Config) []string {
+	var on []string
+	for _, n := range optimizerNames() {
+		if cfg.OptimizerState(n) == config.StateOn {
+			on = append(on, n)
+		}
+	}
+	if tools, err := db.ExternalTools().List(ctx); err == nil {
+		for _, t := range tools {
+			if t.State == "on" {
+				on = append(on, t.Name)
+			}
+		}
+	}
+	return on
+}
+
+// optimizerNames lists the built-in optimizers the registry knows.
+func optimizerNames() []string {
+	var out []string
+	for _, t := range technique.All() {
+		if t.Status == technique.StatusBuilt && (t.Route == technique.RouteNative) {
+			out = append(out, t.Names...)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// blockedBy returns the registry's reason that name cannot be turned on beside what
+// is on already, or "" when nothing is in the way. Anything that is name itself is ignored.
+func blockedBy(on []string, name string) string {
+	var others []string
+	for _, o := range on {
+		if o != name {
+			others = append(others, o)
+		}
+	}
+	if r := technique.CanAdd(others, name, permissive); len(r.Conflicts) > 0 {
+		return r.Conflicts[0].Reason
+	}
+	return ""
 }

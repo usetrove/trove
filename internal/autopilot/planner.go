@@ -14,6 +14,7 @@ const (
 	VerdictWouldTurnOn     = "would_turn_on"
 	VerdictNeedsYourChoice = "needs_your_choice"
 	VerdictCollecting      = "collecting"
+	VerdictBlocked         = "blocked"
 	VerdictNotWorthIt      = "not_worth_it"
 )
 
@@ -34,7 +35,9 @@ func Tier(name string) string {
 //
 // rows are the shadow estimates (each optimizer valued on its own, so they
 // overlap and must not be added together). entries are Autopilot's current states.
-func (p Policy) Plan(rows map[string]measure.ShadowRow, entries map[string]config.AutopilotEntry, baselineDone bool) []config.AutopilotPlanItem {
+// blocked holds, by optimizer name, the technique registry's reason that something already
+// on cannot run beside it.
+func (p Policy) Plan(rows map[string]measure.ShadowRow, entries map[string]config.AutopilotEntry, baselineDone bool, blocked map[string]string) []config.AutopilotPlanItem {
 	var out []config.AutopilotPlanItem
 	for _, name := range optimize.PipelineNames {
 		row := rows[name]
@@ -44,6 +47,8 @@ func (p Policy) Plan(rows map[string]measure.ShadowRow, entries map[string]confi
 		switch {
 		case entries[name].State == config.AutopilotOn:
 			it.Verdict, it.Reason = VerdictOn, "Autopilot turned it on"
+		case blocked[name] != "":
+			it.Verdict, it.Reason = VerdictBlocked, blocked[name]
 		case ok && p.IsEligible(name):
 			it.Verdict, it.Reason = VerdictWouldTurnOn, "enough shadow evidence; Autopilot turns it on at the next check"
 		case ok:
