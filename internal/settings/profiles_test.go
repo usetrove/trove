@@ -69,7 +69,7 @@ func TestProfileValidationRejects(t *testing.T) {
 	}
 	tests := []struct{ name, body, want string }{
 		{"unknown key", mk("harness = \"codex\"\nkey = \"nope\"\nvalue = \"x\""), "not in the codex settings catalog"},
-		{"suggestion-only key", mk("harness = \"claude_code\"\nkey = \"effortLevel\"\nvalue = \"low\""), "cannot be applied"},
+		{"suggestion-only key", mk("harness = \"claude_code\"\nkey = \"MAX_THINKING_TOKENS\"\nvalue = \"2048\""), "cannot be applied"},
 		{"unconfirmed value", mk("harness = \"codex\"\nkey = \"model_verbosity\"\nvalue = \"high\""), "not been confirmed"},
 		{"out of range", mk("harness = \"claude_code\"\nkey = \"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE\"\nvalue = \"500\""), "outside the documented range"},
 		{"not a number", mk("harness = \"claude_code\"\nkey = \"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE\"\nvalue = \"half\""), "not a whole number"},

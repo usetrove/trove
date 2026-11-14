@@ -63,6 +63,8 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 | B8 | `hook_quiet_commands`, `hook_large_output`: quieter flags, hint to use `trove_run` | tool boundary | native | no | yes | |
 | B9 | MCP tools `trove_read`, `trove_search`, `trove_run`, `trove_fetch_full` | tool boundary | native | no | yes | tool definitions are added to every request: an overhead (rule 15) |
 | B10 | `trove fix`: `mcp_prune`, `context_slim`, `cache_breaker_fix`, `model_default` | config | config | no | yes | diff and undo |
+| B13 | `trove fix` `settings_check`: flag and remove a cost-raising setting you already have (caching off, tool search off, a one-hour cache lifetime with one-hour writes in your history) | config | config | no | yes | suggestion only, never in `--all`, no saving figure; added 2026-11-13 |
+| B14 | `trove settings`: catalog of the agent's documented token controls with version checks, profiles and measurement | config | config | no | yes | existed before this document; an earlier draft left it out. Catalog extended 2026-11-13 |
 | B11 | Scout subagent and test-gated cascade (`trove tasks`) | instructions | native + config | no | yes | cheaper model for easy work |
 | B12 | Autopilot (promotion and rollback at session boundaries) | all | native | no | yes | see [autopilot.md](autopilot.md) |
 
@@ -78,9 +80,9 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 | C6 | Effort level per task | config; request | config; proxy | a mid-session change **can invalidate the cache** (S1, summary) | config: yes | session start only (rule 5). S4, S6 |
 | C7 | Model per subagent | config, instructions | config | no | yes | `CLAUDE_CODE_SUBAGENT_MODEL`, frontmatter `model`. S5 |
 | C8 | Per-request model swap in the gateway | request | proxy | **yes** (a different model has a different cache) | no | not recommended; same-family only, if ever |
-| C9 | Output size limits: `BASH_MAX_OUTPUT_LENGTH` or `bashOutputMaxChars`, `MAX_MCP_OUTPUT_TOKENS`, `CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS` | config | config | no | yes | defaults 30,000 chars, 25,000 tokens, 25,000 tokens. S3, S8 |
-| C10 | Compaction timing: `autoCompactWindow`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`, `idleCompaction`; guidance for `/compact` | config | config | compaction rewrites history by design | yes | S3, S4 |
-| C11 | Tool search: `ENABLE_TOOL_SEARCH`, per-server `alwaysLoad` | config | config | no | yes | S3, S8; Headroom sets it too |
+| C9 | Output size limits: `BASH_MAX_OUTPUT_LENGTH` or `bashOutputMaxChars`, `MAX_MCP_OUTPUT_TOKENS`, `CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS` | config | config | no | yes | defaults 30,000 chars, 25,000 tokens, 25,000 tokens. S3, S8. **Catalog entries verbatim 2026-11-13** (`trove settings`, `internal/settings/catalog`); no profile sets a value yet, since lowering one changes behavior and there is no benchmark |
+| C10 | Compaction timing: `autoCompactWindow`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`, `idleCompaction`; guidance for `/compact` | config | config | compaction rewrites history by design | yes | S3, S4. **Catalog entries verbatim 2026-11-13**; no profile ships a number |
+| C11 | Tool search: `ENABLE_TOOL_SEARCH`, per-server `alwaysLoad` | config | config | no | yes | S3, S8; Headroom sets it too. **`ENABLE_TOOL_SEARCH` verbatim 2026-11-13**; `trove fix` flags a stray `=false` (see B13) |
 | C12 | `updatedToolOutput` for more tools than Bash | tool boundary | native | no | yes | S7 says it applies to any tool; Trove's hooks use it only for Bash, Grep, Glob |
 | C13 | Terse replies and minimal code (rules text or a skill) | instructions | wrap or native text | no | yes | costs tokens to carry (rule 15); effect measured, not assumed |
 
@@ -152,8 +154,7 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 
 1. Measure the real 5-minute and 1-hour cache-write split from existing history (finding 2). It decides whether C1 is
    worth building. No code beyond a query.
-2. Add the config-route techniques (C9, C10, C11, and C1 as a setting if step 1 says so) to `trove fix`. They help
-   subscription users and need no proxy.
+2. Config-route techniques. **Done 2026-11-13 (first pass):** the settings catalog now holds the verbatim entries for C9, C10, C11 and the cache lifetime keys, and `trove fix` has `settings_check` (B13). **Not done:** any profile that sets a number (needs a benchmark), and C1 as a recommendation (needs step 1). They help subscription users and need no proxy.
 3. Write the registry and the shared conflict check (requirements 1 and 3).
 4. Build the gateway-only techniques for API-key users, one at a time and shadow first: C3, C5, then C2.
 5. Decide W4 and W5 only after steps 1 to 4, from measured overlap with what already exists.
@@ -175,6 +176,7 @@ are not verbatim.
 | S6 | https://code.claude.com/docs/en/model-config | effort and model precedence (first part read) |
 | S7 | https://code.claude.com/docs/en/hooks | `updatedInput`, `updatedToolOutput`, `updatedMCPToolOutput` (parts read; not checked for other events) |
 | S8 | https://code.claude.com/docs/en/mcp and /costs | tool search, output limits (mcp: first part read) |
+| S9 | https://code.claude.com/docs/en/settings-reference and /env-vars (second read, 2026-11-13) | raw text of `effortLevel`, `modelSettings`, `promptCacheTtl`, `subagentPromptCacheTtl`, `autoCompactWindow`, `autoCompactEnabled`, `bashOutputMaxChars`, `idleCompaction`, `env`, and the env-var rows for `BASH_MAX_OUTPUT_LENGTH`, `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`, `CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS`, `ENABLE_TOOL_SEARCH`, `MAX_MCP_OUTPUT_TOKENS`; minimum versions where the entry states one. The `model-config` page was not read |
 
 Licences, from each repository's LICENSE file:
 

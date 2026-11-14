@@ -26,10 +26,13 @@ Every command takes `--json`. Under `--json`, `--apply` without `--yes` applies 
 | `ctx-` | `context_slim` | Deletes whole sections of `CLAUDE.md` / `.claude/CLAUDE.md` / `AGENTS.md` that repeat the README or `docs/`, are generic overview/boilerplate headings with no rules or commands, or repeat an earlier section | file larger than `fixer.context_min_tokens` (estimated) |
 | `cache-` | `cache_breaker_fix` | Deletes lines that state the current date/time or a generated/updated stamp | the line matches the optimizer's volatile-line classifier and says it holds the current time |
 | `model-` | `model_default` | **Suggestion.** Sets `"model"` in `~/.claude/settings.json`, or `model = ` in `~/.codex/config.toml` for Codex | at least 20 small-task requests, 40% or more of a frontier model's requests |
+| `chk-` | `settings_check` | **Suggestion.** Deletes one cost-raising setting you already have in your own Claude Code settings: `DISABLE_PROMPT_CACHING` (and the per-model forms), `ENABLE_TOOL_SEARCH=false`, or a one-hour cache lifetime (`ENABLE_PROMPT_CACHING_1H`, `CLAUDE_CODE_PROMPT_CACHE_TTL`, `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`, `promptCacheTtl`, `subagentPromptCacheTtl`) | the setting is present with the flagged value in `~/.claude/settings.json`, `.claude/settings.json` or `.claude/settings.local.json`; for a one-hour setting also tokens written at the one-hour rate in your Claude Code history |
 
 Trove never writes new prose and never rewrites a file: edits are text splices that
 keep comments, key order, indentation and line endings. A result that fails to
 re-parse as JSON/TOML is discarded.
+
+`settings_check` is also never part of `--all`, carries no saving figure (Trove cannot know how many sessions a setting affects), says you may have set it on purpose, and edits only by deleting the one key: formatting, key order and line endings are kept, and a file that is not strict JSON is not edited. Managed settings and your shell are never read or changed.
 
 `model_default` is never part of `--all`, is turned into advice if `ANTHROPIC_MODEL`
 is set, the project sets its own model, or (Codex) the project's `.codex/config.toml` sets one or your config selects a `profile`, and carries no saving estimate, because
