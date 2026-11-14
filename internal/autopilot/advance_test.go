@@ -147,7 +147,7 @@ func TestABlockedOptimizerIsHeldBackAtEveryStep(t *testing.T) {
 			t.Errorf("%s with a blocker -> %q (%q); want %q and the reason", state, d.Entry.State, d.Entry.Reason, want)
 		}
 	}
-	plan := p.Plan(map[string]measure.ShadowRow{"noise_normalizer": row(50, 1e6)}, nil, true, map[string]string{"noise_normalizer": "RTK is on"})
+	plan := p.Plan(map[string]measure.ShadowRow{"noise_normalizer": row(50, 1e6)}, nil, true, map[string]string{"noise_normalizer": "RTK is on"}, nil)
 	if v := verdicts(plan)["noise_normalizer"]; v != VerdictBlocked {
 		t.Errorf("planner verdict %q, want blocked", v)
 	}

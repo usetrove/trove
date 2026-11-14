@@ -75,6 +75,10 @@ type Evidence struct {
 	// Blocked is a plain-English reason the technique registry gives when something that is
 	// already on cannot run beside this optimizer. Empty means nothing is in the way.
 	Blocked string
+	// Unavailable is a plain-English reason this optimizer cannot run in the user's setup (it
+	// needs a channel, the gateway or the hooks, that recorded nothing while the other did). Empty
+	// means it can run, or nothing has been seen yet so it is still collecting.
+	Unavailable string
 }
 
 // Decision is Decide's answer.
@@ -89,6 +93,8 @@ func (p Policy) ready(ev Evidence) (bool, string) {
 	switch {
 	case ev.Blocked != "":
 		return false, "held back: " + ev.Blocked
+	case ev.Unavailable != "":
+		return false, "not available in your setup: " + ev.Unavailable
 	case !ev.BaselineDone:
 		return false, "waiting for the baseline period to finish"
 	case ev.ShadowSessions < p.MinSessions:

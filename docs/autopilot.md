@@ -178,8 +178,7 @@ placeholders. `trove autopilot` says so each time it shows them.
   session ends, but `SessionStart` pins each session's states first, so a running session keeps what it started
   with (`TestStateIsPinnedForTheSession`, `TestAutopilotStatesReachTheSnapshot`). An earlier note here said
   otherwise; it was wrong. A session that began before the hooks were installed has no pin and stays off.
-- **Evidence only exists for traffic Trove sees.** A hooks-only subscription user has shadow evidence only from
-  what the hooks can estimate, which is from sizes and not from provider usage fields (open question 4).
+- **Fixed 2026-11-14: a user with no gateway used to get no promotions.** `Advance` read shadow figures from the gateway's request rows only, and counted baseline sessions from the gateway's table of sessions, so a hooks-only (subscription) user had no evidence and never left the baseline. It now also reads the hooks' own counts (`measure.HookShadowEstimates`, from `hook_events`) and counts hook sessions toward the baseline. Where both channels saw the same waste, it takes the larger figure, never the sum. An optimizer that needs a channel the user is not using (the duplicate collapser without a gateway) is held back as "not available in your setup" and shown as `unavailable` in the planner. Hook-side figures are estimates from sizes, not provider usage (open question 4). What each further technique needs is in [autopilot-eligibility.md](autopilot-eligibility.md).
 - **The planner is advice only.** It records what it would choose. Making it active needs a session-level A/B that
   shows it beats the fixed list after its own overhead (build order, step 3); none has been run, so it does not
   choose anything. It does not look at features of the user's repo yet, only at shadow estimates.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/store"
 	"github.com/usetrove/trove/internal/technique"
 )
@@ -82,7 +83,21 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 	for _, r := range rows {
 		byName[r.Optimizer] = r
 	}
-	baselineDone := base.Phase == measure.PhaseActive
+	hookShadow, err := measure.HookShadowEstimates(ctx, db, w)
+	if err != nil {
+		return Result{File: f}, fmt.Errorf("cannot read the hooks' shadow estimates: %v", err)
+	}
+	hookSessions, err := measure.HookSessions(ctx, db)
+	if err != nil {
+		return Result{File: f}, fmt.Errorf("cannot count the hooks' sessions: %v", err)
+	}
+	traffic, err := measure.TrafficSeen(ctx, db, w)
+	if err != nil {
+		return Result{File: f}, fmt.Errorf("cannot tell which channels were used: %v", err)
+	}
+	// The baseline counts sessions from both channels, so a person with no gateway can leave it.
+	seen := measure.PhaseFor(cfg.Measure, base.InstalledAt, now, sessionsSeen(base.SessionsSeen, hookSessions))
+	baselineDone := seen.Phase == measure.PhaseActive
 	on := onNow(ctx, db, cfg)
 	res := Result{File: f}
 	changed := false
@@ -97,13 +112,14 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 		}
 		cur := f.Entries[name]
 		_, back := rolled[name]
-		row := byName[name]
+		sessions, tokens := combine(byName[name], hookShadow[name])
 		ev := Evidence{
 			BaselineDone:   baselineDone,
-			ShadowSessions: row.Sessions,
-			NetTokens:      int64(row.Tokens.Value) - p.OverheadTokens[name]*int64(row.Sessions),
+			ShadowSessions: sessions,
+			NetTokens:      int64(tokens) - p.OverheadTokens[name]*int64(sessions),
 			RolledBack:     back,
 			Blocked:        blockedBy(on, name),
+			Unavailable:    unavailableFor(name, traffic),
 		}
 		d := p.Decide(cur, ev, now)
 		if d.ClearRollback {
@@ -128,7 +144,13 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 			blocked[n] = r
 		}
 	}
-	plan := p.Plan(byName, f.Entries, baselineDone, blocked)
+	unavailable := map[string]string{}
+	for _, n := range optimize.PipelineNames {
+		if r := unavailableFor(n, traffic); r != "" {
+			unavailable[n] = r
+		}
+	}
+	plan := p.Plan(combinedRows(optimize.PipelineNames, byName, hookShadow), f.Entries, baselineDone, blocked, unavailable)
 	if !samePlan(plan, f.Plan) {
 		f.Plan, f.PlannedMS = plan, now.UnixMilli()
 		changed = true
