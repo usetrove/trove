@@ -83,3 +83,61 @@ func TestReportLeavesOutInflightDedupWhenItIsOffAndHasNothing(t *testing.T) {
 		t.Error("a default report mentions in-flight dedup")
 	}
 }
+
+const shadowCap = `{"label":"estimated","optimizers":{"spend_cap":{"tokens":4020,"usd":0.50}}}`
+
+func gatewayRow(r Report, name string) *OptimizerRow {
+	for i := range r.Optimizers.Rows {
+		if r.Optimizers.Rows[i].Name == name {
+			return &r.Optimizers.Rows[i]
+		}
+	}
+	return nil
+}
+
+// What a hard spend cap would have stopped shows as an estimate with an honest note, is never offered
+// as something to switch on, and stays out of a default report.
+func TestReportShowsTheSpendCapAsAnEstimateOnly(t *testing.T) {
+	db := openDB(t)
+	installedDaysAgo(t, db, 30)
+	for i := 0; i < 40; i++ {
+		r := req{ts: now.Add(-time.Duration(i+1) * time.Hour), session: fmt.Sprintf("s%02d", i), agent: "claude_code", model: "claude-a", cost: 1.0}
+		if i < 10 {
+			r.shadow = shadowCap
+		}
+		addReq(t, db, r)
+	}
+	for _, state := range []string{"shadow", "on"} {
+		cfg := config.Default()
+		cfg.Optimizers[config.OptimizerSpendCap] = state
+		r, err := Build(context.Background(), db, Inputs{Config: cfg, Now: now}, mustPeriod(t, Month))
+		if err != nil {
+			t.Fatal(err)
+		}
+		row := gatewayRow(r, config.OptimizerSpendCap)
+		if row == nil {
+			t.Fatalf("%s: no spend_cap row", state)
+		}
+		if row.Effective != config.StateShadow || row.WouldSave == nil || row.WouldSave.Label != "estimated" || row.WouldSave.Value < 4.9 {
+			t.Errorf("%s: row %+v would-save %+v; want shadow and an estimated $5.00", state, row, row.WouldSave)
+		}
+		if row.Saved != nil || row.Measured != nil || row.Enable != "" {
+			t.Errorf("%s: it claims a saving or offers to switch on: %+v", state, row)
+		}
+		if !strings.Contains(row.Note, "no request was refused") {
+			t.Errorf("%s: note %q", state, row.Note)
+		}
+		if d := gatewayRow(r, config.OptimizerInflightDedup); d != nil {
+			t.Errorf("%s: in-flight dedup appears although it has no estimate and is off", state)
+		}
+	}
+	empty := openDB(t)
+	seedNormal(t, empty)
+	r, err := Build(context.Background(), empty, Inputs{Config: testConfig(), Now: now}, mustPeriod(t, Month))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gatewayRow(r, config.OptimizerSpendCap) != nil {
+		t.Error("a default report mentions the spend cap")
+	}
+}

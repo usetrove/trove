@@ -132,8 +132,20 @@ func TestOptimizeStatusListsGatewayBehaviorsApartFromTheRunOrder(t *testing.T) {
 	if len(st.Optimizers) != len(optimize.PipelineNames) {
 		t.Errorf("the run order has %d entries, want the pipeline's %d", len(st.Optimizers), len(optimize.PipelineNames))
 	}
-	if len(st.Gateway) != 1 || st.Gateway[0].Name != "inflight_dedup" || st.Gateway[0].Configured != "on" || st.Gateway[0].Effective != "shadow" {
-		t.Errorf("gateway behaviors: %+v; \"on\" must run as shadow because sharing a call is not built", st.Gateway)
+	if len(st.Gateway) != len(optimize.GatewayNames) {
+		t.Errorf("%d gateway behaviors listed, want %d: %+v", len(st.Gateway), len(optimize.GatewayNames), st.Gateway)
+	}
+	found := false
+	for _, g := range st.Gateway {
+		if g.Name == "inflight_dedup" {
+			found = true
+			if g.Configured != "on" || g.Effective != "shadow" {
+				t.Errorf("inflight_dedup %+v; \"on\" must run as shadow because sharing a call is not built", g)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("inflight_dedup is not listed: %+v", st.Gateway)
 	}
 	if len(st.Unknown) != 0 {
 		t.Errorf("inflight_dedup was reported as an unknown optimizer: %v", st.Unknown)
@@ -143,5 +155,44 @@ func TestOptimizeStatusListsGatewayBehaviorsApartFromTheRunOrder(t *testing.T) {
 	out := h.out.String()
 	if !strings.Contains(out, "Gateway behaviors") || !strings.Contains(out, "inflight_dedup") || !strings.Contains(out, `"on" runs as shadow`) {
 		t.Errorf("text output lacks the gateway section:\n%s", out)
+	}
+}
+
+func TestOptimizeStatusSaysWhatTheSpendCapNeeds(t *testing.T) {
+	status := func(toml string) optimizeStatus {
+		t.Helper()
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte(toml), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		h := newHarness(t, nil)
+		if code := h.run("optimize", "status", "--json", "--data-dir", dir); code != 0 {
+			t.Fatalf("exit %d: %s", code, h.err)
+		}
+		var st optimizeStatus
+		if err := json.Unmarshal(h.out.Bytes(), &st); err != nil {
+			t.Fatal(err)
+		}
+		return st
+	}
+	find := func(st optimizeStatus) optimizerInfo {
+		for _, g := range st.Gateway {
+			if g.Name == "spend_cap" {
+				return g
+			}
+		}
+		t.Fatalf("no spend_cap in %+v", st.Gateway)
+		return optimizerInfo{}
+	}
+	noCap := find(status("[optimizers]\nspend_cap = \"shadow\"\n"))
+	if noCap.Effective != "shadow" || !strings.Contains(noCap.Note, "trove budget set") {
+		t.Errorf("without a cap: %+v; it must say a budget is needed", noCap)
+	}
+	withCap := find(status("[optimizers]\nspend_cap = \"on\"\n[budget]\nperiod = \"daily\"\ncap_usd = 10.0\n"))
+	if withCap.Effective != "shadow" || strings.Contains(withCap.Note, "trove budget set") || !strings.Contains(withCap.Note, "pausing is not built") {
+		t.Errorf("with a cap: %+v; \"on\" must run as shadow and the note must say pausing is not built", withCap)
+	}
+	if st := status("[optimizers]\nspend_cap = \"shadow\"\n"); len(st.Unknown) != 0 {
+		t.Errorf("spend_cap was reported as an unknown optimizer: %v", st.Unknown)
 	}
 }

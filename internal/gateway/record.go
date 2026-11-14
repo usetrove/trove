@@ -46,10 +46,16 @@ func (s *Server) record(f *flight, captured []byte, over, cleanEnd, clientGone b
 		res = extract(x, captured, enc, cleanEnd)
 	}
 	row := s.buildRow(f, res, status, streamed, first, end)
+	if row.CostUSD != nil && status > 0 && status < 400 {
+		s.spend.note(*row.CostUSD) // keeps the cap's running total current between ledger reads
+	}
 	if status < 400 && !clientGone {
 		s.analyze(&row, f, res)
 		if f.dedupShadow {
-			s.addDedupShadow(&row)
+			s.addGatewayShadow(&row, config.OptimizerInflightDedup)
+		}
+		if f.capShadow {
+			s.addGatewayShadow(&row, config.OptimizerSpendCap)
 		}
 		if f.provider == "anthropic" && f.usagePath == "/v1/messages" {
 			// Counts only: tool calls, errors, repeats. See internal/measure.
@@ -323,11 +329,12 @@ func clip(s string, n int) string {
 	return s[:n]
 }
 
-// addDedupShadow notes, on the row of a request that was a duplicate of one still
-// in flight, what making one call for both would have saved: this request's whole
-// bill. It is an estimate: the shared call's answer might not have been the one
-// this request would have got. It only adds to the shadow record; nothing was changed.
-func (s *Server) addDedupShadow(row *store.Request) {
+// addGatewayShadow notes, on the row of a request, what a gateway behavior in shadow mode would have
+// saved: this request's whole bill. For in-flight dedup that is the call a shared answer would have
+// made unnecessary; for the spend cap it is a request a hard cap would have refused. Both are
+// estimates (the shared answer might not have served the request; the person might have raised
+// the cap). It only adds to the shadow record; nothing was changed.
+func (s *Server) addGatewayShadow(row *store.Request, behavior string) {
 	tokens := row.InputUncachedTokens + row.CacheWriteTokens + row.CacheReadTokens + row.OutputTokens
 	if tokens <= 0 {
 		return
@@ -340,7 +347,7 @@ func (s *Server) addDedupShadow(row *store.Request) {
 		}
 	}
 	sh.Label = "estimated"
-	sh.Optimizers[config.OptimizerInflightDedup] = analyze.ShadowEntry{Tokens: tokens, USD: row.CostUSD}
+	sh.Optimizers[behavior] = analyze.ShadowEntry{Tokens: tokens, USD: row.CostUSD}
 	if b, err := json.Marshal(sh); err == nil {
 		row.ShadowSavings = b
 	}

@@ -179,6 +179,14 @@ have saved on that request's row. `"on"` runs as shadow because sharing is not b
 `trove report` as something to switch on. Design, limits and what must be true before sharing is built:
 [inflight-dedup.md](inflight-dedup.md).
 
+## Spend cap (shadow only)
+
+`spend_cap` is the second gateway behavior. In shadow it marks requests that arrived when spending in the budget period
+had already reached the budget cap (`[budget] cap_usd`, set with `trove budget set`), and records on their rows what a
+hard cap would have stopped. It needs a budget cap; without one it does nothing. `"on"` runs as shadow, nothing is ever
+refused, and it is not offered by `trove report` as something to switch on. Design, limits and what must be verified
+before refusing is built: [spend-cap.md](spend-cap.md).
+
 ## Provider facts checked (2026-10-29)
 
 | Fact | Source |

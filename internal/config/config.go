@@ -192,6 +192,10 @@ const (
 	// arrive while one is still waiting for the provider, they could share that one call.
 	// Only its shadow mode exists: it estimates the saving and changes nothing.
 	OptimizerInflightDedup = "inflight_dedup"
+	// OptimizerSpendCap is a behavior of the gateway itself: when spending in the budget period
+	// has reached the budget cap, a hard cap would refuse further requests. Only its shadow mode
+	// exists: it estimates what the cap would have stopped and refuses nothing.
+	OptimizerSpendCap = "spend_cap"
 )
 
 // EnvOptimize is the kill-switch environment variable. Set to "off", it

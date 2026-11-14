@@ -77,7 +77,7 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 | C2 | Fan-out serialisation: hold sibling subagent requests until the first cache entry exists | request | native, proxy | no | no | needs a latency budget (up to 3 s is Probe0's figure, unverified). Not verified against provider docs |
 | C3 | In-flight dedup: identical simultaneous requests share one upstream call | request | native, proxy | no | no | **shadow mode built 2026-11-14** (counts duplicates, estimates the saving, changes nothing); sharing the call is not built. See [inflight-dedup.md](inflight-dedup.md) |
 | C4 | Exact response cache for identical requests | request | native, proxy | no | no | correctness risk with agents; opt-in only |
-| C5 | Hard spend cap checked against the ledger | request | native, proxy | no | no | |
+| C5 | Hard spend cap checked against the ledger | request | native, proxy | no | no | **shadow mode built 2026-11-14** (marks requests made after spending reached the budget cap, estimates what a hard cap would have stopped, refuses nothing); refusing is not built, mainly because how Claude Code and Codex CLI treat a refusal is not verified. See [spend-cap.md](spend-cap.md) |
 | C6 | Effort level per task | config; request | config; proxy | a mid-session change **can invalidate the cache** (S1, summary) | config: yes | session start only (rule 5). S4, S6 |
 | C7 | Model per subagent | config, instructions | config | no | yes | `CLAUDE_CODE_SUBAGENT_MODEL`, frontmatter `model`. S5 |
 | C8 | Per-request model swap in the gateway | request | proxy | **yes** (a different model has a different cache) | no | not recommended; same-family only, if ever |
@@ -187,7 +187,7 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 1. **Done 2026-11-13 (one history):** the 5-minute and 1-hour cache-write split was measured (finding 2). It argues against a blanket TTL downgrade. The per-user estimate for C1 is now built as the `cache_ttl` suggestion (advice only).
 2. Config-route techniques. **Done 2026-11-13 (first pass):** the settings catalog now holds the verbatim entries for C9, C10, C11 and the cache lifetime keys, and `trove fix` has `settings_check` (B13). **Not done:** any profile that sets a number (needs a benchmark), and C1 as a recommendation (needs step 1). They help subscription users and need no proxy.
 3. **Done 2026-11-13:** the registry and the shared conflict check (requirements 1 and 3).
-4. Build the gateway-only techniques for API-key users, one at a time and shadow first: C3, C5, then C2. **C3 shadow done 2026-11-14**; its sharing half waits for evidence from real shadow data (see [inflight-dedup.md](inflight-dedup.md)). C5 and C2 are next.
+4. Build the gateway-only techniques for API-key users, one at a time and shadow first: C3, C5, then C2. **C3 shadow done 2026-11-14**; its sharing half waits for evidence from real shadow data (see [inflight-dedup.md](inflight-dedup.md)). **C5 shadow done 2026-11-14**; refusing waits on verifying how the agents treat a refusal (see [spend-cap.md](spend-cap.md)). C2 (fan-out) is next.
 5. Decide W4 and W5 only after steps 1 to 4, from measured overlap with what already exists.
 6. Run the benchmark, then the A/B of sets, before an active planner.
 

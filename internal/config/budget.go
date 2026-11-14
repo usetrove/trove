@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // SetBudget writes the budget period and cap to <dataDir>/config.toml. It edits
@@ -103,4 +104,38 @@ func setBudgetLines(src, period string, capUSD float64) string {
 	setKey("period", periodLine)
 	setKey("cap_usd", capLine)
 	return strings.Join(lines, nl)
+}
+
+// GatewayBehaviors lists the behaviors of the gateway itself that carry an optimizer
+// state ("off", "shadow" or "on") like the pipeline's optimizers do, but act on which
+// requests reach the provider and not on the bytes of one. Neither has an active mode
+// yet, so "on" runs as shadow for both.
+var GatewayBehaviors = []string{OptimizerInflightDedup, OptimizerSpendCap}
+
+// IsGatewayBehavior reports whether name is one of GatewayBehaviors.
+func IsGatewayBehavior(name string) bool {
+	for _, g := range GatewayBehaviors {
+		if g == name {
+			return true
+		}
+	}
+	return false
+}
+
+// Window returns the budget period that contains now, in now's location: from is
+// its first instant and to the first instant after it. Weeks start on Monday. It
+// is the definition the report and the status line use, so a cap measured here
+// agrees with the pacing a person sees.
+func (b Budget) Window(now time.Time) (from, to time.Time) {
+	y, m, d := now.Date()
+	day := time.Date(y, m, d, 0, 0, 0, 0, now.Location())
+	switch b.Period {
+	case "weekly":
+		from = day.AddDate(0, 0, -((int(day.Weekday()) + 6) % 7))
+		return from, from.AddDate(0, 0, 7)
+	case "daily":
+		return day, day.AddDate(0, 0, 1)
+	}
+	from = time.Date(y, m, 1, 0, 0, 0, 0, now.Location())
+	return from, from.AddDate(0, 1, 0)
 }

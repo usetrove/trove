@@ -108,8 +108,14 @@ func optimizeStatusCmd(a *App) error {
 		known[name] = true
 		info := optimizerInfo{Name: name, Tier: "gateway", Configured: cfg.OptimizerState(name)}
 		info.Effective = optimize.EffectiveStateFor(name, info.Configured, recoverable)
-		if name == config.OptimizerInflightDedup {
+		switch name {
+		case config.OptimizerInflightDedup:
 			info.Note = "estimate only: counts identical requests that arrive while one is still waiting for the provider; sharing the call is not built, so \"on\" runs as shadow"
+		case config.OptimizerSpendCap:
+			info.Note = "estimate only: counts requests made after spending reached your budget cap, which a hard cap would have refused; pausing is not built, so \"on\" runs as shadow"
+			if cfg.Budget.CapUSD <= 0 {
+				info.Note += ". It needs a budget cap: `trove budget set <amount>`"
+			}
 		}
 		st.Gateway = append(st.Gateway, info)
 	}

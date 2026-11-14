@@ -410,9 +410,7 @@ func buildOptimizers(ctx context.Context, db *store.DB, in Inputs, w measure.Win
 	for _, name := range names {
 		configured := in.Config.OptimizerState(name)
 		row := OptimizerRow{Name: name, Configured: configured, Effective: optimize.EffectiveStateFor(name, configured, in.Recoverable)}
-		if name == config.OptimizerInflightDedup {
-			row.Note = "estimate only: counts identical requests that arrived while one was still waiting for the provider. Sharing the call is not built, so nothing is changed"
-		}
+		row.Note = gatewayNote(name)
 		if out.Baseline != nil && row.Effective == config.StateOn {
 			row.Effective = config.StateShadow // the baseline keeps every optimizer in shadow
 		}
@@ -437,7 +435,7 @@ func buildOptimizers(ctx context.Context, db *store.DB, in Inputs, w measure.Win
 		if o, ok := offer[name]; ok {
 			row.Enable = o.Enable
 		}
-		if isGatewayName(name) && configured == config.StateOff && row.WouldSave == nil {
+		if config.IsGatewayBehavior(name) && configured == config.StateOff && row.WouldSave == nil {
 			continue // nothing to say about a gateway behavior that is off and has no estimate
 		}
 		out.Rows = append(out.Rows, row)
@@ -547,11 +545,13 @@ func recommendationTitle(rc recommend.Recommendation) string {
 	return rc.Name
 }
 
-func isGatewayName(name string) bool {
-	for _, g := range optimize.GatewayNames {
-		if g == name {
-			return true
-		}
+// gatewayNote says, for a gateway behavior's row, what its figure is and that it changes nothing.
+func gatewayNote(name string) string {
+	switch name {
+	case config.OptimizerInflightDedup:
+		return "estimate only: counts identical requests that arrived while one was still waiting for the provider. Sharing the call is not built, so nothing is changed"
+	case config.OptimizerSpendCap:
+		return "estimate only: spending past your budget cap that a hard cap would have stopped. Pausing at the cap is not built, so no request was refused"
 	}
-	return false
+	return ""
 }
