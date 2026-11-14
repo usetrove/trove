@@ -100,6 +100,11 @@ func TestConcurrentLargeBodiesAreCappedAndRetriable(t *testing.T) {
 	if code, _ := do2(g.gw.URL+"/anthropic/v1/messages", body); code != http.StatusOK {
 		t.Fatalf("after the first finished the budget must be free again: %d", code)
 	}
+	// The budget is released when the handler returns, which is just after the response reaches the client.
+	deadline := time.Now().Add(5 * time.Second)
+	for g.srvBodyBytes() != 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
 	if got := g.srvBodyBytes(); got != 0 {
 		t.Fatalf("the body budget leaked %d bytes", got)
 	}
