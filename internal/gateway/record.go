@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/usetrove/trove/internal/analyze"
+	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/gateway/agent"
 	"github.com/usetrove/trove/internal/gateway/session"
 	"github.com/usetrove/trove/internal/gateway/usage"
@@ -47,6 +48,9 @@ func (s *Server) record(f *flight, captured []byte, over, cleanEnd, clientGone b
 	row := s.buildRow(f, res, status, streamed, first, end)
 	if status < 400 && !clientGone {
 		s.analyze(&row, f, res)
+		if f.dedupShadow {
+			s.addDedupShadow(&row)
+		}
 		if f.provider == "anthropic" && f.usagePath == "/v1/messages" {
 			// Counts only: tool calls, errors, repeats. See internal/measure.
 			if sig, ok := measure.Extract(f.reqBody); ok {
@@ -317,4 +321,27 @@ func clip(s string, n int) string {
 		n--
 	}
 	return s[:n]
+}
+
+// addDedupShadow notes, on the row of a request that was a duplicate of one still
+// in flight, what making one call for both would have saved: this request's whole
+// bill. It is an estimate: the shared call's answer might not have been the one
+// this request would have got. It only adds to the shadow record; nothing was changed.
+func (s *Server) addDedupShadow(row *store.Request) {
+	tokens := row.InputUncachedTokens + row.CacheWriteTokens + row.CacheReadTokens + row.OutputTokens
+	if tokens <= 0 {
+		return
+	}
+	sh := analyze.Shadow{Label: "estimated", Optimizers: map[string]analyze.ShadowEntry{}}
+	if len(row.ShadowSavings) > 0 {
+		var prev analyze.Shadow
+		if json.Unmarshal(row.ShadowSavings, &prev) == nil && prev.Optimizers != nil {
+			sh = prev
+		}
+	}
+	sh.Label = "estimated"
+	sh.Optimizers[config.OptimizerInflightDedup] = analyze.ShadowEntry{Tokens: tokens, USD: row.CostUSD}
+	if b, err := json.Marshal(sh); err == nil {
+		row.ShadowSavings = b
+	}
 }

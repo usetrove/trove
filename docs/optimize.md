@@ -170,6 +170,15 @@ exactly.
   `subagentPromptCacheTtl`, version 2.1.242 or later) and never changes it. It assumes a lost cache entry is
   rewritten in full, so it is an estimate. Facts verified 2026-11-13 (see [techniques.md](techniques.md)).
 
+## In-flight dedup (shadow only)
+
+`inflight_dedup` is a behavior of the gateway itself, not a pipeline step: it acts on which requests reach the
+provider, not on the bytes of one. In shadow it counts requests that arrived while an identical one (same method, path,
+headers that matter, credential and body) was still waiting for the provider, and records what sharing the call would
+have saved on that request's row. `"on"` runs as shadow because sharing is not built. It is not offered by
+`trove report` as something to switch on. Design, limits and what must be true before sharing is built:
+[inflight-dedup.md](inflight-dedup.md).
+
 ## Provider facts checked (2026-10-29)
 
 | Fact | Source |

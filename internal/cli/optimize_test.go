@@ -113,3 +113,35 @@ func TestOptimizeKillSwitchPathMatchesTheGateway(t *testing.T) {
 		t.Errorf("kill file name = %q", got)
 	}
 }
+
+// In-flight dedup is a gateway behavior, not a pipeline step. It must not join the run order
+// that `optimizers` promises, and it must not be reported as an unknown optimizer.
+func TestOptimizeStatusListsGatewayBehaviorsApartFromTheRunOrder(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("[optimizers]\ninflight_dedup = \"on\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := newHarness(t, nil)
+	if code := h.run("optimize", "status", "--json", "--data-dir", dir); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	var st optimizeStatus
+	if err := json.Unmarshal(h.out.Bytes(), &st); err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Optimizers) != len(optimize.PipelineNames) {
+		t.Errorf("the run order has %d entries, want the pipeline's %d", len(st.Optimizers), len(optimize.PipelineNames))
+	}
+	if len(st.Gateway) != 1 || st.Gateway[0].Name != "inflight_dedup" || st.Gateway[0].Configured != "on" || st.Gateway[0].Effective != "shadow" {
+		t.Errorf("gateway behaviors: %+v; \"on\" must run as shadow because sharing a call is not built", st.Gateway)
+	}
+	if len(st.Unknown) != 0 {
+		t.Errorf("inflight_dedup was reported as an unknown optimizer: %v", st.Unknown)
+	}
+	h = newHarness(t, nil)
+	h.run("optimize", "status", "--data-dir", dir)
+	out := h.out.String()
+	if !strings.Contains(out, "Gateway behaviors") || !strings.Contains(out, "inflight_dedup") || !strings.Contains(out, `"on" runs as shadow`) {
+		t.Errorf("text output lacks the gateway section:\n%s", out)
+	}
+}

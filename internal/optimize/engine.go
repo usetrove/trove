@@ -374,3 +374,17 @@ func (e *Engine) current() config.Config {
 	}
 	return e.apCfg
 }
+
+// GatewayState returns the effective state of a gateway-level behavior (see
+// GatewayNames) for requests arriving now. The kill switch turns it off. It is a
+// pure read of configuration, so it is cheap enough to call on every request.
+// Today the only such behavior is in-flight dedup, whose "on" runs as shadow.
+func (e *Engine) GatewayState(name string) string {
+	if e == nil {
+		return config.StateOff
+	}
+	if off, _ := Disabled(e.killFile, e.getenv); off {
+		return config.StateOff
+	}
+	return effectiveStateFor(name, e.current().OptimizerState(name), e.recovery != nil)
+}

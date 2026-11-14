@@ -188,6 +188,10 @@ const (
 	OptimizerHookQuietCommands = "hook_quiet_commands"
 	// OptimizerNoiseNormalizer is lossless; it also runs in hooks on tool output.
 	OptimizerNoiseNormalizer = "noise_normalizer"
+	// OptimizerInflightDedup is a behavior of the gateway itself: when identical requests
+	// arrive while one is still waiting for the provider, they could share that one call.
+	// Only its shadow mode exists: it estimates the saving and changes nothing.
+	OptimizerInflightDedup = "inflight_dedup"
 )
 
 // EnvOptimize is the kill-switch environment variable. Set to "off", it

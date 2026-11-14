@@ -181,6 +181,11 @@ func Pipeline() []Optimizer {
 	}
 }
 
+// GatewayNames are behaviors of the gateway itself that carry an optimizer state like the
+// pipeline's do. They act on which requests reach the provider, not on the bytes of one,
+// so they are not in the pipeline and a session does not pin them.
+var GatewayNames = []string{config.OptimizerInflightDedup}
+
 // PipelineNames is the fixed order of names, for documentation and status output.
 var PipelineNames = []string{
 	"volatile_prefix_mover",

@@ -27,6 +27,7 @@ func implemented(t *testing.T) map[string]string {
 		}
 	}
 	add("internal/optimize", optimize.PipelineNames...)
+	add("internal/optimize (gateway)", optimize.GatewayNames...)
 	add("internal/hooks", hooks.OptimizerNames...)
 	add("internal/fixer", fixer.MCPPrune, fixer.ContextSlim, fixer.CacheBreaker, fixer.ModelDefault, fixer.SettingsCheck, fixer.TaskScout, fixer.TaskCascade)
 	add("internal/optimize/suggest", suggest.KindCacheTTL)
@@ -76,7 +77,7 @@ func TestEveryNameMatchesTheCode(t *testing.T) {
 // Every optimizer the pipeline and the hooks know is in the registry, so none can
 // be turned on without its conflicts and overhead being on record.
 func TestEveryOptimizerIsRegistered(t *testing.T) {
-	for _, n := range append(append([]string{}, optimize.PipelineNames...), hooks.OptimizerNames...) {
+	for _, n := range append(append(append([]string{}, optimize.PipelineNames...), optimize.GatewayNames...), hooks.OptimizerNames...) {
 		if _, ok := technique.Get(n); !ok {
 			t.Errorf("optimizer %q is not in the technique registry", n)
 		}

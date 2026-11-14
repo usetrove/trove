@@ -30,6 +30,7 @@ import (
 
 	"github.com/usetrove/trove/internal/analyze"
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/gateway/auth"
 	"github.com/usetrove/trove/internal/gateway/session"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/pricing"
@@ -72,6 +73,11 @@ type Server struct {
 	routes    []*route
 	transport http.RoundTripper
 
+	// inflight and fingerprint back in-flight dedup (shadow only, see inflight.go).
+	// A nil fingerprint, when the system has no randomness, turns it off.
+	inflight    *inflightBook
+	fingerprint *auth.Fingerprinter
+
 	// recording counts the goroutines that turn finished responses into rows, so shutdown
 	// can let them reach the recorder before the recorder is closed.
 	recording sync.WaitGroup
@@ -101,8 +107,14 @@ func New(opts Options) (*Server, error) {
 	if tr == nil {
 		tr = passThroughTransport()
 	}
+	fp, err := auth.NewFingerprinter()
+	if err != nil {
+		opts.Logger.Warn("in-flight dedup is off because the system could not supply random numbers", "err", err)
+		fp = nil
+	}
 	return &Server{
 		opts: opts, log: opts.Logger, started: opts.Now(), routes: routes, transport: tr,
+		inflight: newInflightBook(), fingerprint: fp,
 		sessions: session.NewTracker(time.Duration(opts.Config.Gateway.IdleMinutes) * time.Minute),
 	}, nil
 }

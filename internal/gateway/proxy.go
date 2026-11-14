@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/gateway/agent"
 	"github.com/usetrove/trove/internal/gateway/auth"
 	"github.com/usetrove/trove/internal/gateway/session"
@@ -49,6 +50,12 @@ type flight struct {
 	sessionKey string
 	keyed      bool
 	opt        *optimize.Result
+
+	// dedup is this request's entry in the in-flight book (nil when dedup is off), and
+	// dedupShadow is true when an identical request was already in flight and unanswered
+	// when this one arrived: the call that sharing would have saved.
+	dedup       *inflightEntry
+	dedupShadow bool
 
 	mu        sync.Mutex
 	status    int
@@ -100,6 +107,10 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, rt *route) {
 	f := &flight{provider: provider, rt: rt, path: path, usagePath: usagePath, start: start, ctx: r.Context(), reqHeader: withoutCredentials(r.Header)}
 	body = s.optimizeBody(r, f, body)
 	f.reqBody = body
+	if e, dup := s.dedupEnter(r, f, body); e != nil {
+		f.dedup, f.dedupShadow = e, dup
+		defer s.inflight.leave(e) // forward returns only when the response has been written
+	}
 	basePath := strings.TrimSuffix(upstream.Path, "/")
 	rawBase := strings.TrimSuffix(upstream.EscapedPath(), "/")
 
@@ -136,6 +147,9 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, rt *route) {
 // watchResponse wraps the response body in a tee. It runs before any byte is
 // sent to the client and never alters the response.
 func (s *Server) watchResponse(f *flight, resp *http.Response) {
+	if f.dedup != nil {
+		s.inflight.answered(f.dedup)
+	}
 	f.mu.Lock()
 	f.status = resp.StatusCode
 	ct := strings.ToLower(resp.Header.Get("Content-Type"))
@@ -292,4 +306,26 @@ func withoutCredentials(h http.Header) http.Header {
 		}
 	}
 	return out
+}
+
+// dedupEnter registers a request with the in-flight book when dedup is on or in
+// shadow, and says whether it is a duplicate of one still waiting for the provider.
+// It reads the credential only through the fingerprint, never its value, and it
+// can never fail a request: on any problem it returns nil and the request goes on.
+func (s *Server) dedupEnter(r *http.Request, f *flight, body []byte) (e *inflightEntry, dup bool) {
+	defer func() {
+		if recover() != nil {
+			e, dup = nil, false
+		}
+	}()
+	if s.fingerprint == nil || r.Method != http.MethodPost ||
+		s.opts.Optimizer.GatewayState(config.OptimizerInflightDedup) == config.StateOff {
+		return nil, false
+	}
+	var meta strings.Builder
+	meta.WriteString(f.provider + "|" + r.Method + "|" + f.path + "|" + r.URL.RawQuery)
+	for _, h := range []string{"Anthropic-Version", "Anthropic-Beta", "Openai-Beta", "Openai-Organization", "Openai-Project", "Content-Type", "Content-Encoding"} {
+		meta.WriteString("|" + strings.Join(r.Header.Values(h), ","))
+	}
+	return s.inflight.enter(meta.String(), s.fingerprint.Of(r.Header), body)
 }
