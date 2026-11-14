@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/experiment"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/store"
@@ -132,6 +133,13 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 			CanProbation:     canProbation,
 			OtherInProbation: otherInProbation(f.Entries, name),
 			Unavailable:      whyUnavailable(name, setup),
+		}
+		if cur.State == config.AutopilotProbation {
+			pe, err := readTrial(ctx, db, cfg, name, cur)
+			if err != nil {
+				return Result{File: f}, fmt.Errorf("cannot read the trial of %s: %v", name, err)
+			}
+			ev.Probation = pe
 		}
 		d := p.Decide(cur, ev, now)
 		if d.ClearRollback {
@@ -270,4 +278,17 @@ func otherInProbation(entries map[string]config.AutopilotEntry, name string) str
 		}
 	}
 	return ""
+}
+
+// readTrial reads the session-level comparison for an optimizer on trial: sessions assigned since the trial
+// began, on against shadow, from provider-reported cost and outcome counts (all metadata). Its status is the
+// experiment package's own, so a trial is judged by the same rule that already decides "saves" and "costs more"
+// everywhere else, and the thresholds are the user's [experiment] settings. A read error is returned, never
+// turned into a result, so a failure cannot keep an optimizer.
+func readTrial(ctx context.Context, db *store.DB, cfg config.Config, name string, cur config.AutopilotEntry) (ProbationEvidence, error) {
+	r, err := experiment.AnalyzeSince(ctx, db, name, cfg.Experiment, experiment.DefaultPriors(), cur.SinceMS)
+	if err != nil {
+		return ProbationEvidence{}, err
+	}
+	return ProbationEvidence{Status: string(r.Status), NOn: r.NOn, NOff: r.NOff}, nil
 }

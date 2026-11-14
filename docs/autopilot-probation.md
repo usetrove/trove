@@ -166,7 +166,7 @@ keeps exactly the `v1` list until they agree. `config.AutopilotPolicy` is alread
    by `MaxAttempts`. A trial ends in `on` only on a `saves` result with at least 20 sessions per side, in
    `rolled_back` on a worse result or a guardrail trip, and in `shadow` if it cannot continue or shows nothing by the
    deadline. A technique with no shadow saving estimate skips the net-token bar and is judged by the trial alone.
-   Until step 5 reads the comparison, no trial can end in `on`. The table test covers every transition.
+   The table test covers every transition.
 4. ~~**The assigner handoff** for gateway users.~~ **Built, with a correction to the original wording.** The state
    file has two views: `States()` (used by the hooks and everything with no assigner) shows a trial as shadow, and
    `StatesWithArms(abEnabled)` (used only by the gateway) shows it as `on` when A/B comparison is enabled, so the
@@ -175,8 +175,17 @@ keeps exactly the `v1` list until they agree. `config.AutopilotPolicy` is alread
    gateway already runs *every* optimizer that is on through the assigner, including a lossless one Autopilot
    promoted, so such an optimizer runs on about half of a gateway user's sessions. Narrowing that is a behaviour
    change nobody asked for, so it is left alone and recorded here as a finding.
-5. **Reading the result** for gateway users: `Advance` calls `experiment.Analyze` for the technique in probation and
-   maps the status to a transition. (This alone makes probation work for API-key users.)
+5. ~~**Reading the result** for gateway users.~~ **Built.** For an optimizer in probation, `Advance` calls
+   `experiment.AnalyzeSince` (new: `Analyze` limited to sessions assigned after the trial began, so an earlier
+   trial's sessions are never pooled in) with the user's own `[experiment]` thresholds and passes the status and the
+   session counts to `Decide`. So a trial is judged by the same rule that decides "saves" and "costs more"
+   everywhere else: for the optimizer to be kept the whole 95% range of the cost change must be below zero, no
+   outcome (turns, tool errors, abandoned sessions) may be measurably worse, and each side needs at least 20
+   sessions. A failure reading the comparison is returned as an error and the state is left as it was, so it can
+   never keep an optimizer. Tests: a clean saving keeps it, a measured loss rolls it back, no difference waits and
+   then gives up at the deadline, too few sessions decide nothing, sessions from before the trial are not counted,
+   and a failed read keeps nothing. This makes probation work for API-key users; it is the first step that can turn
+   a recoverable optimizer on, and it still cannot be reached by any user, because nothing offers `lossless-v2`.
 6. **Hooks assignment** (item 1 above) with a test that the off arm pins shadow and a database failure pins shadow.
 7. **The history-based comparison** (item 2) with a planted-effect test in both directions, and the scan scheduling
    (item 3) with a timing test that the hook path is unaffected.

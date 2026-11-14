@@ -136,7 +136,7 @@ func seedTrialEvidence(t *testing.T, db *store.DB, dir string) {
 	v2File(t, dir)
 }
 
-func TestAdvanceStartsOneTrialAtATimeAndKeepsNothingYet(t *testing.T) {
+func TestAdvanceStartsOneTrialAtATimeAndKeepsNothingWithoutAComparison(t *testing.T) {
 	db, dir := open(t)
 	seedTrialEvidence(t, db, dir)
 	f := advanceV2(t, db, dir, config.Default(), 4)
@@ -147,7 +147,7 @@ func TestAdvanceStartsOneTrialAtATimeAndKeepsNothingYet(t *testing.T) {
 	if b.State == config.AutopilotProbation || !strings.Contains(b.Reason, "waiting for hook_repeat_read") {
 		t.Fatalf("second must wait its turn: %+v", b)
 	}
-	// Nothing reads the comparison yet, so no trial can end in "on": at worst it times out.
+	// No sessions have been assigned, so the comparison has nothing to show and no trial can end in "on".
 	later, err := Advance(context.Background(), db, dir, config.Default(), PolicyV2(), hookNow.AddDate(0, 0, 40))
 	if err != nil {
 		t.Fatal(err)

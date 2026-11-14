@@ -100,7 +100,7 @@ type sess struct {
 // session must not. Sessions with unpriced requests are left out of cost
 // rather than guessed. Only assignments after the last time the user cleared a
 // rollback count.
-func load(ctx context.Context, db *store.DB, optimizer string) (kept []sess, excluded, unpriced int, err error) {
+func load(ctx context.Context, db *store.DB, optimizer string, notBeforeMS int64) (kept []sess, excluded, unpriced int, err error) {
 	var since sql.NullInt64
 	if err = db.QueryRowContext(ctx, `SELECT MAX(cleared_at) FROM guardrail_events WHERE optimizer = ? AND cleared_at IS NOT NULL`, optimizer).Scan(&since); err != nil {
 		return nil, 0, 0, err
@@ -111,7 +111,7 @@ func load(ctx context.Context, db *store.DB, optimizer string) (kept []sess, exc
 		JOIN sessions s ON s.session_key = a.session_key
 		JOIN session_pins p ON p.session_key = a.session_key
 		WHERE a.optimizer = ? AND a.assigned_at > ? AND s.outcome_signals IS NOT NULL
-		ORDER BY a.session_key`, optimizer, since.Int64)
+		ORDER BY a.session_key`, optimizer, max(since.Int64, notBeforeMS))
 	if err != nil {
 		return nil, 0, 0, err
 	}
@@ -221,7 +221,13 @@ func hashInputs(optimizer string, all []sess, x config.Experiment) string {
 // shadow. It is a pure function of the stored metadata and the config, so the
 // same data always gives the same answer (the bootstrap is seeded).
 func Analyze(ctx context.Context, db *store.DB, optimizer string, x config.Experiment, priors Priors) (Result, error) {
-	all, excluded, unpriced, err := load(ctx, db, optimizer)
+	return AnalyzeSince(ctx, db, optimizer, x, priors, 0)
+}
+
+// AnalyzeSince is Analyze counting only sessions assigned after notBeforeMS (Unix milliseconds). A trial that
+// starts later passes its own start, so sessions from an earlier trial of the same optimizer are not pooled in.
+func AnalyzeSince(ctx context.Context, db *store.DB, optimizer string, x config.Experiment, priors Priors, notBeforeMS int64) (Result, error) {
+	all, excluded, unpriced, err := load(ctx, db, optimizer, notBeforeMS)
 	if err != nil {
 		return Result{}, err
 	}
