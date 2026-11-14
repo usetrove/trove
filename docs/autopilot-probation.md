@@ -1,7 +1,7 @@
 # Autopilot probation (design, not built)
 
-Status: **design for review, 2026-11-13. Nothing here is implemented.** It is gate G7 in
-[autopilot-eligibility.md](autopilot-eligibility.md). Facts below about today's code were read from the code on that
+Status: **design, decisions made and the four open questions verified, 2026-11-13. Nothing here is implemented.** It is gate G7 in
+[autopilot-eligibility.md](autopilot-eligibility.md). Facts below about the code were read from it on that
 date; the ones I could not confirm are in "Check before building".
 
 ## The problem
@@ -75,23 +75,67 @@ two weeks, per technique, and a noisy cost metric may still say `NoClearEffect`.
 running forever. These numbers are placeholders until a benchmark sets them; they are labelled unvalidated wherever
 shown. Probation is slow by design and cannot be made fast without making it unsafe.
 
-## Measuring without a gateway
+## Decisions (made 2026-11-13, the recommended options)
 
-The same session key joins hooks, the gateway and history (`session.ClaudeCodeKey`), and the history scan writes
-priced requests and sessions through the same writer. So a hooks-only user's sessions can reach the `sessions` table
-after the fact, from their own Claude Code logs. Three consequences:
+- One technique in probation at a time.
+- A user with no gateway is judged on tokens per session, with outcome counts beside it, not dollars.
+- A user who has opted out of A/B comparison (`[experiment] enabled = false`) is never put in probation. Their
+  recoverable techniques stay in shadow and Autopilot says why.
+- `ProbationMinSessionsPerArm` stays at 20 (placeholder, labelled unvalidated).
 
-- **Delay.** History is read when `trove` scans it, not live, so a result lags by the scan interval. Probation
-  decisions are made at session boundaries anyway.
-- **Cost is a lower bound** (`logs.md`: history spend came out 1 to 8% below Claude Code's own totals, once 23%).
-  Comparing two arms priced the same way cancels most of that, but the label must say the figures are from history
-  and priced at list rates.
-- **A subscription user does not pay per token**, so dollars are the wrong headline for them. The comparison for a
-  hooks-only user should be tokens in the context per session (input including cache reads), with outcome signals
-  beside it. Dollars stay for API-key users.
+## Verified against the code (2026-11-13)
 
-If these cannot be made to work, probation is an API-key feature and a subscription user stays on shadow for
-recoverable techniques. That is an acceptable, honest outcome and must be shown as such, not hidden.
+The first draft of this design assumed the existing A/B analysis would work for a user with no gateway. **It does
+not.** Four checks, with what was found:
+
+1. **Do the hooks write `session_pins`? No.** The Claude Code hooks pin a session's states into a per-session state
+   file at `SessionStart` (`hooks/handlers.go`, `reset`), from a snapshot. They write nothing to `session_pins` and
+   never ask the assigner for an arm. Only the gateway (`measure.Gate`) and the OpenCode-style plugin engine
+   (`cli.pluginResolver`) do. `experiment.load` joins `session_pins`, so a hooks-only session is excluded from every
+   comparison today.
+2. **Do history-only sessions get roll-ups? No.** The history scan writes `history_requests` (tokens, cost, tool
+   names, tool result bytes, error counts per request), a separate table from `requests` and `sessions`. It writes no
+   `sessions` row and no `outcome_signals`, and `RollupSessions` only reads `sessions`. `experiment.Analyze` joins
+   `sessions`, `session_pins` and `outcome_signals`, so history sessions never reach it. Two more facts: the
+   history scan runs only when the user runs a `trove` command (`cli/logs.go`), not on a schedule, and the
+   periodic loop that runs roll-ups and `experiment.Step` lives in the gateway process, which a hooks-only user does
+   not run.
+3. **Can hook events stand in? Partly.** `hook_events` records only what a hook did (`blocked`, `would_block`,
+   `would_rewrite`, `rewritten`, `reissued`, `reread_anyway`, `fetched_back`), with no column for which arm a
+   session was in, and nothing for a session where the hook never acted. So it can say whether the arm really ran
+   (an "on" session with at least one real action), and give the per-hook failure counts the guardrails already use,
+   but it cannot give a session count per arm or a cost.
+4. **Does opting out of A/B stop it? Yes for the assigner.** Both the gateway and the plugin engine only create an
+   assigner when `[experiment] enabled` is true, so with it off no arm is ever assigned. This matches the decision.
+
+What this means: probation for a gateway user can reuse `experiment.Analyze` as designed. Probation for a hooks-only
+user needs three new pieces, and is the larger half of the work.
+
+## Probation for a user with no gateway (new work)
+
+1. **Assignment in the hooks.** At `SessionStart` the hooks ask the same `experiment.Assigner` for the arm of the one
+   technique in probation (the bookkeeping pass that already runs `autopilot.Advance` has the database open) and pin
+   shadow for the "off" arm. The assignment is recorded in `experiment_assignments`, as for the gateway. If the
+   database cannot be read, the session pins shadow (rule 4).
+2. **A measurement source for sessions the gateway never saw.** Build per-session figures from `history_requests`
+   joined on the shared session key (`session.ClaudeCodeKey`): tokens in the context per session (input, cache write
+   and cache read), turns (request count), tool errors (the stored error counts). Abandonment has no source here and
+   is left out rather than guessed. The arm comes from `experiment_assignments`, and a session counts as "on" only if
+   the hook acted at least once in it (`hook_events`); an "on" session where it never acted is excluded, as the
+   gateway path already excludes sessions not run as assigned.
+3. **Something that runs it.** The history scan and the comparison have to run without the user typing a command.
+   The cheapest place is the same bookkeeping pass at session boundaries, running an incremental scan (0.4 s on 119
+   files, `logs.md`) in the background and never on the hook's own path. Decisions are made only there, so a
+   probation result lags by about one session, which is fine because promotion happens at session boundaries anyway.
+   A cost to check: a hook must stay fast, so the scan must not run inline.
+
+The comparison reuses the existing statistics (the seeded bootstrap in `experiment`) on these per-session figures, and
+keeps the same promote and roll-back thresholds. History token counts and any list-priced cost are a lower bound
+(`logs.md`: 1 to 8% below Claude Code's own totals, once 23%); comparing two arms measured the same way cancels most
+of that, and the label says so.
+
+If step 3 cannot be done without slowing the hooks, probation is a gateway-user feature and subscription users keep
+recoverable techniques in shadow, shown as such. That is an acceptable, honest outcome.
 
 ## Consent
 
@@ -108,36 +152,22 @@ keeps exactly the `v1` list until they agree. `config.AutopilotPolicy` is alread
 - The technique's declared overhead is already inside the measured cost, so it is not subtracted twice
   (`Result.OverheadTokensPerSession` says so today).
 
-## Check before building (unverified)
-
-1. Do hooks write `session_pins` for the sessions they pin, in a form `experiment.load` accepts? Without pins every
-   session is excluded as "not run as assigned".
-2. Does `RollupSessions` write `outcome_signals` for sessions that came only from the history scan, and are tool
-   errors and abandonment derivable for them? If not, the outcome metrics for hooks-only users need a source.
-3. Whether hook-side outcome counts (`hook_events`) can stand in for gateway tool-signal counts, and which of the
-   four metrics survive without the gateway.
-4. Whether `Experiment.Enabled = false` (the user opted out of A/B) should block probation (recommended: yes, and
-   say so) or fall back to shadow-only forever for those techniques.
-
 ## Build plan (each step a small commit with tests)
 
-1. **Verify the four items above** against the code and a real hooks-only install; write the findings here.
+1. ~~Verify the four open questions.~~ Done, above.
 2. **`Policy` fields** `ProbationMinSessionsPerArm`, `ProbationMaxDays`, and the `lossless-v2` policy version with
    the recoverable techniques listed but not yet promotable.
-3. **The probation state** in `autopilot.json` and `Decide`: transitions, the one-at-a-time rule, deadlines,
-   cooldowns, and tests for every edge (table test).
-4. **The assigner handoff**: a probation technique is assigned even if the user's file says nothing, and only then;
-   the engine and hooks pins are unchanged. Test that an Autopilot "on" outside probation never calls the assigner.
-5. **Reading the result**: `Advance` calls `experiment.Analyze` for the technique in probation and maps the status
-   to a transition.
-6. **The hooks-only measurement path** from items 2 and 3 above, or a documented "gateway users only" fallback.
-7. **Consent text, `trove autopilot` and `/trove:status` display** of "in probation: N of M sessions per side".
-8. **A simulated probation** in the stress suite (known effect planted in the data) to show the decision is right in
-   both directions, then one real run on the benchmark (single-hook arms, G8) before any technique is promoted.
+3. **The probation state** in `autopilot.json` and `Decide`: transitions, the one-at-a-time rule, the A/B opt-out
+   block, deadlines, cooldowns, and a table test for every edge.
+4. **The assigner handoff** for gateway users: a probation technique is assigned even if the user's file says
+   nothing, and only then. Test that an Autopilot "on" outside probation never calls the assigner.
+5. **Reading the result** for gateway users: `Advance` calls `experiment.Analyze` for the technique in probation and
+   maps the status to a transition. (This alone makes probation work for API-key users.)
+6. **Hooks assignment** (item 1 above) with a test that the off arm pins shadow and a database failure pins shadow.
+7. **The history-based comparison** (item 2) with a planted-effect test in both directions, and the scan scheduling
+   (item 3) with a timing test that the hook path is unaffected.
+8. **Consent text, `trove autopilot` and `/trove:status` display** of "in probation: N of M sessions per side".
+9. **One real run** on the benchmark (single-hook arms, G8) before any technique is promoted.
 
-## Decisions needed from you
-
-- One technique in probation at a time (recommended) or several?
-- For a user with no gateway: tokens per session as the headline (recommended), or dollars priced from history?
-- If the user has opted out of A/B comparison: block probation (recommended) or ask once?
-- Minimum sessions per arm for probation: keep 20 (two weeks at 3 sessions a day) or raise it?
+Steps 2 to 5 give API-key users probation and are the smaller, lower-risk half; 6 to 7 are what subscription users
+need and may show it cannot be done fast enough, which would be a reportable result.
