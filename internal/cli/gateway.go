@@ -167,7 +167,7 @@ func runGateway(a *App, listen string) error {
 			if err != nil {
 				return nil // a damaged file means no Autopilot, which only lowers states
 			}
-			return f.States()
+			return f.StatesWithArms(cfg.Experiment.Enabled)
 		},
 		ExtraStates: func() map[string]string {
 			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)

@@ -50,7 +50,7 @@ func Summarize(f config.AutopilotFile, now time.Time, days int) *Summary {
 		switch e.State {
 		case config.AutopilotOn:
 			s.On = append(s.On, n)
-		case config.AutopilotShadow, config.AutopilotCandidate:
+		case config.AutopilotShadow, config.AutopilotCandidate, config.AutopilotProbation:
 			s.Learning = append(s.Learning, n)
 		case config.AutopilotRolledBack:
 			s.RolledBack = append(s.RolledBack, Change{Date: time.UnixMilli(e.SinceMS).Format("2006-01-02"), Optimizer: n, State: e.State, Reason: e.Reason})

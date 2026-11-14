@@ -21,6 +21,8 @@ import (
 // Policy is the rule set. DefaultPolicy's numbers are conservative placeholders
 // until a benchmark sets them; they are labeled unvalidated wherever shown.
 type Policy struct {
+	// Name is the policy version the user consented to ("lossless-v1" or "lossless-v2").
+	Name string
 	// Eligible lists the optimizers Autopilot may promote. Only lossless ones that
 	// leave the cached prefix alone are listed on day one.
 	Eligible []string
@@ -32,14 +34,24 @@ type Policy struct {
 	LookbackDays int
 	// CooldownDays is how long a rolled-back optimizer waits before another try.
 	CooldownDays int
-	// MaxAttempts is how many times one optimizer may be promoted. After that a
+	// MaxAttempts is how many times one optimizer may be promoted, or put on probation. After that a
 	// rollback is left for the user to decide.
 	MaxAttempts int
+	// Probation lists the recoverable optimizers that may be kept only after a session-level A/B
+	// comparison (docs/autopilot-probation.md). In list order, one at a time.
+	Probation []string
+	// ProbationMinSessionsPerArm is how many finished sessions each side of the comparison needs
+	// before it can promote. A placeholder until a benchmark sets it.
+	ProbationMinSessionsPerArm int
+	// ProbationMaxDays is how long a probation may run without a clear result before the optimizer
+	// goes back to shadow. A placeholder until a benchmark sets it.
+	ProbationMaxDays int
 }
 
 // DefaultPolicy is the shipped "lossless-v1" policy.
 func DefaultPolicy() Policy {
 	return Policy{
+		Name:         config.AutopilotPolicy,
 		Eligible:     []string{"noise_normalizer", "duplicate_result_collapser"},
 		MinSessions:  10,
 		MinNetTokens: 2000,
@@ -47,6 +59,42 @@ func DefaultPolicy() Policy {
 		CooldownDays: 7,
 		MaxAttempts:  2,
 	}
+}
+
+// PolicyV2 is "lossless-v2": the v1 list, plus recoverable optimizers that must pass probation. They are
+// listed here but cannot be promoted yet: reading the comparison's result is a later step, so a probation
+// can only end by timing out or being rolled back. Nothing offers this policy to a user yet.
+func PolicyV2() Policy {
+	p := DefaultPolicy()
+	p.Name = config.AutopilotPolicyV2
+	p.Probation = []string{"hook_repeat_read", "hook_quiet_commands"}
+	p.ProbationMinSessionsPerArm = 20
+	p.ProbationMaxDays = 28
+	return p
+}
+
+// PolicyFor returns the policy a consent record names, or DefaultPolicy for one this version does not know
+// (which only ever shrinks what Autopilot may do).
+func PolicyFor(name string) Policy {
+	if name == config.AutopilotPolicyV2 {
+		return PolicyV2()
+	}
+	return DefaultPolicy()
+}
+
+// NeedsProbation reports whether the named optimizer must pass probation before it is kept.
+func (p Policy) NeedsProbation(name string) bool {
+	for _, e := range p.Probation {
+		if e == name {
+			return true
+		}
+	}
+	return false
+}
+
+// Names returns every optimizer the policy may move: the lossless list, then the probation list.
+func (p Policy) Names() []string {
+	return append(append([]string{}, p.Eligible...), p.Probation...)
 }
 
 // IsEligible reports whether the policy may promote the named optimizer.
@@ -77,6 +125,26 @@ type Evidence struct {
 	// needs a channel, the gateway or the hooks, that recorded nothing while the other did). Empty
 	// means it can run, or nothing has been seen yet so it is still collecting.
 	Unavailable string
+	// NeedsProbation is true when the policy requires a session-level comparison before this optimizer is kept.
+	NeedsProbation bool
+	// NoSavingEstimate is true when shadow mode cannot put a number on the saving (see the registry's
+	// NoSavingEstimate). The net-token threshold is skipped for it, and only probation can judge it.
+	NoSavingEstimate bool
+	// CanProbation says whether a probation can run for this user now. Empty means it can; otherwise it is
+	// the plain-English reason it cannot (A/B comparison is off, or there is no gateway to assign arms).
+	CanProbation string
+	// OtherInProbation names another optimizer already in probation, or is empty. Only one runs at a time.
+	OtherInProbation string
+	// Probation is the comparison's result so far, while in probation. The zero value means no result yet.
+	Probation ProbationEvidence
+}
+
+// ProbationEvidence is what the session-level comparison shows so far. Status is the experiment package's
+// status string ("saves", "costs_more", "worse_outcomes", "no_clear_effect", "not_enough_data"), or empty
+// when no comparison has been read.
+type ProbationEvidence struct {
+	Status    string
+	NOn, NOff int
 }
 
 // Decision is Decide's answer.
@@ -97,7 +165,7 @@ func (p Policy) ready(ev Evidence) (bool, string) {
 		return false, "waiting for the baseline period to finish"
 	case ev.ShadowSessions < p.MinSessions:
 		return false, fmt.Sprintf("%d of %d shadow sessions so far", ev.ShadowSessions, p.MinSessions)
-	case ev.NetTokens < p.MinNetTokens:
+	case !ev.NoSavingEstimate && ev.NetTokens < p.MinNetTokens:
 		return false, fmt.Sprintf("estimated net saving is %d tokens, below the %d needed", ev.NetTokens, p.MinNetTokens)
 	}
 	return true, ""
@@ -121,12 +189,25 @@ func (p Policy) Decide(cur config.AutopilotEntry, ev Evidence, now time.Time) De
 			next.Reason = why
 		}
 	case config.AutopilotCandidate:
-		if ok, why := p.ready(ev); ok {
+		ok, why := p.ready(ev)
+		switch {
+		case !ok:
+			set(config.AutopilotShadow, "evidence did not hold: "+why)
+		case !ev.NeedsProbation:
 			set(config.AutopilotOn, "turned on from shadow evidence (estimated)")
 			next.Attempts = cur.Attempts + 1
-		} else {
-			set(config.AutopilotShadow, "evidence did not hold: "+why)
+		case cur.Attempts >= p.MaxAttempts:
+			set(config.AutopilotShadow, "already tried the maximum number of times; leaving it for you to decide")
+		case ev.CanProbation != "":
+			set(config.AutopilotShadow, "needs a trial against sessions without it, which cannot run: "+ev.CanProbation)
+		case ev.OtherInProbation != "":
+			next.Reason = "waiting for " + ev.OtherInProbation + " to finish its trial"
+		default:
+			set(config.AutopilotProbation, "on for about half of new sessions, chosen at random, to compare with the rest")
+			next.Attempts = cur.Attempts + 1
 		}
+	case config.AutopilotProbation:
+		return p.decideProbation(cur, ev, now)
 	case config.AutopilotOn:
 		if ev.RolledBack {
 			set(config.AutopilotRolledBack, "a guardrail rolled it back to shadow")
@@ -173,11 +254,12 @@ func (p Policy) NetOf(name string, sessions, events int, removed float64) int64 
 // shadow mode has no saving estimate), or "" when it can. Autopilot never
 // promotes what it cannot charge for (rule 15). Names the registry does not know are left alone: they
 // are not text-adding techniques the registry tracks.
-func CannotJudge(name string) string {
+func (p Policy) CannotJudge(name string) string {
 	if _, known := technique.Get(name); !known {
 		return ""
 	}
-	if NoSavingEstimate(name) {
+	// A technique with no shadow estimate can still be judged by probation, which measures sessions.
+	if NoSavingEstimate(name) && !p.NeedsProbation(name) {
 		return noEstimateReason
 	}
 	if _, ok := technique.OverheadOf(name); !ok {
@@ -192,4 +274,32 @@ const noEstimateReason = "its shadow mode counts what it would have done but can
 func NoSavingEstimate(name string) bool {
 	t, ok := technique.Get(name)
 	return ok && t.NoSavingEstimate
+}
+
+// decideProbation is the probation branch of Decide. The optimizer is on for a random half of new sessions.
+// It is kept only on a clean comparison, and goes back to shadow when the comparison is bad, cannot run, or
+// shows nothing by the deadline.
+func (p Policy) decideProbation(cur config.AutopilotEntry, ev Evidence, now time.Time) Decision {
+	next := cur
+	set := func(state, reason string) {
+		next.State, next.Reason, next.SinceMS = state, reason, now.UnixMilli()
+	}
+	pe := ev.Probation
+	switch {
+	case ev.RolledBack:
+		set(config.AutopilotRolledBack, "a guardrail rolled it back to shadow during the trial")
+	case ev.Unavailable != "":
+		set(config.AutopilotShadow, "no longer available in your setup: "+ev.Unavailable)
+	case ev.CanProbation != "":
+		set(config.AutopilotShadow, "the trial cannot continue: "+ev.CanProbation)
+	case pe.Status == "costs_more" || pe.Status == "worse_outcomes":
+		set(config.AutopilotRolledBack, "the trial showed it makes sessions worse (measured); back to shadow")
+	case pe.Status == "saves" && pe.NOn >= p.ProbationMinSessionsPerArm && pe.NOff >= p.ProbationMinSessionsPerArm:
+		set(config.AutopilotOn, "kept after a clean trial against sessions without it (measured)")
+	case now.Sub(time.UnixMilli(cur.SinceMS)) >= time.Duration(p.ProbationMaxDays)*24*time.Hour:
+		set(config.AutopilotShadow, fmt.Sprintf("no measurable benefit after %d days of trial; leaving it in shadow", p.ProbationMaxDays))
+	default:
+		next.Reason = fmt.Sprintf("trial running: %d sessions with it on and %d with it off so far, each side needs %d", pe.NOn, pe.NOff, p.ProbationMinSessionsPerArm)
+	}
+	return Decision{Entry: next}
 }

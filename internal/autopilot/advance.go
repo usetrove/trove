@@ -100,9 +100,15 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 	seen := measure.PhaseFor(cfg.Measure, base.InstalledAt, now, sessionsSeen(base.SessionsSeen, hookSessions))
 	baselineDone := seen.Phase == measure.PhaseActive
 	on := onNow(ctx, db, cfg)
+	for n, e := range f.Entries {
+		if e.State == config.AutopilotProbation {
+			on = append(on, n) // on for half of sessions, so it can still conflict with what else is on
+		}
+	}
 	res := Result{File: f}
 	changed := false
-	for _, name := range p.Eligible {
+	canProbation := probationBlocker(cfg, traffic)
+	for _, name := range p.Names() {
 		if _, mine := cfg.Optimizers[name]; mine {
 			// The user's own setting wins; Autopilot stays out of the way.
 			if _, had := f.Entries[name]; had {
@@ -119,8 +125,13 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 			ShadowSessions: sessions,
 			NetTokens:      p.NetOf(name, sessions, events, tokens),
 			RolledBack:     back,
-			Blocked:        firstNonEmpty(blockedBy(on, name), CannotJudge(name)),
-			Unavailable:    whyUnavailable(name, setup),
+			Blocked:        firstNonEmpty(blockedBy(on, name), p.CannotJudge(name)),
+
+			NeedsProbation:   p.NeedsProbation(name),
+			NoSavingEstimate: NoSavingEstimate(name),
+			CanProbation:     canProbation,
+			OtherInProbation: otherInProbation(f.Entries, name),
+			Unavailable:      whyUnavailable(name, setup),
 		}
 		d := p.Decide(cur, ev, now)
 		if d.ClearRollback {
@@ -234,6 +245,29 @@ func blockedBy(on []string, name string) string {
 	}
 	if r := technique.CanAdd(others, name, permissive); len(r.Conflicts) > 0 {
 		return r.Conflicts[0].Reason
+	}
+	return ""
+}
+
+// probationBlocker says why a trial cannot run for this user now, or "" when it can. A trial needs the
+// assigner that picks each session's arm, and only the gateway has one in the Claude Code path today; and
+// it needs A/B comparison switched on, because with it off an optimizer that is "on" is on for everyone.
+func probationBlocker(cfg config.Config, tr measure.Traffic) string {
+	switch {
+	case !cfg.Experiment.Enabled:
+		return "A/B comparison is switched off ([experiment] enabled = false)"
+	case !tr.Gateway:
+		return "it needs the gateway to pick which sessions run with it, and none of your recent traffic went through it"
+	}
+	return ""
+}
+
+// otherInProbation returns the name of another optimizer in probation, or "".
+func otherInProbation(entries map[string]config.AutopilotEntry, name string) string {
+	for n, e := range entries {
+		if n != name && e.State == config.AutopilotProbation {
+			return n
+		}
 	}
 	return ""
 }

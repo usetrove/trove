@@ -19,6 +19,16 @@ const AutopilotFileName = "autopilot.json"
 // policy is ignored, so an older program never applies rules it does not know.
 const AutopilotPolicy = "lossless-v1"
 
+// AutopilotPolicyV2 adds techniques that are recoverable rather than lossless. Each goes through probation, a
+// session-level A/B comparison, before it is kept (docs/autopilot-probation.md). Nothing offers this policy to a
+// user yet: consent for it is a later step, so no autopilot.json has it unless written by hand.
+const AutopilotPolicyV2 = "lossless-v2"
+
+// KnownAutopilotPolicy reports whether this version understands the named policy.
+func KnownAutopilotPolicy(name string) bool {
+	return name == AutopilotPolicy || name == AutopilotPolicyV2
+}
+
 // Autopilot states. Only AutopilotOn raises an optimizer above shadow.
 const (
 	AutopilotOff        = "off"
@@ -26,6 +36,9 @@ const (
 	AutopilotCandidate  = "candidate"
 	AutopilotOn         = "on"
 	AutopilotRolledBack = "rolled_back"
+	// AutopilotProbation means the optimizer is on for about half of new sessions, chosen at random, and off for
+	// the rest, so the two can be compared. It is on for everyone only if the comparison is clean.
+	AutopilotProbation = "probation"
 )
 
 // AutopilotEntry is Autopilot's state for one optimizer. Names, states, times
@@ -59,13 +72,23 @@ type AutopilotFile struct {
 // Active reports whether Autopilot may influence optimizer states: the user
 // consented, it is not paused, and the policy is one this version understands.
 func (f AutopilotFile) Active() bool {
-	return f.Enabled && !f.Paused && f.Policy == AutopilotPolicy
+	return f.Enabled && !f.Paused && KnownAutopilotPolicy(f.Policy)
 }
 
 // States maps Autopilot's entries to the configured state an optimizer gets for
 // new sessions. Only "on" is on; shadow, candidate and rolled_back all run in
 // shadow so evidence keeps building; anything else is off.
-func (f AutopilotFile) States() map[string]string {
+//
+// An optimizer in probation is shadow here: this map is for readers that cannot assign a random arm. A reader
+// that can (the gateway, which has the assigner) uses StatesWithArms.
+func (f AutopilotFile) States() map[string]string { return f.states(false) }
+
+// StatesWithArms is States for a reader that assigns each session an A/B arm. An optimizer in probation is "on"
+// there, because the assigner lowers it to shadow for the half of sessions that are the comparison. If A/B
+// comparison is switched off there is no assigner, so "on" would mean on for everyone, and it stays shadow.
+func (f AutopilotFile) StatesWithArms(abEnabled bool) map[string]string { return f.states(abEnabled) }
+
+func (f AutopilotFile) states(arms bool) map[string]string {
 	if !f.Active() {
 		return nil
 	}
@@ -74,6 +97,11 @@ func (f AutopilotFile) States() map[string]string {
 		switch e.State {
 		case AutopilotOn:
 			out[name] = StateOn
+		case AutopilotProbation:
+			out[name] = StateShadow
+			if arms {
+				out[name] = StateOn
+			}
 		case AutopilotShadow, AutopilotCandidate, AutopilotRolledBack:
 			out[name] = StateShadow
 		}

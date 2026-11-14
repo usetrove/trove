@@ -48,12 +48,16 @@ func (p Policy) Plan(rows map[string]measure.ShadowRow, entries map[string]confi
 		switch {
 		case entries[name].State == config.AutopilotOn:
 			it.Verdict, it.Reason = VerdictOn, "Autopilot turned it on"
+		case entries[name].State == config.AutopilotProbation:
+			it.Verdict, it.Reason = VerdictCollecting, "on trial for about half of new sessions: "+entries[name].Reason
 		case blocked[name] != "":
 			it.Verdict, it.Reason = VerdictBlocked, blocked[name]
 		case unavailable[name] != "":
 			it.Verdict, it.Reason = VerdictUnavailable, unavailable[name]
-		case NoSavingEstimate(name):
+		case NoSavingEstimate(name) && !p.NeedsProbation(name):
 			it.Verdict, it.Reason = VerdictNeedsYourChoice, noEstimateReason
+		case ok && p.NeedsProbation(name):
+			it.Verdict, it.Reason = VerdictWouldTurnOn, "enough shadow evidence; Autopilot starts a trial against sessions without it at the next check"
 		case ok && p.IsEligible(name):
 			it.Verdict, it.Reason = VerdictWouldTurnOn, "enough shadow evidence; Autopilot turns it on at the next check"
 		case ok:

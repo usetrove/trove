@@ -155,12 +155,26 @@ keeps exactly the `v1` list until they agree. `config.AutopilotPolicy` is alread
 ## Build plan (each step a small commit with tests)
 
 1. ~~Verify the four open questions.~~ Done, above.
-2. **`Policy` fields** `ProbationMinSessionsPerArm`, `ProbationMaxDays`, and the `lossless-v2` policy version with
-   the recoverable techniques listed but not yet promotable.
-3. **The probation state** in `autopilot.json` and `Decide`: transitions, the one-at-a-time rule, the A/B opt-out
-   block, deadlines, cooldowns, and a table test for every edge.
-4. **The assigner handoff** for gateway users: a probation technique is assigned even if the user's file says
-   nothing, and only then. Test that an Autopilot "on" outside probation never calls the assigner.
+2. ~~**`Policy` fields** `ProbationMinSessionsPerArm`, `ProbationMaxDays`, and the `lossless-v2` policy version with
+   the recoverable techniques listed but not yet promotable.~~ **Built.** `PolicyV2()` is v1 plus
+   `hook_repeat_read` and `hook_quiet_commands` (in that order) on a probation list; 20 sessions per arm and 28 days
+   are placeholders. `PolicyFor(name)` maps a consent record to a policy and falls back to v1 for a name it does not
+   know. Nothing offers v2 to a user: `Enable` still writes v1, and consent for v2 is step 8.
+3. ~~**The probation state** in `autopilot.json` and `Decide`.~~ **Built.** New state `probation`. A candidate that
+   needs a trial starts one only if a trial can run (A/B comparison on, and gateway traffic seen, because only the
+   gateway can assign arms today) and no other trial is running; tries are counted when a trial starts and limited
+   by `MaxAttempts`. A trial ends in `on` only on a `saves` result with at least 20 sessions per side, in
+   `rolled_back` on a worse result or a guardrail trip, and in `shadow` if it cannot continue or shows nothing by the
+   deadline. A technique with no shadow saving estimate skips the net-token bar and is judged by the trial alone.
+   Until step 5 reads the comparison, no trial can end in `on`. The table test covers every transition.
+4. ~~**The assigner handoff** for gateway users.~~ **Built, with a correction to the original wording.** The state
+   file has two views: `States()` (used by the hooks and everything with no assigner) shows a trial as shadow, and
+   `StatesWithArms(abEnabled)` (used only by the gateway) shows it as `on` when A/B comparison is enabled, so the
+   assigner splits sessions, and as shadow when it is not. The earlier plan also said to test that an Autopilot "on"
+   outside probation never calls the assigner. That was wrong: with A/B comparison enabled (the default) the
+   gateway already runs *every* optimizer that is on through the assigner, including a lossless one Autopilot
+   promoted, so such an optimizer runs on about half of a gateway user's sessions. Narrowing that is a behaviour
+   change nobody asked for, so it is left alone and recorded here as a finding.
 5. **Reading the result** for gateway users: `Advance` calls `experiment.Analyze` for the technique in probation and
    maps the status to a transition. (This alone makes probation work for API-key users.)
 6. **Hooks assignment** (item 1 above) with a test that the off arm pins shadow and a database failure pins shadow.
