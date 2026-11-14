@@ -1,0 +1,788 @@
+TROVE BENCHMARK RUNBOOK
+From a blank SSH session to a results table.
+
+Written 2026-11-14 from the code in bench/ (trovebench) at this checkout. Where I could not check
+something, it says so. Commands assume a Debian or Ubuntu server and bash; change the package
+manager lines for anything else. Angle brackets like <THIS> are values you fill in.
+
+======================================================================================================
+ORDER OF WORK: EVERYTHING THAT IS LEFT FOR YOU
+======================================================================================================
+
+ Everything that could be built without you is built and tested. What remains is only what needs your
+ machines, your logins or your API money. In this order:
+
+   1. THE BENCHMARK STUDIES.     Parts 0 to 11 (Studies A and B: the gateway optimizers, and the plugin
+                                 path), then Part D (Study D: each trial candidate hook by itself).
+                                 API key only. Part C is a plan for later and is NOT runnable.
+   2. A REAL-INSTALL TRIAL RUN.  Part E. About a day of ordinary use. Proves the pieces fit on a real
+                                 Claude Code. It is a plumbing check and shows no saving.
+   3. WHAT THE NUMBERS CHANGE.   Part F. Turn the studies into Autopilot's trial policy: keep or drop each
+                                 hook and replace the placeholder numbers, in one commit, with the source.
+
+ Until step 3 is committed, say everywhere that the trial numbers (20 sessions per side, 28 days) and
+ the thresholds are unvalidated placeholders. Nothing has been published from any study yet.
+
+ Things only you can decide, and where each comes up:
+   - which tasks and how many (Part 6),   - the spend caps (Parts 6 and 7, from the pilot),
+   - whether to publish a result (Part 11 and F.4),   - which hooks stay on the trial list (F.1).
+
+======================================================================================================
+PART 0. WHAT THE HARNESS DOES, AND WHAT THAT MEANS FOR THIS PLAN
+======================================================================================================
+
+I read bench/trovebench (conditions.py, docker_run.py, cli.py, study.py, studyreport.py, runner.py,
+validate.py, sources/swebench.py). The facts that shape the plan:
+
+ 1. ONE FRESH CONTAINER PER RUN. Each run starts Trove's gateway inside its own container with its own
+    data folder and database, runs Claude Code on one task, grades it, copies the database out and
+    destroys the container. Nothing carries over between runs.
+
+ 2. CONDITIONS ALREADY AVAILABLE (conditions.py):
+       direct                  no Trove at all
+       passthrough             gateway on, every optimizer off  (the reference for gateway studies)
+       alone_noise_normalizer  one optimizer on
+       alone_duplicate_result_collapser
+       all_safe                every optimizer that can be on for Claude Code
+       hooks                   the plugin's hooks only, no gateway
+       hooks_gateway           hooks and gateway together
+    With Claude Code only noise_normalizer and duplicate_result_collapser can be "on". The others
+    (volatile_prefix_mover, cache_breakpoints, output_trimmer) are reported as "not measurable with
+    this agent", never run as silent no-ops.
+
+ 3. EVERY GATEWAY CONDITION SETS baseline_days = 0, baseline_sessions = 0 and turns the experiment
+    assigner off, so "on" means on from the first request. The benchmark therefore never exercises
+    Autopilot's learning period, and it cannot: a fresh container per run has no history to learn from.
+
+ 4. WHAT THAT MEANS FOR AUTOPILOT. Autopilot can only promote noise_normalizer and
+    duplicate_result_collapser, which are exactly the two optimizers Claude Code can run. So every state
+    Autopilot could end up in is already a condition:
+       it promotes neither   -> passthrough
+       only noise_normalizer -> alone_noise_normalizer
+       only the collapser    -> alone_duplicate_result_collapser
+       both                  -> all_safe
+    The benchmark measures what each end state is worth. What it does not measure is which end state
+    Autopilot would choose, or what the learning period costs. That needs the separate warm-up
+    simulation in PART C, which is NOT BUILT yet.
+
+ 5. THE PLUGIN PATH IS ALREADY A CONDITION (hooks, hooks_gateway), so the path most people use can be
+    measured without new code. Hooks conditions run Claude Code without --bare (so hooks can fire) and
+    need a live "hook probe" result for the EXACT Claude Code version in the container, or they would
+    silently run in shadow mode. The harness refuses to run them without it.
+
+ 6. RUNS ARE SEQUENTIAL. runner.execute walks the plan one run at a time. Wall-clock time is
+    (number of runs) x (average run time). A SWE-bench run can take many minutes. Work out the total
+    from the pilot (PART 6) before you commit to a design.
+
+ 7. SWE-BENCH SUPPORT IS A SUBSET, NOT THE FULL 500. The adapter (sources/swebench.py) covers only
+    plain-pytest repos (astropy, matplotlib, scikit-learn, sphinx, pytest, pylint, xarray, requests,
+    seaborn). Django and SymPy are skipped. It builds each environment from the repo at its base commit
+    on python:3.9-slim, because the official per-instance images were not verified. Many instances will
+    be rejected by `validate`. The usable set is whatever passes validation, and it is likely far smaller
+    than 500.
+
+ 8. BUILD AND VERSION RECORDING. The harness builds Trove from the checkout it runs in (go build
+    ./cmd/trove) and records trove_commit, trove_dirty and the binary's sha256 in versions.json. A
+    dirty tree is recorded as dirty. Run from a clean checkout of a commit you will name in the report.
+
+ 9. STUDIES ARE PRE-REGISTERED. A study file is hashed and locked (prereg) before any run. `run --study`
+    refuses a study that changed after locking, and the caps are part of the file. Changing the task
+    count, repeats or caps means a new study id and a new lock. Anything analysed outside a registered
+    study is exploratory and cannot back a README or landing-page claim.
+
+10. RESULTS ARE GIT-IGNORED (.gitignore: bench/results/). Nothing reaches the repo by itself. The
+    claims checker (go run ./scripts/checkclaims --publish) needs every published figure to cite a
+    committed file. See PART 11.
+
+======================================================================================================
+PART 1. BEFORE YOU CONNECT: DECISIONS TO MAKE
+======================================================================================================
+
+ [ ] Model. config.yaml defaults to claude-haiku-5-5 (cheap). Pick the exact model ID you want to
+     publish about. It must have a price in internal/pricing/pricing.json.
+ [ ] Claude Code version. config.yaml pins claude_version "2.1.319". Keep one version for the whole
+     batch. Hooks conditions need a probe result for exactly this version.
+ [ ] Which Trove commit. Use a commit you can name. The gateway's shadow features (in-flight dedup,
+     spend cap) and Autopilot are off by default, so a default-config benchmark describes the default
+     product on any of these commits. Say which commit in the report.
+ [ ] Which studies (PART 8). Suggested: Study A (gateway end states) and Study B (plugin path).
+ [ ] A spend ceiling you are comfortable with, set in two places: the study's batch_cap_usd, AND a
+     spend limit on the API key's workspace in the Anthropic Console (check that your account offers
+     one). The harness cap is not the only protection you should rely on for a long, unattended run.
+ [ ] Never use a Claude.ai subscription login on a server. The harness is API-key only.
+
+======================================================================================================
+PART 2. LOG IN AND PREPARE THE SERVER
+======================================================================================================
+
+ Step 2.1  Connect, and keep the session alive.
+
+     ssh <USER>@<SERVER>
+     tmux new -s bench          # reattach later with:  tmux attach -t bench
+     # Do everything below inside tmux so a dropped connection does not stop the run.
+
+ Step 2.2  Check the machine.
+
+     nproc ; free -h ; df -h /var/lib/docker /home
+     # Each run's container gets 4 GB RAM and 2 CPUs. Task images are cached per task and can be large:
+     # leave tens of GB free (more for many tasks). Stop and resize if disk is tight.
+
+ Step 2.3  Install the tools.
+
+     sudo apt-get update
+     sudo apt-get install -y git curl build-essential python3 python3-venv python3-pip docker.io tmux
+     sudo systemctl enable --now docker
+     sudo usermod -aG docker "$USER"      # then log out and back in so docker works without sudo
+     docker run --rm hello-world          # must print the hello message
+
+     # Go: the harness cross-compiles Trove with it. go.mod requires go 1.27.3 or newer.
+     # Install Go from https://go.dev/dl/ following their instructions, then:
+     go version
+
+     # Python 3.10 or newer:
+     python3 --version
+
+ Step 2.4  Install Claude Code on the HOST at exactly the pinned version. It is needed only to run the
+     hook probe (PART 5). Use the install method in Claude Code's current setup documentation, then:
+
+     claude --version             # must equal claude_version in bench/config.yaml
+
+ Step 2.5  Put your API key in this shell, without echoing it or putting it in history.
+
+     read -rs ANTHROPIC_API_KEY ; export ANTHROPIC_API_KEY ; echo
+     # Paste the key, press Enter. Do NOT write it into any file. The harness passes it to containers
+     # by name and never stores it.
+     [ -n "$ANTHROPIC_API_KEY" ] && echo "key is set"
+
+======================================================================================================
+PART 3. GET THE CODE AT A KNOWN COMMIT
+======================================================================================================
+
+     git clone <REPO_URL> trove
+     cd trove
+     git fetch --all --tags
+     git checkout <COMMIT_OR_TAG>        # the commit you will name in the report. Use the release tag, v0.3.0
+                                         # or later, so the studies measure what users actually get
+     git status --porcelain              # must print NOTHING (clean tree)
+     git rev-parse HEAD                  # write this down
+
+     python3 -m venv .venv
+     . .venv/bin/activate
+     pip install -e "bench[report,dev]"
+
+     # Self-checks, no API spend:
+     (cd bench && python -m pytest -q)            # the harness's own tests
+     go build ./cmd/trove && echo "trove builds"
+
+======================================================================================================
+PART 4. CONFIGURE AND PROVE THE PIPELINE (NO REAL SPEND YET)
+======================================================================================================
+
+ Step 4.1  Edit bench/config.yaml: set claude_version and model as decided in PART 1. The file's hash is
+     recorded in versions.json. Do not edit it between the pilot and the main runs.
+
+ Step 4.2  Whole pipeline with a fake agent and a mock upstream (no key used, no money):
+
+     python -m trovebench smoke --fake
+     # Expect a report under bench/results/<date>-smoke/. If this fails, fix it before anything else.
+
+ Step 4.3  The estimate-only version of the real smoke test:
+
+     python -m trovebench smoke --dry-run
+
+ Step 4.4  A tiny REAL smoke run (3 tasks x direct and all_safe; costs a few cents to a few dollars):
+
+     python -m trovebench smoke --yes
+     # Check the report: no "error" statuses, trove_dirty false in versions.json.
+
+======================================================================================================
+PART 5. HOOK PROBE (ONLY IF YOU RUN THE HOOKS CONDITIONS)
+======================================================================================================
+
+ The hooks conditions are refused unless a LIVE probe result exists for the container's exact Claude
+ Code version. The probe runs real sessions on the host and spends a few cents.
+
+     go run ./scripts/hookprobe --live --max-usd 0.25 --out /tmp/hookprobe.json
+     # It refuses to run without ANTHROPIC_API_KEY set. IMPORTANT: always pass --out. The default
+     # output is docs/hook-capabilities.json INSIDE the repo; overwriting it would dirty the tree and
+     # every later run would be recorded as trove_dirty.
+     git status --porcelain      # must still print NOTHING
+
+ Keep /tmp/hookprobe.json (or move it somewhere safe). You pass it to every hooks run:
+
+     --hook-capabilities /tmp/hookprobe.json
+
+ If the probe's agent_version differs from claude_version in config.yaml, rerun the probe on the pinned
+ version. A mismatch makes the harness stop before spending anything.
+
+======================================================================================================
+PART 6. TASKS: FETCH, VALIDATE, PILOT
+======================================================================================================
+
+ Step 6.1  Fetch candidate SWE-bench Verified tasks. Ask for more than you need; many are rejected.
+
+     python -m trovebench fetch swebench -n 80 --seed <TASK_SEED> --out bench/tasks/swebench-cand
+     # Writes manifests only. Task text belongs to the upstream projects: keep these local.
+     # (Check how many pytest-repo rows exist: the adapter caps at what the dataset provides.)
+
+ Step 6.2  Validate. For each task this builds an image and proves the tests FAIL on the unmodified repo
+     and PASS with the upstream fix. It calls no model, so it spends no API money, but it takes time and
+     disk. Rejected tasks print a reason.
+
+     python -m trovebench validate --tasks bench/tasks/swebench-cand | tee /tmp/validate.txt
+     grep -c '^OK' /tmp/validate.txt
+     grep '^REJECTED' /tmp/validate.txt | head
+
+ Step 6.3  Build the evaluation set from the validated tasks only. Copy the accepted manifests (the
+     folders the validator marked with validation.json) into a new folder, for example
+     bench/tasks/swebench-main. Leave a SEPARATE set of validated tasks, disjoint from the main set, in
+     bench/tasks/swebench-warmup for PART C (never evaluate on warm-up tasks).
+
+     How many tasks? ship_rule.min_pairs is 30. Repeats of one task are not independent: the analysis
+     resamples whole tasks. Prefer at least 30 to 40 tasks over many repeats of a few.
+
+ Step 6.4  PILOT. A small, unregistered run to learn cost, run time and error rate. It is exploratory
+     and is never used for a claim. Without --study it uses the five conditions listed in
+     bench/config.yaml (direct, passthrough, alone_noise_normalizer, alone_duplicate_result_collapser,
+     all_safe), so 3 tasks x 5 conditions x 1 repeat = 15 runs. It does not exercise the hooks
+     conditions. Make a folder with 3 to 5 of the main-set manifests (bench/tasks/swebench-pilot), then:
+
+     python -m trovebench plan --tasks bench/tasks/swebench-pilot --repeats 1
+     python -m trovebench run  --tasks bench/tasks/swebench-pilot --repeats 1 --yes \
+            --batch bench/results/pilot-1 2>&1 | tee /tmp/pilot.log
+
+     Then read from bench/results/pilot-1:
+       - runs.csv: status per run (anything other than "ok" is excluded from analysis), cost_usd,
+         wall_s. Average cost per run and average wall time per run are what you need.
+       - After runs finish, `plan` switches from its token-profile guess to the OBSERVED mean cost.
+
+     Work out the full-study size:
+       runs      = tasks x conditions x repeats
+       dollars   = runs x observed mean cost per run       (plus headroom for the overshoot of one request)
+       hours     = runs x observed mean wall minutes / 60  (runs are sequential)
+     If the hours are unacceptable: fewer tasks, fewer conditions, or run Study A and Study B in
+     separate tmux windows with separate batch folders (mind API rate limits; each container takes
+     4 GB RAM and 2 CPUs).
+
+======================================================================================================
+PART 7. WRITE AND LOCK THE STUDIES (BEFORE ANY STUDY RUN)
+======================================================================================================
+
+ Caps are part of the locked file. Set them from the pilot, then lock. Use a NEW id and a fresh
+ order_seed. All paths in `tasks:` are relative to bench/.
+
+ --- bench/studies/swebench-gateway-1.yaml  (Study A: every state Autopilot could end up in) ---------
+
+     id: swebench-gateway-1
+     title: "SWE-bench Verified subset: the gateway optimizers, every state Autopilot could reach"
+     hypothesis: >
+       Turning on noise_normalizer, duplicate_result_collapser, or both lowers the billed cost per task
+       against the same gateway with every optimizer off, without lowering the share of tasks that pass.
+     primary_metric: billed_cost_usd
+     secondary_metrics: [success_rate, latency_s]
+     baseline_condition: passthrough
+     conditions: [passthrough, alone_noise_normalizer, alone_duplicate_result_collapser, all_safe]
+     tasks: tasks/swebench-main
+     repeats: 3
+     order_seed: <NEW_SEED>
+     cost_basis: agent
+     analysis:
+       alpha: 0.05
+       bootstrap_resamples: 10000
+       bootstrap_seed: <NEW_SEED>
+       multiple_comparison: holm
+     ship_rule:
+       min_cost_reduction_pct: 5
+       success_margin_pts: 5
+       min_pairs: 30
+     budget:
+       batch_cap_usd: <FROM_PILOT>
+       run_cap_usd: <FROM_PILOT>
+
+ --- bench/studies/swebench-parity-1.yaml  (Study B: the plugin path) -------------------------------
+
+     Copy bench/studies/parity.yaml and change only: id, tasks (tasks/swebench-main), order_seed,
+     bootstrap_seed and the budget. Keep:
+         baseline_condition: direct
+         conditions: [direct, hooks, all_safe, hooks_gateway]
+         parity: {none: direct, plugin: hooks, gateway: all_safe, both: hooks_gateway}
+     Remove the `efforts:` line unless you can afford it: it multiplies the number of runs by the
+     number of effort levels.
+
+ Optional: add `claims:` entries to test a third party's published saving against your measurement.
+ Each needs condition, claimed_cost_reduction_pct, source_url and retrieved_at (a claim without a
+ source is rejected).
+
+ Check each study without spending anything, then lock and commit BEFORE running:
+
+     python -m trovebench plan --study bench/studies/swebench-gateway-1.yaml
+     python -m trovebench prereg bench/studies/swebench-gateway-1.yaml
+     python -m trovebench plan --study bench/studies/swebench-parity-1.yaml \
+            --hook-capabilities /tmp/hookprobe.json
+     python -m trovebench prereg bench/studies/swebench-parity-1.yaml
+
+     git add bench/studies/swebench-gateway-1.yaml bench/studies/swebench-gateway-1.lock.json \
+             bench/studies/swebench-parity-1.yaml bench/studies/swebench-parity-1.lock.json
+     git commit -m "bench: register swebench-gateway-1 and swebench-parity-1"
+     git push        # if you want the registration on record before the runs start
+     git status --porcelain      # must be EMPTY again, or versions.json will say trove_dirty
+
+ The plan output must show the estimate under your batch cap. If `plan` says the estimate is above the
+ cap, `run` will refuse: lower the tasks or repeats in a new study id, do not edit a locked file.
+
+======================================================================================================
+PART 8. RUN THE STUDIES
+======================================================================================================
+
+ Inside tmux, with the venv active and ANTHROPIC_API_KEY exported:
+
+     python -m trovebench run --study bench/studies/swebench-gateway-1.yaml --yes 2>&1 | tee -a /tmp/run-A.log
+     python -m trovebench run --study bench/studies/swebench-parity-1.yaml \
+            --hook-capabilities /tmp/hookprobe.json --yes 2>&1 | tee -a /tmp/run-B.log
+
+ Results go to bench/results/<date>/<study-id>/.
+
+ Watch progress from a second tmux window (Ctrl-b c):
+
+     B=bench/results/<DATE>/swebench-gateway-1
+     wc -l $B/ledger.jsonl                              # runs recorded so far
+     tail -n 3 $B/ledger.jsonl | cut -c1-200
+     docker ps --format '{{.Names}} {{.Status}}'        # the current run's container
+     df -h /var/lib/docker
+
+ If the connection drops, the run keeps going inside tmux. If the process is killed or the machine
+ restarts, run the SAME command again with the same arguments: finished runs are never repeated and runs
+ that failed before grading are retried. If it says the plan differs, you changed a setting: put the
+ original back (a locked study cannot be changed).
+
+ The run stops by itself when spent + run_cap would exceed batch_cap_usd. The stop reason is printed,
+ the report is still written from the runs that finished, and the command exits with code 3 (0 only when
+ every planned run finished). A partial report covers fewer pairs than registered: say so, and do not
+ present it as the full study.
+
+======================================================================================================
+PART 9. SANITY CHECKS BEFORE YOU LOOK AT THE RESULT
+======================================================================================================
+
+ Do these first; a clean-looking table from a bad run is worse than no table.
+
+     B=bench/results/<DATE>/<STUDY_ID>
+     cat $B/versions.json
+       - trove_dirty must be false; trove_commit must be the commit you recorded.
+       - agent_version_reported must equal agent_version_pinned.
+       - model must be the exact ID you intended.
+
+     python - <<'EOF'
+     import csv, collections
+     rows = list(csv.DictReader(open("bench/results/<DATE>/<STUDY_ID>/runs.csv")))
+     by = collections.defaultdict(collections.Counter)
+     for r in rows:
+         by[r["condition"]][r["status"]] += 1
+     for c, k in sorted(by.items()):
+         print(c, dict(k))
+     EOF
+
+       - Count statuses per condition. Many non-"ok" runs mean the paired design lost data. Find out why
+         (look at runs/<id>/agent_stderr_tail.txt) before trusting a comparison.
+       - The harness also checks, before and after each gateway run, that Trove really applied the
+         condition, and marks the run "error" if not. A condition that shows many errors was not run.
+
+     Open $B/report.md and read the whole thing, including any "NOT MEASURABLE" lines and the gateway
+     cross-check warnings (a gateway count differing from the agent's own usage by more than 10 percent
+     on a run is flagged).
+
+======================================================================================================
+PART 10. THE RESULTS TABLE
+======================================================================================================
+
+ The harness writes report.md, charts (cost_change.png, success_diff.png, latency_diff.png) and CSVs:
+ runs.csv, pairs.csv, comparisons.csv (and parity.csv for a parity study, claims.csv if you added
+ claims). To print a compact table of the registered comparisons:
+
+     python - <<'EOF'
+     import csv
+     p = "bench/results/<DATE>/<STUDY_ID>/comparisons.csv"
+     rows = list(csv.DictReader(open(p)))
+     hdr = ("condition", "vs", "pairs", "tasks", "cost change %", "95% CI", "success diff (pts)", "adj p", "verdict")
+     print(" | ".join(hdr))
+     print(" | ".join("---" for _ in hdr))
+     for r in rows:
+         print(" | ".join([
+             r["condition"], r["reference"], r["n_pairs"], r["n_tasks"],
+             f'{float(r["median_cost_change_pct"]):.1f}',
+             f'{float(r["ci_lo"]):.1f} to {float(r["ci_hi"]):.1f}',
+             f'{float(r["success_diff_pts"]):.1f}',
+             r["p_adjusted"], r["verdict"]]))
+     EOF
+
+ Per-condition raw table (counts and means from runs.csv; cost here is the agent-basis estimate):
+
+     python - <<'EOF'
+     import csv, collections, statistics as st
+     rows = [r for r in csv.DictReader(open("bench/results/<DATE>/<STUDY_ID>/runs.csv")) if r["status"] == "ok"]
+     by = collections.defaultdict(list)
+     for r in rows: by[r["condition"]].append(r)
+     print("condition | runs | passed | mean cost $ (estimated) | mean wall s")
+     print("--- | --- | --- | --- | ---")
+     for c, rs in sorted(by.items()):
+         cost = [float(r["agent_cost_usd"] or r["cost_usd"]) for r in rs if (r["agent_cost_usd"] or r["cost_usd"])]
+         print(f'{c} | {len(rs)} | {sum(r["passed"] == "True" for r in rs)} of {len(rs)} | '
+               f'{st.fmean(cost):.4f} | {st.fmean(float(r["wall_s"]) for r in rs):.0f}')
+     EOF
+
+ How to read the verdicts. The ship rule (from the study file) says a condition is recommended only if
+ the whole 95 percent interval for the cost change is at or below -5 percent, the success difference does
+ not fall by more than 5 points, there are at least min_pairs pairs, and the Holm-adjusted p value is
+ below alpha. Otherwise the verdict is NEED MORE DATA or does not ship. Costs are ESTIMATED (list price
+ applied to token counts); pass/fail, wall time and token counts are MEASURED. Never round a result up.
+
+======================================================================================================
+PART 11. BRING RESULTS HOME AND PUBLISH THEM PROPERLY
+======================================================================================================
+
+ Step 11.1  Copy results to your own machine (run this on your machine, not the server). Exclude the
+     per-run folders: they hold the agent's redacted output, which can include upstream code and issue
+     text. Do not publish those.
+
+     rsync -av --exclude 'runs/' --exclude 'bin/' \
+           <USER>@<SERVER>:trove/bench/results/<DATE>/<STUDY_ID>/ ./bench-results/<STUDY_ID>/
+
+     # Keep a private full copy of the whole folder too (including runs/) for your own audit.
+
+ Step 11.2  Commit only what may be published, in a folder that is NOT git-ignored. bench/results/ is
+     ignored, so use a new folder, for example bench/published/<STUDY_ID>/ (check with
+     `git check-ignore -v bench/published/x` that it is not ignored). Commit: report.md, comparisons.csv,
+     pairs.csv, runs.csv, parity.csv and claims.csv if present, the three PNG charts, versions.json,
+     config.used.yaml and study.lock.json. Do NOT commit runs/ or any task text.
+
+     Task content belongs to its upstream projects (bench/LICENSES.md). The SWE-bench Verified dataset
+     card declares no licence, so publish task IDs and your own aggregates only.
+
+ Step 11.3  Update the README "Measured results" section and CHANGELOG so they agree with each other
+     and with the committed files:
+       - state the study id, the lock date, the Trove commit, the Claude Code version, the model,
+         the number of tasks and pairs, the caps and the total spend;
+       - give the verdict in the ship rule's own words, including NEED MORE DATA if that is what it is;
+       - label every figure measured or estimated;
+       - say what the study does NOT cover (other models, other versions, the plugin path if Study B was
+         not run, longer sessions, other languages).
+     Landing-page or launch text may use a figure only inside a claims slot that cites a committed file:
+
+         [ESTIMATED: median paired cost change for all_safe vs passthrough -- source: bench/published/<STUDY_ID>/comparisons.csv]
+
+     then check:   go run ./scripts/checkclaims --publish
+
+ Step 11.4  Optional: see what these results would change in the product's recommender defaults, without
+     writing anything:
+
+     python -m trovebench defaults --results bench/results/<DATE>/<STUDY_ID> --dry-run
+
+ Step 11.5  Remove the key from the server when you are done:
+
+     unset ANTHROPIC_API_KEY ; history -c
+     # Then rotate or delete the API key in the Console if it was created for this run.
+
+======================================================================================================
+PART C. AUTOPILOT'S LEARNING PERIOD  (NOT BUILT; DO AFTER PARTS 0 TO 11)
+======================================================================================================
+
+ Study A tells you what each possible end state is worth. It does not tell you which one Autopilot
+ would reach, or what getting there costs. That needs three pieces that do not exist yet. This part is
+ the plan for them, not something you can run today.
+
+ C.1  A "shadow" condition (small change to bench/trovebench/conditions.py and its tests).
+      Both optimizers set to "shadow" instead of "off" or "on", so the gateway records, per request,
+      what each WOULD have saved. Today passthrough has everything off (no estimates), and all_safe has
+      them on (applied, not estimated). _assert_configured would need to accept the "shadow" state.
+
+ C.2  A warm-up batch. Run the shadow condition once on each task in bench/tasks/swebench-warmup
+      (validated, disjoint from the main set, same agent, model and mix). Aim for well above Autopilot's
+      thresholds: at least 20 sessions overall and 10 shadow sessions per optimizer, more so the decision
+      is not borderline. Each run is one session and has its own database.
+
+ C.3  An offline simulator (a small Go tool, for example scripts/autopilotsim). The state machine is a
+      pure function (autopilot.Policy.Decide) of the evidence and a clock, so no new API spend is needed:
+      read each warm-up run's shadow figures in time order, feed them to Decide with an injected clock
+      and the baseline gate set to match (baseline_days = 0, baseline_sessions = the number you chose,
+      said openly in the report), step it twice for every promotion (candidate then on), and print the
+      end state and the event trace. Repeat with different orderings of the warm-up runs to check the
+      decision is stable.
+
+ C.4  Combine. Autopilot's expected result is the Study A condition matching the simulated end state.
+      The cost of the learning period is the warm-up runs' cost (priced like passthrough while Autopilot
+      only observes). Report both, labeled estimated, and say plainly what the simulation cannot show:
+      variation across real days, changing work habits, long idle gaps (which change cache lifetime) and
+      context drift. A real, longer pilot on real work is still the true test.
+
+======================================================================================================
+PART D. EACH TRIAL CANDIDATE HOOK BY ITSELF  (GATE G8; DO AFTER PARTS 0 TO 11)
+======================================================================================================
+
+ Why: Autopilot's trials (docs/autopilot-probation.md) may try two hooks that are not lossless:
+ hook_repeat_read and hook_quiet_commands. Study B above turns four hooks on together, so it cannot say
+ which hook saves or harms. This study switches each one on BY ITSELF against no Trove. It tells you whether
+ a hook is worth trying at all, and what saving to expect. It does not replace a trial, which judges one hook
+ on one user's real sessions. Two other hooks are not in it: hook_read_limit has no guardrail yet, and
+ hook_large_output points at a tool (trove_run) that a benchmark run does not have, so the harness refuses to
+ run it alone and says why.
+
+ This is API-key only, like every study here. It cannot say anything about a subscription login.
+
+ Before you start:
+   - Parts 0 to 11 are done, so you know the pipeline works and how long and how much a run takes.
+   - The conditions need a LIVE hook probe for the exact Claude Code version in the container (Part 5).
+     hook_quiet_commands rewrites a command's input, so the probe must show Bash input rewriting working.
+   - The tree is clean (git status --porcelain is empty) and you know the commit.
+
+ Step D.1  Pilot the new conditions. The ordinary pilot (Step 6.4) does not run them, so make a copy of
+     the config with these conditions and point the harness at it. The reference condition becomes direct,
+     because there is no passthrough here:
+
+     python - <<'EOF'
+     import yaml
+     d = yaml.safe_load(open("bench/config.yaml"))
+     d["conditions"] = ["direct", "alone_hook_repeat_read", "alone_hook_quiet_commands"]
+     d["ship_rule"]["reference"] = "direct"
+     yaml.safe_dump(d, open("/tmp/hooks-pilot.yaml", "w"), sort_keys=False)
+     EOF
+     python -m trovebench plan --config /tmp/hooks-pilot.yaml --tasks bench/tasks/swebench-pilot --repeats 1 \
+            --hook-capabilities /tmp/hookprobe.json
+     python -m trovebench run  --config /tmp/hooks-pilot.yaml --tasks bench/tasks/swebench-pilot --repeats 1 \
+            --hook-capabilities /tmp/hookprobe.json --yes --batch bench/results/pilot-hooks-1 2>&1 | tee /tmp/pilot-hooks.log
+
+     Read runs.csv as in Step 6.4. Then, before anything else, see whether the hooks acted at all:
+
+     python bench/tools/hook_activity.py bench/results/pilot-hooks-1
+
+     For each single-hook condition it prints in how many runs the hook really changed something. If a
+     hook acted in almost none of the pilot runs, say so now: a full study of it will probably say "no clear
+     difference", and that will mean there was little for it to do on these tasks. You can still run it, but
+     write down that expectation before you do (the study template already says it).
+
+ Step D.2  Write and lock the study. Copy the template and replace the placeholders:
+
+     cp bench/studies/hooks-single-1.yaml.template bench/studies/hooks-single-1.yaml
+     # edit: <NEW_SEED> (one fresh number, used twice), <FROM_PILOT> (batch_cap_usd and run_cap_usd,
+     # from the pilot's observed cost, with headroom for one request's overshoot)
+     python -m trovebench plan   --study bench/studies/hooks-single-1.yaml --hook-capabilities /tmp/hookprobe.json
+     python -m trovebench prereg bench/studies/hooks-single-1.yaml
+     git add bench/studies/hooks-single-1.yaml bench/studies/hooks-single-1.lock.json
+     git commit -m "bench: register hooks-single-1"
+     git status --porcelain      # must be EMPTY again
+
+     Use the same tasks folder as Study A and B (tasks/swebench-main) so the three studies are comparable.
+     The template is refused if a placeholder is left in, so it cannot be locked half-finished.
+
+ Step D.3  Run it, as in Part 8, with the probe file:
+
+     python -m trovebench run --study bench/studies/hooks-single-1.yaml \
+            --hook-capabilities /tmp/hookprobe.json --yes 2>&1 | tee /tmp/hooks-single-1.log
+
+ Step D.4  Check and read it, as in Parts 9 and 10, plus two things:
+
+     python bench/tools/hook_activity.py bench/results/<DATE>/hooks-single-1
+       - Read this BEFORE the table. "Hook acted in" is the share of runs where the hook really changed
+         something. A hook that acted rarely cannot show a difference however good it is.
+     The comparisons are alone_hook_repeat_read vs direct and alone_hook_quiet_commands vs direct, with Holm
+     adjustment across the two. A hook is "recommended" only if the cost-change interval is entirely at or
+     below -5% and the success-difference interval stays above -5 points, as in the other studies.
+
+ Step D.5  What the result is for (and what it is not):
+     - It is evidence about how much each hook saves on SWE-bench-style tasks with an API key. It is the
+       basis for deciding whether a hook is worth offering as a trial, and for replacing the placeholder
+       numbers in Autopilot's trial policy (20 sessions per side, 28 days). Do not copy a number into the
+       policy without saying where it came from; the policy's numbers stay labelled placeholders until then.
+     - It is not proof for a subscription user, and not a substitute for the trial on their own work.
+     - A "NEED MORE DATA" or "no clear difference" result is valid and publishable. Say so. Do not extend the
+       study under the same id; register a new one.
+     - Rerun Part 11 to bring results home and publish them properly.
+
+======================================================================================================
+PART E. A REAL-INSTALL TRIAL RUN  (A PLUMBING CHECK, NOT A RESULT)
+======================================================================================================
+
+ Why: every test of Autopilot trials so far used synthetic sessions and fixture logs. This is the one
+ check that uses a real Claude Code. It proves the pieces fit on a real install: that real session
+ ids give matching keys, that the hooks really pin a side and record it, that the history scan finds real
+ transcripts inside its time budget, and that the status shows it. It cannot show that a hook saves
+ anything: a real trial needs 20 finished sessions on each side and takes weeks. Do not report a saving
+ from this part.
+
+ Do this on macOS, Linux or WSL (the plugin's hooks run through `sh`; Windows is not supported yet), with
+ the released trove binary on PATH and Claude Code installed. A subscription login is fine and is the case
+ this part is for (no gateway). Do NOT use the benchmark server's containers.
+
+ !! SAFETY. Use a throwaway data directory, set in the SAME terminal you start Claude Code from. If you
+ !! forget, Trove writes into ~/.trove. On the Windows machine this project was written on, ~/.trove holds
+ !! a different product's database; never point this at it.
+
+ Step E.1  Set up, in one terminal that you keep open:
+
+     export TROVE_DATA_DIR="$HOME/trove-trial-test"
+     mkdir -p "$TROVE_DATA_DIR"
+     trove --version                      # must print the release you are testing
+     printf '[measure]\nbaseline_days = 0\nbaseline_sessions = 0\n' > "$TROVE_DATA_DIR/config.toml"
+         # Only so a short test is not held back by the 7-day baseline. A real install keeps the default.
+     trove hooks install --yes --agent claude --rewrite     # shows the change, then applies it
+     trove hooks verify                   # optional for hook_repeat_read; needed before hook_quiet_commands can act.
+                                          # Follow what it says; it tests rewriting inside a session you start
+     trove autopilot on --yes
+     trove autopilot trials on --yes      # read the consent text it prints; it must match what you intend
+     trove autopilot                      # expect: hook_repeat_read and hook_quiet_commands in shadow,
+                                          # "Trials are on"
+
+ Step E.2  Make shadow evidence. Autopilot needs 10 sessions in which the hook WOULD have acted, and an
+     estimated saving of at least 2,000 tokens net of the hook's own 68-token message each time. Start
+     Claude Code from THIS terminal (not from an IDE or app, which will not see TROVE_DATA_DIR), in a repo
+     with one source file of about 10 KB or more, and for each of 10 sessions say exactly:
+
+         Read <that file>, then read <that file> again, then say done.
+
+     End the session normally (exit Claude Code) each time. Each session end runs Autopilot once. After
+     the 10th session end hook_repeat_read becomes "candidate", and the next session end puts it "on
+     trial" (run one more session if it has not moved). Check after each:
+
+         trove autopilot
+
+     Expected: the state line for hook_repeat_read changes shadow -> candidate -> on trial. If it stays in
+     shadow, the reason printed beside it says why (for example not enough sessions yet, or it is not
+     available in your setup). hook_quiet_commands needs install commands (pip install, npm install) to
+     act, so it may stay in shadow for the whole test. That is expected, not a failure.
+
+ Step E.3  Run trial sessions. Once hook_repeat_read says "on trial", run at least 14 more sessions, each
+     with the same instruction as E.2. Each session is assigned a side when it starts, at random, and it
+     keeps it. In an "on" session the second read is refused with a message that starts
+     "Trove: this file is unchanged since you read it earlier" and Claude then carries on from what it
+     already has. In an "off" session the second read works normally. Note, for each session, which
+     happened (you will compare it with the record in E.4).
+
+ Step E.4  Check the record, read-only. Wait at least 30 minutes after your last session (a session counts
+     only once it has been idle that long), end one more session or run `trove hooks sync`, then:
+
+     python3 - <<'EOF'
+     import os, sqlite3
+     db = sqlite3.connect("file:" + os.environ["TROVE_DATA_DIR"] + "/trove.db?mode=ro", uri=True)
+     q = lambda s: db.execute(s).fetchall()
+     print("arms recorded:", q("SELECT arm, COUNT(*) FROM experiment_assignments WHERE optimizer='hook_repeat_read' GROUP BY arm"))
+     print("hook events:  ", q("SELECT kind, COUNT(*) FROM hook_events WHERE hook='hook_repeat_read' GROUP BY kind"))
+     print("history rows: ", q("SELECT COUNT(*), COUNT(DISTINCT session_key) FROM history_requests"))
+     print("joined:       ", q("SELECT a.arm, COUNT(DISTINCT a.session_key) FROM experiment_assignments a JOIN history_requests h ON h.session_key = a.session_key OR h.session_key LIKE a.session_key || '~%' WHERE a.optimizer='hook_repeat_read' GROUP BY a.arm"))
+     EOF
+     trove autopilot
+     cat "$TROVE_DATA_DIR/hooks/config.json"
+
+     What must be true (each is a pass or a fail; write down any fail with its output):
+       [ ] arms recorded shows BOTH "on" and "off", and the total is the number of trial sessions you ran
+           (a few sessions will not split evenly; a very lopsided split on 14 or more is worth noting).
+       [ ] hook events has "blocked" for the on sessions and "would_block" for the off sessions, and your
+           notes from E.3 agree with which sessions got which.
+       [ ] "joined" counts both arms: every trial session found its history rows. If joined is 0 or far
+           below arms recorded, the session keys do not match on a real install. That is the most
+           important failure this part can find: stop and report it.
+       [ ] `trove autopilot` shows hook_repeat_read as "on trial" with a line like
+           "trial running: N sessions with it on and M with it off so far, each side needs 20", with N and M
+           matching the joined counts (a session still idle for under 30 minutes is not counted yet).
+       [ ] hooks/config.json lists "trial": ["hook_repeat_read"].
+       [ ] No session end was slow or reported a hook timeout (see "$TROVE_DATA_DIR/hooks.log"). Session
+           end has about 2.5 seconds, and reading history is limited to 0.7 seconds of that.
+       [ ] The first trial session starts and ends exactly as normal; Claude Code shows no Trove errors.
+
+ Step E.5  Privacy check. Pick a word nobody would type by accident, put it in the prompt of one more
+     session (for example: Read <file> twice. Remember the word PINEAPPLE-CANARY-7731.), then:
+
+     python3 - <<'EOF'
+     import os, sqlite3
+     db = sqlite3.connect("file:" + os.environ["TROVE_DATA_DIR"] + "/trove.db?mode=ro", uri=True)
+     needle = "PINEAPPLE-CANARY-7731"
+     for (t,) in db.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall():
+         for row in db.execute(f'SELECT * FROM "{t}"'):
+             if any(needle in str(c) for c in row):
+                 print("FOUND in", t)
+     print("done")
+     EOF
+     grep -r "PINEAPPLE-CANARY-7731" "$TROVE_DATA_DIR" --include='*' -l 2>/dev/null
+
+     Must print only "done" and list no file. Any hit is a rule-7 failure (no prompt text is ever stored):
+     stop and report it, with the table or file name only.
+
+ Step E.6  Withdraw and clean up, and check the withdrawal:
+
+     trove autopilot trials off
+     trove autopilot                      # no hook is "on trial"; "Trials ... are off"
+     trove hooks uninstall
+     trove autopilot off
+     unset TROVE_DATA_DIR
+     rm -rf "$HOME/trove-trial-test"      # the literal folder you created in E.1, nothing else
+
+ If anything in E.2 to E.5 fails, the failure is the result: keep the command output (it holds counts and
+ hashed keys only, never prompt text), do not try to work around it, and hand it back before the studies
+ are used for anything.
+
+======================================================================================================
+PART F. AFTER THE STUDIES: WHAT THE NUMBERS CHANGE
+======================================================================================================
+
+ Autopilot's trial policy has placeholder numbers (internal/autopilot/autopilot.go, PolicyV2):
+ ProbationMinSessionsPerArm = 20 and ProbationMaxDays = 28, plus the keep rule (the whole 95 percent range
+ of the token change below zero, no worse outcome). They are placeholders until you do this. Do not edit
+ them without a result to point at.
+
+ Step F.1  Read Study D (hooks-single-1) first through its hook_activity report (Step D.4), then the table.
+     For each hook decide one of three things and write the reason next to it in docs/autopilot-probation.md:
+       - It met the ship rule (cost down at least 5 percent with the whole interval below, success not
+         lower by more than the margin): keep it on the trial list.
+       - It showed no clear difference but ACTED in a small share of runs: keep it on the list, and say the
+         study could not test it. The trial on the user's own work is then its only evidence.
+       - It was worse, or did not meet the rule although it acted often: take it off
+         PolicyV2().Probation in internal/autopilot/autopilot.go, so no user is asked to trial it, and
+         update the consent text in internal/cli/autopilot.go (trialsConsent), which names both hooks.
+
+ Step F.2  Set the session count from the data, not from taste. The study's per-task cost spread tells
+     you how many sessions it takes to see a saving of the size you measured. If the study's saving for a
+     hook is S percent and the cost spread across sessions is wide, a trial needs many sessions per side
+     to see S. Write the number you derived and how in docs/autopilot-probation.md. If the number is too
+     large to be practical (for example months of normal use), say so there and remove that hook from the
+     list rather than shipping a trial that cannot finish.
+
+ Step F.3  Change the code and the words together, in one commit:
+       - internal/autopilot/autopilot.go: PolicyV2 values, with the source (study id and commit) in the
+         comment, and drop the "placeholder" wording only for the numbers you replaced.
+       - internal/cli/autopilot.go: trialsConsent and the text printed by `trove autopilot` (they quote the
+         20 sessions and 28 days) so the user is told the real numbers.
+       - docs/autopilot-probation.md, docs/autopilot-eligibility.md (gate G8), CHANGELOG.md.
+       - go test ./... must pass (several tests assert the numbers and the consent text).
+
+ Step F.4  Publish the studies as in Part 11. Say what they do and do not show: API key only, SWE-bench
+     style tasks, one Claude Code version, one model. A subscription user's saving is not measured by any
+     of this.
+
+ Step F.5  Then, and only then, the README and the plugin can say trials are backed by a study. Until
+     F.3 is committed they must keep saying the numbers are unvalidated.
+
+======================================================================================================
+THINGS THAT WILL GO WRONG, AND WHAT TO DO
+======================================================================================================
+
+ - `validate` rejects most tasks.        Expected (see PART 0 item 7). Use what passes. Fetch more
+                                         candidates (-n larger, a different --seed) rather than
+                                         loosening anything.
+ - docker build times out or fills disk. docker system df ; docker image prune (only images you can
+                                         rebuild). Leave headroom before a long run.
+ - Runs end "error".                     Read runs/<id>/agent_stderr_tail.txt. Rate limits (HTTP 429)
+                                         show up here. Resume the same command; errored runs retry.
+ - "Trove did not apply condition ...".  The gateway read a different config than intended, or the
+                                         Trove build differs. Stop; do not publish those runs.
+ - Hooks condition refused.              Probe version does not equal the container's Claude Code
+                                         version, or the probe file is missing. Rerun the probe.
+ - Plan differs when resuming.           You changed tasks, repeats or conditions. Restore them.
+ - A run overshoots its cap.             The agent checks its budget between API calls, so one run can
+                                         exceed run_cap_usd by about one request. Keep headroom in
+                                         batch_cap_usd.
+ - trove_dirty is true.                  You ran from an unclean tree. Commit or discard, rebuild, rerun.
+                                         Do not publish a dirty-tree result as if it were a named commit.
+ - The result is NEED MORE DATA.         That is a valid, publishable result. Say so. Do not extend the
+                                         study and re-analyse under the same id; register a new one.
+
+======================================================================================================
+END. Re-check anything marked as unverified against current documentation before relying on it.
+======================================================================================================

@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-14
+
 ### Added
 - Benchmark: each trial candidate hook can now be measured by itself (`alone_hook_repeat_read`, `alone_hook_quiet_commands`, `alone_hook_read_limit`: the hook on, no gateway, everything else off), with a study template (`bench/studies/hooks-single-1.yaml.template`) and `bench/tools/hook_activity.py`, which reports in how many runs a hook actually acted so that a "no clear difference" result can be read correctly. No study has been run; Autopilot's trial thresholds remain placeholders until one is.
 - `trove autopilot trials on|off`: a second, separate yes that lets Autopilot try two changes that are not lossless (`hook_repeat_read`, `hook_quiet_commands`). Each is first watched in shadow, then runs one at a time for about half of new sessions, chosen at random, and is kept only if the comparison is clean (fewer tokens, no more turns or tool errors, at least 20 sessions on each side, dropped after 28 days with no clear result; these numbers are unvalidated placeholders). It never runs if A/B comparison is off, never beside a setting you made, and for a user with no gateway never if history reading is off. `trove setup`, `--yes` and `--autopilot` do not give this consent, `trials off` withdraws it and removes anything a trial kept, and `trove autopilot` and `/trove:status` show what is on trial and how far along it is. See [docs/autopilot-probation.md](docs/autopilot-probation.md). Not yet run on a real install.
