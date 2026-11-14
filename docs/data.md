@@ -40,6 +40,7 @@ Last checked against the code and schema version 17 on 2026-11-06.
 | `hooks.log`, `hooks.log.1` | Redacted hook errors, capped at 256 KB | Rotated at the cap |
 | `recovery/` | Full raw output of commands you ran through `trove_run`, kept so a trimmed result can be fetched back. **Can contain anything a command printed.** Opt-in; local; size-capped | 7 days, 200 MB cap, then deleted |
 | `contribute.json` | Whether sharing is on, your random install id, the date of the last upload | Kept until you disable and delete it; removed by `trove data delete` and `--purge-data` |
+| `autopilot.json` | Whether you agreed to Autopilot, the policy name, and for each optimizer Autopilot manages: its state (off, shadow, candidate, on, rolled_back), the time it entered that state, a short plain-English reason and a try count. No prompts, paths or credentials | Kept until you run `trove autopilot off`; removed by `--purge-data`. Written only by `trove autopilot`, `trove setup` (with your yes) and Autopilot's own evaluation |
 | `gateway.json` | Process id and loopback address of a running gateway | Removed when the gateway stops |
 | `gateway.log` | Gateway service output on macOS | Kept until deleted |
 

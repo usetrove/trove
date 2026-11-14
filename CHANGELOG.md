@@ -4,7 +4,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+- Autopilot (`trove autopilot [on|off|pause|resume]`, a consent step in `trove setup`): after one consent Trove starts the eligible lossless optimizers in shadow, promotes one only from shadow evidence at a session boundary, and rolls it back to shadow if a guardrail trips. Your own `config.toml` setting always wins. State is in `autopilot.json`. Thresholds are placeholders until a benchmark runs. See [docs/autopilot.md](docs/autopilot.md).
+
 ### Changed
+- `trove --help` now lists 8 commands. The rest still work and are listed by `trove advanced`.
+- CLAUDE.md rule 6 allows opt-in by agreeing once to a named policy.
 - `trove --version` replaces `trove version` (same output, same `--json`). `trove version` still works as a hidden alias for one release. The plugin launcher tries `--version` first and falls back to `version`, so it still accepts a `trove` on PATH from an earlier release at the pinned version.
 
 ## [0.2.2] - 2026-11-12
