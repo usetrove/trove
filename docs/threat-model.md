@@ -1,6 +1,8 @@
 # Threat model
 
 Written 2026-10-30 as part of the security and privacy review (findings: [security-findings.md](security-findings.md)).
+Updated 2026-11-14 for Autopilot trials, the hook guardrails, the gateway request limits and the signed installer; the
+single reference for all controls is now [security.md](security.md).
 Every mitigation below names the code and the test that holds it in place. If a row has no test, it says so.
 
 ## What Trove is, for this purpose
@@ -52,7 +54,7 @@ no account, no update check, and no telemetry unless the user opts in to the ano
 
 | Threat | Mitigation | Evidence |
 |---|---|---|
-| DNS rebinding (page's own hostname resolves to 127.0.0.1) | `Host` must be `localhost`, `127.0.0.1` or `::1`; anything else is 403 | `server.go` `loopbackHost`; `TestGuards` (`evil.example`, `127.0.0.1.evil.com`, `10.0.0.5`) |
+| DNS rebinding (page's own hostname resolves to 127.0.0.1) | `Host` must be `localhost`, `127.0.0.1` or `::1`; anything else is 403 | `server.go` `loopbackHost`; `TestGuards`; `TestHostHeaderMatrix` (look-alike, userinfo, numeric and IPv4-mapped hosts) |
 | Cross-origin fetch or form POST | Any request with an `Origin` header is 403, on every route including health | `TestGuards` |
 | Read the response cross-origin | No `Access-Control-*` headers are ever sent; preflights carry `Origin` and are refused | `TestGuards` |
 | Use the gateway as an open proxy | The upstream host is fixed from config and overwritten on every request; the client controls only path and query. Upstream URLs may not carry credentials, a query or a fragment, and `gateway.New` re-validates them | `proxy.go` `Rewrite`; `TestNewRefusesUnsafeUpstreams`, config tests |
@@ -71,8 +73,8 @@ agent into calling Trove's tools or runs when a tool opens it.
 | Agent runs `trove_run` and the repo's `commands.toml` names an arbitrary program | `trove_run` runs nothing until the user has approved that exact version of the file with `trove mcp trust`, which needs a real terminal, shows every command and has no `--yes`. Approval is a hash in `~/.trove`, so an edit withdraws it | `mcp/trust.go`; `TestRunRefusesUnapprovedCommandsFile`, `TestApprovalRunsAndEditWithdrawsIt`, `TestMCPTrustRefusesWithoutATerminal` |
 | Agent uses `trove_read` / `trove_search` to pull `.env`, keys or `.git/config` into context | Files that usually hold secrets are refused and skipped by name, including through a symlink with an innocent name | `root/sensitive.go`; `TestSensitive`, `TestReadRefusesSecretFiles`, `TestSearchSkipsSecretFiles` |
 | Path traversal or symlink escape out of the project | Absolute paths, `..` and symlinks leading outside are refused; the opened file is re-checked against what was resolved | `root.Resolve`/`OpenRead`; existing `root_test.go`, `read_test.go`, `search_test.go` |
-| `trove_run` command steals the agent's keys from its environment | Credential-looking variables, `SSH_AUTH_SOCK` and `DATABASE_URL` are removed. This is a **denylist**, so an oddly named secret can pass | `filteredEnv`; `TestFilteredEnvDropsCredentialsAndKeepsToolchain` |
-| Hostile hook input (tool input, session ids, file paths) | 1 MB stdin cap; only known fields decoded; session and prompt ids hashed before use in paths; a file named in the input is only stat'd and hashed, never stored; hooks always exit 0 | `hooks/input.go`; `hooks_test.go` (`TestNothingSensitiveIsStored`, fail-open tests) |
+| `trove_run` command steals the agent's keys from its environment | Credential-looking variables, `SSH_AUTH_SOCK`, `DATABASE_URL`, webhook URLs, connection strings, `*_AUTH`, `*_KEY`, `KUBECONFIG` and the usual SaaS prefixes are removed. This is a **denylist** (an allowlist would break toolchains), so an oddly named secret can pass (R6) | `filteredEnv`; `TestFilteredEnvDropsCredentialsAndKeepsToolchain` |
+| Hostile hook input (tool input, session ids, file paths) | 1 MB stdin cap; only known fields decoded; session and prompt ids hashed before use in paths; a file named in the input is only stat'd and hashed, never stored; hooks always exit 0 | `hooks/input.go`; `hooks_test.go` (`TestNothingSensitiveIsStored`, fail-open tests) | `TestHostileSessionIDsAndPathsStayInsideTheDataFolder` drives path tricks, NULs and 5 KB ids through every hook and checks nothing is written outside the data folder and no path text reaches disk |
 | A hook command line that breaks out of its quoting | Binary path and data dir are single-quoted for POSIX `sh`, tested against a real shell; Trove refuses to write a command that depends on `PATH` | `cli/shellquote.go`; `TestShellQuoteSurvivesARealShell` |
 | A repo's `.mcp.json` or settings registering something hostile | Not Trove's to stop: the agent asks the user before using project-scoped MCP servers and trusts hooks per its own rules (see [compliance.md](compliance.md)). Trove only writes its own entries, between markers, with a backup | n/a |
 | Output of a hostile command filling the disk or the context | Captured output is capped at 8 MB; the recovery store is size-capped and expires | `capWriter`; `recovery` tests |
@@ -83,10 +85,23 @@ agent into calling Trove's tools or runs when a tool opens it.
 |---|---|---|
 | A dependency phones home or exfiltrates | Six direct dependencies, all pure Go, pinned in `go.sum`. A test fails if shipped code outside a short allowlist (the gateway, a loopback health probe, the opt-in upload, and `internal/stress/loopback.go`, whose dialer refuses any non-loopback address; plus the QA-only `qa/loadtest`, same rule) can dial or build an HTTP client, or imports a network-capable package; another fails on telemetry libraries in `go.mod`; a Linux test runs the real binary under `strace` and fails on any non-loopback `connect`/`send` | `internal/egress` tests; CI job `privacy` |
 | Known vulnerabilities | `govulncheck ./...` in CI (pinned to v1.9.0). It found 10 reachable standard-library issues on Go 1.27.0; `go.mod` now requires 1.27.3, and the scan is clean | CI job `vulncheck`; [finding F-12](security-findings.md) |
-| A tampered GitHub Action or tool in the build | Actions are pinned to commit SHAs; `govulncheck` is pinned; test and build jobs use the Go version from `go.mod` | `.github/workflows/*.yml` |
-| A tampered release archive | `checksums.txt` is signed with keyless cosign and every archive has an SPDX SBOM. `install.sh` checks the archive's SHA-256 against `checksums.txt` from the same release before running anything. **They do not verify the cosign signature**, so they do not protect against a compromised release, only against corruption or a bad mirror. See R3 | `.goreleaser.yaml`; `install_test.sh` |
+| A tampered GitHub Action or tool in the build | Actions are pinned to commit SHAs and kept current by Dependabot; `govulncheck` is pinned; `go mod verify` checks every module against `go.sum`; CodeQL (security-extended) scans the Go code; test and build jobs use the Go version from `go.mod` | `.github/workflows/*.yml`, `.github/dependabot.yml` |
+| A tampered release archive | `checksums.txt` is signed with keyless cosign and every archive has an SPDX SBOM. `install.sh` checks the archive's SHA-256 against `checksums.txt` and, when `cosign` is installed, the signature on `checksums.txt` against this repository's release workflow identity; a bad signature stops the install, and `TROVE_REQUIRE_SIGNATURE=1` refuses to install without a verified signature. Without cosign the default is checksum-only with a note, and the npm wrapper still checks the checksum only (R3) | `.goreleaser.yaml`; `install_test.sh` (fake cosign) |
 | A non-reproducible build hides a swap | The release stamps the commit date, not the build time, sets `-buildvcs=false` and a fixed file time. Reproducibility has **not been demonstrated** by rebuilding and comparing | `.goreleaser.yaml` |
 | An unexpected network-capable module linked in | `golang.org/x/oauth2` is linked into the binary through the MCP SDK. No Trove code calls it; the strace test would catch a connection. See R4 | `go list -deps ./cmd/trove` |
+
+### A6. A hostile repository or agent steering Autopilot, the guardrails or the trials
+
+*Can:* get the agent to read, re-read, run noisy commands or fetch trimmed output in patterns that push a guardrail or a trial result one way or the other.
+
+| Threat | Mitigation | Evidence |
+|---|---|---|
+| Make Autopilot keep a harmful change (fake a good trial) | A change is kept only on a measured, intention-to-treat comparison with enough sessions per side, and any guardrail can still roll it back later. Arms are a hash of the session key, so the agent cannot choose a side. The worst a steered agent can do is delay or block a promotion, which is the safe direction | `measure.Arm`; `TestACleanTrialKeepsTheOptimizer`, `TestATrialThatCostsMoreIsRolledBack` |
+| Widen what Autopilot does without consent | A new policy version (v3) needs its own yes; a v2 user keeps exactly v2 until they agree; `--yes` on setup never grants trials; the plugin command never turns trials on | `TestMovingFromV2ToV3NeedsANewYesAndKeepsWhatWasAlreadyKept`, `TestAV2UserIsNeverGivenTheNewCandidates` |
+| Roll back a good optimizer by feeding the guardrail | Possible and accepted: a rollback only returns to shadow (doing less is always safe, rule 4), and the user can lift it. The adoption guardrail ignores Codex sessions and only runs when the counter hook is installed, so a missing hook cannot cause a rollback | `TestUnusedAdviceGuardrail` |
+| Hook counters or spool used to write outside the data folder or store content | Events hold a hashed session key, an event kind and two numbers; unknown kinds are dropped at ingest and the table refuses them; the spool is capped at 4 MB | `spool.go` `validKind`, `0018` migration test, `TestHostileSessionIDsAndPathsStayInsideTheDataFolder` |
+| Reading the agent's local history for trials exposes it | Only while a hook trial runs and only with `[history] enabled`; it uses the same line-length-bounded reader as `trove logs scan`, keeps counts, hashes and token figures only, runs under a 700 ms budget at session end, and never leaves the machine | `hooks/trialscan.go`; `privacy.TestNoContentReachesTheDatabaseFilesOrAnythingShared`; `logs.ReadLine` |
+| Check that the counters are really installed before trusting a guardrail | `AdoptionObservable` reads only Trove's own manifest and the first MiB of an agent settings file, and any error means "not observable" | `TestAdoptionIsObservableOnlyWhenTheRunHookIsInstalled` |
 
 ### A5. A tampered config or environment
 
@@ -118,7 +133,7 @@ but not restricted to Anthropic or OpenAI hosts, because custom enterprise endpo
   port written into the agent config, or a Unix socket. Open (finding F-13).
 - **R2. Any local user can call the gateway.** They cannot spend the owner's key, but can add usage rows and see
   health counters. Accepted for a single-user tool.
-- **R3. Release signature is not verified by the installers.** Open (finding F-15).
+- **R3. The npm wrapper does not verify the release signature.** `install.sh` does when cosign is present (finding F-15, partly closed); the npm wrapper checks the checksum only. Open.
 - **R4. A dormant `oauth2` dependency is linked in.** Open, low (finding F-16).
 - **R5. A process with the user's privileges can do anything**, including editing `mcp_trust.json`. Out of scope;
   the TTY requirement on `trove mcp trust` only stops an agent from approving through its own shell
@@ -127,4 +142,4 @@ but not restricted to Anthropic or OpenAI hosts, because custom enterprise endpo
   an ordinary file or variable is not caught.
 - **R7. Windows.** Mode bits are not meaningful and Trove sets no ACLs; the hook and MCP process-group
   handling is incomplete. Windows is not a supported platform yet.
-- **R8. Memory.** A request body of up to 256 MiB is buffered per request with no concurrency cap (finding F-7).
+- **R8. Memory.** A request body of up to 256 MiB is buffered per request, and bodies held at the same moment are capped at 1 GiB in total; one over the budget gets a retriable 503 (finding F-7, closed). A single legitimate request is never refused for its size.

@@ -1,8 +1,9 @@
 # Widening what Autopilot may promote
 
-Status: **a plan, not built.** It says what each technique needs before it can join Autopilot's eligible list,
-in what order, and what has to change in the code first. Written 2026-11-14 from the code in this checkout. Where a
-claim rests on something not verified, it says so.
+Status (2026-11-14): **mostly built.** Gates G2, G3, G4, G5, G6 and G7 are built; G8 (a study for each technique) is the
+only gate left, and it is the benchmark runbook. Policy `lossless-v2` (two trial candidates) and `lossless-v3` (five)
+exist. The sections below were written as a plan and keep their reasoning; each says what became of it. Where a claim
+rests on something not verified, it says so.
 
 ## Where things stand
 
@@ -35,10 +36,10 @@ is skipped.
 | G1 | **Built, with a shadow mode** that records, from real use and without content, what it would have saved. | optimizers and hooks | gateway behaviors (dedup, spend cap) record shadow but have no active mode |
 | G2 | **An evidence source Autopilot reads.** Sessions that ran it in shadow and the estimated net tokens, as `Evidence`. | `Advance` reads gateway rows only | hook techniques: an adapter over `hook_events` (`would_*` events, distinct sessions, token sums) |
 | G3 | **Declared overhead**, charged against its saving (rule 15). Text it adds is counted. | `Policy.NetOf`, registry `Overhead`, `UseOverhead`, `UseNetted` | **Built (2026-11-13).** The registry allows `AddsText` in `Auto` only when both figures are numbers; Autopilot charges per session and per event unless the optimizer's own estimate already subtracts it; B6, B7 and B8 declare 68, 42 and 54 tokens per use, checked against the real message text. `output_trimmer` still declares no numbers, so Autopilot refuses it |
-| G4 | **A guardrail that can see how it fails**, rolling it back to shadow by itself (rule 6). | `measure.EvaluateHooks` (`hook_reread`, `hook_rerun`, `hook_fetch_back`) and gateway rules; hook rollbacks use the same recorder as the gateway's, so `Advance` already sees them | `hook_read_limit` has none; `hook_large_output` has none beyond adoption counts |
+| G4 | **A guardrail that can see how it fails**, rolling it back to shadow by itself (rule 6). | **Built for every trial candidate (2026-11-14).** `measure.EvaluateHooksWith`: `hook_reread`, `hook_rerun`, `hook_fetch_back` (stricter, half the shared rate), `hook_extra_read` (a limited read followed by a read of more of the file; twice the shared rate) and `hook_unused_advice` (fewer than 10 percent of the sessions where the hint was given then used `trove_run`; only when the counter hook is installed, Claude Code only). All limits are placeholders | nothing, but none has been tuned by a study |
 | G5 | **Prerequisites checked at promotion time, in the user's real setup**: login, gateway, MCP server registered, a live hook probe for the exact agent version, a custom agent. Otherwise the state says `on` while it runs as shadow. | `technique.Check` with a context | `Advance` uses a permissive context for conflicts only; it needs the real one, and a "hook probe passed" capability that does not exist yet |
 | G6 | **No conflict with what is already on** (registry claims), and the open question about `hook_quiet_commands` beside RTK decided. | `technique.CanAdd`, wired into `Advance` | the RTK decision |
-| G7 | **A tier rule.** Lossless: shadow evidence is enough, as today. Recoverable or behavior-changing: shadow evidence is not enough, because a shadow run cannot show harm that only appears when it acts. These need a **probation** step (below; the full design is in [autopilot-probation.md](autopilot-probation.md)). Cached-prompt-touching: probation plus proof the cached prefix is stable. | not built | the whole tier rule |
+| G7 | **A tier rule.** Lossless: shadow evidence is enough, as today. Recoverable or behavior-changing: shadow evidence is not enough, because a shadow run cannot show harm that only appears when it acts. These need a **probation** step (below; the full design is in [autopilot-probation.md](autopilot-probation.md)). Cached-prompt-touching: probation plus proof the cached prefix is stable. | **Built** (`Policy.Probation`, `decideProbation`, `experiment.AnalyzeHookTrial`; see [autopilot-probation.md](autopilot-probation.md)) | nothing |
 | G8 | **Thresholds validated per technique** from a pre-registered study, using the existing ship rule (cost change at least 5% with the whole interval below it, success not lower by more than the margin). Placeholders are not enough. | `bench/`, ship rule | **Arms built, no study run (2026-11-13).** `alone_hook_repeat_read`, `alone_hook_quiet_commands` and `alone_hook_read_limit` switch on one hook each with no gateway; a study template (`bench/studies/hooks-single-1.yaml.template`) and `bench/tools/hook_activity.py` (how often each hook acted, so a null result can be read) exist; the run is Part D of the benchmark runbook. Until a study is run and its numbers are written into the policy, the thresholds remain placeholders |
 | G9 | **Applied at a session boundary, never mid-session.** | engine and hook pins | nothing missing |
 | G10 | **The user stays in control**: their own `config.toml` setting wins, `autopilot off` and `pause` work, and the consent text matches what it now does. | `OptimizerState`, `autopilot` command | consent text per policy version |
@@ -81,7 +82,7 @@ model is told no, and the agent has to repeat the Read to get it anyway. The hoo
   "hook probe passed for this agent version" capability; hooks treat an unprobed agent as unable to act), **G3** (a
   denial message replaces a whole read, so its overhead is netted inside the tokens it removes; the registry
   invariant has to allow that), **G8** (a benchmark arm for this hook on its own).
-- Verdict: eligible after G2, G5, G3, G8 **and G7 (probation)**. G2, G5 and G3 are built.
+- Verdict: **trial candidate in `lossless-v2` and v3.** G2, G3, G5, G7 are built; G8 (a study) is not run.
 
 ### 2. `noise_normalizer` for users with no gateway (B1, already eligible).
 Not a new technique, but the first thing G2 delivers: it is eligible today and cannot be promoted for a subscription
@@ -98,8 +99,7 @@ Adds one quieting flag to an allowlisted command (`go test`, `npm test` and simi
   fixed per-rule figure would be invented, so none is recorded (rule 9). The registry marks it `NoSavingEstimate`,
   Autopilot refuses to judge it from shadow evidence and the planner says so. It can only be judged by measuring
   sessions with it on, which is the probation step.
-- Verdict: eligible after G2, G5, G6, G8 **and G7 (probation)**. Recoverable in tier (the agent can rerun the full
-  command), corrected from "lossless" on 2026-11-13.
+- Verdict: **trial candidate in `lossless-v2` and v3.** Judged only by a trial, because its shadow mode has no saving estimate. Recoverable in tier (the agent can rerun the full command), corrected from "lossless" on 2026-11-13. G8 is not run.
 
 ### 4. `hook_read_limit` (B7).
 Adds `limit: 400` to a read of a file of 40 KB or more and tells the model the read was partial.
@@ -108,15 +108,14 @@ Adds `limit: 400` to a read of a file of 40 KB or more and tells the model the r
   agent to do, so the existing counters cannot tell help from harm. A usable signal would be extra reads of the same
   file after a limited read and the turns they add. **G7**: it changes what the model sees, so probation. **G3**: the
   note is added text. **G2**, **G5**, **G8**.
-- Verdict: later. Eligible after a new guardrail, then probation.
+- Verdict (2026-11-14): **trial candidate in `lossless-v3`.** The guardrail is built: a ledger mark on the limited read and a count, once per file, of a later read that reaches past line 400 (`extra_read`). It rolls back at twice the shared rate, because a follow-up read is what the note asks for and is only a warning sign when it is common. It still has no saving beyond its shadow estimate and no study (G8).
 
 ### 5. `hook_large_output` (B8).
 Hints at `trove_run` for known-noisy commands. Only works if the Trove MCP server is registered.
 - Needs: **G5** (the MCP server must already be registered; Autopilot must not install it, because that is a
   separate consent), **G3** (the hint is text, and the MCP tool definitions it relies on are B9's overhead, charged
   to it), **G4** (adoption is counted: `advised` against `trove_run` use), **G2**, **G8**.
-- Verdict: later. The saving depends on the agent following the hint, so it needs the most careful netting of
-  overhead against benefit.
+- Verdict (2026-11-14): **trial candidate in `lossless-v3`.** The adoption signal is built: a `post_tool_run` hook counts, once per session, that the agent used `trove_run`; the guardrail compares sessions where the hint was given with sessions where it was then used and rolls back below 10 percent. It needs the counter hook installed (`trove hooks install` again on an older install; `trove hooks status` says so) and the Trove MCP server registered, which Autopilot checks and never installs. Judged by a trial because it has no shadow saving estimate.
 
 ### 6. `output_trimmer` (B3).
 Keeps failures and the first and last lines of long test and build output; the full text is stored and can be
@@ -125,7 +124,7 @@ fetched back.
 - Needs: **G5** (the MCP server and a working recovery store), **G7 probation** (it is recoverable, not lossless),
   **G3** (the marker text and the MCP definitions), a stricter threshold than the lossless ones, and **G8**.
   Shadow evidence cannot show the fetch-back rate, because nothing is trimmed in shadow; only probation can.
-- Verdict: eligible after probation exists. The registry currently keeps it out on purpose.
+- Verdict (2026-11-14): **trial candidate in `lossless-v3`.** Its overhead is declared (the marker is netted inside its estimate; the 351 tokens of MCP tool definitions are charged per session, kept equal to the real schema by a test), its guardrail is stricter than the rest, and it is trialled through the hooks only so subscription users can trial it. Fetch-back cannot be seen in shadow, only in a trial.
 
 ### 7. `volatile_prefix_mover` and `cache_breakpoints` (B4, B5).
 They apply only to custom agents, never to Claude Code or Codex, and they change the cached prompt layout.
@@ -161,6 +160,17 @@ These are changes to the agent's own settings files, not optimizer states. Autop
 - **Candidates not built** (fan-out, response cache, model swap, tool-output rewrite for more tools, terse replies):
   they cannot be eligible before they exist. Fan-out was verified and is not recommended
   ([fan-out.md](fan-out.md)).
+
+## Policy versions as built (2026-11-14)
+
+| Policy | Lossless list (no trial) | Trial candidates (one at a time, in this order) | Offered by |
+|---|---|---|---|
+| `lossless-v1` | `noise_normalizer`, `duplicate_result_collapser` | none | `trove autopilot on` |
+| `lossless-v2` | same | `hook_repeat_read`, `hook_quiet_commands` | kept for anyone who agreed to it in v0.3.0 |
+| `lossless-v3` | same | v2's two, then `output_trimmer`, `hook_large_output`, `hook_read_limit` | `trove autopilot trials on` |
+
+A v2 user keeps exactly v2 until they run `trove autopilot trials on` and say yes again; what v2 already kept stays.
+The trial numbers (20 sessions per side, 28 days) are the same placeholders in both.
 
 ## What was built first (2026-11-14)
 
@@ -216,13 +226,11 @@ plugin's start check handles the update case; `trove doctor` warns otherwise).
    a prerequisite for every hook technique. Includes the real-setup context for promotion checks (G5) and a "hook
    probe passed" capability.
 2. ~~**Relax the registry's `AddsText` rule** to "overhead declared and netted", with a test.~~ Done.
-3. **Benchmark arms for single hooks (G8).** Add conditions that switch on one hook optimizer at a time, so each is
-   attributable.
-4. **The probation step (G7).** Both `hook_repeat_read` and `hook_quiet_commands` are recoverable, so neither can
-   join before it exists. Nothing recoverable can.
-5. **`hook_repeat_read`, then `hook_quiet_commands`** (after deciding the RTK pairing), with new consent text. Then
-   `output_trimmer`, then `hook_read_limit` (after its guardrail) and `hook_large_output`.
-6. **Everything else** only on evidence from real use, one at a time.
+3. ~~**Benchmark arms for single hooks (G8).**~~ Built for the three hooks that can run alone; the study is not run (runbook Part D).
+4. ~~**The probation step (G7).**~~ Built.
+5. ~~**`hook_repeat_read`, then `hook_quiet_commands`**, with new consent text.~~ Policy v2. ~~Then `output_trimmer`, `hook_read_limit` and `hook_large_output`~~ with their guardrails and new consent: policy v3.
+6. **Everything else** only on evidence from real use, one at a time. Still not eligible, by design: `cache_breakpoints` and `volatile_prefix_mover` (custom agents only, never Claude Code), `inflight_dedup` and `spend_cap` (shadow only; spend cap should never be automatic).
+7. **Run the studies** (runbook Parts D and F) and replace the placeholder numbers, with the source, in one commit.
 
 ## The admission checklist (copy for each technique)
 

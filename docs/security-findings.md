@@ -16,6 +16,27 @@ CLAUDE.md. Companion documents: [threat-model.md](threat-model.md), [../PRIVACY.
 No critical or high finding is open. One finding first rated high (F-4) was re-rated low after checking the
 provider documentation, for the reason given there.
 
+## Update 2026-11-14
+
+A second pass closed or narrowed the open findings that could be fixed safely, and covered the code added since
+(Autopilot trials, the hook guardrails, the history scan). What it does and does not close is in this table; the
+controls themselves are described in [security.md](security.md).
+
+| Finding | Status now | What changed |
+|---|---|---|
+| F-7 timeouts and memory | **Fixed** | Whole-request read timeout (5 min; a response stream is not limited, tested); bodies held in memory at once are capped at 1 GiB with a retriable 503; a lone request is never refused for size. No upstream response-header timeout was added on purpose: a client that disconnects already cancels the upstream call, and a limit could cut a valid long request (rule 4). `TestAStalledRequestIsCutOffButALongStreamIsNot`, `TestConcurrentLargeBodiesAreCappedAndRetriable` |
+| F-11 symlinked config files | **Fixed** for writes | A symlinked settings file is written through, so the link stays. `TestWritingThroughASymlinkKeepsTheLink` (skipped on Windows, where creating a link needs a privilege; runs on the Linux and macOS jobs). The fixer's symlink-at-an-allowlisted-name case is still not separately tested |
+| F-15 installer signature | **Partly fixed** | `install.sh` verifies the cosign signature on `checksums.txt` when cosign is installed, refuses on a bad signature, and refuses unverified installs under `TROVE_REQUIRE_SIGNATURE=1`. Without cosign the default is still checksum-only, with a note. The npm wrapper is unchanged. Tested with a fake cosign; the real verification path is first exercised by the next release |
+| F-26 redaction shapes | **Fixed** | AWS, GitHub, Google, Slack, Stripe and npm keys and PEM private key blocks are redacted with no nearby name. Still best effort |
+| F-28 environment filter | **Narrowed**, still a denylist | More names are dropped (webhooks, connection strings, `*_AUTH`, `*_KEY`, `KUBECONFIG`, common SaaS prefixes). An allowlist was not done: it would break toolchains whose variables cannot be listed in advance, and there is no way to test that here |
+| F-9 recovery store | **Open, accepted** | Not changed. Redacting output before it is stored would break the guarantee that a fetched-back output equals what the tool printed, and the ID is the hash of that text. The mitigations are the opt-in, 0600 files in a 0700 folder, the size cap, the expiry (`[recovery] ttl_days`) and `trove data delete`. Shorten the expiry if command output may hold secrets |
+| F-13 port squatting | **Open, accepted** | Inherent to a fixed local port. Use a different `gateway.port` on a shared machine. A per-install random port would need the agent configuration rewritten on every start |
+| Supply chain | **Added** | Dependabot (Go modules, Actions, pip), CodeQL security-extended on every push and weekly, `go mod verify` in CI. Not added: SLSA build provenance attestation and a secret-scanning workflow (the usual action needs a licence for organisations), and a CI job that rebuilds a release and compares it (F-14 is still not demonstrated) |
+| New code | **Covered** | The Host header look-alike matrix (`TestHostHeaderMatrix`), hostile session ids and paths through every hook (`TestHostileSessionIDsAndPathsStayInsideTheDataFolder`), a v2 user never being given the new trial candidates, and the new guardrails each have a table test |
+
+Still open overall: F-4, F-9, F-13, F-14 (not demonstrated), F-15 (npm wrapper, and the default without cosign), F-16, F-22 to F-25, F-27,
+F-29. Nothing in this update has run in CI yet; the local Windows suite passes and local `golangci-lint` is blind on this Go version.
+
 ## How this was done, and what it does not prove
 
 Read: the gateway, auth, redaction, config, store, setup/undo, fixer, MCP server, hooks, logs parsers, CLI, CI

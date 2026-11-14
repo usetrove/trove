@@ -55,13 +55,13 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 |---|---|---|---|---|---|---|
 | B1 | `noise_normalizer`: strip colour codes, progress frames, repeated blank lines | tool boundary, request | native | no (new results only) | yes (hook) | lossless; Autopilot-eligible |
 | B2 | `duplicate_result_collapser`: replace a repeated identical tool result with a pointer | request | native | no, deterministic | no (gateway) | lossless; Autopilot-eligible |
-| B3 | `output_trimmer`: keep failures and the first and last lines of long test and build output | tool boundary, request | native | no | yes (hook, Bash only) | recoverable: full text kept locally; needs the MCP server and recovery store. Not Autopilot-eligible |
+| B3 | `output_trimmer`: keep failures and the first and last lines of long test and build output | tool boundary, request | native | no | yes (hook, Bash only) | recoverable: full text kept locally; needs the MCP server and recovery store. An Autopilot **trial candidate** (policy v3), never promoted from shadow evidence alone; its marker is netted in its estimate and the 351 tokens of MCP tool definitions are charged to it per session |
 | B4 | `volatile_prefix_mover`: move changing lines out of the stable prompt | request | native | **yes** | no | custom agents only |
 | B5 | `cache_breakpoints`: place cache markers on the final layout | request | native | **yes** | no | custom agents only; at most 3 of the 4 allowed |
-| B6 | `hook_repeat_read`: deny a repeat read of an unchanged file | tool boundary | native | no | yes | S7 `PreToolUse` deny |
-| B7 | `hook_read_limit`: add `limit: 400` to a large read | tool boundary | native | no | yes | needs `updatedInput` (S7); it replaces the whole input |
-| B8 | `hook_large_output`: hint to use `trove_run` for known-noisy commands | tool boundary | native | no | yes | needs the MCP server |
-| B15 | `hook_quiet_commands`: add one output-quieting flag to an allowlisted command | tool boundary | native | no | yes | rewrites the Bash command like RTK does but is not refused beside it today; whether it should be is open |
+| B6 | `hook_repeat_read`: deny a repeat read of an unchanged file | tool boundary | native | no | yes | S7 `PreToolUse` deny; trial candidate (policy v2 and v3) |
+| B7 | `hook_read_limit`: add `limit: 400` to a large read | tool boundary | native | no | yes | needs `updatedInput` (S7); it replaces the whole input; trial candidate (policy v3), guardrail `hook_extra_read` |
+| B8 | `hook_large_output`: hint to use `trove_run` for known-noisy commands | tool boundary | native | no | yes | needs the MCP server; trial candidate (policy v3), guardrail `hook_unused_advice` |
+| B15 | `hook_quiet_commands`: add one output-quieting flag to an allowlisted command | tool boundary | native | no | yes | rewrites the Bash command like RTK does but is not refused beside it today; whether it should be is open; trial candidate (policy v2 and v3) |
 | B9 | MCP tools `trove_read`, `trove_search`, `trove_run`, `trove_fetch_full` | tool boundary | native | no | yes | tool definitions are added to every request: an overhead (rule 15) |
 | B10 | `trove fix`: `mcp_prune`, `context_slim`, `cache_breaker_fix`, `model_default` | config | config | no | yes | diff and undo |
 | B13 | `trove fix` `settings_check`: flag and remove a cost-raising setting you already have (caching off, tool search off, a one-hour cache lifetime with one-hour writes in your history) | config | config | no | yes | suggestion only, never in `--all`, no saving figure; added 2026-11-13 |

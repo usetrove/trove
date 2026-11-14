@@ -24,6 +24,7 @@ trove hooks install --rewrite   # also install the hooks that rewrite tool input
 | `session_reset` | `SessionStart`, Claude Code `PreCompact` | Pins the optimizer states for the session. Forgets earlier reads after a compaction or resume, because the agent no longer has those files in context. |
 | `session_end_receipt` | `SessionEnd` | Moves the hook counters into the database, runs the hook guardrail, writes the session receipt, refreshes the snapshot the other hooks read, then writes the session's features and, if stale, the repo's ([features.md](features.md)). |
 | `pre_tool_large_output` (optional, `--large-output`) | `PreToolUse` on `Bash` | For a known-noisy command (`go test ./...`, `npm test`, bare `pytest`, `make`, verbose builds) adds a hint to use `trove_run`. Never blocks. Only fires when the MCP server is registered. |
+| `post_tool_run` (installed with `--large-output` or `--rewrite`) | `PostToolUse` on `mcp__trove__trove_run` | Counts, once per session, that the agent used `trove_run`. It is how the guardrail for the hint above sees whether the hint is followed. Changes nothing. Run `trove hooks install` again if your hooks were installed with v0.3.0 or earlier; `trove hooks status` says when it is missing. |
 
 Session features also come from `post_tool_read_record`, `session_reset` (compactions) and `post_tool_output`
 (tool-result features, only with `--rewrite`). Each call appends one numeric line to a small journal next to the
@@ -61,15 +62,15 @@ Each rewriting optimizer is watched by what the agent does next, from the hook's
 | Optimizer | Counted as "did not help" | Rule |
 |---|---|---|
 | `hook_quiet_commands` | the agent ran the same command again exactly as first written (`reissued`). It is counted once per command and the command is not quieted a second time, so the agent never has to run it twice to get its output. | `hook_rerun` |
-| `output_trimmer` | the agent called `trove_fetch_full` for an output the hook trimmed (`fetched_back`). A `PostToolUse` hook on `mcp__trove__trove_fetch_full` (`post_tool_fetch`, installed with `--rewrite`) does the counting, and only for ids this session's trimming produced, so fetches of `trove_run` output do not count against it. | `hook_fetch_back` |
+| `output_trimmer` | the agent called `trove_fetch_full` for an output the hook trimmed (`fetched_back`). A `PostToolUse` hook on `mcp__trove__trove_fetch_full` (`post_tool_fetch`, installed with `--rewrite`) does the counting, and only for ids this session's trimming produced, so fetches of `trove_run` output do not count against it. | `hook_fetch_back` | The limit for this one is half of `measure.refetch_rate_percent` (12% by default), because it hides text. 
 | `hook_repeat_read` | a blocked read the agent retried (`reread_anyway`) | `hook_reread` |
+| `hook_read_limit` | the agent read more of a file after its first read was limited (`extra_read`): a later `Read` of the same file that reaches past line 400. It is counted once per file, and a read inside the first 400 lines is not counted. Reading the rest is what the note asks for, so this rule is looser: the limit is twice `measure.refetch_rate_percent` (50% by default). | `hook_extra_read` |
+| `hook_large_output` | the hint to use `trove_run` was given in a session and the agent never used it. A `PostToolUse` hook on `mcp__trove__trove_run` (`post_tool_run`, installed with `--large-output` or `--rewrite`) counts one `adopted` event per session. The rule compares sessions: it needs 20 sessions where the hint was given and rolls the hook back when fewer than 10 percent of them used `trove_run` (`measure.MinAdoptionPercent`). Codex sessions are not judged (its hooks cannot see `trove_run`), and the rule does not run at all unless the counter hook is installed, so an install from before it existed is not rolled back for something it could not count: `trove hooks status` says so and `trove hooks install` adds it. | `hook_unused_advice` |
 
 Once at least `measure.min_sessions` (20) actions are counted and the share that did not help reaches
-`measure.refetch_rate_percent` (25%), that optimizer goes back to `shadow` for new sessions and `trove report`
-says why. Each optimizer is judged on its own. These counts cannot see everything: a rewrite can cost extra turns
+`measure.refetch_rate_percent` (25%, or the stricter or looser limit in the table), that optimizer goes back to `shadow` for new sessions and `trove report`
+says why. Each optimizer is judged on its own. The limits for the trimmer, the read limit and the hint are placeholders, not tuned by a benchmark. These counts cannot see everything: a rewrite can cost extra turns
 without any of them firing, which is why the A/B comparison remains the test of whether it saved money.
-`hook_read_limit` has no such rule, because reading the rest of a limited file with `offset` and `limit` is
-what it asks the agent to do.
 
 ### The quiet-command allowlist
 
@@ -176,6 +177,10 @@ Each decision is one row in `hook_events`: hook, kind, bytes, estimated tokens, 
 | `advised` / `would_advise` | a hint was added / would have been | measured count |
 | `reread_anyway` | the agent retried a denied read | measured count |
 | `rewritten` / `would_rewrite` | an input or output was changed / would have been | measured count |
+| `reissued` | the agent ran a quieted command again as first written | measured count |
+| `fetched_back` | the agent fetched back an output a hook trimmed | measured count |
+| `extra_read` | the agent read more of a file after `hook_read_limit` limited a read of it (once per file) | measured count |
+| `adopted` | the agent used `trove_run` (once per session) | measured count |
 
 Tokens saved is **estimated** (file size ÷ 3.5 bytes per token, lower for line-limited reads) and counts only
 blocks the agent did not retry. Hints have no savings estimate, because the output they avoid is not known.
