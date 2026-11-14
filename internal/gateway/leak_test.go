@@ -29,8 +29,8 @@ import (
 // Credentials must appear nowhere. Prompt text may pass through to the provider
 // but must never be written to disk (CLAUDE.md rules 2 and 7).
 const (
-	leakAnthropicKey = "sk-ant-api03-LEAKTESTANTHROPICKEY0123456789abcdef"
-	leakOpenAIKey    = "sk-proj-LEAKTESTOPENAIKEY0123456789abcdefghij"
+	leakAnthropicKey = "sk-ant-api03-LEAKTESTANTHROPICKEY0123456789abcdef" // secretscan:allow
+	leakOpenAIKey    = "sk-proj-LEAKTESTOPENAIKEY0123456789abcdefghij"     // secretscan:allow
 	leakOAuthToken   = "LEAKTESTOAUTHBEARERTOKEN0123456789"
 	leakJWTSecret    = "LEAKTESTJWTPAYLOAD0123456789"
 	leakPAT          = "pat_LEAKTESTCODEXPERSONALACCESSTOKEN0123456789"

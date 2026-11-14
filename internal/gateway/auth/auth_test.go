@@ -32,7 +32,7 @@ func TestAnthropic(t *testing.T) {
 		{"api key with benign betas", hdr("x-api-key", fakeConsoleKey, "anthropic-beta", "interleaved-thinking-2025-05-14,effort-2025-11-24"), true, ""},
 		{"bearer only (auth token or oauth)", hdr("Authorization", "Bearer "+fakeConsoleKey), false, "bearer_only"},
 		{"oauth beta flag", hdr("x-api-key", fakeConsoleKey, "anthropic-beta", "foo,oauth-2025-04-20"), false, "oauth_beta"},
-		{"different bearer and key", hdr("x-api-key", fakeConsoleKey, "Authorization", "Bearer sk-ant-api03-OTHERKEYFORTESTS0123456789abcdefgh"), false, "mixed_credentials"},
+		{"different bearer and key", hdr("x-api-key", fakeConsoleKey, "Authorization", "Bearer sk-ant-api03-OTHERKEYFORTESTS0123456789abcdefgh"), false, "mixed_credentials"}, // secretscan:allow
 		{"non-bearer scheme beside key", hdr("x-api-key", fakeConsoleKey, "Authorization", "Basic abc"), false, "mixed_credentials"},
 		{"nothing", hdr(), false, "no_credential"},
 		// The key-shape gate: each kind of credential that is not a Console API key is refused.

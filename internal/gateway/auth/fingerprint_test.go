@@ -11,7 +11,7 @@ func TestFingerprintTellsCredentialsApartWithoutKeepingThem(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	key := "sk-ant-api03-DISTINCTIVEKEYMATERIAL0123456789"
+	key := "sk-ant-api03-DISTINCTIVEKEYMATERIAL0123456789" // secretscan:allow
 	a := f.Of(http.Header{"X-Api-Key": {key}})
 	if a != f.Of(http.Header{"X-Api-Key": {key}}) {
 		t.Error("the same credential must give the same digest")

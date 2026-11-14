@@ -203,7 +203,7 @@ func TestDedupShadowIgnoresRequestsThatDifferInAnyPart(t *testing.T) {
 		body []byte
 	}{
 		"another body":         {anthropicHdr, []byte(`{"model":"claude-opus-5-5","max_tokens":64,"messages":[{"role":"user","content":"a different prompt"}]}`)},
-		"another api key":      {other(anthropicHdr, "x-api-key", "sk-ant-api03-ANOTHERKEYNOTTHESAME0123456789abcdef"), dedupBody},
+		"another api key":      {other(anthropicHdr, "x-api-key", "sk-ant-api03-ANOTHERKEYNOTTHESAME0123456789abcdef"), dedupBody}, // secretscan:allow
 		"another beta header":  {other(anthropicHdr, "anthropic-beta", "some-beta-2026"), dedupBody},
 		"another api version":  {other(anthropicHdr, "anthropic-version", "2024-01-01"), dedupBody},
 		"another content type": {other(anthropicHdr, "Content-Type", "application/json; charset=utf-8"), dedupBody},

@@ -113,6 +113,9 @@ That is a statement about accuracy, not about security, but it is repeated here 
 | Static analysis: `gosec` through `golangci-lint`, and CodeQL (security-extended) on every push, pull request and weekly | `.golangci.yml`, `codeql.yml` |
 | Actions pinned to commit SHAs and kept current by Dependabot (Go modules, Actions, pip) | `.github/dependabot.yml` |
 | Releases: static binaries, keyless cosign signature over `checksums.txt`, one SPDX SBOM per archive, deterministic build flags | `.goreleaser.yaml`, `release.yml` |
+| SLSA build provenance: each archive and `checksums.txt` is attested by the release workflow. Verify with `gh attestation verify <file> --repo usetrove/trove` | `release.yml` (`actions/attest-build-provenance`, pinned) |
+| Secret scanning: a tracked file holding a credential-shaped string fails CI. Deliberate fakes carry `secretscan:allow` | `scripts/secretscan`, `ci.yml` job `secretscan` |
+| Reproducible build check: the same commit built from two directories must give identical bytes | `scripts/rebuild-check.sh`, `ci.yml` job `reproducible` |
 | `install.sh` verifies the archive's SHA-256 and, when cosign is installed, the signature (refuses on a bad one; `TROVE_REQUIRE_SIGNATURE=1` refuses unverified installs) | `install_test.sh` (fake cosign) |
 
 ## Known gaps, stated plainly
@@ -123,8 +126,8 @@ That is a statement about accuracy, not about security, but it is repeated here 
 | Port squatting on a shared machine (F-13, R1) | Inherent to a fixed local port | Change `gateway.port`; single-user machines are unaffected |
 | `trove_run` environment filter is a name list (F-28) | An allowlist breaks toolchains that cannot be listed in advance | The list covers the common credential names; `trove_run` runs only approved commands |
 | npm wrapper checks the checksum only (F-15) | No sigstore verifier is bundled | `install.sh` verifies; verify by hand as in `SECURITY.md` |
-| Reproducible builds are configured, not demonstrated (F-14) | Needs a rebuild-and-compare job | Deterministic flags and recorded Go version |
-| No SLSA provenance attestation and no secret-scanning workflow | Not added without being able to run them here | Cosign signature and SBOM; `redact` tests |
+| Reproducible builds: checked on one platform pair only (F-14) | `rebuild-check.sh` ran once here (Windows host, linux/amd64 target, identical bytes) and runs in CI on Linux; the full goreleaser archives are not compared | The CI job; deterministic flags and recorded Go version |
+| SLSA provenance and secret scanning were added but have not run in CI | The attestation needs a tagged release on GitHub; `secretscan` passes locally and was checked against a planted key | The first release and the first CI run show whether they work |
 | Windows mode bits and ACLs (R7, F-25) | Not a supported platform yet | None |
 | Nothing from this update has run in CI | The review machine is Windows; local `golangci-lint` cannot type-check this Go version, and the `strace` test needs Linux | The local suite passes; CI is the authority |
 

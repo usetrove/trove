@@ -187,7 +187,7 @@ func TestReadSymlinkEscapeRefused(t *testing.T) {
 func TestReadRefusesSecretFiles(t *testing.T) {
 	dir := t.TempDir()
 	write(t, dir, ".env", "API_KEY=hunter2\n")
-	write(t, dir, "deploy/server.pem", "-----BEGIN PRIVATE KEY-----\n")
+	write(t, dir, "deploy/server.pem", "-----BEGIN PRIVATE KEY-----\n") // secretscan:allow
 	write(t, dir, ".env.example", "API_KEY=changeme\n")
 	if err := os.Symlink(filepath.Join(dir, ".env"), filepath.Join(dir, "notes.txt")); err != nil {
 		t.Logf("no symlinks here (%v); skipping the link case", err)

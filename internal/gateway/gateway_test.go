@@ -486,7 +486,7 @@ func TestNewRefusesUnsafeUpstreams(t *testing.T) {
 // Transport errors can quote the URL or headers. What reaches the client must be
 // redacted, and redacted before truncation so a secret cannot be cut in half.
 func TestShortErrRedactsBeforeTruncating(t *testing.T) {
-	secret := "sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	secret := "sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" // secretscan:allow
 	err := errors.New(strings.Repeat("x", 100) + " Authorization: Bearer " + secret + " failed")
 	got := shortErr(err)
 	if strings.Contains(got, "sk-ant") || strings.Contains(got, "ABCDEFGH") {

@@ -8,7 +8,7 @@ import (
 // Credential shapes other than sk- keys and JWTs are redacted even with no sensitive name beside them (F-26).
 // The values below are made up, in the documented shapes; none is a real credential.
 func TestOtherCredentialShapesAreRedactedWithoutAName(t *testing.T) {
-	pem := "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAxxxxxxxxxxxxxxxxxxxx\nyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\n-----END RSA PRIVATE KEY-----"
+	pem := "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEAxxxxxxxxxxxxxxxxxxxx\nyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy\n-----END RSA PRIVATE KEY-----" // secretscan:allow
 	cases := []struct{ name, secret string }{
 		{"AWS access key id", "AKIAIOSFODNN7EXAMPLE"},
 		{"AWS temporary key id", "ASIAIOSFODNN7EXAMPLE"},
@@ -47,7 +47,7 @@ func TestOrdinaryTextSurvivesTheNewShapes(t *testing.T) {
 
 // An unterminated private key block (a log cut off in the middle) still loses everything after the BEGIN line.
 func TestAnUnterminatedPrivateKeyBlockIsRedactedToTheEnd(t *testing.T) {
-	got := String("before\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\nmore base64 here")
+	got := String("before\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\nmore base64 here") // secretscan:allow
 	if strings.Contains(got, "MIIEvQ") || strings.Contains(got, "more base64") || !strings.HasPrefix(got, "before") {
 		t.Fatalf("%q", got)
 	}

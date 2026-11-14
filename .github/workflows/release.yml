@@ -6,7 +6,8 @@ on:
 
 permissions:
   contents: write
-  id-token: write # keyless cosign signing via GitHub OIDC
+  id-token: write # keyless cosign signing and build provenance via GitHub OIDC
+  attestations: write # SLSA build provenance
 
 jobs:
   goreleaser:
@@ -51,3 +52,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # A token with write access to usetrove/homebrew-trove (the default token cannot push to another repo).
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+      # SLSA build provenance: a signed statement of which workflow, commit and runner built each archive.
+      # Verify with: gh attestation verify <archive> --repo usetrove/trove
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
