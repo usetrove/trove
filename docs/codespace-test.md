@@ -46,7 +46,7 @@ On `usetrove/trove`, choose the branch to test (`hooks-rewrite` before the beta,
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | TROVE_VERSION=0.1.0-beta.1 sh
-trove version          # should print 0.1.0-beta.1 and a commit
+trove --version          # should print 0.1.0-beta.1 and a commit
 ```
 
 **Option B, before the release (build from source, the same flags as the release build):**
@@ -54,7 +54,7 @@ trove version          # should print 0.1.0-beta.1 and a commit
 ```bash
 go build -trimpath -ldflags "-s -w" -o "$HOME/bin/trove" ./cmd/trove
 export PATH="$HOME/bin:$PATH"
-trove version
+trove --version
 ```
 
 Option B's plugin uses the `trove` on your `PATH`, because the plugin's `VERSION` is `dev` until the release sets it.

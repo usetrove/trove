@@ -148,6 +148,8 @@ type ShadowRow struct {
 	Tokens    Figure `json:"tokens"`
 	USD       Figure `json:"usd"`
 	Sessions  int    `json:"sessions"`
+	// Events is how many times it would have acted, when the source counts that. Not in the JSON.
+	Events int `json:"-"`
 }
 
 // ShadowEstimates reports the shadow-mode estimate for every optimizer that is
@@ -170,7 +172,9 @@ func ShadowEstimates(ctx context.Context, db *store.DB, w Window, cfg config.Con
 	var out []ShadowRow
 	for _, n := range names {
 		_, back := rolled[n]
-		if cfg.OptimizerState(n) == config.StateOn && !back {
+		// A gateway behavior set to "on" still only estimates (none has an active mode), so its
+		// shadow figure is still what it "would" save and must not be hidden.
+		if cfg.OptimizerState(n) == config.StateOn && !back && !config.IsGatewayBehavior(n) {
 			continue
 		}
 		o := ru.Optimizers[n]
@@ -242,8 +246,8 @@ func Offers(ctx context.Context, db *store.DB, w Window, cfg config.Config, rule
 		if _, back := rolled[s.Optimizer]; back {
 			continue
 		}
-		if (s.Optimizer == config.OptimizerOutputTrimmer && !rules.Recoverable) || s.Optimizer == analyze.OptPrune {
-			continue // cannot be switched on
+		if (s.Optimizer == config.OptimizerOutputTrimmer && !rules.Recoverable) || s.Optimizer == analyze.OptPrune || config.IsGatewayBehavior(s.Optimizer) {
+			continue // cannot be switched on (a gateway behavior has only its shadow mode)
 		}
 		if s.Sessions < rules.MinSessions || s.USD.Value < rules.MinUSD {
 			continue

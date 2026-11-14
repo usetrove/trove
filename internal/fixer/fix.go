@@ -29,10 +29,11 @@ import (
 
 // Fix kinds.
 const (
-	MCPPrune     = "mcp_prune"
-	ContextSlim  = "context_slim"
-	CacheBreaker = "cache_breaker_fix"
-	ModelDefault = "model_default"
+	MCPPrune      = "mcp_prune"
+	ContextSlim   = "context_slim"
+	CacheBreaker  = "cache_breaker_fix"
+	ModelDefault  = "model_default"
+	SettingsCheck = "settings_check"
 )
 
 // Fix is one proposed change. Nothing has been written when it is returned.
@@ -113,7 +114,7 @@ func (e *Env) now() time.Time {
 // meaning the same thing between runs.
 func fixID(kind string, parts ...string) string {
 	h := sha256.Sum256([]byte(kind + "\x00" + strings.Join(parts, "\x00")))
-	short := map[string]string{MCPPrune: "mcp", ContextSlim: "ctx", CacheBreaker: "cache", ModelDefault: "model", SettingsProfile: "settings", TaskScout: "scout", TaskCascade: "cascade"}[kind]
+	short := map[string]string{MCPPrune: "mcp", ContextSlim: "ctx", CacheBreaker: "cache", ModelDefault: "model", SettingsCheck: "chk", SettingsProfile: "settings", TaskScout: "scout", TaskCascade: "cascade"}[kind]
 	return short + "-" + hex.EncodeToString(h[:])[:8]
 }
 
@@ -126,7 +127,7 @@ func pathHash(p string) string {
 // enough evidence, returns none.
 type detector func(ctx context.Context, e *Env) ([]*Fix, error)
 
-var detectors = []detector{detectMCPPrune, detectContextSlim, detectCacheBreaker, detectModelDefault, detectSettings, detectTasks}
+var detectors = []detector{detectMCPPrune, detectContextSlim, detectCacheBreaker, detectModelDefault, detectSettingsCheck, detectSettings, detectTasks}
 
 // Detect plans every available fix, largest estimated saving first. It writes
 // nothing. A detector that fails is reported in errs and does not hide the rest.

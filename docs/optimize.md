@@ -157,6 +157,35 @@ exactly.
 - **Reasoning effort**: models where output tokens are a large share of spend.
   Anthropic publishes no savings figure for lower effort, so the suggestion
   carries a "per 10% fewer output tokens" scenario and no savings estimate.
+- **Cache lifetime** (`cache_ttl`): would the other prompt cache lifetime (5 minutes or 1 hour) have been
+  cheaper for your own sessions? It reads Claude Code's history, which records the tokens written at each
+  lifetime, and takes the gap before each request: a gap of 5 minutes or less is served by either lifetime, one of
+  more than 5 and up to 60 minutes only by a one-hour entry. It compares the one-hour premium with the rewrites that
+  premium avoided (or, if you are on 5 minutes, the rewrites a longer lifetime would have avoided with the premium it
+  would add), per model at list prices, for the main conversation and for subagents separately. It speaks up only when
+  the other lifetime is at least 25% cheaper and the difference is at least $1, from at least 100 requests. Most of
+  the time it says nothing, which means your current lifetime is paying for itself. It gives a dollar figure only
+  when the history shows an API key; on a subscription or an unknown plan it says what the list-price difference
+  would be and that this is not money saved. It names the Claude Code setting to change (`promptCacheTtl` or
+  `subagentPromptCacheTtl`, version 2.1.242 or later) and never changes it. It assumes a lost cache entry is
+  rewritten in full, so it is an estimate. Facts verified 2026-11-13 (see [techniques.md](techniques.md)).
+
+## In-flight dedup (shadow only)
+
+`inflight_dedup` is a behavior of the gateway itself, not a pipeline step: it acts on which requests reach the
+provider, not on the bytes of one. In shadow it counts requests that arrived while an identical one (same method, path,
+headers that matter, credential and body) was still waiting for the provider, and records what sharing the call would
+have saved on that request's row. `"on"` runs as shadow because sharing is not built. It is not offered by
+`trove report` as something to switch on. Design, limits and what must be true before sharing is built:
+[inflight-dedup.md](inflight-dedup.md).
+
+## Spend cap (shadow only)
+
+`spend_cap` is the second gateway behavior. In shadow it marks requests that arrived when spending in the budget period
+had already reached the budget cap (`[budget] cap_usd`, set with `trove budget set`), and records on their rows what a
+hard cap would have stopped. It needs a budget cap; without one it does nothing. `"on"` runs as shadow, nothing is ever
+refused, and it is not offered by `trove report` as something to switch on. Design, limits and what must be verified
+before refusing is built: [spend-cap.md](spend-cap.md).
 
 ## Provider facts checked (2026-10-29)
 

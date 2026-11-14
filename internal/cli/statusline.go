@@ -74,7 +74,7 @@ func statusLine(a *App, format string) (line string, st *report.Status, problem 
 		return "Trove: database problem, run `trove doctor`", nil, err.Error()
 	}
 	color := format != report.FormatShell && !a.NoColor && a.Getenv("NO_COLOR") == ""
-	return report.RenderStatus(status, format, color), &status, ""
+	return report.RenderStatus(status, format, color) + autopilotSuffix(dir), &status, ""
 }
 
 // claudeSessionID reads the session id Claude Code sends as JSON on stdin. It

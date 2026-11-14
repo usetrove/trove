@@ -45,7 +45,10 @@ if [ -x "$cached" ]; then
 fi
 
 if p=$(command -v trove 2>/dev/null) && [ -n "$p" ]; then
-  if [ "$ver" = dev ] || [ "$("$p" version 2>/dev/null | head -n 1)" = "trove $ver" ]; then
+  # `--version` is the current spelling; an older program at the same version only knows `version`.
+  pv=$("$p" --version 2>/dev/null | head -n 1)
+  [ "$pv" = "trove $ver" ] || pv=$("$p" version 2>/dev/null | head -n 1)
+  if [ "$ver" = dev ] || [ "$pv" = "trove $ver" ]; then
     exec "$p" "$@"
   fi
 fi

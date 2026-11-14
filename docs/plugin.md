@@ -34,7 +34,7 @@ macOS and Linux are the supported platforms. On Windows the plugin is experiment
 | SessionStart command | `trove plugin start`: the one-time report, and the capability check below. Always exits 0. |
 | `/trove:report` | `trove report` |
 | `/trove:status` | Which features are on, in shadow mode, or held back. |
-| `/trove:setup` | The approval flow: repeat-read check in shadow mode, status line, Trove tools (MCP), scout subagent, live hook test. |
+| `/trove:setup` | The approval flow: Autopilot, repeat-read check in shadow mode, status line, Trove tools (MCP), scout subagent, live hook test. |
 | `/trove:uninstall` | Undoes everything Trove changed, then tells you to remove the plugin. |
 | `bin/trove` | A small wrapper that finds or fetches the `trove` program (below). |
 

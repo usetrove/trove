@@ -29,7 +29,7 @@ data dir, config and database, so runs cannot contaminate each other.
 |---|---|
 | `direct` | No gateway. Cost is *estimated* from the agent's own usage report. |
 | `passthrough` | Gateway on, every optimizer off. The reference for the ship rule. |
-| `alone:<optimizer>` | One optimizer `on`. |
+| `alone:<optimizer>` | One optimizer `on`. A gateway optimizer runs through the gateway; one of `hook_repeat_read`, `hook_read_limit` or `hook_quiet_commands` runs in the plugin's hooks with no gateway, and only that hook is on. `hook_large_output` is refused (its hint points at a tool a benchmark run does not have). Name it `alone_<optimizer>` in a study file. |
 | `all_safe` | Every optimizer that can be `on` for the agent. |
 
 With Claude Code only `noise_normalizer` and `duplicate_result_collapser` can be `on`:

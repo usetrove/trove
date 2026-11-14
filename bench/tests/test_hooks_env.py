@@ -53,3 +53,19 @@ def test_install_command_uses_the_data_dir_and_syncs():
     cmd = install_command("/trove-data")
     assert cmd.count("TROVE_DATA_DIR=/trove-data") == 2
     assert "--rewrite" in cmd and cmd.endswith("trove hooks sync")
+
+
+@pytest.mark.parametrize("hook", ["hook_repeat_read", "hook_quiet_commands"])
+def test_a_single_hook_condition_is_checked_against_the_snapshot(hook):
+    """The harness refuses a run whose hooks did not pick up the condition: only this hook on, the rest off."""
+    cond = parse_condition(f"alone_{hook}", "claude_code")
+    others = {h: "off" for h in ("hook_repeat_read", "hook_read_limit", "hook_quiet_commands", "hook_large_output")}
+    good = {"states": {**others, hook: "on", "noise_normalizer": "off"}}
+    check_snapshot(json.dumps(good), cond)
+    # Another hook left on would contaminate the comparison, so it must be caught.
+    other = next(h for h in others if h != hook)
+    with pytest.raises(HooksSetupError, match=other):
+        check_snapshot(json.dumps({"states": {**good["states"], other: "on"}}), cond)
+    # This hook not picked up means the run would be a second "direct", which must also be caught.
+    with pytest.raises(HooksSetupError, match=hook):
+        check_snapshot(json.dumps({"states": {**good["states"], hook: "shadow"}}), cond)

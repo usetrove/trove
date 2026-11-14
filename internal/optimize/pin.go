@@ -183,6 +183,9 @@ func effectiveState(name, state string) string { return effectiveStateFor(name, 
 // can fetch the full output back (trove_fetch_full); otherwise it stays in
 // shadow, which only estimates.
 func effectiveStateFor(name, state string, recoverable bool) string {
+	if config.IsGatewayBehavior(name) && state == config.StateOn {
+		return config.StateShadow // no gateway behavior has an active mode yet; on would only estimate
+	}
 	if name == config.OptimizerOutputTrimmer && state == config.StateOn && !recoverable {
 		return config.StateShadow
 	}

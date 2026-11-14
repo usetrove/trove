@@ -102,3 +102,23 @@ func TestRenderPacingGoldens(t *testing.T) {
 	}
 	golden(t, "pacing.txt", out.String())
 }
+
+// The gateway's spend cap and the report must agree on where a budget period starts and ends,
+// so a cap measured by one matches the pacing shown by the other.
+func TestBudgetWindowAgreesWithTheReportPeriods(t *testing.T) {
+	loc := time.FixedZone("test", 5*3600+1800)
+	for _, n := range []time.Time{
+		time.Date(2026, 11, 13, 14, 30, 0, 0, loc), time.Date(2026, 11, 9, 0, 0, 0, 0, loc), time.Date(2026, 11, 15, 23, 59, 0, 0, loc),
+		time.Date(2026, 12, 31, 23, 59, 0, 0, loc), time.Date(2027, 3, 1, 0, 0, 0, 0, loc),
+	} {
+		for _, period := range []string{"daily", "weekly", "monthly"} {
+			from, to := config.Budget{Period: period}.Window(n)
+			name := PeriodName(period)
+			wantFrom := StartOf(name, n)
+			wantTo := EndOf(name, wantFrom)
+			if !from.Equal(wantFrom) || !to.Equal(wantTo) {
+				t.Errorf("%s at %v: budget window %v to %v, report period %v to %v", period, n, from, to, wantFrom, wantTo)
+			}
+		}
+	}
+}

@@ -24,8 +24,23 @@ func TestBuiltinCatalogLoads(t *testing.T) {
 	if s, ok := c.Lookup(ClaudeCode, "claudeMdExcludes"); !ok || !s.Applyable {
 		t.Error("claudeMdExcludes should be in the Claude Code catalog and applyable")
 	}
-	if s, ok := c.Lookup(ClaudeCode, "effortLevel"); !ok || s.Applyable {
-		t.Error("effortLevel must stay suggestion-only until its values are read as raw text")
+	// Read as raw text on 2026-11-13, so these may be written now.
+	for _, k := range []string{"effortLevel", "ENABLE_TOOL_SEARCH", "MAX_MCP_OUTPUT_TOKENS", "bashOutputMaxChars", "autoCompactWindow", "promptCacheTtl", "subagentPromptCacheTtl", "idleCompaction"} {
+		if s, ok := c.Lookup(ClaudeCode, k); !ok || !s.Applyable || s.Verified != VerifiedVerbatim || s.VerifiedOn != "2026-11-13" {
+			t.Errorf("%s should be applyable, verbatim and verified on 2026-11-13: %+v", k, s)
+		}
+	}
+	// Still only seen in a summary: these stay suggestion-only until read as raw text.
+	for _, k := range []string{"MAX_THINKING_TOKENS", "alwaysLoad", "model", "fallbackModel"} {
+		if s, ok := c.Lookup(ClaudeCode, k); !ok || s.Applyable {
+			t.Errorf("%s must stay suggestion-only until its entry is read as raw text", k)
+		}
+	}
+	if s, _ := c.Lookup(ClaudeCode, "bashOutputMaxChars"); s.Since != "2.1.261" || *s.Min != 4000 || *s.Max != 128000 {
+		t.Errorf("bashOutputMaxChars range or version drifted from the docs: %+v", s)
+	}
+	if s, _ := c.Lookup(ClaudeCode, "BASH_MAX_OUTPUT_LENGTH"); s.Applyable {
+		t.Error("BASH_MAX_OUTPUT_LENGTH is ignored when bashOutputMaxChars is set; Trove writes the key instead")
 	}
 }
 

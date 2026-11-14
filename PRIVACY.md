@@ -105,6 +105,7 @@ at most once a day, from whichever Trove process runs first (the gateway, a hook
 | `hooks/` | Per-session lists of file **content hashes** and sizes (so a repeated read can be spotted), a spool of counts, optimizer states | No paths, no contents, no raw session ids [`TestNothingSensitiveIsStored`] |
 | `hooks.log` (and `.1`) | One-line errors from hooks, with file names removed, redacted, capped at 256 KB | |
 | `contribute.json` | Whether you turned the summary upload on, your random install id, and the day of the last upload | Written only by `trove contribute enable/disable/reset`; absent means off |
+| `autopilot.json` | Whether you agreed to Autopilot and to trials, each optimizer's Autopilot state with a short reason, its last 50 state changes and the planner's advice. No request content | Written only by `trove autopilot on/off/pause/resume/trials`, `trove setup` after your yes, and Autopilot's own checks; absent means off |
 | `gateway.json` | The running gateway's process id and address | Removed on stop |
 | `gateway.log` | Only on macOS, only if you install the background service: the gateway's own log lines | Redacted logger; no headers or bodies. Path is `~/.trove/gateway.log` even if you chose another data folder (finding F-24) |
 | `mcp_installs.json` | The commands that undo MCP registrations Trove made | |
@@ -114,6 +115,9 @@ at most once a day, from whichever Trove process runs first (the gateway, a hook
 Trove also **reads**, without changing them, your agents' local session logs (`~/.claude/projects`,
 `~/.codex/sessions`) to estimate waste before you route traffic through the gateway. It keeps only the numbers
 described in `history_requests` above. Pass `--no-history` or set `history.enabled = false` to stop that.
+If you agree to Autopilot trials (`trove autopilot trials on`) and have no gateway, the plugin also reads that history when a session
+ends, for at most a fraction of a second and only while a trial is running, so it can compare sessions with and without the change.
+The same limits and the same `history.enabled = false` apply.
 It reads `~/.claude/settings.json` for two key names (`apiKeyHelper`, `forceLoginMethod`) to tell API-key from
 subscription use, and checks whether `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and `OPENAI_API_KEY` are set
 without reading their values.

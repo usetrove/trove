@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/histscan"
 	"github.com/usetrove/trove/internal/logs"
 	"github.com/usetrove/trove/internal/logs/cchistory"
 	"github.com/usetrove/trove/internal/logs/cxhistory"
@@ -81,19 +82,7 @@ func scanHistory(ctx context.Context, a *App, dir string, cfg config.Config, all
 	if perr != nil {
 		tbl = nil
 	}
-	in := &logs.Ingester{
-		DB:       db,
-		Sources:  []logs.Source{src, cdx},
-		Versions: logs.ParserVersions{logs.SourceClaudeCode: cchistory.ParserVersion, logs.SourceCodex: cxhistory.ParserVersion},
-		Pricing:  tbl,
-		Plan: func(source string) logs.Plan {
-			if source == logs.SourceCodex {
-				return res.Codex.Plan
-			}
-			return res.Plan.Plan
-		},
-		Annotate: logs.NewAuditor(tbl).Annotate,
-	}
+	in := histscan.New(db, tbl, src, cdx, res.Plan.Plan, res.Codex.Plan)
 	var since time.Time
 	if !all {
 		since = time.Now().AddDate(0, 0, -historyDays)

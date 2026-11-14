@@ -77,3 +77,34 @@ func TestSweepReceipts(t *testing.T) {
 		t.Errorf("list order or content wrong: %+v", list)
 	}
 }
+
+// A receipt names the optimizers that were on for the session, from its pin.
+func TestReceiptNamesTheOptimizersThatWereOn(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	key := "c-eeeeeeeeeeeeeeeeeeeeeeee"
+	if _, err := db.ExecContext(ctx, `INSERT INTO requests(ts, session_key, agent, model, status_code, input_uncached_tokens, cost_usd) VALUES(?,?,?,?,?,?,?)`,
+		t0.UnixMilli(), key, "claude_code", "m1", 200, 10, 0.5); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO sessions(session_key, agent, started_at, ended_at, request_count) VALUES(?,?,?,?,1)`,
+		key, "claude_code", t0.UnixMilli(), t0.UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO session_pins(session_key, states, custom_agents, bytes_per_token, pinned_at) VALUES(?,?,?,?,?)`,
+		key, `{"noise_normalizer":"on","output_trimmer":"shadow","duplicate_result_collapser":"on"}`, `[]`, 3.5, t0.UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := SweepReceipts(ctx, db, 30*time.Minute, t0.Add(5*time.Hour))
+	if err != nil || len(got) != 1 {
+		t.Fatalf("%v %+v", err, got)
+	}
+	want := []string{"duplicate_result_collapser", "noise_normalizer"}
+	if len(got[0].On) != 2 || got[0].On[0] != want[0] || got[0].On[1] != want[1] {
+		t.Errorf("on = %v, want %v (shadow does not count)", got[0].On, want)
+	}
+	listed, err := ListReceipts(ctx, db, 5)
+	if err != nil || len(listed) != 1 || len(listed[0].On) != 2 {
+		t.Errorf("listed receipt lost the names: %v %+v", err, listed)
+	}
+}

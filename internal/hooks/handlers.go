@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/usetrove/trove/internal/autopilot"
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/external"
 	"github.com/usetrove/trove/internal/features"
@@ -69,6 +70,18 @@ func (h *handler) reset(in Input, key string) error {
 	if len(st.Pins) == 0 {
 		for _, n := range OptimizerNames {
 			st.do(op{T: "pin", N: n, V: h.snap.Pin(n)})
+		}
+		// An optimizer on trial is on for about half of sessions. The arm is a hash of the session key, so
+		// it needs no database at the start of a session, and it is recorded in the spool so the comparison
+		// counts the session even if it never ends.
+		for _, n := range h.snap.Trial {
+			arm := measure.Arm(key, n)
+			if arm == config.StateOn {
+				st.do(op{T: "pin", N: n, V: h.snap.lowered(n, stateOn)})
+				_ = h.emit(key, n, KindArmOn, 0, 0)
+			} else {
+				_ = h.emit(key, n, KindArmOff, 0, 0)
+			}
 		}
 		// Tuned values are pinned with the states, so they cannot change mid-session
 		// (rule 5). The repo is the hash of the working directory; none is pinned
@@ -216,6 +229,8 @@ func (h *handler) sessionEnd(in Input, key string) error {
 	if cfg.Notifications.Desktop && h.notify != nil && len(recs) > 0 {
 		h.notify(recs[len(recs)-1])
 	}
+	// Autopilot turn-on and rollback notices, once each. Best effort.
+	_ = autopilot.Announce(h.dir, cfg.Notifications.Desktop, h.notifyText)
 	// Last, and best effort: the receipt is already written.
 	if err := h.flushFeatures(ctx, db, in, key); err != nil {
 		return fmt.Errorf("cannot write the session features: %v", err)
@@ -226,7 +241,7 @@ func (h *handler) sessionEnd(in Input, key string) error {
 // Maintain brings the hook bookkeeping up to date: it ingests the spool, applies
 // the hook guardrail and rewrites the snapshot the hooks read. It is safe to run
 // at any time and as often as wanted.
-func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, _ func(string) string, now time.Time) error {
+func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, getenv func(string) string, now time.Time) error {
 	if _, err := IngestSpool(ctx, db, dir); err != nil {
 		return fmt.Errorf("cannot ingest hook counts: %v", err)
 	}
@@ -242,6 +257,13 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	rolled, err := measure.Overrides(ctx, db)
 	if err != nil {
 		return fmt.Errorf("cannot read guardrail rollbacks: %v", err)
+	}
+	// A trial of a hook technique is judged on the agent's own history, so read it first (only while one runs).
+	scanTrialHistory(ctx, db, dir, cfg, getenv)
+	// Autopilot: promote or roll back at this session boundary. Best effort, and a failure
+	// leaves the saved states as they were, so it never turns anything on by accident.
+	if res, aerr := autopilot.Advance(ctx, db, dir, cfg, autopilot.CurrentPolicy(dir), now); aerr == nil {
+		cfg = cfg.WithAutopilot(res.File)
 	}
 	// Revert tuning that did not help before the snapshot is written, so the next
 	// session already starts with the defaults. Best effort: tuning must never stop

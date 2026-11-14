@@ -3,6 +3,8 @@ package measure
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"sort"
 	"strings"
 	"time"
 
@@ -30,6 +32,9 @@ type Receipt struct {
 	CacheHit *Figure `json:"cache_hit_percent,omitempty"`
 	// Saved is what optimizers that were on saved (estimated).
 	Saved Figure `json:"saved_usd"`
+	// On names the optimizers that were on for the session, from its pinned
+	// states. Names only, so the receipt can say what was running.
+	On []string `json:"optimizers_on,omitempty"`
 }
 
 // receiptHorizon is how far back a sweep looks for finished sessions, so the
@@ -143,6 +148,7 @@ func buildReceipt(ctx context.Context, db *store.DB, key, agent string, ended in
 	if total := input + cacheWrite + cacheRead; total > 0 {
 		r.CacheHit = &Figure{Value: 100 * float64(cacheRead) / float64(total), Label: Measured, N: calls}
 	}
+	r.On = pinnedOn(ctx, db, key)
 	return r, true, nil
 }
 
@@ -181,6 +187,7 @@ func ListReceipts(ctx context.Context, db *store.DB, limit int) ([]Receipt, erro
 		if hit.Valid {
 			r.CacheHit = &Figure{Value: hit.Float64, Label: Measured, N: calls}
 		}
+		r.On = pinnedOn(ctx, db, key)
 		out = append(out, r)
 	}
 	return out, rows.Err()
@@ -199,4 +206,25 @@ func shortKey(key string) string {
 		return base + "~" + gen
 	}
 	return base
+}
+
+// pinnedOn lists, sorted, the optimizers pinned "on" when the session started.
+// A missing pin or a read problem gives none: a receipt never fails for this.
+func pinnedOn(ctx context.Context, db *store.DB, key string) []string {
+	var raw string
+	if err := db.QueryRowContext(ctx, `SELECT states FROM session_pins WHERE session_key = ?`, key).Scan(&raw); err != nil {
+		return nil
+	}
+	var states map[string]string
+	if json.Unmarshal([]byte(raw), &states) != nil {
+		return nil
+	}
+	var on []string
+	for n, s := range states {
+		if s == config.StateOn {
+			on = append(on, n)
+		}
+	}
+	sort.Strings(on)
+	return on
 }

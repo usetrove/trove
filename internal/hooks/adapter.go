@@ -280,3 +280,8 @@ func (l *ledgerView) Delete(k string) { l.st.do(op{T: "del", K: k}) }
 func (l *ledgerView) Prompts() int { return l.st.PromptN }
 
 func (l *ledgerView) Save() error { return l.st.save(l.dir, l.key) }
+
+// RewriteKindOf says which kind of rewrite the named optimizer does in the hooks (RewriteInput or
+// RewriteOutput), or "" when it rewrites nothing the agent could ignore (it denies a read, or only
+// advises). The technique registry's hook capability needs are checked against it.
+func RewriteKindOf(name string) string { return rewriteKind(name) }

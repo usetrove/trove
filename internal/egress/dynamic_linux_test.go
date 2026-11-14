@@ -105,7 +105,7 @@ func TestCommandsMakeNoOutboundConnections(t *testing.T) {
 	}
 	s := newSandbox(t)
 	for i, args := range [][]string{
-		{"version"}, {"doctor"}, {"report"}, {"report", "--json"}, {"pricing", "show"},
+		{"--version"}, {"doctor"}, {"report"}, {"report", "--json"}, {"pricing", "show"},
 		{"hooks", "status"}, {"mcp", "status"}, {"mcp", "schema-size"}, {"fix"}, {"undo"},
 		{"uninstall", "--dry-run"}, {"setup", "--dry-run"},
 	} {

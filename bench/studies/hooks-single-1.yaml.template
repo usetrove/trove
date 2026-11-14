@@ -1,0 +1,48 @@
+# Study (d): each of the two hooks Autopilot trials might try, switched on BY ITSELF, against no Trove.
+# This is a TEMPLATE, not a registered study. Do not run it as it is.
+#
+# Why it exists: the `hooks` condition turns four hooks on together (docs/autopilot-eligibility.md, gate G8), so a
+# saving or a harm cannot be pinned on one of them. Autopilot's trials need to know, per hook, whether it is worth
+# trying at all, and what saving to expect; this study answers that. It does not replace the trial, which judges
+# one hook on one user's real sessions.
+#
+# To use it (docs/benchmark-runbook.txt, Part D):
+#   1. Copy it to bench/studies/hooks-single-1.yaml (or a new id) and replace every <PLACEHOLDER>.
+#      <NEW_SEED> is a fresh number, used for both seeds. <FROM_PILOT> comes from a pilot, as for the other studies.
+#   2. python -m trovebench plan   --study bench/studies/hooks-single-1.yaml --hook-capabilities /tmp/hookprobe.json
+#   3. python -m trovebench prereg bench/studies/hooks-single-1.yaml      (locks it; commit the lock BEFORE running)
+#
+# Same Claude Code version, API-key auth, tasks and cost basis as the other studies. The baseline is `direct`
+# (no Trove, no gateway), because every condition here is a hooks-only condition with no gateway, so each is priced
+# from the agent's own usage report, the only like-for-like basis.
+#
+# What to expect, stated before the run: hook_quiet_commands only acts on a few install commands (pip, npm), so
+# on many tasks it may never act. If it acted in only a small share of runs, "no clear difference" would mean
+# there was little for it to do, not that it does nothing: run  python bench/tools/hook_activity.py  on the
+# results to see how often each hook acted before reading the table.
+
+id: hooks-single-1
+title: "Each trial candidate hook by itself, against no Trove"
+hypothesis: >
+  Turning on hook_repeat_read by itself, or hook_quiet_commands by itself, lowers the cost per task against no
+  Trove, without lowering the share of tasks that pass.
+primary_metric: billed_cost_usd
+secondary_metrics: [success_rate, latency_s]
+baseline_condition: direct
+conditions: [direct, alone_hook_repeat_read, alone_hook_quiet_commands]
+tasks: tasks/swebench-main
+repeats: 3
+order_seed: <NEW_SEED>
+cost_basis: agent
+analysis:
+  alpha: 0.05
+  bootstrap_resamples: 10000
+  bootstrap_seed: <NEW_SEED>
+  multiple_comparison: holm      # two comparisons, so the adjusted p values are what count
+ship_rule:
+  min_cost_reduction_pct: 5      # the cost-change interval must be entirely at or below -5%
+  success_margin_pts: 5          # the success difference interval must stay above -5 points
+  min_pairs: 30
+budget:
+  batch_cap_usd: <FROM_PILOT>
+  run_cap_usd: <FROM_PILOT>

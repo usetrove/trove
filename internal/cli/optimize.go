@@ -33,7 +33,10 @@ type optimizeStatus struct {
 	CustomAgents []string        `json:"custom_agents"`
 	BudgetMS     int             `json:"budget_ms"`
 	Optimizers   []optimizerInfo `json:"optimizers"` // in the order they run
-	Unknown      []string        `json:"unknown_optimizers,omitempty"`
+	// Gateway lists behaviors of the gateway itself (in-flight dedup). They are not part of the run order:
+	// they act on which requests reach the provider, not on a request's bytes.
+	Gateway []optimizerInfo `json:"gateway,omitempty"`
+	Unknown []string        `json:"unknown_optimizers,omitempty"`
 }
 
 type killSwitch struct {
@@ -101,6 +104,21 @@ func optimizeStatusCmd(a *App) error {
 		}
 		st.Optimizers = append(st.Optimizers, info)
 	}
+	for _, name := range optimize.GatewayNames {
+		known[name] = true
+		info := optimizerInfo{Name: name, Tier: "gateway", Configured: cfg.OptimizerState(name)}
+		info.Effective = optimize.EffectiveStateFor(name, info.Configured, recoverable)
+		switch name {
+		case config.OptimizerInflightDedup:
+			info.Note = "estimate only: counts identical requests that arrive while one is still waiting for the provider; sharing the call is not built, so \"on\" runs as shadow"
+		case config.OptimizerSpendCap:
+			info.Note = "estimate only: counts requests made after spending reached your budget cap, which a hard cap would have refused; pausing is not built, so \"on\" runs as shadow"
+			if cfg.Budget.CapUSD <= 0 {
+				info.Note += ". It needs a budget cap: `trove budget set <amount>`"
+			}
+		}
+		st.Gateway = append(st.Gateway, info)
+	}
 	for n := range cfg.Optimizers {
 		if !known[n] {
 			st.Unknown = append(st.Unknown, n)
@@ -123,6 +141,15 @@ func renderOptimizeStatus(st optimizeStatus) string {
 		_, _ = fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\n", i+1, o.Name, o.Tier, o.Configured, o.Effective, o.Note)
 	}
 	_ = w.Flush()
+	if len(st.Gateway) > 0 {
+		b.WriteString("\nGateway behaviors (not part of the run order; they act on which requests reach the provider):\n")
+		gw := tabwriter.NewWriter(&b, 0, 0, 2, ' ', 0)
+		_, _ = fmt.Fprintln(gw, "BEHAVIOR\tCONFIGURED\tEFFECTIVE\tNOTE")
+		for _, o := range st.Gateway {
+			_, _ = fmt.Fprintf(gw, "%s\t%s\t%s\t%s\n", o.Name, o.Configured, o.Effective, o.Note)
+		}
+		_ = gw.Flush()
+	}
 	fmt.Fprintf(&b, "\nCustom agents: %s. Time budget per request: %d ms; past it, your original request is forwarded.\n",
 		orNone(st.CustomAgents), st.BudgetMS)
 	b.WriteString("States are fixed when a session starts; edits to config.toml apply to the next session.\n")

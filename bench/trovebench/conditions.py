@@ -36,6 +36,17 @@ HOOK_OPTIMIZERS = (
 )
 HOOKS_ON = ("hook_repeat_read", "hook_read_limit", "hook_quiet_commands", "noise_normalizer")
 
+# Hook-side optimizers that can be switched on by themselves (`alone:<hook>`), so the benefit or harm of each
+# is attributable to it: the `hooks` condition turns four on together and cannot say which one did what.
+# hook_large_output advises running a command through trove_run, a tool that exists only when Trove's MCP
+# server is registered, which a benchmark run does not do, so measuring it would measure a hint that points
+# at nothing.
+HOOK_ALONE = ("hook_repeat_read", "hook_read_limit", "hook_quiet_commands")
+_HOOK_UNMEASURABLE = {
+    "hook_large_output": "hook_large_output advises using trove_run, which exists only when Trove's MCP server is "
+                         "registered, and a benchmark run does not register it",
+}
+
 # Optimizers that can be "on" for each agent. Everything else is reported as
 # "not measurable with this agent" rather than silently measured as a no-op.
 _CUSTOM_ONLY = {"volatile_prefix_mover", "cache_breakpoints"}
@@ -92,8 +103,15 @@ def parse_condition(spec: str, agent: str) -> Condition:
         return Condition("hooks_gateway", uses_gateway=True, on=supported, uses_hooks=True, hooks_on=HOOKS_ON)
     if spec.startswith("alone:"):
         name = spec.split(":", 1)[1]
+        if name in HOOK_OPTIMIZERS:
+            # One hook by itself: no gateway (the agent talks to the provider directly, as in `hooks`), the
+            # hooks installed, and only this one switched on. Everything else stays off.
+            label = spec.replace(":", "_")
+            if name in _HOOK_UNMEASURABLE:
+                return Condition(label, uses_gateway=False, uses_hooks=True, unsupported_reason=_HOOK_UNMEASURABLE[name])
+            return Condition(label, uses_gateway=False, uses_hooks=True, hooks_on=(name,))
         if name not in OPTIMIZERS:
-            raise ConditionError(f"'{spec}': unknown optimizer '{name}'. Known: {', '.join(OPTIMIZERS)}.")
+            raise ConditionError(f"'{spec}': unknown optimizer '{name}'. Known: {', '.join(OPTIMIZERS + HOOK_OPTIMIZERS)}.")
         if name in _GATED:
             why = f"{name} is gated to shadow mode until the MCP fetch tool exists, so it cannot be switched on"
         elif name in supported:
@@ -102,7 +120,8 @@ def parse_condition(spec: str, agent: str) -> Condition:
             why = f"{name} only acts for custom agents, and {agent} is never a custom agent"
         return Condition(spec.replace(":", "_"), uses_gateway=True, unsupported_reason=why)
     raise ConditionError(
-        f"unknown condition '{spec}'. Use direct, passthrough, all_safe, hooks, hooks_gateway or alone:<optimizer>."
+        f"unknown condition '{spec}'. Use direct, passthrough, all_safe, hooks, hooks_gateway or alone:<optimizer> "
+        f"(a gateway optimizer, or one of {', '.join(HOOK_ALONE)})."
     )
 
 

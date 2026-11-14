@@ -77,13 +77,14 @@ target = "settings_json"
 scopes = ["user", "project", "local", "managed"]
 type = "enum"
 enum = ["low", "medium", "high", "xhigh"]
+verified_values = ["low", "medium", "high", "xhigh"]
 default_note = "unset: the model default (high on most models; medium on the 5.5 models)"
 doc_url = "https://code.claude.com/docs/en/settings-reference.md"
-verified_on = "2026-11-05"
-verified = "extractor"
+verified_on = "2026-11-13"
+verified = "verbatim"
 risk = "lowers_capability"
-applyable = false
-notes = "Key exists (raw index row) but its value list was only seen in a model-extracted view. Trove suggests '/effort <level>' instead of writing it. CLAUDE_CODE_EFFORT_LEVEL and /effort take precedence over the file."
+applyable = true
+notes = "Read as raw text 2026-11-13. In project, local and managed settings it applies to every model. In ~/.claude/settings.json it is the older form: Opus 5.5 and models released after it ignore it until a level is saved for them (modelSettings), so Trove writes it to the project. CLAUDE_CODE_EFFORT_LEVEL overrides both this key and --effort; a saved modelSettings level beats this key in the same file. No profile ships a value for it yet: a lower effort changes answers and there is no benchmark. Anthropic's caching docs say a change of effort can invalidate cached message blocks, so it takes effect for new sessions only."
 
 [[setting]]
 key = "MAX_THINKING_TOKENS"
@@ -107,13 +108,14 @@ target = "settings_env"
 scopes = ["user", "project", "local", "env"]
 type = "string"
 pattern = "^(true|false|auto|auto:[0-9]+)$"
-default_note = "on by default"
-doc_url = "https://code.claude.com/docs/en/mcp.md"
-verified_on = "2026-11-05"
-verified = "extractor"
+verified_values = ["true", "false", "auto"]
+default_note = "unset: MCP tools are deferred, except where tool search stays off"
+doc_url = "https://code.claude.com/docs/en/env-vars.md"
+verified_on = "2026-11-13"
+verified = "verbatim"
 risk = "changes_behavior"
-applyable = false
-notes = "Only 'false' and the on-by-default behaviour were seen as raw text; the other values are unconfirmed."
+applyable = true
+notes = "Row read as raw text 2026-11-13: unset or true defers MCP tools; auto turns tool search on once definitions reach 10% of the context window; auto:N sets the percentage (the docs give auto:5 as an example); false loads every tool upfront. Trove writes only true, false or auto. If a gateway rejects tool search, the env-vars page has a section for that."
 
 [[setting]]
 key = "alwaysLoad"
@@ -132,16 +134,17 @@ notes = "Field name seen as raw text on ws/http entries; its meaning and the ver
 [[setting]]
 key = "MAX_MCP_OUTPUT_TOKENS"
 harness = "claude_code"
-target = "shell_env"
-scopes = ["env"]
+target = "settings_env"
+scopes = ["user", "project", "local", "env"]
 type = "int"
+min = 1
 default = "25000"
-doc_url = "https://code.claude.com/docs/en/mcp.md"
-verified_on = "2026-11-05"
-verified = "extractor"
+doc_url = "https://code.claude.com/docs/en/env-vars.md"
+verified_on = "2026-11-13"
+verified = "verbatim"
 risk = "lowers_capability"
-applyable = false
-notes = "Docs show it exported in the shell. Whether the settings env block accepts it is unconfirmed, so Trove only suggests the export."
+applyable = true
+notes = "Row read as raw text 2026-11-13: maximum tokens in an MCP tool response, default 25000, with a warning above 10,000. A tool that declares anthropic/maxResultSizeChars uses that limit for text instead, and a text result over 50,000 characters is saved to a file whatever this says. The row does not state a range, so Trove sets no maximum. The settings env block accepts most variables in the reference and its ignore list does not name this one."
 
 [[setting]]
 key = "model"
@@ -170,6 +173,127 @@ verified = "extractor"
 risk = "changes_behavior"
 applyable = false
 notes = "Up to 3 models; the highest-precedence file defining it supplies the whole chain."
+
+# ---- Added 2026-11-13 from raw text of settings-reference and env-vars ------------
+# Each entry below was read as raw page text on 2026-11-13 (settings-reference
+# offsets 39937-119811 and 199748-239685; env-vars 0-119841 and 159788-190764).
+# No profile uses any of them yet: a value that changes behavior needs benchmark
+# evidence first (see profiles.toml). They are here so `trove settings` can show
+# them, check them against the installed version, and write them on request.
+
+[[setting]]
+key = "bashOutputMaxChars"
+harness = "claude_code"
+target = "settings_json"
+scopes = ["user", "project", "local", "managed"]
+type = "int"
+min = 4000
+max = 128000
+default_note = "unset: Claude receives up to 30,000 characters of a successful command's output inline"
+since = "2.1.261"
+doc_url = "https://code.claude.com/docs/en/settings-reference.md"
+verified_on = "2026-11-13"
+verified = "verbatim"
+risk = "changes_behavior"
+applyable = true
+notes = "Characters of a successful Bash or PowerShell command's output Claude receives inline; past the limit Claude Code saves the output to a file and Claude gets a short preview and the path. Claude Code clamps the value to 4000..128000. When this key is set, BASH_MAX_OUTPUT_LENGTH is ignored. Lowering it cuts tokens per command but can cost extra turns to open the file, and there is no benchmark yet, so it is a choice, not a default."
+
+[[setting]]
+key = "autoCompactWindow"
+harness = "claude_code"
+target = "settings_json"
+scopes = ["user", "project", "local", "managed"]
+type = "int"
+min = 100000
+max = 1000000
+default_note = "unset: Claude Code picks a window tuned for the model"
+doc_url = "https://code.claude.com/docs/en/settings-reference.md"
+verified_on = "2026-11-13"
+verified = "verbatim"
+risk = "changes_behavior"
+applyable = true
+notes = "How full the context gets before automatic compaction; capped at the model's context window. Order of precedence: CLAUDE_CODE_AUTO_COMPACT_WINDOW, then --autocompact, then this key; within one file modelSettings.<model>.autoCompactWindow (v2.1.288+) beats this key. The docs add that Claude Code can ignore the variable's value, in a section of model-config that was not read. Compaction rewrites history, so an earlier window loses cached prefixes."
+
+[[setting]]
+key = "idleCompaction"
+harness = "claude_code"
+target = "settings_json"
+scopes = ["user", "project", "local", "managed"]
+type = "bool"
+default_note = "true when the conversation is on the one-hour cache TTL, auto-compact is on and the context has reached the threshold (default 200,000 tokens)"
+since = "2.1.290"
+doc_url = "https://code.claude.com/docs/en/settings-reference.md"
+verified_on = "2026-11-13"
+verified = "verbatim"
+risk = "changes_behavior"
+applyable = true
+notes = "Compacts a long conversation you have stepped away from, before the prompt cache expires, so the next message sends a summary instead of the whole conversation. false turns it off; DISABLE_AUTO_COMPACT turns it off along with auto-compaction. On earlier versions turn off autoCompactEnabled instead. Whether it saves money depends on the cache lifetime and on how often you return; it is not measured here."
+
+[[setting]]
+key = "promptCacheTtl"
+harness = "claude_code"
+target = "settings_json"
+scopes = ["user", "project", "local", "managed"]
+type = "enum"
+enum = ["5m", "1h"]
+verified_values = ["5m", "1h"]
+default_note = "unset: each main-conversation request gets its default lifetime (see docs/techniques.md, finding 2)"
+since = "2.1.242"
+doc_url = "https://code.claude.com/docs/en/settings-reference.md"
+verified_on = "2026-11-13"
+verified = "verbatim"
+risk = "changes_behavior"
+applyable = true
+notes = "Prompt cache lifetime for the main conversation, interactive, -p and Agent SDK turns and the helpers run inline with them. The API bills a one-hour cache write at 2x the base input price and a five-minute write at 1.25x. Precedence: FORCE_PROMPT_CACHING_5M, then CLAUDE_CODE_PROMPT_CACHE_TTL, then this key, then ENABLE_PROMPT_CACHING_1H. A shorter lifetime can cost more cache misses after a pause. Which is cheaper for a given user depends on how they pause, so Trove offers it only as a suggestion from their own history."
+
+[[setting]]
+key = "subagentPromptCacheTtl"
+harness = "claude_code"
+target = "settings_json"
+scopes = ["user", "project", "local", "managed"]
+type = "enum"
+enum = ["5m", "1h"]
+verified_values = ["5m", "1h"]
+default_note = "unset: each of these requests gets its default lifetime"
+since = "2.1.242"
+doc_url = "https://code.claude.com/docs/en/settings-reference.md"
+verified_on = "2026-11-13"
+verified = "verbatim"
+risk = "changes_behavior"
+applyable = true
+notes = "Prompt cache lifetime for requests made outside the main conversation: subagents, workflows, and Claude Code's own background and helper requests such as compaction and session titles. Precedence: FORCE_PROMPT_CACHING_5M, then CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL, then this key, then ENABLE_PROMPT_CACHING_1H."
+
+[[setting]]
+key = "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS"
+harness = "claude_code"
+target = "settings_env"
+scopes = ["user", "project", "local", "env"]
+type = "int"
+min = 1
+default = "25000"
+doc_url = "https://code.claude.com/docs/en/env-vars.md"
+verified_on = "2026-11-13"
+verified = "verbatim"
+risk = "lowers_capability"
+applyable = true
+notes = "Token limit for a file read, default 25,000. A read made with the allow_large parameter can go past it when the context window has room. The row states no range, so Trove sets no maximum. Lowering it makes large files arrive in pieces, which can cost extra turns."
+
+[[setting]]
+key = "BASH_MAX_OUTPUT_LENGTH"
+harness = "claude_code"
+target = "settings_env"
+scopes = ["user", "project", "local", "env"]
+type = "int"
+min = 1
+max = 150000
+default = "30000"
+default_note = "30,000 characters; maximum 150,000"
+doc_url = "https://code.claude.com/docs/en/env-vars.md"
+verified_on = "2026-11-13"
+verified = "verbatim"
+risk = "changes_behavior"
+applyable = false
+notes = "Older way to set what bashOutputMaxChars now sets. Claude Code ignores this variable when bashOutputMaxChars is set, so Trove shows it and writes the key instead."
 
 [[gap]]
 key = "custom compaction instructions"

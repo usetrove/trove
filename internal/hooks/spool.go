@@ -28,6 +28,11 @@ const (
 	KindReissued     = "reissued"
 	// KindFetchedBack: the agent called trove_fetch_full for output a hook trimmed.
 	KindFetchedBack = "fetched_back"
+	// KindArmOn and KindArmOff are not decisions. They record which side of a trial a session was
+	// assigned when it started, so a session that never ends is still counted. They go to
+	// experiment_assignments, not hook_events.
+	KindArmOn  = "arm_on"
+	KindArmOff = "arm_off"
 )
 
 // event is one line of the spool. Counts, sizes and a hashed session key only.
@@ -115,12 +120,25 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 		return 0, err
 	}
 	defer func() { _ = stmt.Close() }()
+	arm, err := tx.PrepareContext(ctx, `INSERT OR IGNORE INTO experiment_assignments (session_key, optimizer, arm, stratum, seq, assigned_at) VALUES (?,?,?,'',0,?)`)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = arm.Close() }()
 	n := 0
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		var e event
 		if json.Unmarshal(sc.Bytes(), &e) != nil || !validKind(e.Kind) || e.Hook == "" || e.Key == "" {
 			continue // a torn or foreign line; skip it
+		}
+		if e.Kind == KindArmOn || e.Kind == KindArmOff {
+			// The first record for a session and optimizer wins, so an arm never changes.
+			if _, err := arm.ExecContext(ctx, e.Key, e.Hook, strings.TrimPrefix(e.Kind, "arm_"), e.T); err != nil {
+				return 0, err
+			}
+			n++
+			continue
 		}
 		if _, err := stmt.ExecContext(ctx, e.T, e.Key, e.Hook, e.Kind, e.Bytes, e.Tokens); err != nil {
 			return 0, err
@@ -135,7 +153,7 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 
 func validKind(k string) bool {
 	switch k {
-	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack:
+	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindArmOn, KindArmOff:
 		return true
 	}
 	return false

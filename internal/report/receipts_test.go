@@ -30,3 +30,14 @@ func TestRenderReceiptsGoldens(t *testing.T) {
 		assertLabeled(t, r)
 	}
 }
+
+func TestReceiptLineNamesWhatWasOn(t *testing.T) {
+	r := measure.Receipt{Calls: 2, Cost: measure.Figure{Value: 1, Label: measure.Estimated}, On: []string{"noise_normalizer"}}
+	if got := ReceiptLine(r); !strings.Contains(got, "on: noise_normalizer") {
+		t.Errorf("line %q does not name the optimizer that was on", got)
+	}
+	r.On = nil
+	if got := ReceiptLine(r); strings.Contains(got, "on:") {
+		t.Errorf("line %q mentions optimizers when none were on", got)
+	}
+}

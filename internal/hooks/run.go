@@ -83,6 +83,8 @@ type Env struct {
 	Now    func() time.Time
 	// Notify shows a desktop notification for a receipt, synchronously. May be nil.
 	Notify func(measure.Receipt)
+	// NotifyText shows a short desktop notification, synchronously. May be nil.
+	NotifyText func(title, body string)
 }
 
 // Main runs one hook and returns the process exit code, which is always 0: a
@@ -162,8 +164,10 @@ type handler struct {
 	getenv func(string) string
 	now    func() time.Time
 	notify func(measure.Receipt)
-	snap   Snapshot
-	eng    *optimize.Engine
+	// notifyText shows a short desktop notification; nil where there is none.
+	notifyText func(title, body string)
+	snap       Snapshot
+	eng        *optimize.Engine
 	// budget is the engine's time budget for this process: the hook's deadline
 	// less a margin. recover is set when the output trimmer may run for real, so
 	// the engine gets the recovery store.
@@ -187,7 +191,7 @@ func run(dir, event, agent string, e Env) []byte {
 		return nil
 	}
 	snap, _ := LoadSnapshot(dir)
-	h := &handler{dir: dir, agent: agent, getenv: e.Getenv, now: e.Now, notify: e.Notify, snap: snap, budget: callDeadline}
+	h := &handler{dir: dir, agent: agent, getenv: e.Getenv, now: e.Now, notify: e.Notify, notifyText: e.NotifyText, snap: snap, budget: callDeadline}
 	if event == EventPostOutput {
 		h.budget = postDeadline
 	}

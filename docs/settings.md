@@ -32,10 +32,16 @@ named: 0.134.0 (the profile change). Neither site states a "latest" version.
 | `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` | env, 1..100, only lowers | verbatim, applyable; default not stated |
 | `claudeMdExcludes` | settings, any layer, arrays merge | verbatim, applyable |
 | `outputStyle` | settings; Proactive, Concise, Explanatory, Learning (case-sensitive) | verbatim, applyable |
-| `effortLevel` | settings; low, medium, high, xhigh | key verbatim, values extractor: suggest `/effort` only |
+| `effortLevel` | settings; low, medium, high, xhigh | **read verbatim 2026-11-13**, applyable (project scope; see the catalog note) |
 | `MAX_THINKING_TOKENS` | env | its env-vars entry was beyond the raw text read: suggest only |
-| `ENABLE_TOOL_SEARCH`, per-server `alwaysLoad` | env, MCP entry | values unconfirmed: suggest only |
-| `MAX_MCP_OUTPUT_TOKENS` | shell export, default 25000 (extractor) | suggest only |
+| `ENABLE_TOOL_SEARCH` | env; true, false, auto, auto:N | **read verbatim 2026-11-13**, applyable (Trove writes true, false or auto) |
+| per-server `alwaysLoad` | MCP entry | values unconfirmed: suggest only |
+| `MAX_MCP_OUTPUT_TOKENS` | env, default 25000 | **read verbatim 2026-11-13**, applyable |
+| `CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS` | env, default 25000 tokens | **read verbatim 2026-11-13**, applyable |
+| `bashOutputMaxChars` | settings, 4000..128000, v2.1.261+ | **read verbatim 2026-11-13**, applyable; `BASH_MAX_OUTPUT_LENGTH` is ignored when it is set, so it is display only |
+| `autoCompactWindow` | settings, 100000..1000000 | **read verbatim 2026-11-13**, applyable |
+| `idleCompaction` | settings, boolean, v2.1.290+ | **read verbatim 2026-11-13**, applyable |
+| `promptCacheTtl`, `subagentPromptCacheTtl` | settings, 5m or 1h, v2.1.242+ | **read verbatim 2026-11-13**, applyable; no profile uses them |
 | `model`, `fallbackModel` | settings | extractor; `model` already handled by `model_default` |
 | Custom compaction instructions | none found | **gap**, not offered |
 
@@ -69,10 +75,7 @@ per-key sources, so detection is best effort (see Known gaps).
 
 ## Follow-ups needed to widen what Trove can apply
 
-1. Read the raw `effortLevel`, `MAX_THINKING_TOKENS` and `ENABLE_TOOL_SEARCH`
-   sections (settings-reference and env-vars are 450 KB and 190 KB; the fetch
-   tool only returns the first ~40 KB raw). Until then those levers are
-   suggestions.
+1. Done 2026-11-13 for `effortLevel`, `ENABLE_TOOL_SEARCH`, `MAX_MCP_OUTPUT_TOKENS` and the new entries above (read by character offset, raw text). Still to read raw: `MAX_THINKING_TOKENS`, per-server `alwaysLoad`, the `model-config` section that says when Claude Code ignores `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, and `modelSettings` (v2.1.251+, which holds the per-model effort and compaction window that `/effort` and `/autocompact` write).
 2. Read the raw Codex settings table for the three extractor-only keys.
 3. Benchmark evidence (the "Prompt 25" results referenced by the task) is not in
    the repo: `bench/results/` holds only smoke runs. Profiles therefore ship
