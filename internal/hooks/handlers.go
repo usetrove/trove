@@ -262,7 +262,7 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	scanTrialHistory(ctx, db, dir, cfg, getenv)
 	// Autopilot: promote or roll back at this session boundary. Best effort, and a failure
 	// leaves the saved states as they were, so it never turns anything on by accident.
-	if res, aerr := autopilot.Advance(ctx, db, dir, cfg, autopilot.DefaultPolicy(), now); aerr == nil {
+	if res, aerr := autopilot.Advance(ctx, db, dir, cfg, autopilot.CurrentPolicy(dir), now); aerr == nil {
 		cfg = cfg.WithAutopilot(res.File)
 	}
 	// Revert tuning that did not help before the snapshot is written, so the next

@@ -32,6 +32,57 @@ func Enable(dir string, p Policy, now time.Time) (config.AutopilotFile, error) {
 	return f, config.SaveAutopilot(dir, f)
 }
 
+// CurrentPolicy is the policy the user consented to, read from autopilot.json. A missing, damaged or unknown
+// record gives the v1 policy, which only ever shrinks what Autopilot may do.
+func CurrentPolicy(dir string) Policy {
+	f, err := config.LoadAutopilot(dir)
+	if err != nil {
+		return DefaultPolicy()
+	}
+	return PolicyFor(f.Policy)
+}
+
+// EnableTrials records the user's agreement to trials (policy lossless-v2) and lists the trial candidates in
+// shadow. It needs Autopilot to be on already, and changes no request: a candidate is only ever put on trial
+// later, from shadow evidence, at a session boundary.
+func EnableTrials(dir string, now time.Time) (config.AutopilotFile, error) {
+	f, err := config.LoadAutopilot(dir)
+	if err != nil {
+		return f, err
+	}
+	if !f.Enabled {
+		return f, fmt.Errorf("Autopilot is not on. Run `trove autopilot on` first")
+	}
+	f.Policy, f.TrialsConsentedAt = config.AutopilotPolicyV2, now.UnixMilli()
+	for _, name := range PolicyV2().Probation {
+		if _, ok := f.Entries[name]; !ok {
+			f.Entries[name] = config.AutopilotEntry{State: config.AutopilotShadow, SinceMS: now.UnixMilli(), Reason: "collecting shadow estimates"}
+			f.Record(config.AutopilotEvent{AtMS: now.UnixMilli(), Optimizer: name, From: config.AutopilotOff, To: config.AutopilotShadow, Reason: "trials turned on"})
+		}
+	}
+	return f, config.SaveAutopilot(dir, f)
+}
+
+// DisableTrials withdraws the agreement to trials: back to the lossless-v1 policy, and every trial candidate
+// is forgotten, including one on trial. New sessions are not split any more; sessions already running keep
+// their pins. What Autopilot turned on under v1 is untouched.
+func DisableTrials(dir string, now time.Time) (config.AutopilotFile, error) {
+	f, err := config.LoadAutopilot(dir)
+	if err != nil {
+		return f, err
+	}
+	f.Policy, f.TrialsConsentedAt = config.AutopilotPolicy, 0
+	for _, name := range PolicyV2().Probation {
+		if e, ok := f.Entries[name]; ok {
+			if e.State == config.AutopilotProbation || e.State == config.AutopilotOn {
+				f.Record(config.AutopilotEvent{AtMS: now.UnixMilli(), Optimizer: name, From: e.State, To: config.AutopilotOff, Reason: "trials turned off"})
+			}
+			delete(f.Entries, name)
+		}
+	}
+	return f, config.SaveAutopilot(dir, f)
+}
+
 // Disable withdraws consent and forgets Autopilot's states and plan. New sessions
 // go back to what config.toml says. Sessions already running keep their pins.
 func Disable(dir string) error {
@@ -282,6 +333,8 @@ func probationBlocker(cfg config.Config, tr measure.Traffic, name string) string
 		return "A/B comparison is switched off ([experiment] enabled = false)"
 	case !tr.Gateway && !tr.Hooks:
 		return "Trove has not seen any of your sessions yet"
+	case viaHooks(name) && !tr.Gateway && !cfg.History.Enabled:
+		return "without the gateway a trial is judged on your local session history, and reading it is switched off ([history] enabled = false)"
 	case viaHooks(name) && !tr.Hooks:
 		return "the plugin's hooks assign which sessions run with it, and they have recorded nothing recently"
 	case !viaHooks(name) && !tr.Gateway:

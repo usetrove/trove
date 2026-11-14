@@ -99,6 +99,16 @@ Nothing is required of them. Optional, content-free surfaces:
 
 Always available: `trove status`, `trove autopilot off`, `trove autopilot pause`, `trove undo`. All support `--json`.
 
+## Trials (a second, separate yes)
+
+The first agreement covers lossless changes only. `trove autopilot trials on` asks for a second one, to let Autopilot
+try changes that are not lossless: today `hook_repeat_read` and `hook_quiet_commands`. It is its own consent because
+a trial changes what the model sees for half of the user's sessions. `trove setup`, `--yes` and `--autopilot` never
+give it, and `trove autopilot trials off` withdraws it, which also removes anything a trial kept. Switching Autopilot
+off ends trials as well, and switching it on again is a v1 agreement. The design, the gates and what each step
+verified are in [autopilot-probation.md](autopilot-probation.md). A trial runs only when A/B comparison is on, never
+beside a setting the user made, and for a user with no gateway only when reading local history is allowed.
+
 ## What stays manual
 
 - Optimizers that can change answers (for example output trimming) keep a stricter rule or an explicit choice.

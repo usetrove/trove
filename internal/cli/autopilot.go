@@ -26,6 +26,27 @@ changing anything, and turn on only the ones that prove safe for your sessions.
 
 Undo it any time with ` + "`trove autopilot off`" + ` (or ` + "`trove undo`" + ` for everything).`
 
+// trialsConsent is what the user agrees to for trials (policy lossless-v2). It is a second, separate yes: the
+// first agreement covers only lossless changes, and a trial changes what the model sees for half of the sessions.
+const trialsConsent = `Trials let Autopilot try a few changes that are not lossless: they hide or shorten
+something the model could otherwise see, which the agent can get back, at a cost, if it needs it.
+Today that is two: refusing a repeat read of a file that has not changed, and adding a quiet flag to
+a few noisy commands such as ` + "`npm install`" + `.
+
+  - Nothing starts on a hunch. Each is first watched in shadow mode, as everything else is.
+  - Then one at a time it runs for about half of your new sessions, chosen at random, and is off for the
+    rest, so Trove can compare real sessions with and without it.
+  - It is kept only if the comparison is clean: fewer tokens, and no more turns or tool errors.
+    Otherwise it goes back to shadow and Trove tells you why.
+  - It needs at least 20 sessions on each side, so a trial takes weeks, not days. If there is no clear
+    difference after 28 days it is dropped. These numbers are placeholders, not yet validated.
+  - Sessions already running are never changed, and a session never switches sides.
+  - For this Trove reads your local Claude Code history (counts only, never text) when a session ends.
+  - It does not run if you have turned off A/B comparison ([experiment] enabled = false).
+  - Anything you set yourself in config.toml is left exactly as you set it.
+
+Withdraw it any time with ` + "`trove autopilot trials off`" + `. That also removes anything a trial kept.`
+
 type autopilotOptimizerJSON struct {
 	Name   string `json:"name"`
 	State  string `json:"state"`
@@ -33,13 +54,17 @@ type autopilotOptimizerJSON struct {
 }
 
 type autopilotStatusJSON struct {
-	Enabled    bool                     `json:"enabled"`
-	Paused     bool                     `json:"paused"`
-	Policy     string                   `json:"policy,omitempty"`
+	Enabled bool   `json:"enabled"`
+	Paused  bool   `json:"paused"`
+	Policy  string `json:"policy,omitempty"`
+	// Trials is true when the user has agreed to trials (policy lossless-v2).
+	Trials     bool                     `json:"trials"`
 	Optimizers []autopilotOptimizerJSON `json:"optimizers,omitempty"`
 	// Thresholds are placeholders until a benchmark sets them.
 	Thresholds string `json:"thresholds,omitempty"`
-	Changed    string `json:"changed,omitempty"`
+	// TrialRule says what a trial needs, when trials are on.
+	TrialRule string `json:"trial_rule,omitempty"`
+	Changed   string `json:"changed,omitempty"`
 	// Summary is the last week: changes, rollbacks and the shadow planner's advice.
 	Summary *autopilot.Summary `json:"summary,omitempty"`
 }
@@ -47,14 +72,26 @@ type autopilotStatusJSON struct {
 func newAutopilot(a *App) *cobra.Command {
 	var yes bool
 	c := &cobra.Command{
-		Use:       "autopilot [on|off|pause|resume]",
+		Use:       "autopilot [on|off|pause|resume|trials [on|off]]",
 		Short:     "Let Trove turn on proven savings by itself (with no argument: show what it is doing)",
-		Args:      cobra.MaximumNArgs(1),
-		ValidArgs: []string{"on", "off", "pause", "resume"},
+		Args:      cobra.MaximumNArgs(2),
+		ValidArgs: []string{"on", "off", "pause", "resume", "trials"},
 		RunE: func(_ *cobra.Command, args []string) error {
 			verb := ""
-			if len(args) == 1 {
+			if len(args) >= 1 {
 				verb = args[0]
+			}
+			if verb == "trials" {
+				sub := "on"
+				if len(args) == 2 {
+					sub = args[1]
+				}
+				if sub != "on" && sub != "off" {
+					return fmt.Errorf("unknown action %q. Use `trove autopilot trials on` or `trove autopilot trials off`.", sub)
+				}
+				verb = "trials " + sub
+			} else if len(args) == 2 {
+				return fmt.Errorf("unknown action %q. Use on, off, pause, resume or trials, or no argument to see the status.", strings.Join(args, " "))
 			}
 			return runAutopilot(a, verb, yes)
 		},
@@ -68,7 +105,6 @@ func runAutopilot(a *App, verb string, yes bool) error {
 	if err != nil {
 		return err
 	}
-	p := autopilot.DefaultPolicy()
 	changed := ""
 	switch verb {
 	case "":
@@ -90,10 +126,45 @@ func runAutopilot(a *App, verb string, yes bool) error {
 		if err := ensureConfigFile(dir); err != nil {
 			return err
 		}
-		if _, err := autopilot.Enable(dir, p, time.Now()); err != nil {
+		if _, err := autopilot.Enable(dir, autopilot.DefaultPolicy(), time.Now()); err != nil {
 			return fmt.Errorf("cannot turn on Autopilot: %v. Check that %s is writable.", err, dir)
 		}
 		changed = "Autopilot is on. It starts in shadow mode and changes nothing yet."
+	case "trials on":
+		cur, _ := config.LoadAutopilot(dir)
+		if !cur.Enabled {
+			return fmt.Errorf("Autopilot is not on. Run `trove autopilot on` first, then `trove autopilot trials on`.")
+		}
+		if cur.Policy == config.AutopilotPolicyV2 {
+			changed = "Trials are already on."
+			break
+		}
+		if !yes {
+			if a.JSON {
+				return fmt.Errorf("Trials need your agreement. Run `trove autopilot trials on --yes` to agree without a prompt.")
+			}
+			_, _ = fmt.Fprint(a.Out, trialsConsent+"\n\n")
+			if !a.confirm("Turn on trials?") {
+				return a.emit(autopilotStatusJSON{Changed: "Trials not turned on."}, "Trials not turned on. Nothing was changed.")
+			}
+		}
+		if _, err := autopilot.EnableTrials(dir, time.Now()); err != nil {
+			return fmt.Errorf("cannot turn on trials: %v. Check that %s is writable.", err, dir)
+		}
+		changed = "Trials are on. The candidates start in shadow mode and change nothing yet."
+	case "trials off":
+		cur, err := config.LoadAutopilot(dir)
+		if err != nil {
+			return err
+		}
+		if cur.Policy != config.AutopilotPolicyV2 {
+			changed = "Trials are already off."
+			break
+		}
+		if _, err := autopilot.DisableTrials(dir, time.Now()); err != nil {
+			return fmt.Errorf("cannot turn off trials: %v. Check that %s is writable.", err, dir)
+		}
+		changed = "Trials are off. New sessions are no longer split; sessions already running keep their settings. Anything a trial had kept is off again."
 	case "off":
 		if err := autopilot.Disable(dir); err != nil {
 			return fmt.Errorf("cannot turn off Autopilot: %v. Check that %s is writable.", err, dir)
@@ -112,14 +183,15 @@ func runAutopilot(a *App, verb string, yes bool) error {
 		}
 		changed = map[string]string{"pause": "Autopilot is paused. New sessions use only what config.toml says.", "resume": "Autopilot is running again."}[verb]
 	default:
-		return fmt.Errorf("unknown action %q. Use on, off, pause or resume, or no argument to see the status.", verb)
+		return fmt.Errorf("unknown action %q. Use on, off, pause, resume or trials, or no argument to see the status.", verb)
 	}
 
 	f, err := config.LoadAutopilot(dir)
 	if err != nil {
 		return err
 	}
-	st := autopilotStatusJSON{Enabled: f.Enabled, Paused: f.Paused, Policy: f.Policy, Changed: changed}
+	p := autopilot.PolicyFor(f.Policy)
+	st := autopilotStatusJSON{Enabled: f.Enabled, Paused: f.Paused, Policy: f.Policy, Trials: f.Policy == config.AutopilotPolicyV2, Changed: changed}
 	st.Summary = autopilot.Summarize(f, time.Now(), 7)
 	for _, n := range f.Names() {
 		e := f.Entries[n]
@@ -128,6 +200,10 @@ func runAutopilot(a *App, verb string, yes bool) error {
 	if f.Enabled {
 		st.Thresholds = fmt.Sprintf("at least %d shadow sessions and %d estimated net tokens in %d days (placeholder values, not yet validated by a benchmark)",
 			p.MinSessions, p.MinNetTokens, p.LookbackDays)
+		if st.Trials {
+			st.TrialRule = fmt.Sprintf("at least %d sessions on each side and no more than %d days (placeholder values, not yet validated by a benchmark)",
+				p.ProbationMinSessionsPerArm, p.ProbationMaxDays)
+		}
 	}
 	return a.emit(st, renderAutopilot(st))
 }
@@ -147,7 +223,11 @@ func renderAutopilot(s autopilotStatusJSON) string {
 		b.WriteString("Autopilot is on.\n")
 	}
 	for _, o := range s.Optimizers {
-		line := fmt.Sprintf("  %-28s %s", o.Name, o.State)
+		state := o.State
+		if state == config.AutopilotProbation {
+			state = "on trial"
+		}
+		line := fmt.Sprintf("  %-28s %s", o.Name, state)
 		if o.Reason != "" {
 			line += "  (" + o.Reason + ")"
 		}
@@ -155,6 +235,14 @@ func renderAutopilot(s autopilotStatusJSON) string {
 	}
 	if s.Thresholds != "" {
 		b.WriteString("\nIt turns an optimizer on after " + s.Thresholds + ". Savings shown are estimated until measured.\n")
+	}
+	switch {
+	case s.Trials && s.TrialRule != "":
+		b.WriteString("\nTrials are on: a change that is not lossless is tried on about half of new sessions, chosen at random, and kept only if the comparison is clean. A trial needs " + s.TrialRule + ". Withdraw with `trove autopilot trials off`.\n")
+	case s.Trials:
+		b.WriteString("\nTrials are on.\n")
+	default:
+		b.WriteString("\nTrials (changes that are not lossless, tried on half of your sessions to compare) are off. See them with `trove autopilot trials on`.\n")
 	}
 	if d := s.Summary.Details(); d != "" {
 		b.WriteString("\n" + d + "\n")

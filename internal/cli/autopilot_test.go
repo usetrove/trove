@@ -99,7 +99,7 @@ func TestAutopilotStatusJSON(t *testing.T) {
 
 func TestAutopilotRejectsUnknownActions(t *testing.T) {
 	h := newHarness(t, nil)
-	if code := h.run("autopilot", "bogus"); code != 1 || !strings.Contains(h.err.String(), "Use on, off, pause or resume") {
+	if code := h.run("autopilot", "bogus"); code != 1 || !strings.Contains(h.err.String(), "Use on, off, pause, resume or trials") {
 		t.Errorf("exit %d, stderr %q", code, h.err)
 	}
 	h = newHarness(t, nil)

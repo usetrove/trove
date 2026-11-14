@@ -189,6 +189,14 @@ func TestNoTrialWhenOptedOutAndTheArmsComeFromTheRightChannel(t *testing.T) {
 	if got := probationBlocker(config.Default(), measure.Traffic{Hooks: true}, "volatile_prefix_mover"); !strings.Contains(got, "gateway") {
 		t.Errorf("hooks-only traffic for a request-level technique: %q", got)
 	}
+	noHistory := config.Default()
+	noHistory.History.Enabled = false
+	if got := probationBlocker(noHistory, measure.Traffic{Hooks: true}, "hook_repeat_read"); !strings.Contains(got, "history") {
+		t.Errorf("hooks-only with history reading off cannot be measured: %q", got)
+	}
+	if got := probationBlocker(noHistory, measure.Traffic{Hooks: true, Gateway: true}, "hook_repeat_read"); got != "" {
+		t.Errorf("with a gateway the sessions are measured there, history or not: %q", got)
+	}
 	if got := probationBlocker(config.Default(), measure.Traffic{}, "hook_repeat_read"); got == "" {
 		t.Error("no sessions seen yet must not start a trial")
 	}

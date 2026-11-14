@@ -26,7 +26,7 @@ const trialScanBudget = 700 * time.Millisecond
 // leaves nothing worse than a comparison that has less data.
 func scanTrialHistory(ctx context.Context, db *store.DB, dir string, cfg config.Config, getenv func(string) string) {
 	f, err := config.LoadAutopilot(dir)
-	if err != nil || !f.Active() || !cfg.Experiment.Enabled {
+	if err != nil || !f.Active() || !cfg.Experiment.Enabled || !cfg.History.Enabled {
 		return
 	}
 	since := int64(0)

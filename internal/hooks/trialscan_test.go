@@ -105,6 +105,19 @@ func TestHistoryIsNotReadWhenComparisonIsOff(t *testing.T) {
 	}
 }
 
+// A user who switched history reading off never has it read for a trial.
+func TestHistoryIsNotReadWhenHistoryIsSwitchedOff(t *testing.T) {
+	db, dir, getenv, now := trialDB(t, true)
+	cfg := config.Default()
+	cfg.History.Enabled = false
+	if err := Maintain(context.Background(), db, dir, cfg, getenv, now); err != nil {
+		t.Fatal(err)
+	}
+	if n := historyRows(t, db); n != 0 {
+		t.Errorf("%d history rows were read with history switched off", n)
+	}
+}
+
 // The scan is bounded: a context that is already over reads nothing and returns at once, and never errors.
 func TestTheTrialScanGivesUpQuietlyWhenOutOfTime(t *testing.T) {
 	db, dir, getenv, _ := trialDB(t, true)

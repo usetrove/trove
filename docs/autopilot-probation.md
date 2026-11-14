@@ -1,6 +1,6 @@
 # Autopilot probation (design, not built)
 
-Status: **design, decisions made and the four open questions verified, 2026-11-13. Nothing here is implemented.** It is gate G7 in
+Status: **built through step 8, 2026-11-13; not yet run on a real install or validated by a benchmark.** It is gate G7 in
 [autopilot-eligibility.md](autopilot-eligibility.md). Facts below about the code were read from it on that
 date; the ones I could not confirm are in "Check before building".
 
@@ -219,7 +219,18 @@ keeps exactly the `v1` list until they agree. `config.AutopilotPolicy` is alread
    runs any `trove` command. I did not measure a single very large transcript. If one file takes longer than the
    budget every time it will never be read by the hooks, the comparison will show "not enough data", and the
    trial will time out in shadow, which is safe but slow.
-8. **Consent text, `trove autopilot` and `/trove:status` display** of "in probation: N of M sessions per side".
+8. ~~**Consent text, `trove autopilot` and `/trove:status` display.**~~ **Built.** `trove autopilot trials [on|off]`
+   (no new top-level command): `on` shows the `lossless-v2` consent text, asks, and records the agreement
+   (`trials_consented_ms`, policy `lossless-v2`), listing the two candidates in shadow; with no terminal or in `--json`
+   it refuses without `--yes`, and `trove setup`, `--yes` and `--autopilot` never reach it. `off` goes back to v1
+   and forgets every candidate, including one kept by a trial, recording the removal as an event. Switching
+   Autopilot off ends trials, and switching it on again is a v1 agreement. Advance, the gateway's hourly check and the
+   hooks' bookkeeping all run the policy in the consent record (`autopilot.CurrentPolicy`), so a v1 user is never
+   affected. `trove autopilot` shows an optimizer on trial as "on trial" with how many sessions are on each side,
+   whether trials are on or off, and what a trial needs (marked as placeholder values), also in `--json`
+   (`trials`, `trial_rule`). `/trove:status` tells the user the same and is told never to turn trials on itself.
+   A user who set `history.enabled = false` is never read for a trial, and a hooks-only user in that state is held
+   back with the reason.
 9. **One real run** on the benchmark (single-hook arms, G8) before any technique is promoted.
 
 Steps 2 to 5 give API-key users probation and are the smaller, lower-risk half; 6 to 7 are what subscription users

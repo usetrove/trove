@@ -52,14 +52,16 @@ type AutopilotEntry struct {
 
 // AutopilotFile is the contents of autopilot.json.
 type AutopilotFile struct {
-	Version      int                       `json:"version"`
-	Enabled      bool                      `json:"enabled"`
-	Paused       bool                      `json:"paused"`
-	Policy       string                    `json:"policy"`
-	ConsentedAt  int64                     `json:"consented_at_ms"`
-	Entries      map[string]AutopilotEntry `json:"entries"`
-	LastEvalMS   int64                     `json:"last_eval_ms,omitempty"`
-	LastEvalNote string                    `json:"last_eval_note,omitempty"`
+	Version     int    `json:"version"`
+	Enabled     bool   `json:"enabled"`
+	Paused      bool   `json:"paused"`
+	Policy      string `json:"policy"`
+	ConsentedAt int64  `json:"consented_at_ms"`
+	// TrialsConsentedAt is when the user agreed to trials (policy lossless-v2), 0 if they have not.
+	TrialsConsentedAt int64                     `json:"trials_consented_ms,omitempty"`
+	Entries           map[string]AutopilotEntry `json:"entries"`
+	LastEvalMS        int64                     `json:"last_eval_ms,omitempty"`
+	LastEvalNote      string                    `json:"last_eval_note,omitempty"`
 	// History is the last AutopilotHistoryMax state changes, oldest first.
 	History []AutopilotEvent `json:"history,omitempty"`
 	// NotifiedMS is the time of the newest event a desktop notice was sent for.
@@ -99,7 +101,8 @@ func (f AutopilotFile) states(arms bool) map[string]string {
 			out[name] = StateOn
 		case AutopilotProbation:
 			out[name] = StateShadow
-			if arms {
+			// Only a user who agreed to trials (policy v2) has any, so a stray entry under v1 is shadow.
+			if arms && f.Policy == AutopilotPolicyV2 {
 				out[name] = StateOn
 			}
 		case AutopilotShadow, AutopilotCandidate, AutopilotRolledBack:
@@ -111,7 +114,7 @@ func (f AutopilotFile) states(arms bool) map[string]string {
 
 // Trials returns the optimizers in probation, sorted, or nil when Autopilot is not active.
 func (f AutopilotFile) Trials() []string {
-	if !f.Active() {
+	if !f.Active() || f.Policy != AutopilotPolicyV2 {
 		return nil
 	}
 	var out []string
