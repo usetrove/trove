@@ -43,7 +43,7 @@ func TestAHooksOnlyUserIsHeldBackUntilAProbeHasSeenTheRewriteWork(t *testing.T) 
 	db, dir := open(t)
 	setInstall(t, db, 30)
 	hookSessions(t, db, "noise_normalizer", 25, 200) // plenty of evidence and a finished baseline
-	Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -30))
+	_, _ = Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -30))
 
 	f := advanceN(t, db, dir, hookNow, 3)
 	e := f.Entries["noise_normalizer"]
@@ -67,7 +67,7 @@ func TestAProbeForTheWrongRewriteDoesNotCount(t *testing.T) {
 	db, dir := open(t)
 	setInstall(t, db, 30)
 	hookSessions(t, db, "noise_normalizer", 25, 200)
-	Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -30))
+	_, _ = Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -30))
 	probed(t, dir,
 		hookcaps.Capability{Agent: "claude", Tool: "Read", InputRewrite: hookcaps.Yes, OutputRewrite: hookcaps.No, Method: "live"},
 		hookcaps.Capability{Agent: "claude", Tool: "Bash", InputRewrite: hookcaps.Yes, OutputRewrite: hookcaps.No, Method: "live"})
@@ -86,7 +86,7 @@ func TestAGatewayUserNeedsNoHookProbe(t *testing.T) {
 	db, dir := open(t)
 	setInstall(t, db, 30)
 	gatewaySessions(t, db, "noise_normalizer", 25, 300)
-	Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -30))
+	_, _ = Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -30))
 	f := advanceN(t, db, dir, hookNow, 3)
 	if got := f.Entries["noise_normalizer"].State; got != config.AutopilotOn {
 		t.Errorf("a gateway user was held back: %q (%q)", got, f.Entries["noise_normalizer"].Reason)
@@ -99,7 +99,7 @@ func TestAPromotionIsUndoneWhenTheProbeNoLongerCoversIt(t *testing.T) {
 	db, dir := open(t)
 	setInstall(t, db, 30)
 	hookSessions(t, db, "noise_normalizer", 25, 200)
-	Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -30))
+	_, _ = Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -30))
 	probed(t, dir)
 	if got := advanceN(t, db, dir, hookNow, 2).Entries["noise_normalizer"].State; got != config.AutopilotOn {
 		t.Fatalf("setup: %q, want on", got)

@@ -36,8 +36,8 @@ func TestEnableTrialsNeedsAutopilotAndChangesNoRequest(t *testing.T) {
 
 func TestDisableTrialsForgetsCandidatesAndKeepsWhatV1Manages(t *testing.T) {
 	_, dir := open(t)
-	Enable(dir, DefaultPolicy(), probNow)
-	EnableTrials(dir, probNow)
+	_, _ = Enable(dir, DefaultPolicy(), probNow)
+	_, _ = EnableTrials(dir, probNow)
 	f, _ := config.LoadAutopilot(dir)
 	f.Entries["hook_repeat_read"] = config.AutopilotEntry{State: config.AutopilotOn} // kept by a trial
 	f.Entries["noise_normalizer"] = config.AutopilotEntry{State: config.AutopilotOn} // kept under v1
