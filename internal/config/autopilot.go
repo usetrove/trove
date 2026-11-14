@@ -109,6 +109,20 @@ func (f AutopilotFile) states(arms bool) map[string]string {
 	return out
 }
 
+// Trials returns the optimizers in probation, sorted, or nil when Autopilot is not active.
+func (f AutopilotFile) Trials() []string {
+	if !f.Active() {
+		return nil
+	}
+	var out []string
+	for _, n := range f.Names() {
+		if f.Entries[n].State == AutopilotProbation {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // Names returns the optimizers in the file, sorted.
 func (f AutopilotFile) Names() []string {
 	n := make([]string, 0, len(f.Entries))
@@ -174,7 +188,24 @@ func SaveAutopilot(dataDir string, f AutopilotFile) error {
 // user's state, whatever Autopilot would choose.
 func (c Config) WithAutopilot(f AutopilotFile) Config {
 	c.autopilot = f.States()
+	c.trials = f.Trials()
 	return c
+}
+
+// AutopilotTrials returns the optimizers on trial that this Config may run as a trial: Autopilot has them in
+// probation, the user has not set them in config.toml (their setting wins), and A/B comparison is enabled (with it
+// off nothing may be assigned an arm, so nothing is on trial). Sorted.
+func (c Config) AutopilotTrials() []string {
+	if !c.Experiment.Enabled {
+		return nil
+	}
+	var out []string
+	for _, n := range c.trials {
+		if _, mine := c.Optimizers[n]; !mine {
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // AutopilotStates returns the states Autopilot contributes to this Config.

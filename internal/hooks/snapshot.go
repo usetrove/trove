@@ -38,8 +38,11 @@ type Snapshot struct {
 	// session that starts in a repo pins that repo's applied values; the repo is
 	// found by hashing the hook's working directory under RepoSalt, so no path is
 	// stored here. Tuning is keyed by that hash.
-	RepoSalt string                     `json:"repo_salt,omitempty"`
-	Tuning   map[string]optimize.Tuning `json:"tuning,omitempty"`
+	RepoSalt string `json:"repo_salt,omitempty"`
+	// Trial lists the optimizers Autopilot has on trial. A session that starts now is assigned an arm for each
+	// by a hash of its key (see trialArm): on for about half, shadow for the rest, and the choice is recorded.
+	Trial  []string                   `json:"trial,omitempty"`
+	Tuning map[string]optimize.Tuning `json:"tuning,omitempty"`
 }
 
 const snapshotVersion = 1
@@ -74,7 +77,7 @@ func WriteSnapshot(dir string, s Snapshot) error {
 // (measure.Overrides) and whether the MCP server is registered.
 func BuildSnapshot(cfg config.Config, rolledBack map[string]string, troveRun bool, now time.Time) Snapshot {
 	s := Snapshot{V: snapshotVersion, States: map[string]string{}, RolledBack: []string{}, TroveRun: troveRun, UpdatedAt: now.Unix(),
-		RecoveryMaxMB: cfg.Recovery.MaxMB, RecoveryTTLDays: cfg.Recovery.TTLDays}
+		RecoveryMaxMB: cfg.Recovery.MaxMB, RecoveryTTLDays: cfg.Recovery.TTLDays, Trial: hookTrials(cfg)}
 	for _, n := range OptimizerNames {
 		s.States[n] = cfg.OptimizerState(n)
 		if _, ok := rolledBack[n]; ok {
@@ -122,3 +125,17 @@ func (s Snapshot) lowered(name, cur string) string {
 // Pin is the state a session that starts now keeps: config.toml, lowered by any
 // rollback.
 func (s Snapshot) Pin(name string) string { return s.lowered(name, s.States[name]) }
+
+// hookTrials is the part of cfg's trial list the hooks implement.
+func hookTrials(cfg config.Config) []string {
+	var out []string
+	for _, n := range cfg.AutopilotTrials() {
+		for _, h := range OptimizerNames {
+			if h == n {
+				out = append(out, n)
+				break
+			}
+		}
+	}
+	return out
+}

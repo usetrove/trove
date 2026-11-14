@@ -2,7 +2,6 @@ package autopilot
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -19,42 +18,44 @@ const trialOptimizer = "hook_repeat_read"
 // trialStart is when the optimizer entered probation in these tests.
 var trialStart = hookNow.AddDate(0, 0, -20)
 
-// trialSessions stores n finished sessions for the optimizer, assigning arms with the real Assigner at the
-// given time, and pricing a session as base when it ran shadow and base*onFactor when it ran with the optimizer
-// on. A small deterministic wobble keeps the comparison from being degenerate. It returns the arms by key.
-func trialSessions(t *testing.T, db *store.DB, prefix string, n int, at time.Time, onFactor float64) {
+// trialSessions stores n finished sessions the way a user with no gateway has them: the arm the hooks recorded
+// at session start (a hash of the key), and the requests from the agent's own history. A session that ran with
+// the optimizer on uses onFactor times the tokens, with a small deterministic wobble. It returns how many ran on
+// each side.
+func trialSessions(t *testing.T, db *store.DB, prefix string, n int, at time.Time, onFactor float64) (on, off int) {
 	t.Helper()
-	ctx := context.Background()
-	a := experiment.NewAssigner(db, config.Default().Experiment, func() time.Time { return at }, nil)
 	for i := 0; i < n; i++ {
 		key := fmt.Sprintf("%s%03d", prefix, i)
-		arm := a.Arm(key, trialOptimizer)
-		state, factor := config.StateShadow, 1.0
+		arm := measure.Arm(key, trialOptimizer)
+		factor := 1.0
 		if arm == experiment.ArmOn {
-			state, factor = config.StateOn, onFactor
+			factor = onFactor
+			on++
+		} else {
+			off++
 		}
-		cost := 1.0 * factor * (1 + 0.02*float64(i%5))
-		sig, _ := json.Marshal(measure.SessionSignals{Turns: 20 + i%3, ToolErrors: i % 2, HasTools: true, On: []string{}, Acted: []string{}, PinnedAt: at.UnixMilli()})
-		start := at.Add(time.Duration(i) * time.Hour)
-		if _, err := db.ExecContext(ctx, `INSERT INTO sessions(session_key, agent, started_at, ended_at, request_count, total_cost_usd, outcome_signals)
-			VALUES(?, 'claude_code', ?, ?, 10, ?, ?)`, key, start.UnixMilli(), start.Add(10*time.Minute).UnixMilli(), cost, string(sig)); err != nil {
+		if _, err := db.Exec(`INSERT INTO experiment_assignments(session_key, optimizer, arm, stratum, seq, assigned_at) VALUES(?,?,?,'',0,?)`,
+			key, trialOptimizer, arm, at.UnixMilli()); err != nil {
 			t.Fatal(err)
 		}
-		pins, _ := json.Marshal(map[string]string{trialOptimizer: state})
-		if _, err := db.ExecContext(ctx, `INSERT INTO session_pins(session_key, states, custom_agents, bytes_per_token, pinned_at)
-			VALUES(?, ?, '[]', 3.5, ?)`, key, string(pins), start.UnixMilli()); err != nil {
-			t.Fatal(err)
+		tokens := int64(100000 * factor * (1 + 0.03*float64(i%7)))
+		for r := 0; r < 4; r++ {
+			ts := at.Add(time.Duration(i)*time.Hour + time.Duration(r)*time.Minute)
+			if _, err := db.Exec(`INSERT INTO history_requests(request_key, source, session_key, ts, input_tokens, cache_read, output_tokens, errors)
+				VALUES(?,?,?,?,?,?,?,?)`, fmt.Sprintf("%s-%d", key, r), "claude_code", key, ts.UnixMilli(), tokens/8, tokens/2/4, tokens/8/4, i%2); err != nil {
+				t.Fatal(err)
+			}
 		}
 	}
+	return on, off
 }
 
-// onTrial sets up a user with a gateway and hooks, with the optimizer already in probation since trialStart.
+// onTrial sets up a user with hooks and no gateway (the subscription case), with the optimizer already in probation since trialStart.
 func onTrial(t *testing.T) (*store.DB, string) {
 	t.Helper()
 	db, dir := open(t)
 	setInstall(t, db, 45)
 	hookSessions(t, db, trialOptimizer, 25, 500)
-	gatewaySessions(t, db, "noise_normalizer", 3, 10)
 	probed(t, dir)
 	v2File(t, dir)
 	f, err := config.LoadAutopilot(dir)
@@ -80,7 +81,7 @@ func advanceTrial(t *testing.T, db *store.DB, dir string, at time.Time) config.A
 // The point of the whole step: a clean measured saving over enough sessions keeps the optimizer.
 func TestACleanTrialKeepsTheOptimizer(t *testing.T) {
 	db, dir := onTrial(t)
-	trialSessions(t, db, "w", 60, trialStart.Add(24*time.Hour), 0.70) // 30% cheaper with it on
+	trialSessions(t, db, "w", 160, trialStart.Add(24*time.Hour), 0.70) // 30% fewer tokens with it on
 	e := advanceTrial(t, db, dir, hookNow)
 	if e.State != config.AutopilotOn || e.Attempts != 1 || !strings.Contains(e.Reason, "clean trial") {
 		t.Fatalf("after a clean saving: %+v", e)
@@ -93,7 +94,7 @@ func TestACleanTrialKeepsTheOptimizer(t *testing.T) {
 
 func TestATrialThatCostsMoreIsRolledBack(t *testing.T) {
 	db, dir := onTrial(t)
-	trialSessions(t, db, "w", 60, trialStart.Add(24*time.Hour), 1.30) // 30% dearer with it on
+	trialSessions(t, db, "w", 160, trialStart.Add(24*time.Hour), 1.30) // 30% more tokens with it on
 	e := advanceTrial(t, db, dir, hookNow)
 	if e.State != config.AutopilotRolledBack || !strings.Contains(e.Reason, "worse") {
 		t.Fatalf("after a measured loss: %+v", e)
@@ -106,7 +107,7 @@ func TestATrialThatCostsMoreIsRolledBack(t *testing.T) {
 
 func TestATrialWithNoDifferenceWaitsThenGivesUp(t *testing.T) {
 	db, dir := onTrial(t)
-	trialSessions(t, db, "w", 60, trialStart.Add(24*time.Hour), 1.0)
+	trialSessions(t, db, "w", 160, trialStart.Add(24*time.Hour), 1.0)
 	if e := advanceTrial(t, db, dir, hookNow); e.State != config.AutopilotProbation {
 		t.Fatalf("no clear effect yet, inside the deadline: %+v", e)
 	}
@@ -118,7 +119,7 @@ func TestATrialWithNoDifferenceWaitsThenGivesUp(t *testing.T) {
 
 func TestATrialWithTooFewSessionsKeepsRunning(t *testing.T) {
 	db, dir := onTrial(t)
-	trialSessions(t, db, "w", 12, trialStart.Add(24*time.Hour), 0.50) // a big saving, but 6 sessions a side
+	trialSessions(t, db, "w", 12, trialStart.Add(24*time.Hour), 0.50) // a big saving, but about 6 sessions a side
 	e := advanceTrial(t, db, dir, hookNow)
 	if e.State != config.AutopilotProbation || !strings.Contains(e.Reason, "trial running") {
 		t.Fatalf("too few sessions must not decide anything: %+v", e)
@@ -128,7 +129,7 @@ func TestATrialWithTooFewSessionsKeepsRunning(t *testing.T) {
 // Sessions assigned before this trial began belong to an earlier attempt and must not carry this one.
 func TestSessionsFromBeforeTheTrialDoNotCount(t *testing.T) {
 	db, dir := onTrial(t)
-	trialSessions(t, db, "old", 60, trialStart.Add(-10*24*time.Hour), 0.50) // a great saving, but earlier
+	trialSessions(t, db, "old", 160, trialStart.Add(-10*24*time.Hour), 0.50) // a great saving, but earlier
 	e := advanceTrial(t, db, dir, hookNow)
 	if e.State == config.AutopilotOn {
 		t.Fatalf("an earlier trial's sessions promoted this one: %+v", e)
@@ -141,7 +142,7 @@ func TestSessionsFromBeforeTheTrialDoNotCount(t *testing.T) {
 // If reading the comparison fails, nothing is kept: the error is returned and the state is left as it was.
 func TestAFailureReadingTheTrialKeepsNothing(t *testing.T) {
 	db, dir := onTrial(t)
-	trialSessions(t, db, "w", 60, trialStart.Add(24*time.Hour), 0.70)
+	trialSessions(t, db, "w", 160, trialStart.Add(24*time.Hour), 0.70)
 	if _, err := db.Exec(`DROP TABLE experiment_assignments`); err != nil {
 		t.Fatal(err)
 	}

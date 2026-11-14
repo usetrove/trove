@@ -71,6 +71,18 @@ func (h *handler) reset(in Input, key string) error {
 		for _, n := range OptimizerNames {
 			st.do(op{T: "pin", N: n, V: h.snap.Pin(n)})
 		}
+		// An optimizer on trial is on for about half of sessions. The arm is a hash of the session key, so
+		// it needs no database at the start of a session, and it is recorded in the spool so the comparison
+		// counts the session even if it never ends.
+		for _, n := range h.snap.Trial {
+			arm := measure.Arm(key, n)
+			if arm == config.StateOn {
+				st.do(op{T: "pin", N: n, V: h.snap.lowered(n, stateOn)})
+				_ = h.emit(key, n, KindArmOn, 0, 0)
+			} else {
+				_ = h.emit(key, n, KindArmOff, 0, 0)
+			}
+		}
 		// Tuned values are pinned with the states, so they cannot change mid-session
 		// (rule 5). The repo is the hash of the working directory; none is pinned
 		// when the directory is unknown or the repo has no applied tuning.
@@ -229,7 +241,7 @@ func (h *handler) sessionEnd(in Input, key string) error {
 // Maintain brings the hook bookkeeping up to date: it ingests the spool, applies
 // the hook guardrail and rewrites the snapshot the hooks read. It is safe to run
 // at any time and as often as wanted.
-func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, _ func(string) string, now time.Time) error {
+func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, getenv func(string) string, now time.Time) error {
 	if _, err := IngestSpool(ctx, db, dir); err != nil {
 		return fmt.Errorf("cannot ingest hook counts: %v", err)
 	}
@@ -246,6 +258,8 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	if err != nil {
 		return fmt.Errorf("cannot read guardrail rollbacks: %v", err)
 	}
+	// A trial of a hook technique is judged on the agent's own history, so read it first (only while one runs).
+	scanTrialHistory(ctx, db, dir, cfg, getenv)
 	// Autopilot: promote or roll back at this session boundary. Best effort, and a failure
 	// leaves the saved states as they were, so it never turns anything on by accident.
 	if res, aerr := autopilot.Advance(ctx, db, dir, cfg, autopilot.DefaultPolicy(), now); aerr == nil {

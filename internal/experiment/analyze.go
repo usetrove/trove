@@ -31,7 +31,10 @@ const (
 
 // Metric names.
 const (
-	MetricCost      = "cost_per_session"
+	MetricCost = "cost_per_session"
+	// MetricTokens is the headline for a trial judged without priced sessions: tokens (input, cache and output)
+	// per session. See AnalyzeHookTrial.
+	MetricTokens    = "tokens_per_session"
 	MetricTurns     = "turns"
 	MetricToolErrs  = "tool_errors"
 	MetricAbandoned = "abandoned"
@@ -68,7 +71,9 @@ type Result struct {
 	Excluded int `json:"excluded"`
 	Unpriced int `json:"unpriced"`
 
+	// Cost is the headline metric. It is cost per session unless Headline says otherwise.
 	Cost     *MetricResult  `json:"cost,omitempty"`
+	Headline string         `json:"headline,omitempty"`
 	Outcomes []MetricResult `json:"outcomes,omitempty"`
 
 	// Combined shrinks the cost estimate toward the benchmark prior, if there is
@@ -231,8 +236,13 @@ func AnalyzeSince(ctx context.Context, db *store.DB, optimizer string, x config.
 	if err != nil {
 		return Result{}, err
 	}
+	return analyzeAll(ctx, db, optimizer, x, priors, all, excluded, unpriced, MetricCost)
+}
+
+// analyzeAll compares the given sessions. headline is the metric that decides "saves" and "costs more".
+func analyzeAll(ctx context.Context, db *store.DB, optimizer string, x config.Experiment, priors Priors, all []sess, excluded, unpriced int, headline string) (Result, error) {
 	res := Result{Optimizer: optimizer, Excluded: excluded, Unpriced: unpriced, OverheadLabel: string(measure.Estimated),
-		InputsHash: hashInputs(optimizer, all, x)}
+		InputsHash: hashInputs(optimizer, all, x), Headline: headline}
 	for _, s := range all {
 		if s.arm == ArmOn {
 			res.NOn++
@@ -259,12 +269,15 @@ func AnalyzeSince(ctx context.Context, db *store.DB, optimizer string, x config.
 		pick     func(sess) float64
 	}
 	specs := []spec{
-		{MetricCost, true, func(s sess) float64 { return s.cost }},
+		{headline, true, func(s sess) float64 { return s.cost }},
 		{MetricTurns, true, func(s sess) float64 { return s.turns }},
 		{MetricToolErrs, true, func(s sess) float64 { return s.errs }},
 		{MetricAbandoned, false, func(s sess) float64 { return s.abandoned }},
 	}
 	for _, sp := range specs {
+		if sp.metric == MetricAbandoned && headline != MetricCost {
+			continue // sessions not seen by the gateway have no source for it, and a zero would be invented
+		}
 		on, off, nOn, nOff := split(all, sp.pick)
 		est, lo, hi, used, ok := bootstrap(on, off, minStratum, sp.relative, seedFor(x.Seed, optimizer, sp.metric))
 		if !ok {
@@ -276,7 +289,7 @@ func AnalyzeSince(ctx context.Context, db *store.DB, optimizer string, x config.
 		}
 		mr := MetricResult{Metric: sp.metric, Kind: kind, Value: est, Low: lo, High: hi, Label: measure.Measured,
 			Confidence: confidence(lo, hi, min(nOn, nOff), minPer), NOn: nOn, NOff: nOff, Strata: used}
-		if sp.metric == MetricCost {
+		if sp.metric == headline {
 			c := mr
 			res.Cost = &c
 		} else {
@@ -316,10 +329,14 @@ func decide(res *Result, x config.Experiment) {
 	c := res.Cost
 	costLimit := float64(x.CostIncreasePercent) / 100
 	outLimit := float64(x.OutcomeWorsenPercent) / 100
+	more, less, what := "cost %s more", "cost %s less", "cost"
+	if res.Headline == MetricTokens {
+		more, less, what = "use %s more tokens", "use %s fewer tokens", "tokens used"
+	}
 	switch {
 	case c.Low > 0 && c.Value >= costLimit:
 		res.Status = CostsMore
-		res.Reason = fmt.Sprintf("with it on, sessions cost %s more (measured, 95%% range %s to %s) than the same kind of sessions without it", pct(c.Value), pct(c.Low), pct(c.High))
+		res.Reason = fmt.Sprintf("with it on, sessions "+more+" (measured, 95%% range %s to %s) than the same kind of sessions without it", pct(c.Value), pct(c.Low), pct(c.High))
 	default:
 		for _, o := range res.Outcomes {
 			limit := outLimit
@@ -335,10 +352,10 @@ func decide(res *Result, x config.Experiment) {
 		switch {
 		case c.High < 0:
 			res.Status = Saves
-			res.Reason = fmt.Sprintf("with it on, sessions cost %s less (measured, 95%% range %s to %s); %s", pct(-c.Value), pct(-c.High), pct(-c.Low), measure.TextNoRegression)
+			res.Reason = fmt.Sprintf("with it on, sessions "+less+" (measured, 95%% range %s to %s); %s", pct(-c.Value), pct(-c.High), pct(-c.Low), measure.TextNoRegression)
 		default:
 			res.Status = NoClearEffect
-			res.Reason = fmt.Sprintf("no clear difference in cost yet (measured change %s, 95%% range %s to %s)", signed(c.Value), signed(c.Low), signed(c.High))
+			res.Reason = fmt.Sprintf("no clear difference in "+what+" yet (measured change %s, 95%% range %s to %s)", signed(c.Value), signed(c.Low), signed(c.High))
 		}
 	}
 }

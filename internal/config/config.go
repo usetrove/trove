@@ -46,6 +46,9 @@ type Config struct {
 	// autopilot holds the states Autopilot chose for optimizers the user did not set
 	// themselves (see autopilot.go). It is not part of config.toml.
 	autopilot map[string]string
+	// trials names the optimizers Autopilot has on trial (see AutopilotProbation), for readers that assign
+	// each session an arm themselves.
+	trials []string
 }
 
 // Contribute holds the setting for the optional anonymous summary upload (see

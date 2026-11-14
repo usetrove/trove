@@ -108,7 +108,6 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 	}
 	res := Result{File: f}
 	changed := false
-	canProbation := probationBlocker(cfg, traffic)
 	for _, name := range p.Names() {
 		if _, mine := cfg.Optimizers[name]; mine {
 			// The user's own setting wins; Autopilot stays out of the way.
@@ -130,12 +129,12 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 
 			NeedsProbation:   p.NeedsProbation(name),
 			NoSavingEstimate: NoSavingEstimate(name),
-			CanProbation:     canProbation,
+			CanProbation:     probationBlocker(cfg, traffic, name),
 			OtherInProbation: otherInProbation(f.Entries, name),
 			Unavailable:      whyUnavailable(name, setup),
 		}
 		if cur.State == config.AutopilotProbation {
-			pe, err := readTrial(ctx, db, cfg, name, cur)
+			pe, err := readTrial(ctx, db, cfg, name, cur, now)
 			if err != nil {
 				return Result{File: f}, fmt.Errorf("cannot read the trial of %s: %v", name, err)
 			}
@@ -257,14 +256,35 @@ func blockedBy(on []string, name string) string {
 	return ""
 }
 
-// probationBlocker says why a trial cannot run for this user now, or "" when it can. A trial needs the
-// assigner that picks each session's arm, and only the gateway has one in the Claude Code path today; and
-// it needs A/B comparison switched on, because with it off an optimizer that is "on" is on for everyone.
-func probationBlocker(cfg config.Config, tr measure.Traffic) string {
+// viaHooks reports whether the named optimizer runs only in the plugin's hooks: not through the gateway, and
+// not at the request layer. The gateway pins only the request-level optimizers, so it can never split sessions
+// for these; their trials are assigned by the hooks.
+func viaHooks(name string) bool {
+	t, ok := technique.Get(name)
+	if !ok || t.Gateway {
+		return false
+	}
+	for _, l := range t.Layers {
+		if l == technique.LayerRequest {
+			return false
+		}
+	}
+	return true
+}
+
+// probationBlocker says why a trial cannot run for this user now, or "" when it can. A trial needs A/B
+// comparison switched on (with it off an optimizer that is "on" is on for everyone), and something to split
+// the sessions: the hooks for a hook technique, the gateway for a request-level one. Nothing is checked before
+// any traffic is seen, as with the other prerequisite checks.
+func probationBlocker(cfg config.Config, tr measure.Traffic, name string) string {
 	switch {
 	case !cfg.Experiment.Enabled:
 		return "A/B comparison is switched off ([experiment] enabled = false)"
-	case !tr.Gateway:
+	case !tr.Gateway && !tr.Hooks:
+		return "Trove has not seen any of your sessions yet"
+	case viaHooks(name) && !tr.Hooks:
+		return "the plugin's hooks assign which sessions run with it, and they have recorded nothing recently"
+	case !viaHooks(name) && !tr.Gateway:
 		return "it needs the gateway to pick which sessions run with it, and none of your recent traffic went through it"
 	}
 	return ""
@@ -281,12 +301,20 @@ func otherInProbation(entries map[string]config.AutopilotEntry, name string) str
 }
 
 // readTrial reads the session-level comparison for an optimizer on trial: sessions assigned since the trial
-// began, on against shadow, from provider-reported cost and outcome counts (all metadata). Its status is the
-// experiment package's own, so a trial is judged by the same rule that already decides "saves" and "costs more"
-// everywhere else, and the thresholds are the user's [experiment] settings. A read error is returned, never
-// turned into a result, so a failure cannot keep an optimizer.
-func readTrial(ctx context.Context, db *store.DB, cfg config.Config, name string, cur config.AutopilotEntry) (ProbationEvidence, error) {
-	r, err := experiment.AnalyzeSince(ctx, db, name, cfg.Experiment, experiment.DefaultPriors(), cur.SinceMS)
+// began, on against shadow (all metadata). A request-level optimizer is judged on provider-reported cost by
+// the gateway's comparison. A hook technique is judged on tokens per session, from the gateway's record of a
+// session or else the agent's local history, because a user with no gateway has no priced sessions. Both use
+// the experiment package's own status rule and the user's [experiment] thresholds. A read error is returned,
+// never turned into a result, so a failure cannot keep an optimizer.
+func readTrial(ctx context.Context, db *store.DB, cfg config.Config, name string, cur config.AutopilotEntry, now time.Time) (ProbationEvidence, error) {
+	var r experiment.Result
+	var err error
+	if viaHooks(name) {
+		idle := time.Duration(cfg.Gateway.IdleMinutes) * time.Minute
+		r, err = experiment.AnalyzeHookTrial(ctx, db, name, cfg.Experiment, cur.SinceMS, now, idle)
+	} else {
+		r, err = experiment.AnalyzeSince(ctx, db, name, cfg.Experiment, experiment.DefaultPriors(), cur.SinceMS)
+	}
 	if err != nil {
 		return ProbationEvidence{}, err
 	}

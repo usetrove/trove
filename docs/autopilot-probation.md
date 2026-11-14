@@ -134,8 +134,8 @@ keeps the same promote and roll-back thresholds. History token counts and any li
 (`logs.md`: 1 to 8% below Claude Code's own totals, once 23%); comparing two arms measured the same way cancels most
 of that, and the label says so.
 
-If step 3 cannot be done without slowing the hooks, probation is a gateway-user feature and subscription users keep
-recoverable techniques in shadow, shown as such. That is an acceptable, honest outcome.
+Step 3 was done as a bounded scan at session end (see the build plan, item 7), not as a background process, so
+the hooks are not slowed beyond 700 ms at a point where the agent is already finished.
 
 ## Consent
 
@@ -186,9 +186,39 @@ keeps exactly the `v1` list until they agree. `config.AutopilotPolicy` is alread
    then gives up at the deadline, too few sessions decide nothing, sessions from before the trial are not counted,
    and a failed read keeps nothing. This makes probation work for API-key users; it is the first step that can turn
    a recoverable optimizer on, and it still cannot be reached by any user, because nothing offers `lossless-v2`.
-6. **Hooks assignment** (item 1 above) with a test that the off arm pins shadow and a database failure pins shadow.
-7. **The history-based comparison** (item 2) with a planted-effect test in both directions, and the scan scheduling
-   (item 3) with a timing test that the hook path is unaffected.
+6. ~~**Hooks assignment**.~~ **Built.** The snapshot the hooks read now lists the optimizers on trial. At
+   `SessionStart` (only when a session is first pinned, so a resume is never reassigned) the hooks take a hash of the
+   session key and the optimizer name (`measure.Arm`), pin the optimizer on for one arm and leave it shadow for the
+   other, and append the arm to the spool. Ingesting the spool writes it to `experiment_assignments` (first record
+   wins) and not to `hook_events`. Because the arm is a hash, no database is opened at session start; because it
+   is spooled at the start, a session that never ends is still counted. A rollback or the kill switch still lowers
+   an "on" arm to shadow, and the user's own `config.toml` setting and `[experiment] enabled = false` both keep an
+   optimizer out of the trial list. A hash gives about, not exactly, half; the comparison does not need exact
+   balance.
+7. ~~**The history-based comparison** and its scheduling.~~ **Built.** `experiment.AnalyzeHookTrial`: tokens per
+   session is the headline, with turns and tool errors beside it and abandoned sessions left out (only the
+   gateway sees them). A session's figures come from the gateway's record when there is one, otherwise from
+   `history_requests`; every assigned session counts under its assigned arm whether or not the hook acted (intention
+   to treat), because dropping "on" sessions where the hook never acted would drop exactly the ones it could not
+   have changed. A session counts once it has been idle for the gateway's idle window. At session end,
+   while an optimizer that runs in the hooks is on trial, `Maintain` reads the agent's history first, with the same
+   reader as `trove logs scan` (new package `internal/histscan`, shared so rows are priced and annotated
+   identically), limited to files changed since the trial began and to 700 ms. Tests: planted savings and losses in
+   both directions and no effect on history-only data, running and earlier sessions left out, a session in both
+   sources counted once, arms assigned and recorded, a repeated record never changes an arm, the history scan runs
+   only while a trial does, and the hooks' session key matches the history's.
+
+   **Correction to the plan.** The gateway pins only the five request-level optimizers, so it can never split
+   sessions for a hook technique. Steps 4 and 5 allowed a trial of `hook_repeat_read` only when the user had
+   gateway traffic and read the gateway's comparison, which would have found no assignments. A hook technique now
+   needs hook traffic and is judged by `AnalyzeHookTrial`; a request-level technique still needs the gateway.
+
+   **Measured on this machine (2026-11-13):** a first scan of 30 days of Claude Code history into an empty database took
+   3.9 s and a re-scan with nothing new 0.29 s. The 700 ms budget therefore fits an ordinary session's file but
+   not a first read of a long trial window: that read finishes over several session ends, or sooner if the user
+   runs any `trove` command. I did not measure a single very large transcript. If one file takes longer than the
+   budget every time it will never be read by the hooks, the comparison will show "not enough data", and the
+   trial will time out in shadow, which is safe but slow.
 8. **Consent text, `trove autopilot` and `/trove:status` display** of "in probation: N of M sessions per side".
 9. **One real run** on the benchmark (single-hook arms, G8) before any technique is promoted.
 

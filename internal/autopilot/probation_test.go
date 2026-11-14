@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/store"
 )
 
@@ -157,7 +158,7 @@ func TestAdvanceStartsOneTrialAtATimeAndKeepsNothingWithoutAComparison(t *testin
 	}
 }
 
-func TestNoTrialWhenTheUserOptedOutOfComparisonOrHasNoGateway(t *testing.T) {
+func TestNoTrialWhenOptedOutAndTheArmsComeFromTheRightChannel(t *testing.T) {
 	db, dir := open(t)
 	seedTrialEvidence(t, db, dir)
 	cfg := config.Default()
@@ -170,14 +171,26 @@ func TestNoTrialWhenTheUserOptedOutOfComparisonOrHasNoGateway(t *testing.T) {
 		}
 	}
 
-	db2, dir2 := open(t) // hooks only: nothing went through a gateway
+	// The hooks assign the arms for a hook technique, so a user with hooks and no gateway can have a trial.
+	db2, dir2 := open(t)
 	setInstall(t, db2, 30)
 	hookSessions(t, db2, "hook_repeat_read", 25, 500)
 	probed(t, dir2)
 	v2File(t, dir2)
 	f = advanceV2(t, db2, dir2, config.Default(), 4)
-	if e := f.Entries["hook_repeat_read"]; e.State == config.AutopilotProbation || !strings.Contains(e.Reason, "gateway") {
-		t.Errorf("a hooks-only user cannot be assigned arms yet: %+v", e)
+	if e := f.Entries["hook_repeat_read"]; e.State != config.AutopilotProbation {
+		t.Errorf("a hooks-only user should be on trial: %+v", e)
+	}
+
+	// Gateway traffic alone cannot split sessions for a hook technique: the gateway never runs it.
+	if got := probationBlocker(config.Default(), measure.Traffic{Gateway: true}, "hook_repeat_read"); !strings.Contains(got, "hooks") {
+		t.Errorf("gateway-only traffic for a hook technique: %q", got)
+	}
+	if got := probationBlocker(config.Default(), measure.Traffic{Hooks: true}, "volatile_prefix_mover"); !strings.Contains(got, "gateway") {
+		t.Errorf("hooks-only traffic for a request-level technique: %q", got)
+	}
+	if got := probationBlocker(config.Default(), measure.Traffic{}, "hook_repeat_read"); got == "" {
+		t.Error("no sessions seen yet must not start a trial")
 	}
 }
 
