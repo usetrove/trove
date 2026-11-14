@@ -35,7 +35,11 @@ def validate_task(task: Task, agent: Agent, agent_version: str | None) -> Valida
     gold = Path(task.base_dir) / "gold.patch"
     if not gold.exists():
         return Validation(task.id, "skipped", "no gold.patch to validate against")
-    tag, image_id = de.build_task_image(task, agent, agent_version)
+    try:
+        tag, image_id = de.build_task_image(task, agent, agent_version)
+    except de.DockerError as e:
+        # An old repo that cannot be built on a modern toolchain is a rejected task, not a reason to stop the batch.
+        return Validation(task.id, "rejected", "environment build failed: " + " ".join(str(e).split())[-400:])
     with de.Container(tag, f"val-{task.id}-base") as c:
         base = _grade(c, task)
     if base.rc == 0 or base.timed_out:
