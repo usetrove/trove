@@ -187,5 +187,8 @@ placeholders. `trove autopilot` says so each time it shows them.
   `[notifications] desktop = true`. Without a notifier the events are still recorded and shown in the report.
 - **Receipts record names, not savings per optimizer.** `Receipt.On` lists what was on; the saving shown beside it
   is the existing estimated figure for the session.
-- **Declared overhead is empty.** The two eligible optimizers inject no text. Any optimizer that does must declare
-  its overhead in `Policy.OverheadTokens` before it is made eligible (rule 15).
+- **Declared overhead comes from the technique registry.** The two eligible optimizers inject no text. A
+  technique that does must declare its per-session and per-use cost in `internal/technique/registry.go`
+  (`Overhead`, `UseOverhead`, `UseNetted`) before it can be marked for Autopilot; a test enforces it and another
+  checks the figures against the real message sizes. Autopilot subtracts it from the shadow saving before it
+  compares with the threshold (`Policy.NetOf`), and refuses to promote one whose cost is not declared as numbers.

@@ -55,14 +55,37 @@ func TestPlannerVerdicts(t *testing.T) {
 	}
 }
 
-func TestPlannerChargesDeclaredOverhead(t *testing.T) {
+// The cost of added text comes from the technique registry. hook_repeat_read adds a 68-token denial
+// each time it blocks and does not subtract it itself, so Autopilot charges 68 per event.
+func TestPlannerChargesTheRegistrysDeclaredOverhead(t *testing.T) {
 	p := DefaultPolicy()
-	p.OverheadTokens = map[string]int64{"noise_normalizer": 500}
-	// 9,000 removed over 20 sessions, minus 500 per session, is -1,000: not worth it.
-	plan := p.Plan(map[string]measure.ShadowRow{"noise_normalizer": row(20, 9000)}, nil, true, nil, nil)
+	r := row(20, 9000)
+	r.Events = 200 // 200 x 68 = 13,600 of added text against 9,000 removed
+	plan := p.Plan(map[string]measure.ShadowRow{"hook_repeat_read": r}, nil, true, nil, nil)
 	for _, it := range plan {
-		if it.Optimizer == "noise_normalizer" && (it.Verdict != VerdictNotWorthIt || it.NetTokens != -1000) {
-			t.Errorf("got %q with %d net tokens, want not_worth_it and -1000", it.Verdict, it.NetTokens)
+		if it.Optimizer == "hook_repeat_read" && (it.Verdict != VerdictNotWorthIt || it.NetTokens != 9000-13600) {
+			t.Errorf("got %q with %d net tokens, want not_worth_it and %d", it.Verdict, it.NetTokens, 9000-13600)
+		}
+	}
+}
+
+func TestNetOfChargesPerUseUnlessTheEstimateAlreadyDid(t *testing.T) {
+	p := DefaultPolicy()
+	cases := []struct {
+		name         string
+		sessions, ev int
+		removed      float64
+		want         int64
+	}{
+		{"noise_normalizer", 10, 100, 5000, 5000},        // adds no text
+		{"hook_repeat_read", 10, 100, 5000, 5000 - 6800}, // 68 per denial, not netted
+		{"hook_read_limit", 10, 100, 5000, 5000},         // 42 per note, already inside its estimate
+		{"output_trimmer", 10, 100, 5000, 5000},          // adds text, declares no numbers: shown as is; ChargeableCost stops promotion
+		{"not_a_technique", 10, 100, 5000, 5000},
+	}
+	for _, c := range cases {
+		if got := p.NetOf(c.name, c.sessions, c.ev, c.removed); got != c.want {
+			t.Errorf("%s: net %d, want %d", c.name, got, c.want)
 		}
 	}
 }
@@ -184,5 +207,16 @@ func TestSummarize(t *testing.T) {
 	}
 	if strings.Contains(txt, "$") {
 		t.Errorf("the summary states a dollar figure it cannot back up:\n%s", txt)
+	}
+}
+
+func TestAnOptimizerWithUndeclaredCostIsNeverChargeable(t *testing.T) {
+	if ChargeableCost("output_trimmer") == "" {
+		t.Error("output_trimmer adds text with no declared numbers; Autopilot must refuse it")
+	}
+	for _, n := range []string{"noise_normalizer", "duplicate_result_collapser", "hook_repeat_read", "hook_read_limit", "not_a_technique"} {
+		if why := ChargeableCost(n); why != "" {
+			t.Errorf("%s: %q", n, why)
+		}
 	}
 }

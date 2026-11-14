@@ -49,10 +49,10 @@ func TestRegistryInvariants(t *testing.T) {
 		if x.Status.Selectable() && x.Overhead == nil && x.OverheadNote == "" {
 			t.Errorf("%s: can be turned on but has no declared overhead (rule 15)", id)
 		}
-		// Autopilot may only promote what is built, lossless, leaves the cached prompt alone and adds no unmeasured text.
+		// Autopilot may only promote what is built, lossless, leaves the cached prompt alone, and charges any text it adds.
 		if x.Auto {
-			if x.Status != StatusBuilt || x.Tier != tierLossless || x.Prefix || x.AddsText {
-				t.Errorf("%s: marked for Autopilot but is not a built, lossless, prefix-safe, text-free technique", id)
+			if p := autoProblem(x); p != "" {
+				t.Errorf("%s: marked for Autopilot but %s", id, p)
 			}
 		}
 		// A technique that can change the cached prompt is never automatic.
@@ -307,5 +307,51 @@ func TestHookCapabilitiesAreRequiredOnlyWhereTheHooksAreTheWayIn(t *testing.T) {
 		if c.want != "" && !strings.Contains(joined, "trove hooks verify") {
 			t.Errorf("%s: the problem must say what to do: %q", c.name, joined)
 		}
+	}
+}
+
+func TestAutoProblemAllowsAddedTextOnlyWhenItIsCharged(t *testing.T) {
+	base := Technique{Status: StatusBuilt, Tier: tierLossless}
+	withText := func(session, use *int) Technique {
+		x := base
+		x.AddsText, x.Overhead, x.UseOverhead = true, session, use
+		return x
+	}
+	cases := []struct {
+		name string
+		x    Technique
+		ok   bool
+	}{
+		{"plain lossless", base, true},
+		{"text, both declared", withText(none(), use(68)), true},
+		{"text, no per-use figure", withText(none(), nil), false},
+		{"text, no per-session figure", withText(nil, use(68)), false},
+		{"text, nothing declared", withText(nil, nil), false},
+		{"prefix", func() Technique { x := base; x.Prefix = true; return x }(), false},
+		{"not lossless", func() Technique { x := base; x.Tier = tierRecover; return x }(), false},
+		{"not built", func() Technique { x := base; x.Status = StatusExcluded; return x }(), false},
+	}
+	for _, c := range cases {
+		if got := autoProblem(c.x) == ""; got != c.ok {
+			t.Errorf("%s: eligible = %v, want %v (%q)", c.name, got, c.ok, autoProblem(c.x))
+		}
+	}
+}
+
+func TestOverheadOfReadsTheRegistry(t *testing.T) {
+	if o, ok := OverheadOf("hook_repeat_read"); !ok || o.PerUse != 68 || o.Netted || o.PerSession != 0 {
+		t.Errorf("hook_repeat_read: %+v %v", o, ok)
+	}
+	if o, ok := OverheadOf("hook_read_limit"); !ok || o.PerUse != 42 || !o.Netted {
+		t.Errorf("hook_read_limit: %+v %v", o, ok)
+	}
+	if o, ok := OverheadOf("noise_normalizer"); !ok || o != (Overhead{}) {
+		t.Errorf("noise_normalizer adds no text: %+v %v", o, ok)
+	}
+	if _, ok := OverheadOf("output_trimmer"); ok {
+		t.Error("output_trimmer adds text with no numbers declared, so it must not report a usable overhead")
+	}
+	if _, ok := OverheadOf("nope"); ok {
+		t.Error("an unknown name has no overhead")
 	}
 }

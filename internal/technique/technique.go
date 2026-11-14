@@ -128,10 +128,18 @@ type Technique struct {
 	// AddsText is true when it puts text or tool definitions into prompts, which
 	// rule 15 says must be declared and charged. Overhead is the declared tokens
 	// per session when known; OverheadNote says where a measured figure comes from.
-	AddsText     bool     `json:"adds_text"`
-	Overhead     *int     `json:"overhead_tokens,omitempty"`
-	OverheadNote string   `json:"overhead_note,omitempty"`
-	Requires     []string `json:"requires,omitempty"`
+	AddsText     bool   `json:"adds_text"`
+	Overhead     *int   `json:"overhead_tokens,omitempty"`
+	OverheadNote string `json:"overhead_note,omitempty"`
+	// UseOverhead is the tokens the technique adds to the context each time it acts (a denial
+	// message, a hint, a marker), as opposed to Overhead, which every session that runs it pays.
+	// Nil means not declared; 0 means it adds no text when it acts.
+	UseOverhead *int `json:"overhead_per_use_tokens,omitempty"`
+	// UseNetted is true when the technique's own saving estimate already subtracts UseOverhead, so
+	// a reader of that estimate must not subtract it again. It is false when the estimate is the
+	// tokens removed before the added text is counted.
+	UseNetted bool     `json:"overhead_netted_in_estimate,omitempty"`
+	Requires  []string `json:"requires,omitempty"`
 	// HookNeeds lists the hook capabilities the technique relies on when it runs in the plugin's
 	// hooks, as "Tool:kind" with kind input or output (for example "Bash:output"). They are required
 	// only when it does not run through the gateway: a technique with a request layer is satisfied
@@ -438,4 +446,44 @@ func hookNeedText(n string) string {
 func ValidHookNeed(n string) bool {
 	tool, kind, ok := strings.Cut(n, ":")
 	return ok && tool != "" && (kind == "input" || kind == "output")
+}
+
+// autoProblem says why a technique may not be marked for Autopilot, or "" when it may. Autopilot promotes
+// only what is built, lossless and leaves the cached prompt alone. Text it adds is allowed only when the
+// cost is declared as numbers (per session and per use), so the promotion decision can charge for it.
+func autoProblem(x Technique) string {
+	if x.Status != StatusBuilt || x.Tier != tierLossless || x.Prefix {
+		return "it is not a built, lossless, prefix-safe technique"
+	}
+	if x.AddsText && (x.Overhead == nil || x.UseOverhead == nil) {
+		return "it adds text but does not declare both its per-session and per-use overhead as numbers"
+	}
+	return ""
+}
+
+// Overhead is what a technique costs the context, for netting against a saving estimate.
+type Overhead struct {
+	PerSession int64 // tokens every session that runs it pays
+	PerUse     int64 // tokens each time it acts
+	Netted     bool  // its own estimate already subtracts PerUse
+}
+
+// OverheadOf returns the declared overhead of the named technique. ok is false when the name is unknown
+// or the technique adds text without declaring numbers, in which case the caller must not promote it.
+func OverheadOf(name string) (o Overhead, ok bool) {
+	t, found := Get(name)
+	if !found {
+		return Overhead{}, false
+	}
+	if t.AddsText && (t.Overhead == nil || t.UseOverhead == nil) {
+		return Overhead{}, false
+	}
+	if t.Overhead != nil {
+		o.PerSession = int64(*t.Overhead)
+	}
+	if t.UseOverhead != nil {
+		o.PerUse = int64(*t.UseOverhead)
+	}
+	o.Netted = t.UseNetted
+	return o, true
 }

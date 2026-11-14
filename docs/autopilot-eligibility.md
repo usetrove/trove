@@ -34,7 +34,7 @@ is skipped.
 |---|---|---|---|
 | G1 | **Built, with a shadow mode** that records, from real use and without content, what it would have saved. | optimizers and hooks | gateway behaviors (dedup, spend cap) record shadow but have no active mode |
 | G2 | **An evidence source Autopilot reads.** Sessions that ran it in shadow and the estimated net tokens, as `Evidence`. | `Advance` reads gateway rows only | hook techniques: an adapter over `hook_events` (`would_*` events, distinct sessions, token sums) |
-| G3 | **Declared overhead**, charged against its saving (rule 15). Text it adds is counted. | `Policy.OverheadTokens`, registry `Overhead` | the registry bars `AddsText` from `Auto`; that has to become "overhead declared and netted" before any text-adding technique can join |
+| G3 | **Declared overhead**, charged against its saving (rule 15). Text it adds is counted. | `Policy.NetOf`, registry `Overhead`, `UseOverhead`, `UseNetted` | **Built (2026-11-13).** The registry allows `AddsText` in `Auto` only when both figures are numbers; Autopilot charges per session and per event unless the optimizer's own estimate already subtracts it; B6, B7 and B8 declare 68, 42 and 54 tokens per use, checked against the real message text. `output_trimmer` still declares no numbers, so Autopilot refuses it |
 | G4 | **A guardrail that can see how it fails**, rolling it back to shadow by itself (rule 6). | `measure.EvaluateHooks` (`hook_reread`, `hook_rerun`, `hook_fetch_back`) and gateway rules; hook rollbacks use the same recorder as the gateway's, so `Advance` already sees them | `hook_read_limit` has none; `hook_large_output` has none beyond adoption counts |
 | G5 | **Prerequisites checked at promotion time, in the user's real setup**: login, gateway, MCP server registered, a live hook probe for the exact agent version, a custom agent. Otherwise the state says `on` while it runs as shadow. | `technique.Check` with a context | `Advance` uses a permissive context for conflicts only; it needs the real one, and a "hook probe passed" capability that does not exist yet |
 | G6 | **No conflict with what is already on** (registry claims), and the open question about `hook_quiet_commands` beside RTK decided. | `technique.CanAdd`, wired into `Advance` | the RTK decision |
@@ -208,7 +208,7 @@ plugin's start check handles the update case; `trove doctor` warns otherwise).
 1. **The evidence adapter for hooks (G2).** One piece of work that fixes hooks-only users for `noise_normalizer` and is
    a prerequisite for every hook technique. Includes the real-setup context for promotion checks (G5) and a "hook
    probe passed" capability.
-2. **Relax the registry's `AddsText` rule** to "overhead declared and netted", with a test.
+2. ~~**Relax the registry's `AddsText` rule** to "overhead declared and netted", with a test.~~ Done.
 3. **Benchmark arms for single hooks (G8).** Add conditions that switch on one hook optimizer at a time, so each is
    attributable.
 4. **`hook_repeat_read`, then `hook_quiet_commands`** (after deciding the RTK pairing), as `lossless-v2`, with new

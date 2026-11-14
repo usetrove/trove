@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/technique"
 )
 
 // Policy is the rule set. DefaultPolicy's numbers are conservative placeholders
@@ -31,9 +32,6 @@ type Policy struct {
 	LookbackDays int
 	// CooldownDays is how long a rolled-back optimizer waits before another try.
 	CooldownDays int
-	// OverheadTokens is each optimizer's declared token cost per session (rule 15). The
-	// two lossless transforms inject no text, so it is empty for them.
-	OverheadTokens map[string]int64
 	// MaxAttempts is how many times one optimizer may be promoted. After that a
 	// rollback is left for the user to decide.
 	MaxAttempts int
@@ -151,4 +149,35 @@ func (p Policy) Decide(cur config.AutopilotEntry, ev Evidence, now time.Time) De
 		set(config.AutopilotShadow, "unknown state reset to shadow")
 	}
 	return Decision{Entry: next}
+}
+
+// NetOf is the estimated net tokens an optimizer kept out of the context across the evidence: what
+// it removed, minus the text it adds (rule 15). The cost comes from the technique registry, so there
+// is one place it is declared. It is charged per session for text every session pays, and per event for
+// text added each time it acts, unless the optimizer's own estimate already subtracts that. An
+// optimizer that adds text without declaring numbers cannot be charged here: its figure is returned as
+// it is, for the planner to show, and Advance refuses to promote it (see ChargeableCost).
+func (p Policy) NetOf(name string, sessions, events int, removed float64) int64 {
+	o, ok := technique.OverheadOf(name)
+	if !ok {
+		return int64(removed)
+	}
+	net := int64(removed) - o.PerSession*int64(sessions)
+	if !o.Netted {
+		net -= o.PerUse * int64(events)
+	}
+	return net
+}
+
+// ChargeableCost says why an optimizer's cost cannot be netted, or "" when it can. Autopilot never
+// promotes what it cannot charge for (rule 15). Names the registry does not know are left alone: they
+// are not text-adding techniques the registry tracks.
+func ChargeableCost(name string) string {
+	if _, known := technique.Get(name); !known {
+		return ""
+	}
+	if _, ok := technique.OverheadOf(name); !ok {
+		return "its cost in added text is not declared as numbers, so it cannot be charged against its saving"
+	}
+	return ""
 }

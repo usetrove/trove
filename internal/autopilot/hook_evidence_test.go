@@ -231,13 +231,13 @@ func TestDecideHoldsAnUnavailableOptimizerBack(t *testing.T) {
 
 func TestCombineTakesTheLargerOfEachFigure(t *testing.T) {
 	gw := measure.ShadowRow{Sessions: 10, Tokens: measure.Figure{Value: 900}}
-	hk := measure.HookShadow{Sessions: 7, Tokens: 1500}
-	s, tok := combine(gw, hk)
-	if s != 10 || tok != 1500 {
-		t.Errorf("combine = %d sessions, %v tokens; want 10 and 1500 (each figure's larger value)", s, tok)
+	hk := measure.HookShadow{Sessions: 7, Events: 40, Tokens: 1500}
+	s, ev, tok := combine(gw, hk)
+	if s != 10 || ev != 40 || tok != 1500 {
+		t.Errorf("combine = %d sessions, %d events, %v tokens; want 10, 40 and 1500 (each figure's larger value)", s, ev, tok)
 	}
-	if s, tok := combine(measure.ShadowRow{}, measure.HookShadow{}); s != 0 || tok != 0 {
-		t.Errorf("no evidence gave %d, %v", s, tok)
+	if s, ev, tok := combine(measure.ShadowRow{}, measure.HookShadow{}); s != 0 || ev != 0 || tok != 0 {
+		t.Errorf("no evidence gave %d, %d, %v", s, ev, tok)
 	}
 	if got := combinedRows([]string{"a", "b"}, map[string]measure.ShadowRow{"a": gw}, nil); len(got) != 1 || got["a"].Tokens.Label != measure.Estimated {
 		t.Errorf("combinedRows = %+v; want only the optimizer with evidence, labeled estimated", got)

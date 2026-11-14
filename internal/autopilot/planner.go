@@ -42,7 +42,7 @@ func (p Policy) Plan(rows map[string]measure.ShadowRow, entries map[string]confi
 	var out []config.AutopilotPlanItem
 	for _, name := range optimize.PipelineNames {
 		row := rows[name]
-		net := int64(row.Tokens.Value) - p.OverheadTokens[name]*int64(row.Sessions)
+		net := p.NetOf(name, row.Sessions, row.Events, row.Tokens.Value)
 		it := config.AutopilotPlanItem{Optimizer: name, Tier: Tier(name), Sessions: row.Sessions, NetTokens: net}
 		ok, why := p.ready(Evidence{BaselineDone: baselineDone, ShadowSessions: row.Sessions, NetTokens: net})
 		switch {

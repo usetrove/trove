@@ -9,6 +9,8 @@ var zero = 0
 
 func none() *int { return &zero }
 
+func use(n int) *int { return &n }
+
 const (
 	urlRTK        = "https://github.com/rtk-ai/rtk"
 	urlHeadroom   = "https://github.com/headroomlabs-ai/headroom"
@@ -52,16 +54,16 @@ var registry = []Technique{
 		Licence: "Trove project", Note: "custom agents only; at most 3 of the 4 allowed markers"},
 	{ID: "B6", Title: "Deny a repeat read of an unchanged file", Names: []string{"hook_repeat_read"},
 		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Tier: tierLossless,
-		Subscription: true, AddsText: true, OverheadNote: "a one-line denial that replaces a whole file read",
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(68), OverheadNote: "a one-line denial (about 68 tokens) each time it blocks a read; the saving estimate does not subtract it",
 		Licence: "Trove project"},
 	{ID: "B7", Title: "Add a line limit to a large file read", Names: []string{"hook_read_limit"},
 		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Tier: tierRecover,
 		HookNeeds:    []string{"Read:input"},
-		Subscription: true, AddsText: true, OverheadNote: "a short note that the read was partial and how to read more",
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(42), UseNetted: true, OverheadNote: "a short note (about 42 tokens) that the read was partial; the saving estimate already subtracts it",
 		Licence: "Trove project", Note: "rewrites the whole tool input (updatedInput replaces it)"},
 	{ID: "B8", Title: "Hint to use trove_run for known-noisy commands", Names: []string{"hook_large_output"},
 		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Tier: tierLossless,
-		Subscription: true, AddsText: true, OverheadNote: "one short hint per noisy command",
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(54), OverheadNote: "one hint (about 54 tokens) per noisy command; it has no saving estimate, so none is netted",
 		Requires: []string{CapMCPServer}, Claims: []Claim{{ResourceShellCompressor, ownerTrove}},
 		Licence: "Trove project"},
 	{ID: "B15", Title: "Add one output-quieting flag to an allowlisted command", Names: []string{"hook_quiet_commands"},

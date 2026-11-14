@@ -113,13 +113,13 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 		}
 		cur := f.Entries[name]
 		_, back := rolled[name]
-		sessions, tokens := combine(byName[name], hookShadow[name])
+		sessions, events, tokens := combine(byName[name], hookShadow[name])
 		ev := Evidence{
 			BaselineDone:   baselineDone,
 			ShadowSessions: sessions,
-			NetTokens:      int64(tokens) - p.OverheadTokens[name]*int64(sessions),
+			NetTokens:      p.NetOf(name, sessions, events, tokens),
 			RolledBack:     back,
-			Blocked:        blockedBy(on, name),
+			Blocked:        firstNonEmpty(blockedBy(on, name), ChargeableCost(name)),
 			Unavailable:    whyUnavailable(name, setup),
 		}
 		d := p.Decide(cur, ev, now)

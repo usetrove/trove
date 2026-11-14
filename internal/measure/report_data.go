@@ -148,6 +148,8 @@ type ShadowRow struct {
 	Tokens    Figure `json:"tokens"`
 	USD       Figure `json:"usd"`
 	Sessions  int    `json:"sessions"`
+	// Events is how many times it would have acted, when the source counts that. Not in the JSON.
+	Events int `json:"-"`
 }
 
 // ShadowEstimates reports the shadow-mode estimate for every optimizer that is

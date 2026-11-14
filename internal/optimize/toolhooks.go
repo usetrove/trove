@@ -220,9 +220,7 @@ func (RepeatRead) TransformInput(_ context.Context, call ToolCall, s Session) (T
 	if err := s.Ledger.Save(); err != nil {
 		return call, Report{Err: "ledger"} // if the denial cannot be remembered, do not deny: it could loop
 	}
-	rep.Decision = &Decision{Kind: KindBlocked, Bytes: fs.Partial, Tokens: tokens, Message: fmt.Sprintf(
-		"Trove: this file is unchanged since you read it earlier in this session (prompt #%d, %s ago), so its contents are already in your context. Use that. If you really need it read again, repeat the same Read and it will go through.",
-		ent.Prompt, ago(s.Now, ent.At))}
+	rep.Decision = &Decision{Kind: KindBlocked, Bytes: fs.Partial, Tokens: tokens, Message: repeatReadMessage(ent.Prompt, ago(s.Now, ent.At))}
 	return call, rep
 }
 
@@ -303,5 +301,13 @@ func (LargeOutputAdvice) TransformInput(_ context.Context, call ToolCall, s Sess
 		return call, Report{} // trove_run is not registered with the agent, so there is nothing to suggest
 	}
 	return call, Report{Name: name, Decision: &Decision{Kind: KindAdvised,
-		Message: "Trove: this command usually prints a lot. If the trove_run tool is available, run it through trove_run: the full output stays retrievable and only the part that matters enters your context."}}
+		Message: largeOutputHint}}
+}
+
+// largeOutputHint is the advice hook_large_output adds; its size is the per-use overhead declared for B8.
+const largeOutputHint = "Trove: this command usually prints a lot. If the trove_run tool is available, run it through trove_run: the full output stays retrievable and only the part that matters enters your context."
+
+// repeatReadMessage is the denial the agent sees; its size is the per-use overhead declared for B6.
+func repeatReadMessage(prompt int, ago string) string {
+	return fmt.Sprintf("Trove: this file is unchanged since you read it earlier in this session (prompt #%d, %s ago), so its contents are already in your context. Use that. If you really need it read again, repeat the same Read and it will go through.", prompt, ago)
 }

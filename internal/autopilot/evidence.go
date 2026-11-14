@@ -19,26 +19,31 @@ import (
 // other's figure stands on its own.)
 
 // combine returns the evidence for one optimizer from the gateway and the hooks.
-func combine(gw measure.ShadowRow, hk measure.HookShadow) (sessions int, tokens float64) {
-	sessions, tokens = gw.Sessions, gw.Tokens.Value
+// events is the larger channel's count of times it acted, used to charge text it adds each time. Only
+// the hooks count events; the gateway techniques add no per-use text.
+func combine(gw measure.ShadowRow, hk measure.HookShadow) (sessions, events int, tokens float64) {
+	sessions, events, tokens = gw.Sessions, gw.Events, gw.Tokens.Value
+	if hk.Events > events {
+		events = hk.Events
+	}
 	if hk.Sessions > sessions {
 		sessions = hk.Sessions
 	}
 	if float64(hk.Tokens) > tokens {
 		tokens = float64(hk.Tokens)
 	}
-	return sessions, tokens
+	return sessions, events, tokens
 }
 
 // combinedRows builds the shadow rows the planner reads from both channels, for the given names.
 func combinedRows(names []string, gw map[string]measure.ShadowRow, hk map[string]measure.HookShadow) map[string]measure.ShadowRow {
 	out := make(map[string]measure.ShadowRow, len(names))
 	for _, n := range names {
-		s, t := combine(gw[n], hk[n])
+		s, e, t := combine(gw[n], hk[n])
 		if s == 0 && t == 0 {
 			continue
 		}
-		out[n] = measure.ShadowRow{Optimizer: n, Sessions: s, Tokens: measure.Figure{Value: t, Label: measure.Estimated}}
+		out[n] = measure.ShadowRow{Optimizer: n, Sessions: s, Events: e, Tokens: measure.Figure{Value: t, Label: measure.Estimated}}
 	}
 	return out
 }
@@ -76,4 +81,13 @@ func sessionsSeen(gatewaySessions, hookSessions int) int {
 		return hookSessions
 	}
 	return gatewaySessions
+}
+
+func firstNonEmpty(xs ...string) string {
+	for _, x := range xs {
+		if x != "" {
+			return x
+		}
+	}
+	return ""
 }
