@@ -60,14 +60,14 @@ func TestEveryNameMatchesTheCode(t *testing.T) {
 	known := implemented(t)
 	for _, x := range technique.All() {
 		for _, n := range x.Names {
-			_, real := known[n]
+			_, found := known[n]
 			switch x.Status {
 			case technique.StatusBuilt, technique.StatusPartial, technique.StatusWrapped:
-				if !real {
+				if !found {
 					t.Errorf("%s (%s) is %s but nothing in the code is called %q", x.ID, x.Title, x.Status, n)
 				}
 			case technique.StatusCandidate:
-				if real {
+				if found {
 					t.Errorf("%s is a candidate but %q already exists in %s: update its status", x.ID, n, known[n])
 				}
 			}

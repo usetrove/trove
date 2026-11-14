@@ -130,7 +130,7 @@ func TestTheBaselineCountsHookSessions(t *testing.T) {
 			setInstall(t, db, c.days)
 			probed(t, dir)
 			hookSessions(t, db, "noise_normalizer", c.sessions, 500)
-			Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -c.days))
+			_, _ = Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -c.days))
 			res, err := Advance(context.Background(), db, dir, config.Default(), DefaultPolicy(), hookNow)
 			if err != nil {
 				t.Fatal(err)
@@ -155,7 +155,7 @@ func TestEvidenceFromBothChannelsIsNotAdded(t *testing.T) {
 	setInstall(t, db, 30)
 	gatewaySessions(t, db, "noise_normalizer", 12, 250) // 3,000 tokens
 	hookSessions(t, db, "noise_normalizer", 12, 200)    // 12 sessions x 2 events x 200 = 4,800 tokens
-	Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -30))
+	_, _ = Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -30))
 	res, err := Advance(context.Background(), db, dir, config.Default(), DefaultPolicy(), hookNow)
 	if err != nil {
 		t.Fatal(err)
@@ -174,7 +174,7 @@ func TestEvidenceFromBothChannelsIsNotAdded(t *testing.T) {
 
 func TestNothingSeenYetIsCollectingNotUnavailable(t *testing.T) {
 	db, dir := open(t)
-	Enable(dir, DefaultPolicy(), hookNow)
+	_, _ = Enable(dir, DefaultPolicy(), hookNow)
 	res, err := Advance(context.Background(), db, dir, config.Default(), DefaultPolicy(), hookNow.Add(time.Hour))
 	if err != nil {
 		t.Fatal(err)

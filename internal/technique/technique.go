@@ -212,9 +212,9 @@ type Context struct {
 	HookCaps []string
 }
 
-func (c Context) has(cap string) bool {
+func (c Context) has(capability string) bool {
 	for _, h := range c.Have {
-		if h == cap {
+		if h == capability {
 			return true
 		}
 	}
@@ -347,7 +347,7 @@ func (t Technique) unmet(ctx Context) []string {
 			out = append(out, "it needs "+capabilityText(r))
 		}
 	}
-	if len(t.HookNeeds) > 0 && !(t.hasLayer(LayerRequest) && ctx.GatewayOn) {
+	if len(t.HookNeeds) > 0 && (!t.hasLayer(LayerRequest) || !ctx.GatewayOn) {
 		for _, n := range t.HookNeeds {
 			if !ctx.hasHookCap(n) {
 				out = append(out, "it needs a hook probe that showed "+hookNeedText(n)+" works for your agent (run /trove:setup, or `trove hooks verify`)")

@@ -25,9 +25,9 @@ func TestDeclaredPerUseOverheadMatchesTheRealMessages(t *testing.T) {
 			t.Errorf("%s: no declared overhead", c.name)
 			continue
 		}
-		real := EstTokens(int64(len(c.text)))
-		if diff := real - o.PerUse; diff > slack || diff < -slack {
-			t.Errorf("%s: registry declares %d tokens per use but the message is about %d; update UseOverhead in internal/technique/registry.go", c.name, o.PerUse, real)
+		got := EstTokens(int64(len(c.text)))
+		if diff := got - o.PerUse; diff > slack || diff < -slack {
+			t.Errorf("%s: registry declares %d tokens per use but the message is about %d; update UseOverhead in internal/technique/registry.go", c.name, o.PerUse, got)
 		}
 	}
 }

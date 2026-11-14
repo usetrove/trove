@@ -246,7 +246,7 @@ func TestAllIsInNumericOrder(t *testing.T) {
 		}
 		return -1
 	}
-	if !(idx("B9") < idx("B10") && idx("B14") < idx("B15") && idx("B15") < idx("C1") && idx("C13") < idx("W1")) {
+	if idx("B9") >= idx("B10") || idx("B14") >= idx("B15") || idx("B15") >= idx("C1") || idx("C13") >= idx("W1") {
 		t.Errorf("order %v", ids)
 	}
 }

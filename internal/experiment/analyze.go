@@ -33,8 +33,8 @@ const (
 const (
 	MetricCost = "cost_per_session"
 	// MetricTokens is the headline for a trial judged without priced sessions: tokens (input, cache and output)
-	// per session. See AnalyzeHookTrial.
-	MetricTokens    = "tokens_per_session"
+	// per session. See AnalyzeHookTrial. The name only says "tokens"; it is not a credential.
+	MetricTokens    = "tokens_per_session" //nolint:gosec // G101: a metric name
 	MetricTurns     = "turns"
 	MetricToolErrs  = "tool_errors"
 	MetricAbandoned = "abandoned"

@@ -158,7 +158,7 @@ func TestAnnounceSendsEachNoticeOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	var sent []string
-	send := func(title, body string) { sent = append(sent, body) }
+	send := func(_, body string) { sent = append(sent, body) }
 	if err := Announce(dir, true, send); err != nil {
 		t.Fatal(err)
 	}

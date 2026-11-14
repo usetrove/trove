@@ -34,12 +34,6 @@ func (l *fakeLedger) read(ctx context.Context, from, to time.Time) (float64, err
 	return fn(from, to)
 }
 
-func (l *fakeLedger) set(fn func(from, to time.Time) (float64, error)) {
-	l.mu.Lock()
-	l.fn = fn
-	l.mu.Unlock()
-}
-
 func constLedger(usd float64) *fakeLedger {
 	l := &fakeLedger{}
 	l.fn = func(_, _ time.Time) (float64, error) { return usd, nil }
@@ -60,8 +54,8 @@ func (c *clock) advance(d time.Duration) {
 
 var capDay = time.Date(2026, 11, 13, 14, 0, 0, 0, time.UTC)
 
-func newCap(cap float64, period string, l *fakeLedger, c *clock) *spendCap {
-	return newSpendCap(config.Budget{Period: period, CapUSD: cap, WarnAtPercent: 80}, l.read, c.now)
+func newCap(limit float64, period string, l *fakeLedger, c *clock) *spendCap {
+	return newSpendCap(config.Budget{Period: period, CapUSD: limit, WarnAtPercent: 80}, l.read, c.now)
 }
 
 func waitFor(t *testing.T, what string, cond func() bool) {
