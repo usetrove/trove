@@ -72,7 +72,7 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 
 | ID | Technique | Layer | Route | Prefix | Subscription | Notes and sources |
 |---|---|---|---|---|---|---|
-| C1 | **Cache lifetime**: choose 5 minutes or 1 hour | config; request | config, then proxy | the setting: no. A per-breakpoint split: yes | config: yes; split: no | See findings 1 and 2: measured once, a blanket 5-minute default would have cost more for that developer. S2, S4 |
+| C1 | **Cache lifetime**: choose 5 minutes or 1 hour | config; request | config, then proxy | the setting: no. A per-breakpoint split: yes | config: yes; split: no | See findings 1 and 2: measured once, a blanket 5-minute default would have cost more for that developer. S2, S4. The per-user estimate is built (`cache_ttl` suggestion) |
 | C2 | Fan-out serialisation: hold sibling subagent requests until the first cache entry exists | request | native, proxy | no | no | needs a latency budget (up to 3 s is Probe0's figure, unverified). Not verified against provider docs |
 | C3 | In-flight dedup: identical simultaneous requests share one upstream call | request | native, proxy | no | no | fail open on any doubt |
 | C4 | Exact response cache for identical requests | request | native, proxy | no | no | correctness risk with agents; opt-in only |
@@ -129,6 +129,10 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
    **Consequence:** do not ship a TTL downgrade as a default. If anything is built for C1, it is a per-user estimate
    computed from the user's own history, shown first and recommending a change only when five minutes is cheaper for
    that user.
+   **Built 2026-11-13:** the `cache_ttl` suggestion (`internal/optimize/suggest/cachettl.go`, shown by `trove report` and
+   `trove optimize suggest`) does exactly this, in both directions, and is silent unless the other lifetime is at least
+   25% cheaper by at least $1. On the history above it correctly says nothing.
+   It is advice only; it does not change any setting.
 3. **A per-breakpoint split still needs the gateway.** The API accepts a TTL on each cache marker, and a longer TTL
    must come before a shorter one (S1, summary only). Claude Code's settings pick one TTL per bucket, not one per
    breakpoint.
@@ -169,7 +173,7 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 
 ## Suggested order of work
 
-1. **Done 2026-11-13 (one history):** the 5-minute and 1-hour cache-write split was measured (finding 2). It argues against a blanket TTL downgrade. What remains for C1 is a per-user estimate computed from each user's own history, shadow only, as an `analyze` finding.
+1. **Done 2026-11-13 (one history):** the 5-minute and 1-hour cache-write split was measured (finding 2). It argues against a blanket TTL downgrade. The per-user estimate for C1 is now built as the `cache_ttl` suggestion (advice only).
 2. Config-route techniques. **Done 2026-11-13 (first pass):** the settings catalog now holds the verbatim entries for C9, C10, C11 and the cache lifetime keys, and `trove fix` has `settings_check` (B13). **Not done:** any profile that sets a number (needs a benchmark), and C1 as a recommendation (needs step 1). They help subscription users and need no proxy.
 3. Write the registry and the shared conflict check (requirements 1 and 3).
 4. Build the gateway-only techniques for API-key users, one at a time and shadow first: C3, C5, then C2.

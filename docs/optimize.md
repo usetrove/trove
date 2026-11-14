@@ -157,6 +157,18 @@ exactly.
 - **Reasoning effort**: models where output tokens are a large share of spend.
   Anthropic publishes no savings figure for lower effort, so the suggestion
   carries a "per 10% fewer output tokens" scenario and no savings estimate.
+- **Cache lifetime** (`cache_ttl`): would the other prompt cache lifetime (5 minutes or 1 hour) have been
+  cheaper for your own sessions? It reads Claude Code's history, which records the tokens written at each
+  lifetime, and takes the gap before each request: a gap of 5 minutes or less is served by either lifetime, one of
+  more than 5 and up to 60 minutes only by a one-hour entry. It compares the one-hour premium with the rewrites that
+  premium avoided (or, if you are on 5 minutes, the rewrites a longer lifetime would have avoided with the premium it
+  would add), per model at list prices, for the main conversation and for subagents separately. It speaks up only when
+  the other lifetime is at least 25% cheaper and the difference is at least $1, from at least 100 requests. Most of
+  the time it says nothing, which means your current lifetime is paying for itself. It gives a dollar figure only
+  when the history shows an API key; on a subscription or an unknown plan it says what the list-price difference
+  would be and that this is not money saved. It names the Claude Code setting to change (`promptCacheTtl` or
+  `subagentPromptCacheTtl`, version 2.1.242 or later) and never changes it. It assumes a lost cache entry is
+  rewritten in full, so it is an estimate. Facts verified 2026-11-13 (see [techniques.md](techniques.md)).
 
 ## Provider facts checked (2026-10-29)
 

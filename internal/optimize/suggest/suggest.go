@@ -85,6 +85,11 @@ func Generate(ctx context.Context, db Querier, tbl *pricing.Table, from, to time
 			return nil, err
 		}
 		out = append(out, e...)
+		c, err := cacheTTL(ctx, db, tbl, from, to)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, c...)
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		a, b := out[i].EstSavingsUSD, out[j].EstSavingsUSD
