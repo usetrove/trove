@@ -80,7 +80,7 @@ func TestNetOfChargesPerUseUnlessTheEstimateAlreadyDid(t *testing.T) {
 		{"noise_normalizer", 10, 100, 5000, 5000},        // adds no text
 		{"hook_repeat_read", 10, 100, 5000, 5000 - 6800}, // 68 per denial, not netted
 		{"hook_read_limit", 10, 100, 5000, 5000},         // 42 per note, already inside its estimate
-		{"output_trimmer", 10, 100, 5000, 5000},          // adds text, declares no numbers: shown as is; ChargeableCost stops promotion
+		{"output_trimmer", 10, 100, 5000, 5000},          // adds text, declares no numbers: shown as is; CannotJudge stops promotion
 		{"not_a_technique", 10, 100, 5000, 5000},
 	}
 	for _, c := range cases {
@@ -211,12 +211,26 @@ func TestSummarize(t *testing.T) {
 }
 
 func TestAnOptimizerWithUndeclaredCostIsNeverChargeable(t *testing.T) {
-	if ChargeableCost("output_trimmer") == "" {
+	if CannotJudge("output_trimmer") == "" {
 		t.Error("output_trimmer adds text with no declared numbers; Autopilot must refuse it")
 	}
 	for _, n := range []string{"noise_normalizer", "duplicate_result_collapser", "hook_repeat_read", "hook_read_limit", "not_a_technique"} {
-		if why := ChargeableCost(n); why != "" {
+		if why := CannotJudge(n); why != "" {
 			t.Errorf("%s: %q", n, why)
+		}
+	}
+}
+
+func TestATechniqueWithNoSavingEstimateIsNeverJudgedFromShadow(t *testing.T) {
+	for _, n := range []string{"hook_quiet_commands", "hook_large_output"} {
+		if CannotJudge(n) == "" {
+			t.Errorf("%s has no shadow saving estimate; Autopilot must refuse it", n)
+		}
+		r := row(50, 1_000_000) // even a huge figure must not matter
+		for _, it := range DefaultPolicy().Plan(map[string]measure.ShadowRow{n: r}, nil, true, nil, nil) {
+			if it.Optimizer == n && it.Verdict != VerdictNeedsYourChoice {
+				t.Errorf("%s planned as %q", n, it.Verdict)
+			}
 		}
 	}
 }

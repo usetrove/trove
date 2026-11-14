@@ -52,6 +52,8 @@ func (p Policy) Plan(rows map[string]measure.ShadowRow, entries map[string]confi
 			it.Verdict, it.Reason = VerdictBlocked, blocked[name]
 		case unavailable[name] != "":
 			it.Verdict, it.Reason = VerdictUnavailable, unavailable[name]
+		case NoSavingEstimate(name):
+			it.Verdict, it.Reason = VerdictNeedsYourChoice, noEstimateReason
 		case ok && p.IsEligible(name):
 			it.Verdict, it.Reason = VerdictWouldTurnOn, "enough shadow evidence; Autopilot turns it on at the next check"
 		case ok:

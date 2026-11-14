@@ -138,8 +138,12 @@ type Technique struct {
 	// UseNetted is true when the technique's own saving estimate already subtracts UseOverhead, so
 	// a reader of that estimate must not subtract it again. It is false when the estimate is the
 	// tokens removed before the added text is counted.
-	UseNetted bool     `json:"overhead_netted_in_estimate,omitempty"`
-	Requires  []string `json:"requires,omitempty"`
+	// NoSavingEstimate is true when the technique's shadow mode counts what it would have done but
+	// cannot say how many tokens that would have saved (how much a flag or a hint removes depends on
+	// the command). Such a technique has no evidence a saving threshold can be judged against.
+	NoSavingEstimate bool     `json:"no_saving_estimate,omitempty"`
+	UseNetted        bool     `json:"overhead_netted_in_estimate,omitempty"`
+	Requires         []string `json:"requires,omitempty"`
 	// HookNeeds lists the hook capabilities the technique relies on when it runs in the plugin's
 	// hooks, as "Tool:kind" with kind input or output (for example "Bash:output"). They are required
 	// only when it does not run through the gateway: a technique with a request layer is satisfied

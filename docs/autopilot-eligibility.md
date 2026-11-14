@@ -72,15 +72,16 @@ a program that does not know it, and the reverse needs the same care.
 "Eligible after" means the gates that still have to be met, in order. IDs are from the registry.
 
 ### 1. `hook_repeat_read` (B6). First in line.
-Denies a repeat read of an unchanged file once, naming the earlier prompt. Lossless in tier: the agent can read it
-again, and the hook clears its ledger on compaction.
+Denies a repeat read of an unchanged file once, naming the earlier prompt. **Recoverable** in tier (corrected
+2026-11-13: this page and the registry said lossless, the code said recoverable, and a test now keeps them equal): the
+model is told no, and the agent has to repeat the Read to get it anyway. The hook clears its ledger on compaction.
 - Has: shadow mode (`would_block`, with token estimates), a guardrail (`hook_reread`, rolls back at 25% retried),
   session pinning.
 - Needs: **G2** (the `hook_events` adapter, which also unlocks hooks-only users for `noise_normalizer`), **G5** (a
   "hook probe passed for this agent version" capability; hooks treat an unprobed agent as unable to act), **G3** (a
   denial message replaces a whole read, so its overhead is netted inside the tokens it removes; the registry
   invariant has to allow that), **G8** (a benchmark arm for this hook on its own).
-- Verdict: eligible after G2, G5, G3 and G8 for this technique. No probation needed.
+- Verdict: eligible after G2, G5, G3, G8 **and G7 (probation)**. G2, G5 and G3 are built.
 
 ### 2. `noise_normalizer` for users with no gateway (B1, already eligible).
 Not a new technique, but the first thing G2 delivers: it is eligible today and cannot be promoted for a subscription
@@ -92,7 +93,13 @@ Adds one quieting flag to an allowlisted command (`go test`, `npm test` and simi
 - Needs: **G2**, **G5** (it rewrites the tool input, so it needs the `updatedInput` capability from the probe),
   **G6** (decide whether it may run beside RTK: both rewrite the same Bash input, and `trove external` has never
   refused the pair), **G8**.
-- Verdict: eligible after G2, G5, G6 and G8. Lossless in tier (the agent can rerun the full command), so no probation.
+- **Its shadow mode has no saving estimate, and cannot honestly have one.** How many tokens a flag removes depends on
+  the command and on what it would have printed, which a shadow run (it runs the command as written) never sees. A
+  fixed per-rule figure would be invented, so none is recorded (rule 9). The registry marks it `NoSavingEstimate`,
+  Autopilot refuses to judge it from shadow evidence and the planner says so. It can only be judged by measuring
+  sessions with it on, which is the probation step.
+- Verdict: eligible after G2, G5, G6, G8 **and G7 (probation)**. Recoverable in tier (the agent can rerun the full
+  command), corrected from "lossless" on 2026-11-13.
 
 ### 4. `hook_read_limit` (B7).
 Adds `limit: 400` to a read of a file of 40 KB or more and tells the model the read was partial.
@@ -211,10 +218,10 @@ plugin's start check handles the update case; `trove doctor` warns otherwise).
 2. ~~**Relax the registry's `AddsText` rule** to "overhead declared and netted", with a test.~~ Done.
 3. **Benchmark arms for single hooks (G8).** Add conditions that switch on one hook optimizer at a time, so each is
    attributable.
-4. **`hook_repeat_read`, then `hook_quiet_commands`** (after deciding the RTK pairing), as `lossless-v2`, with new
-   consent text.
-5. **The probation step (G7).** Then `output_trimmer`, then `hook_read_limit` (after its guardrail) and
-   `hook_large_output`.
+4. **The probation step (G7).** Both `hook_repeat_read` and `hook_quiet_commands` are recoverable, so neither can
+   join before it exists. Nothing recoverable can.
+5. **`hook_repeat_read`, then `hook_quiet_commands`** (after deciding the RTK pairing), with new consent text. Then
+   `output_trimmer`, then `hook_read_limit` (after its guardrail) and `hook_large_output`.
 6. **Everything else** only on evidence from real use, one at a time.
 
 ## The admission checklist (copy for each technique)

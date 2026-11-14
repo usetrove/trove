@@ -38,3 +38,17 @@ func TestUndeclaredTextAdderStaysOutOfAutopilot(t *testing.T) {
 		t.Error("output_trimmer now declares numbers; revisit whether it may join Autopilot, and update this test")
 	}
 }
+
+// The registry and the code must agree on how risky each optimizer is, because Autopilot's rule for
+// what it may promote reads the registry's tier and the user is told the code's.
+func TestRegistryTiersMatchTheCode(t *testing.T) {
+	for _, c := range Matrix() {
+		tq, ok := technique.Get(c.Optimizer)
+		if !ok {
+			continue
+		}
+		if tq.Tier != string(c.Tier) {
+			t.Errorf("%s: registry %s says %q but the code says %q", c.Optimizer, tq.ID, tq.Tier, c.Tier)
+		}
+	}
+}

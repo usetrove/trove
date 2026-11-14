@@ -156,7 +156,7 @@ func (p Policy) Decide(cur config.AutopilotEntry, ev Evidence, now time.Time) De
 // is one place it is declared. It is charged per session for text every session pays, and per event for
 // text added each time it acts, unless the optimizer's own estimate already subtracts that. An
 // optimizer that adds text without declaring numbers cannot be charged here: its figure is returned as
-// it is, for the planner to show, and Advance refuses to promote it (see ChargeableCost).
+// it is, for the planner to show, and Advance refuses to promote it (see CannotJudge).
 func (p Policy) NetOf(name string, sessions, events int, removed float64) int64 {
 	o, ok := technique.OverheadOf(name)
 	if !ok {
@@ -169,15 +169,27 @@ func (p Policy) NetOf(name string, sessions, events int, removed float64) int64 
 	return net
 }
 
-// ChargeableCost says why an optimizer's cost cannot be netted, or "" when it can. Autopilot never
+// CannotJudge says why Autopilot cannot judge an optimizer from shadow evidence (its cost cannot be netted, or its
+// shadow mode has no saving estimate), or "" when it can. Autopilot never
 // promotes what it cannot charge for (rule 15). Names the registry does not know are left alone: they
 // are not text-adding techniques the registry tracks.
-func ChargeableCost(name string) string {
+func CannotJudge(name string) string {
 	if _, known := technique.Get(name); !known {
 		return ""
+	}
+	if NoSavingEstimate(name) {
+		return noEstimateReason
 	}
 	if _, ok := technique.OverheadOf(name); !ok {
 		return "its cost in added text is not declared as numbers, so it cannot be charged against its saving"
 	}
 	return ""
+}
+
+const noEstimateReason = "its shadow mode counts what it would have done but cannot estimate the tokens that would save, so Autopilot has no saving to judge"
+
+// NoSavingEstimate reports whether the named technique's shadow mode cannot put a number on its saving.
+func NoSavingEstimate(name string) bool {
+	t, ok := technique.Get(name)
+	return ok && t.NoSavingEstimate
 }

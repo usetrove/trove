@@ -119,7 +119,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 			ShadowSessions: sessions,
 			NetTokens:      p.NetOf(name, sessions, events, tokens),
 			RolledBack:     back,
-			Blocked:        firstNonEmpty(blockedBy(on, name), ChargeableCost(name)),
+			Blocked:        firstNonEmpty(blockedBy(on, name), CannotJudge(name)),
 			Unavailable:    whyUnavailable(name, setup),
 		}
 		d := p.Decide(cur, ev, now)
