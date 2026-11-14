@@ -667,6 +667,21 @@ PART E. A REAL-INSTALL TRIAL RUN  (A PLUMBING CHECK, NOT A RESULT)
      already has. In an "off" session the second read works normally. Note, for each session, which
      happened (you will compare it with the record in E.4).
 
+ Step E.3b  Check the two new counters (added 2026-11-14), once. They rest on a tool name: the hooks
+     match the Trove MCP tools as `mcp__trove__trove_run` and `mcp__trove__trove_fetch_full`. Claude Code's
+     docs give the form `mcp__<server>__<tool>` (verified 2026-10-29, docs/mcp.md), and Trove registers the
+     server as "trove", but nobody has yet seen the hook fire on a real session. So test it. With `trove mcp install` done and the project's
+     .trove/commands.toml approved (`trove mcp trust`), start one session and say: "Use the trove_run tool to run
+     <a command from commands.toml>, then say done." Then:
+
+         trove hooks status
+
+     Expected: a line for hook_large_output that includes "trove_run used in 1 sessions (measured)". If it
+     never appears although Claude did call the tool, the matcher name is wrong for your Claude Code version:
+     do not trust the hook_large_output guardrail or trial until it is fixed. Likewise a read of a very large
+     file followed by a read past line 400 should show "read more of 1 limited files" for hook_read_limit
+     once it is on.
+
  Step E.4  Check the record, read-only. Wait at least 30 minutes after your last session (a session counts
      only once it has been idle that long), end one more session or run `trove hooks sync`, then:
 

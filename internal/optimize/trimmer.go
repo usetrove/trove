@@ -241,7 +241,13 @@ func (OutputTrimmer) Points() []Point { return []Point{PointRequest, PointToolOu
 // OverheadTokens implements Capable. The trimmer's marker line is netted out of
 // BytesRemoved; the cost that is always present is the MCP tool definitions the
 // agent needs to fetch trimmed output back (trove_fetch_full, trove_run).
-// TODO(measure): fill this from `trove mcp schema-size` once it is wired in.
+//
+// That cost is declared in the technique registry (internal/technique: 351 tokens per session, kept equal to
+// `trove mcp schema-size` by a test), and Autopilot charges it from there. It is deliberately not fed into this
+// per-request channel: the gateway's net guard (measure.NetGuard) would then charge it on every request at full
+// price, although the definitions are cached after the first one, and that would change when the guard switches
+// the trimmer off, which is a policy decision of its own. So this stays 0, and `trove doctor --capabilities`
+// shows the registry's figure (351), because the matrix reads it from there.
 func (OutputTrimmer) OverheadTokens() int { return 0 }
 
 // TransformOutput implements ToolOutputOptimizer, using the same trimOutput as
