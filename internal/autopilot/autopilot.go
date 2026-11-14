@@ -21,7 +21,7 @@ import (
 // Policy is the rule set. DefaultPolicy's numbers are conservative placeholders
 // until a benchmark sets them; they are labeled unvalidated wherever shown.
 type Policy struct {
-	// Name is the policy version the user consented to ("lossless-v1" or "lossless-v2").
+	// Name is the policy version the user consented to ("lossless-v1", "lossless-v2" or "lossless-v3").
 	Name string
 	// Eligible lists the optimizers Autopilot may promote. Only lossless ones that
 	// leave the cached prefix alone are listed on day one.
@@ -61,9 +61,8 @@ func DefaultPolicy() Policy {
 	}
 }
 
-// PolicyV2 is "lossless-v2": the v1 list, plus recoverable optimizers that must pass probation. They are
-// listed here but cannot be promoted yet: reading the comparison's result is a later step, so a probation
-// can only end by timing out or being rolled back. Nothing offers this policy to a user yet.
+// PolicyV2 is "lossless-v2": the v1 list, plus two recoverable optimizers that must pass probation, a
+// session-level comparison, before they are kept. A user who agreed to it keeps exactly these two.
 func PolicyV2() Policy {
 	p := DefaultPolicy()
 	p.Name = config.AutopilotPolicyV2
@@ -73,10 +72,26 @@ func PolicyV2() Policy {
 	return p
 }
 
+// PolicyV3 is "lossless-v3": v2 plus three more recoverable optimizers, each judged by its own guardrail as well
+// as by probation. One trial runs at a time, in this order: the two from v2, then the output trimmer, the
+// trove_run hint and the read limit. The numbers are the same placeholders as v2's until a benchmark sets them.
+func PolicyV3() Policy {
+	p := PolicyV2()
+	p.Name = config.AutopilotPolicyV3
+	p.Probation = append(p.Probation, "output_trimmer", "hook_large_output", "hook_read_limit")
+	return p
+}
+
+// TrialPolicy is the policy `trove autopilot trials on` offers: the newest one with a probation list.
+func TrialPolicy() Policy { return PolicyV3() }
+
 // PolicyFor returns the policy a consent record names, or DefaultPolicy for one this version does not know
 // (which only ever shrinks what Autopilot may do).
 func PolicyFor(name string) Policy {
-	if name == config.AutopilotPolicyV2 {
+	switch name {
+	case config.AutopilotPolicyV3:
+		return PolicyV3()
+	case config.AutopilotPolicyV2:
 		return PolicyV2()
 	}
 	return DefaultPolicy()

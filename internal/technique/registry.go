@@ -11,6 +11,12 @@ func none() *int { return &zero }
 
 func use(n int) *int { return &n }
 
+// trimmerToolDefTokens is what the Trove MCP server's four tool definitions add to the context in a session
+// that has it registered, which the output trimmer cannot work without (it needs trove_fetch_full). It is charged
+// to the trimmer in full, even for a user who registered the server for other reasons, so a promotion never rests
+// on a saving the definitions already ate. A test in internal/mcp keeps it equal to `trove mcp schema-size`.
+const trimmerToolDefTokens = 351
+
 const (
 	urlRTK        = "https://github.com/rtk-ai/rtk"
 	urlHeadroom   = "https://github.com/headroomlabs-ai/headroom"
@@ -40,9 +46,10 @@ var registry = []Technique{
 		Licence: "Trove project", Note: "deterministic, so a resent history gives the same bytes"},
 	{ID: "B3", Title: "Keep failures and the first and last lines of long test and build output", Names: []string{"output_trimmer"},
 		Layers: []Layer{LayerToolBoundary, LayerRequest}, Route: RouteNative, Status: StatusBuilt, Tier: tierRecover,
-		Subscription: true, AddsText: true, OverheadNote: noticeInCount + "; the MCP tool definitions it relies on are B9's overhead",
-		HookNeeds: []string{"Bash:output"},
-		Requires:  []string{CapMCPServer, CapRecoveryStore}, Claims: []Claim{{ResourceShellCompressor, ownerTrove}},
+		Subscription: true, AddsText: true, Overhead: use(trimmerToolDefTokens), UseOverhead: none(), UseNetted: true,
+		OverheadNote: noticeInCount + "; the four MCP tool definitions it relies on (about 351 tokens, `trove mcp schema-size`) are charged to it as a per-session cost, although the server is also B9's",
+		HookNeeds:    []string{"Bash:output"},
+		Requires:     []string{CapMCPServer, CapRecoveryStore}, Claims: []Claim{{ResourceShellCompressor, ownerTrove}},
 		Licence: "Trove project", Note: "full output is kept locally and can be fetched back; Bash output only in hooks"},
 	{ID: "B4", Title: "Move changing lines out of the stable prompt", Names: []string{"volatile_prefix_mover"},
 		Layers: []Layer{LayerRequest}, Route: RouteNative, Status: StatusBuilt, Tier: tierLossless, Prefix: true,

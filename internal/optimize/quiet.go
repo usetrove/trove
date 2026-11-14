@@ -81,8 +81,11 @@ func (ReadLimit) TransformInput(_ context.Context, call ToolCall, s Session) (To
 		return call, Report{}
 	}
 	a, ok := parseReadArgs(call.Input)
-	if !ok || a.Offset != 0 || a.Limit != 0 {
+	if !ok {
 		return call, Report{}
+	}
+	if a.Offset != 0 || a.Limit != 0 {
+		return call, countExtraRead(a, s)
 	}
 	fs, ok := StatFile(a.FilePath, 0, false)
 	if !ok || fs.Size < ReadLimitMinBytes {
@@ -103,8 +106,45 @@ func (ReadLimit) TransformInput(_ context.Context, call ToolCall, s Session) (To
 	if !ok {
 		return call, Report{}
 	}
+	// Remember that this file was limited, by hash only, so a later read of more of it can be counted. If the
+	// mark cannot be saved the read is left whole: a limit that cannot be judged afterwards is not worth making.
+	if s.Ledger != nil {
+		key := limitedKey(a.FilePath)
+		if ent, seen := s.Ledger.Get(key); !seen || ent.BlockedSum == "" {
+			s.Ledger.Put(key, ReadEntry{Prompt: s.Ledger.Prompts(), At: s.Now.Unix()})
+			if err := s.Ledger.Save(); err != nil {
+				return call, Report{Err: "ledger"}
+			}
+		}
+	}
 	rep.Decision = &Decision{Kind: KindRewritten, Bytes: saved, Tokens: rep.TokensRemoved, Message: note}
 	return ToolCall{Name: call.Name, Input: in}, rep
+}
+
+// limitedKey is the ledger key for "this file's read was limited by hook_read_limit". The path is hashed,
+// never stored.
+func limitedKey(path string) string { return "l:" + ReadKey(path, 0, 0) }
+
+// countExtraRead counts, once per file, a read of more of a file after hook_read_limit limited the first read.
+// Only a read that goes past what the limit gave counts: one that ends after line ReadLimitLines, or that has
+// no limit of its own and starts later in the file. A read inside the first lines, which the agent already
+// has, does not. It never changes the call.
+func countExtraRead(a readArgs, s Session) Report {
+	reachesPast := a.Limit == 0 || int(a.Offset)+int(a.Limit) > ReadLimitLines
+	if s.Ledger == nil || !reachesPast {
+		return Report{}
+	}
+	key := limitedKey(a.FilePath)
+	ent, seen := s.Ledger.Get(key)
+	if !seen || ent.BlockedSum != "" {
+		return Report{} // not limited by us, or already counted
+	}
+	ent.BlockedSum = "counted"
+	s.Ledger.Put(key, ent)
+	if err := s.Ledger.Save(); err != nil {
+		return Report{} // an uncounted read is a missing count, never a failure of the call
+	}
+	return Report{Name: config.OptimizerHookReadLimit, Decision: &Decision{Kind: KindExtraRead}}
 }
 
 // QuietRule is one allowlisted rewrite: when a command is exactly Prefix followed

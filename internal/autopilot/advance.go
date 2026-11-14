@@ -42,10 +42,14 @@ func CurrentPolicy(dir string) Policy {
 	return PolicyFor(f.Policy)
 }
 
-// EnableTrials records the user's agreement to trials (policy lossless-v2) and lists the trial candidates in
-// shadow. It needs Autopilot to be on already, and changes no request: a candidate is only ever put on trial
+// EnableTrials records the user's agreement to trials under policy p (lossless-v2 or v3) and lists p's trial
+// candidates in shadow. A user moving from v2 to v3 keeps what v2 already has (its states and attempt counts) and
+// gets the new candidates in shadow. It needs Autopilot to be on already, and changes no request: a candidate is only ever put on trial
 // later, from shadow evidence, at a session boundary.
-func EnableTrials(dir string, now time.Time) (config.AutopilotFile, error) {
+func EnableTrials(dir string, p Policy, now time.Time) (config.AutopilotFile, error) {
+	if len(p.Probation) == 0 {
+		return config.AutopilotFile{}, fmt.Errorf("policy %s has no trials", p.Name)
+	}
 	f, err := config.LoadAutopilot(dir)
 	if err != nil {
 		return f, err
@@ -53,8 +57,8 @@ func EnableTrials(dir string, now time.Time) (config.AutopilotFile, error) {
 	if !f.Enabled {
 		return f, fmt.Errorf("Autopilot is not on. Run `trove autopilot on` first")
 	}
-	f.Policy, f.TrialsConsentedAt = config.AutopilotPolicyV2, now.UnixMilli()
-	for _, name := range PolicyV2().Probation {
+	f.Policy, f.TrialsConsentedAt = p.Name, now.UnixMilli()
+	for _, name := range p.Probation {
 		if _, ok := f.Entries[name]; !ok {
 			f.Entries[name] = config.AutopilotEntry{State: config.AutopilotShadow, SinceMS: now.UnixMilli(), Reason: "collecting shadow estimates"}
 			f.Record(config.AutopilotEvent{AtMS: now.UnixMilli(), Optimizer: name, From: config.AutopilotOff, To: config.AutopilotShadow, Reason: "trials turned on"})
@@ -63,8 +67,8 @@ func EnableTrials(dir string, now time.Time) (config.AutopilotFile, error) {
 	return f, config.SaveAutopilot(dir, f)
 }
 
-// DisableTrials withdraws the agreement to trials: back to the lossless-v1 policy, and every trial candidate
-// is forgotten, including one on trial. New sessions are not split any more; sessions already running keep
+// DisableTrials withdraws the agreement to trials: back to the lossless-v1 policy, and every trial candidate of
+// every policy version is forgotten, including one on trial. New sessions are not split any more; sessions already running keep
 // their pins. What Autopilot turned on under v1 is untouched.
 func DisableTrials(dir string, now time.Time) (config.AutopilotFile, error) {
 	f, err := config.LoadAutopilot(dir)
@@ -72,7 +76,7 @@ func DisableTrials(dir string, now time.Time) (config.AutopilotFile, error) {
 		return f, err
 	}
 	f.Policy, f.TrialsConsentedAt = config.AutopilotPolicy, 0
-	for _, name := range PolicyV2().Probation {
+	for _, name := range PolicyV3().Probation {
 		if e, ok := f.Entries[name]; ok {
 			if e.State == config.AutopilotProbation || e.State == config.AutopilotOn {
 				f.Record(config.AutopilotEvent{AtMS: now.UnixMilli(), Optimizer: name, From: e.State, To: config.AutopilotOff, Reason: "trials turned off"})
@@ -220,7 +224,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 			unavailable[n] = r
 		}
 	}
-	plan := p.Plan(combinedRows(optimize.PipelineNames, byName, hookShadow), f.Entries, baselineDone, blocked, unavailable)
+	plan := p.Plan(combinedRows(p.planNames(), byName, hookShadow), f.Entries, baselineDone, blocked, unavailable)
 	if !samePlan(plan, f.Plan) {
 		f.Plan, f.PlannedMS = plan, now.UnixMilli()
 		changed = true
@@ -307,21 +311,10 @@ func blockedBy(on []string, name string) string {
 	return ""
 }
 
-// viaHooks reports whether the named optimizer runs only in the plugin's hooks: not through the gateway, and
-// not at the request layer. The gateway pins only the request-level optimizers, so it can never split sessions
-// for these; their trials are assigned by the hooks.
-func viaHooks(name string) bool {
-	t, ok := technique.Get(name)
-	if !ok || t.Gateway {
-		return false
-	}
-	for _, l := range t.Layers {
-		if l == technique.LayerRequest {
-			return false
-		}
-	}
-	return true
-}
+// viaHooks reports whether the hooks assign the named optimizer's trial arms. It is one list, in the config
+// package, because the gateway's assigner has to skip the same names: one session must never get two arms for
+// one optimizer. output_trimmer is on that list although it also runs in the gateway.
+func viaHooks(name string) bool { return config.HookAssignsTrial(name) }
 
 // probationBlocker says why a trial cannot run for this user now, or "" when it can. A trial needs A/B
 // comparison switched on (with it off an optimizer that is "on" is on for everyone), and something to split

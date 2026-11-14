@@ -39,7 +39,7 @@ func TestAnOptimizerOnTrialIsOnOnlyWhereTheAssignerCanSplitSessions(t *testing.T
 }
 
 func TestOnlyKnownPoliciesAreActive(t *testing.T) {
-	for policy, want := range map[string]bool{AutopilotPolicy: true, AutopilotPolicyV2: true, "lossless-v3": false, "": false} {
+	for policy, want := range map[string]bool{AutopilotPolicy: true, AutopilotPolicyV2: true, "lossless-v3": true, "lossless-v9": false, "": false} {
 		if got := probationFile(policy).Active(); got != want {
 			t.Errorf("policy %q active = %v, want %v", policy, got, want)
 		}

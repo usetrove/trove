@@ -348,8 +348,13 @@ func TestOverheadOfReadsTheRegistry(t *testing.T) {
 	if o, ok := OverheadOf("noise_normalizer"); !ok || o != (Overhead{}) {
 		t.Errorf("noise_normalizer adds no text: %+v %v", o, ok)
 	}
-	if _, ok := OverheadOf("output_trimmer"); ok {
-		t.Error("output_trimmer adds text with no numbers declared, so it must not report a usable overhead")
+	// The trimmer's marker is netted inside its estimate; its MCP tool definitions are charged per session.
+	if o, ok := OverheadOf("output_trimmer"); !ok || o.PerSession != trimmerToolDefTokens || o.PerUse != 0 || !o.Netted {
+		t.Errorf("output_trimmer: %+v %v", o, ok)
+	}
+	// A technique that adds text without declaring numbers must still be refused by the Auto check.
+	if autoProblem(Technique{AddsText: true, Auto: true, Status: StatusBuilt, Tier: tierLossless}) == "" {
+		t.Error("an undeclared text adder must not pass the Auto check")
 	}
 	if _, ok := OverheadOf("nope"); ok {
 		t.Error("an unknown name has no overhead")

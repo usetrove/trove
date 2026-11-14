@@ -32,10 +32,16 @@ func TestDeclaredPerUseOverheadMatchesTheRealMessages(t *testing.T) {
 	}
 }
 
-// The trimmer's marker is netted inside its own estimate, so it declares no separate figure.
-func TestUndeclaredTextAdderStaysOutOfAutopilot(t *testing.T) {
-	if _, ok := technique.OverheadOf(OutputTrimmer{}.Name()); ok {
-		t.Error("output_trimmer now declares numbers; revisit whether it may join Autopilot, and update this test")
+// The trimmer's marker is netted inside its own estimate, so it declares no per-use figure; the Trove MCP tool
+// definitions it cannot work without are charged to it per session (rule 15). Autopilot trials it only because
+// both are declared: if either is dropped it must be refused again.
+func TestTheTrimmerDeclaresItsOverheadAsNumbers(t *testing.T) {
+	o, ok := technique.OverheadOf(OutputTrimmer{}.Name())
+	if !ok {
+		t.Fatal("output_trimmer adds text, so it must declare numbers or Autopilot has to refuse it")
+	}
+	if o.PerUse != 0 || !o.Netted || o.PerSession <= 0 {
+		t.Errorf("declared %+v: the marker is netted in its estimate, and the tool definitions are a per-session cost", o)
 	}
 }
 

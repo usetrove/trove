@@ -109,6 +109,9 @@ func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.H
 	}
 	if largeOutput || rewrite {
 		s = append(s, setup.HookSpec{Event: "PreToolUse", Matcher: "Bash", Command: build(hooks.EventLargeOutput), Timeout: 5})
+		// Counts, once per session, that the agent used trove_run. It is how the guardrail for the hint above
+		// sees whether the hint is followed; without it the guardrail cannot judge the hint (hooks.AdoptionObservable).
+		s = append(s, setup.HookSpec{Event: "PostToolUse", Matcher: "mcp__trove__trove_run", Command: build(hooks.EventPostRun), Timeout: 5})
 	}
 	if rewrite {
 		// PostToolUse can replace what the model sees (updatedToolOutput). Which
@@ -380,6 +383,11 @@ func newHooksStatus(a *App) *cobra.Command {
 			for _, n := range hooks.OptimizerNames {
 				rep.Optimizers[n] = cfg.OptimizerState(n)
 			}
+			// An install from before the trove_run counter existed cannot show whether the hint is followed, so that
+			// guardrail stays idle. Say so, with the fix, rather than leave it silent.
+			if len(cs) > 0 && rep.Optimizers[config.OptimizerHookLargeOutput] == config.StateOn && !hooks.AdoptionObservable(dir) {
+				rep.Notes = append(rep.Notes, "hook_large_output is on, but the installed hooks do not count use of trove_run, so Trove cannot tell whether its hint is followed. Run `trove hooks install` to add that counter.")
+			}
 			if snap, ok := hooks.LoadSnapshot(dir); ok {
 				rep.RolledBack = append(rep.RolledBack, snap.RolledBack...)
 			}
@@ -410,6 +418,9 @@ func renderHooksStatus(r hooksStatusReport) string {
 	if len(r.RolledBack) > 0 {
 		b.WriteString("Rolled back to shadow by a guardrail: " + strings.Join(r.RolledBack, ", ") + "\n")
 	}
+	for _, n := range r.Notes {
+		b.WriteString(n + "\n")
+	}
 	if len(r.Stats) == 0 {
 		b.WriteString("No hook activity recorded in the last 30 days.")
 		return b.String()
@@ -423,6 +434,12 @@ func renderHooksStatus(r hooksStatusReport) string {
 		}
 		if s.Blocked > 0 {
 			fmt.Fprintf(&b, "; about %.0f tokens kept out of context (estimated)", s.TokensSaved.Value)
+		}
+		if s.ExtraRead > 0 {
+			fmt.Fprintf(&b, "; read more of %d limited files (measured)", s.ExtraRead)
+		}
+		if s.Adopted > 0 {
+			fmt.Fprintf(&b, "; trove_run used in %d sessions (measured)", s.Adopted)
 		}
 		b.WriteString("\n")
 	}

@@ -111,6 +111,10 @@ const (
 	// KindReissued means the agent ran a command again exactly as it first wrote
 	// it, after the command had been quieted: the quiet flag did not satisfy it.
 	KindReissued = "reissued"
+	// KindExtraRead means the agent read more of a file after hook_read_limit limited a read of it, which is
+	// what the limit's note asks for. It is counted once per file, so the share of limited reads that were
+	// followed by another read is a measured rate (see measure.RuleHookExtraRead).
+	KindExtraRead = "extra_read"
 )
 
 // IsDeny reports whether the adapter must refuse to run the call.

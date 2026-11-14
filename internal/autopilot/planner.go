@@ -6,6 +6,7 @@ import (
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/optimize"
+	"github.com/usetrove/trove/internal/technique"
 )
 
 // Planner verdicts.
@@ -19,12 +20,27 @@ const (
 	VerdictNotWorthIt      = "not_worth_it"
 )
 
-// Tier says what kind of change an optimizer makes, from docs/optimize.md.
+// Tier says what kind of change an optimizer makes, from the technique registry (the one place that says, and a
+// test keeps it equal to the code). An optimizer the registry does not know is treated as lossless, as before.
 func Tier(name string) string {
-	if name == config.OptimizerOutputTrimmer {
-		return "recoverable" // shortens output; the full text can be fetched back
+	if t, ok := technique.Get(name); ok && t.Tier != "" {
+		return t.Tier
 	}
 	return "lossless"
+}
+
+// planNames is every optimizer the planner speaks about: the request-level pipeline, then the policy's other
+// trial candidates (the hooks), in a stable order and without repeats.
+func (p Policy) planNames() []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, n := range append(append([]string{}, optimize.PipelineNames...), p.Probation...) {
+		if !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out
 }
 
 // Plan is the shadow planner. For every optimizer it says what Autopilot would do
@@ -40,11 +56,11 @@ func Tier(name string) string {
 // on cannot run beside it.
 func (p Policy) Plan(rows map[string]measure.ShadowRow, entries map[string]config.AutopilotEntry, baselineDone bool, blocked, unavailable map[string]string) []config.AutopilotPlanItem {
 	var out []config.AutopilotPlanItem
-	for _, name := range optimize.PipelineNames {
+	for _, name := range p.planNames() {
 		row := rows[name]
 		net := p.NetOf(name, row.Sessions, row.Events, row.Tokens.Value)
 		it := config.AutopilotPlanItem{Optimizer: name, Tier: Tier(name), Sessions: row.Sessions, NetTokens: net}
-		ok, why := p.ready(Evidence{BaselineDone: baselineDone, ShadowSessions: row.Sessions, NetTokens: net})
+		ok, why := p.ready(Evidence{BaselineDone: baselineDone, ShadowSessions: row.Sessions, NetTokens: net, NoSavingEstimate: NoSavingEstimate(name)})
 		switch {
 		case entries[name].State == config.AutopilotOn:
 			it.Verdict, it.Reason = VerdictOn, "Autopilot turned it on"

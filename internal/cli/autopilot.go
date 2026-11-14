@@ -26,20 +26,40 @@ changing anything, and turn on only the ones that prove safe for your sessions.
 
 Undo it any time with ` + "`trove autopilot off`" + ` (or ` + "`trove undo`" + ` for everything).`
 
-// trialsConsent is what the user agrees to for trials (policy lossless-v2). It is a second, separate yes: the
+// trialCandidates says, in plain English, what each trial candidate changes. It is the text the user agrees to,
+// so every name in a policy's Probation list must have a line here (TestTrialsConsentNamesEveryCandidate).
+var trialCandidates = map[string]string{
+	"hook_repeat_read":    "refusing a repeat read of a file that has not changed (the agent can read it again)",
+	"hook_quiet_commands": "adding a quiet flag to a few noisy commands such as `npm install` (the agent can run it again without the flag)",
+	"output_trimmer":      "shortening very long test and build output to its failures and the first and last lines, with the full text kept on your machine for the agent to fetch back (needs the Trove MCP server, which adds about 350 tokens of tool definitions to every session)",
+	"hook_large_output":   "suggesting the Trove MCP tool trove_run for known-noisy commands (a hint of about 55 tokens each time; needs the Trove MCP server)",
+	"hook_read_limit":     "limiting the first read of a very large file to its first 400 lines, with a note telling the agent how to read the rest",
+}
+
+// trialsConsent is what the user agrees to for trials under the given policy. It is a second, separate yes: the
 // first agreement covers only lossless changes, and a trial changes what the model sees for half of the sessions.
-const trialsConsent = `Trials let Autopilot try a few changes that are not lossless: they hide or shorten
+// The numbers and the list come from the policy, so the words cannot drift from what the code does.
+func trialsConsent(p autopilot.Policy) string {
+	var list strings.Builder
+	for _, n := range p.Probation {
+		list.WriteString("    - " + trialCandidates[n] + "\n")
+	}
+	return fmt.Sprintf(trialsConsentFmt, len(p.Probation), list.String(), p.ProbationMinSessionsPerArm, p.ProbationMaxDays)
+}
+
+const trialsConsentFmt = `Trials let Autopilot try a few changes that are not lossless: they hide or shorten
 something the model could otherwise see, which the agent can get back, at a cost, if it needs it.
-Today that is two: refusing a repeat read of a file that has not changed, and adding a quiet flag to
-a few noisy commands such as ` + "`npm install`" + `.
+Today that is %d:
+%s
 
   - Nothing starts on a hunch. Each is first watched in shadow mode, as everything else is.
   - Then one at a time it runs for about half of your new sessions, chosen at random, and is off for the
     rest, so Trove can compare real sessions with and without it.
   - It is kept only if the comparison is clean: fewer tokens, and no more turns or tool errors.
     Otherwise it goes back to shadow and Trove tells you why.
-  - It needs at least 20 sessions on each side, so a trial takes weeks, not days. If there is no clear
-    difference after 28 days it is dropped. These numbers are placeholders, not yet validated.
+  - It needs at least %d sessions on each side, so a trial takes weeks, not days. If there is no clear
+    difference after %d days it is dropped. These numbers are placeholders, not yet validated.
+  - Each also has its own guardrail that puts it back to shadow by itself if the agent keeps undoing it.
   - Sessions already running are never changed, and a session never switches sides.
   - For this Trove reads your local Claude Code history (counts only, never text) when a session ends.
   - It does not run if you have turned off A/B comparison ([experiment] enabled = false).
@@ -57,7 +77,7 @@ type autopilotStatusJSON struct {
 	Enabled bool   `json:"enabled"`
 	Paused  bool   `json:"paused"`
 	Policy  string `json:"policy,omitempty"`
-	// Trials is true when the user has agreed to trials (policy lossless-v2).
+	// Trials is true when the user has agreed to trials (policy lossless-v2 or lossless-v3).
 	Trials     bool                     `json:"trials"`
 	Optimizers []autopilotOptimizerJSON `json:"optimizers,omitempty"`
 	// Thresholds are placeholders until a benchmark sets them.
@@ -135,29 +155,39 @@ func runAutopilot(a *App, verb string, yes bool) error {
 		if !cur.Enabled {
 			return fmt.Errorf("Autopilot is not on. Run `trove autopilot on` first, then `trove autopilot trials on`.")
 		}
-		if cur.Policy == config.AutopilotPolicyV2 {
+		tp := autopilot.TrialPolicy()
+		if cur.Policy == tp.Name {
 			changed = "Trials are already on."
 			break
 		}
+		// A user on an older trial policy agreed to fewer changes. Widening it is a new yes, never a quiet upgrade.
+		upgrade := cur.HasTrials()
 		if !yes {
 			if a.JSON {
 				return fmt.Errorf("Trials need your agreement. Run `trove autopilot trials on --yes` to agree without a prompt.")
 			}
-			_, _ = fmt.Fprint(a.Out, trialsConsent+"\n\n")
+			if upgrade {
+				had := len(autopilot.PolicyFor(cur.Policy).Probation)
+				_, _ = fmt.Fprintf(a.Out, "You agreed to trials of %d changes before. This adds %d more, listed below, and needs a new yes.\n\n", had, len(tp.Probation)-had)
+			}
+			_, _ = fmt.Fprint(a.Out, trialsConsent(tp)+"\n\n")
 			if !a.confirm("Turn on trials?") {
 				return a.emit(autopilotStatusJSON{Changed: "Trials not turned on."}, "Trials not turned on. Nothing was changed.")
 			}
 		}
-		if _, err := autopilot.EnableTrials(dir, time.Now()); err != nil {
+		if _, err := autopilot.EnableTrials(dir, tp, time.Now()); err != nil {
 			return fmt.Errorf("cannot turn on trials: %v. Check that %s is writable.", err, dir)
 		}
 		changed = "Trials are on. The candidates start in shadow mode and change nothing yet."
+		if upgrade {
+			changed = "Trials now include the new candidates. They start in shadow mode and change nothing yet; the ones you already had keep their state."
+		}
 	case "trials off":
 		cur, err := config.LoadAutopilot(dir)
 		if err != nil {
 			return err
 		}
-		if cur.Policy != config.AutopilotPolicyV2 {
+		if !cur.HasTrials() {
 			changed = "Trials are already off."
 			break
 		}
@@ -191,7 +221,7 @@ func runAutopilot(a *App, verb string, yes bool) error {
 		return err
 	}
 	p := autopilot.PolicyFor(f.Policy)
-	st := autopilotStatusJSON{Enabled: f.Enabled, Paused: f.Paused, Policy: f.Policy, Trials: f.Policy == config.AutopilotPolicyV2, Changed: changed}
+	st := autopilotStatusJSON{Enabled: f.Enabled, Paused: f.Paused, Policy: f.Policy, Trials: f.HasTrials(), Changed: changed}
 	st.Summary = autopilot.Summarize(f, time.Now(), 7)
 	for _, n := range f.Names() {
 		e := f.Entries[n]
