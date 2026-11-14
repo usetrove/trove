@@ -300,9 +300,14 @@ def _cmd_validate(args) -> int:
     cfg = load_config(args.config)
     agent = get_agent(cfg.agent)
     bad = 0
-    for t in load_tasks(args.tasks):
+    tasks = load_tasks(args.tasks)
+    total = len(tasks)
+    for i, t in enumerate(tasks, 1):
+        # Progress notes go to stderr so a piped result file keeps only result lines; results stay line-leading
+        # OK / REJECTED so `grep '^OK'` keeps working.
+        print(f"[{i}/{total}] validating {t.id} ...", file=sys.stderr, flush=True)
         v = validate_task(t, agent, cfg.claude_version)
-        print(f"{v.status.upper():9} {v.task_id}: {v.reason}")
+        print(f"{v.status.upper():9} {v.task_id}: {v.reason}  [{i}/{total} {100 * i // total}%]", flush=True)
         bad += v.status == "rejected"
     return 1 if bad else 0
 
