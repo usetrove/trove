@@ -4,6 +4,25 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-14
+
+### Added
+- Autopilot trial policy `lossless-v3`: the two v2 candidates plus `output_trimmer`, `hook_large_output` and `hook_read_limit`, tried one at a time in that order. It needs its own yes: `trove autopilot trials on` shows what is added and asks again, and a user who agreed to v2 keeps exactly v2 until then (what v2 already kept stays). The consent text is generated from the policy, so it cannot list fewer changes than the policy makes. The numbers (20 sessions per side, 28 days) are the same unvalidated placeholders. See [docs/autopilot-eligibility.md](docs/autopilot-eligibility.md).
+- Guardrails that set a trial candidate back to shadow by themselves: `hook_read_limit` (a limited read followed by a read of more of the file; limit twice the shared rate) and `hook_large_output` (fewer than 10 percent of the sessions where the `trove_run` hint was given then used `trove_run`). A new hook `post_tool_run` counts use of `trove_run`; installs from v0.3.0 or earlier need `trove hooks install` again, `trove hooks status` says so, and until then that guardrail does not run rather than guess. New event kinds `extra_read` and `adopted` (migration 0018); both appear in `trove report` and `trove hooks status`. See [docs/hooks.md](docs/hooks.md).
+- Security: `docs/security.md` (every control, what it does not protect against, and the test for each), an updated threat model and findings, a fuller `SECURITY.md` with how to verify a release, Dependabot, CodeQL and `go mod verify` in CI, and `install.sh` verifies the cosign signature when cosign is present (`TROVE_REQUIRE_SIGNATURE=1` refuses unverified installs).
+- Supply chain: SLSA build provenance on release archives (`gh attestation verify`), a licence-free secret scan over tracked files (`scripts/secretscan`), and a CI job that builds one commit from two directories and compares the bytes (`scripts/rebuild-check.sh`). None has run in CI yet.
+
+### Changed
+- `output_trimmer` now declares its overhead (its marker is netted inside its estimate; the 351 tokens of Trove MCP tool definitions are charged per session, kept equal to the real schema by a test), so Autopilot can trial it. It is trialled through the hooks only, so a subscription user can trial it too, and its guardrail is now half as tolerant as the shared rate (12 percent instead of 25) because it hides text.
+- The gateway has a whole-request read timeout (5 minutes; a response stream is not limited) and caps the request bodies it holds in memory at once (1 GiB in total; one over the budget gets a plain 503 the agent retries; a lone request is never refused for its size). Free-text redaction now also covers AWS, GitHub, Google, Slack, Stripe and npm keys and PEM private keys. A symlinked agent settings file is written through, so the link stays. `trove_run` drops more credential-looking environment names.
+- Corrected stale text: probation is built (the docs said it was not), and the planner now covers every trial candidate, with each tier read from the technique registry.
+
+### Known gaps
+- All Autopilot thresholds and trial numbers (including the 50%, 12% and 10% limits) are unvalidated placeholders. `output_trimmer` and `hook_large_output` have no study arm; their trials on your own sessions are their only evidence.
+- Left open on purpose in the security review: the recovery store holds raw output (F-9), port squatting on a shared machine (F-13), `trove_run` filters its environment by name pattern (F-28), the npm wrapper checks the checksum only (F-15).
+- SLSA provenance and the rebuild check are new and unproven on a release; the first tagged release is their first real run.
+- Installs from v0.3.0 or earlier need `trove hooks install --rewrite` again to get the `trove_run` counter.
+
 ## [0.3.0] - 2026-11-14
 
 ### Added

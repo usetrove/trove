@@ -80,7 +80,7 @@ func TestNetOfChargesPerUseUnlessTheEstimateAlreadyDid(t *testing.T) {
 		{"noise_normalizer", 10, 100, 5000, 5000},        // adds no text
 		{"hook_repeat_read", 10, 100, 5000, 5000 - 6800}, // 68 per denial, not netted
 		{"hook_read_limit", 10, 100, 5000, 5000},         // 42 per note, already inside its estimate
-		{"output_trimmer", 10, 100, 5000, 5000},          // adds text, declares no numbers: shown as is; CannotJudge stops promotion
+		{"output_trimmer", 10, 100, 5000, 5000 - 3510},   // its marker is netted inside its estimate; its 351 tool-definition tokens are charged per session
 		{"not_a_technique", 10, 100, 5000, 5000},
 	}
 	for _, c := range cases {
@@ -210,13 +210,20 @@ func TestSummarize(t *testing.T) {
 	}
 }
 
-func TestAnOptimizerWithUndeclaredCostIsNeverChargeable(t *testing.T) {
-	if DefaultPolicy().CannotJudge("output_trimmer") == "" {
-		t.Error("output_trimmer adds text with no declared numbers; Autopilot must refuse it")
-	}
-	for _, n := range []string{"noise_normalizer", "duplicate_result_collapser", "hook_repeat_read", "hook_read_limit", "not_a_technique"} {
-		if why := DefaultPolicy().CannotJudge(n); why != "" {
+// Everything a policy may move must be chargeable (rule 15): a technique that adds text has to declare numbers,
+// or Autopilot refuses it. output_trimmer used to be refused for lack of numbers; it declares them now, so this
+// walks every name any policy lists, so a future text-adding candidate cannot join without them.
+func TestEveryNameAPolicyListsIsChargeable(t *testing.T) {
+	names := append(PolicyV3().Names(), "not_a_technique")
+	for _, n := range names {
+		if why := PolicyV3().CannotJudge(n); why != "" {
 			t.Errorf("%s: %q", n, why)
+		}
+	}
+	// Outside a trial list, a technique with no shadow estimate is still refused.
+	for _, n := range []string{"hook_quiet_commands", "hook_large_output"} {
+		if DefaultPolicy().CannotJudge(n) == "" {
+			t.Errorf("%s: v1 must refuse a technique it cannot estimate", n)
 		}
 	}
 }

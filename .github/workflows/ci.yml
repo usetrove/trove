@@ -126,8 +126,30 @@ jobs:
         with:
           go-version: stable
           check-latest: true
+      # Every downloaded module must match the hash recorded in go.sum (catches a swapped dependency).
+      - run: go mod verify
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
       - run: govulncheck ./...
+
+  # No credential-shaped text in any tracked file (scripts/secretscan; no licence or network needed).
+  secretscan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - run: go run ./scripts/secretscan
+
+  # The release build is deterministic: the same commit built from two directories gives the same bytes (F-14).
+  reproducible:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - run: sh scripts/rebuild-check.sh
 
   build:
     needs: [lint, test]

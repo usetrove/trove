@@ -87,6 +87,10 @@ type Server struct {
 	// recording counts the goroutines that turn finished responses into rows, so shutdown
 	// can let them reach the recorder before the recorder is closed.
 	recording sync.WaitGroup
+
+	// bodyBytes is how many request-body bytes are held in memory right now across all in-flight requests (see
+	// reserveBody). A local client cannot make the gateway hold more than maxBufferedBodies at once.
+	bodyBytes atomic.Int64
 }
 
 // New builds a Server. The upstream origins come from opts.Config.
@@ -229,13 +233,27 @@ func (s *Server) ListenAndServe(ctx context.Context, addr string) error {
 	return s.Serve(ctx, ln)
 }
 
+// requestReadTimeout is how long a client may take to send one whole request, headers and body. A local client
+// sends it in a moment, so a longer time only lets a stalled or hostile one hold a connection and the memory
+// behind it. It does not limit the response: a stream may run as long as the provider keeps it open, because the
+// server sets no write timeout and the read deadline is cleared once the request has been read. It is a
+// variable only so a test can shorten it.
+var requestReadTimeout = 5 * time.Minute
+
+// newHTTPServer is the HTTP server the gateway runs, with the limits that stop one local client from holding
+// resources: a header timeout, a whole-request read timeout and an idle timeout. There is deliberately no write
+// timeout, because that would cut a long stream (docs/security.md).
+func (s *Server) newHTTPServer() *http.Server {
+	return &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second, ReadTimeout: requestReadTimeout, IdleTimeout: 2 * time.Minute}
+}
+
 // Serve is ListenAndServe on an existing listener (which must be loopback).
 func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	if err := ValidateListenAddr(ln.Addr().String()); err != nil {
 		_ = ln.Close()
 		return err
 	}
-	srv := &http.Server{Handler: s.Handler(), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 2 * time.Minute}
+	srv := s.newHTTPServer()
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 	select {

@@ -3,6 +3,8 @@ package optimize
 import (
 	"fmt"
 	"strings"
+
+	"github.com/usetrove/trove/internal/technique"
 )
 
 // The capability matrix says, for every optimizer and every adapter, whether the
@@ -43,6 +45,16 @@ var abilities = map[Adapter]map[Point]Support{
 	},
 }
 
+// declaredOverhead is what the matrix shows for an optimizer's cost in added text: the per-session figure the
+// technique registry declares when there is one (the output trimmer's MCP tool definitions), else the figure the
+// optimizer itself reports. The registry is where Autopilot reads it, so the user is shown the same number.
+func declaredOverhead(c Capable) int {
+	if o, ok := technique.OverheadOf(c.Name()); ok && int(o.PerSession) > c.OverheadTokens() {
+		return int(o.PerSession)
+	}
+	return c.OverheadTokens()
+}
+
 // Row is one optimizer's line in the matrix.
 type Row struct {
 	Optimizer      string              `json:"optimizer"`
@@ -71,7 +83,7 @@ func Matrix() []Row {
 	}
 	rows := make([]Row, 0, len(all))
 	for _, c := range all {
-		r := Row{Optimizer: c.Name(), Tier: c.Tier(), Points: c.Points(), OverheadTokens: c.OverheadTokens(), Support: map[Adapter]Support{}}
+		r := Row{Optimizer: c.Name(), Tier: c.Tier(), Points: c.Points(), OverheadTokens: declaredOverhead(c), Support: map[Adapter]Support{}}
 		for _, a := range Adapters {
 			r.Support[a] = supportFor(c, a)
 		}

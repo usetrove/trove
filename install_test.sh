@@ -52,5 +52,40 @@ check "refuses a missing checksum entry" $rc
 if TROVE_OS=plan9 TROVE_INSTALL_DIR="$work/bin4" sh "$here/install.sh" >"$work/out4" 2>&1; then rc=1; else rc=0; fi
 check "refuses an unsupported OS" $rc
 
+
+# 5. signature checks (a fake cosign stands in for the real one; the real one is exercised by the release workflow)
+echo "$(sum "$rel/$file")  $file" >"$rel/checksums.txt"
+printf '{}' >"$rel/checksums.txt.sigstore.json"
+mkdir -p "$work/fakebin"
+printf '#!/bin/sh\n# records its arguments, then succeeds or fails as asked\necho "$@" >"%s/cosign.args"\nexit "${FAKE_COSIGN_RC:-0}"\n' "$work" >"$work/fakebin/cosign"
+chmod +x "$work/fakebin/cosign"
+
+rc=0
+TROVE_COSIGN="$work/fakebin/cosign" FAKE_COSIGN_RC=0 TROVE_INSTALL_DIR="$work/bin5" sh "$here/install.sh" >"$work/out5" 2>&1 || rc=$?
+check "installs when cosign verifies the signature" $rc
+grep -q "checksum and signature verified" "$work/out5"
+check "says the signature was verified" $?
+grep -q "certificate-identity https://github.com/usetrove/trove/.github/workflows/release.yml@refs/tags/v1.0.0" "$work/cosign.args" &&
+  grep -q "certificate-oidc-issuer https://token.actions.githubusercontent.com" "$work/cosign.args"
+check "cosign is told which workflow and issuer to trust" $?
+
+if TROVE_COSIGN="$work/fakebin/cosign" FAKE_COSIGN_RC=1 TROVE_INSTALL_DIR="$work/bin6" sh "$here/install.sh" >"$work/out6" 2>&1; then rc=1; else rc=0; fi
+check "refuses when the signature does not verify" $rc
+grep -q "did not verify" "$work/out6"
+check "bad-signature message is plain English" $?
+[ ! -e "$work/bin6/trove" ]
+check "nothing installed after a bad signature" $?
+
+# no cosign available: a plain install goes ahead with a note, a strict one refuses
+rc=0
+TROVE_COSIGN=cosign-is-not-installed TROVE_INSTALL_DIR="$work/bin7" sh "$here/install.sh" >"$work/out7" 2>&1 || rc=$?
+check "installs without cosign" $rc
+grep -q "signature was not checked" "$work/out7"
+check "says the signature was not checked" $?
+if TROVE_COSIGN=cosign-is-not-installed TROVE_REQUIRE_SIGNATURE=1 TROVE_INSTALL_DIR="$work/bin8" sh "$here/install.sh" >"$work/out8" 2>&1; then rc=1; else rc=0; fi
+check "TROVE_REQUIRE_SIGNATURE=1 refuses without cosign" $rc
+[ ! -e "$work/bin8/trove" ]
+check "nothing installed when a signature was required" $?
+
 [ "$failures" -eq 0 ] || { echo "$failures failure(s)"; exit 1; }
 echo "all install tests passed"

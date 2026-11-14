@@ -1,0 +1,22 @@
+# Keeps the Go modules and the pinned GitHub Actions current, so a fixed vulnerability or a new action release
+# arrives as a reviewable pull request instead of staying behind. Updates are grouped to keep the noise down.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: pip
+    directory: /bench
+    schedule:
+      interval: monthly

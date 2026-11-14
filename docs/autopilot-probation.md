@@ -1,4 +1,4 @@
-# Autopilot probation (design, not built)
+# Autopilot probation (built)
 
 Status: **built through step 8, 2026-11-13; not yet run on a real install or validated by a benchmark.** It is gate G7 in
 [autopilot-eligibility.md](autopilot-eligibility.md). Facts below about the code were read from it on that
@@ -185,7 +185,7 @@ keeps exactly the `v1` list until they agree. `config.AutopilotPolicy` is alread
    never keep an optimizer. Tests: a clean saving keeps it, a measured loss rolls it back, no difference waits and
    then gives up at the deadline, too few sessions decide nothing, sessions from before the trial are not counted,
    and a failed read keeps nothing. This makes probation work for API-key users; it is the first step that can turn
-   a recoverable optimizer on, and it still cannot be reached by any user, because nothing offers `lossless-v2`.
+   a recoverable optimizer on, and it was not reachable by a user until step 8 (`trove autopilot trials on`, v0.3.0).
 6. ~~**Hooks assignment**.~~ **Built.** The snapshot the hooks read now lists the optimizers on trial. At
    `SessionStart` (only when a session is first pinned, so a resume is never reassigned) the hooks take a hash of the
    session key and the optimizer name (`measure.Arm`), pin the optimizer on for one arm and leave it shadow for the
@@ -219,7 +219,7 @@ keeps exactly the `v1` list until they agree. `config.AutopilotPolicy` is alread
    runs any `trove` command. I did not measure a single very large transcript. If one file takes longer than the
    budget every time it will never be read by the hooks, the comparison will show "not enough data", and the
    trial will time out in shadow, which is safe but slow.
-8. ~~**Consent text, `trove autopilot` and `/trove:status` display.**~~ **Built.** `trove autopilot trials [on|off]`
+8. ~~**Consent text, `trove autopilot` and `/trove:status` display.**~~ **Built.** (Updated 2026-11-14: `trials on` now offers `lossless-v3`, the five candidates; the consent text is generated from the policy; a v2 user keeps exactly v2 until a new yes. See [autopilot-eligibility.md](autopilot-eligibility.md), "Policy versions as built".) `trove autopilot trials [on|off]`
    (no new top-level command): `on` shows the `lossless-v2` consent text, asks, and records the agreement
    (`trials_consented_ms`, policy `lossless-v2`), listing the two candidates in shadow; with no terminal or in `--json`
    it refuses without `--yes`, and `trove setup`, `--yes` and `--autopilot` never reach it. `off` goes back to v1

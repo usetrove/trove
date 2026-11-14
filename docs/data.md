@@ -382,7 +382,7 @@ One row per decision made by Trove's agent hooks.
 | `ts` | When |
 | `session_key` | Hash of the session id |
 | `hook` | Which optimizer (for example hook_repeat_read) |
-| `kind` | What happened: blocked, would_block, advised, would_advise, reread_anyway, rewritten, would_rewrite, reissued or fetched_back |
+| `kind` | What happened: blocked, would_block, advised, would_advise, reread_anyway, rewritten, would_rewrite, reissued, fetched_back, extra_read or adopted |
 | `bytes` | Size of the file or output involved |
 | `tokens` | Estimated tokens kept out of the context, 0 when unknown |
 

@@ -47,10 +47,13 @@ const (
 	// EventPostFetch runs after the trove_fetch_full MCP tool and counts fetch-backs
 	// of output that a hook trimmed.
 	EventPostFetch = "post_tool_fetch"
+	// EventPostRun runs after the trove_run MCP tool and counts that the agent used it, which is how the
+	// guardrail for hook_large_output sees whether its hint was followed.
+	EventPostRun = "post_tool_run"
 )
 
 // Events lists every event name.
-var Events = []string{EventPreRead, EventPostRead, EventPostEdit, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch}
+var Events = []string{EventPreRead, EventPostRead, EventPostEdit, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch, EventPostRun}
 
 const (
 	// maxHashBytes is the largest file the repeat-read hook will hash. Bigger
@@ -212,6 +215,8 @@ func run(dir, event, agent string, e Env) []byte {
 		out, err = h.postOutput(in, key)
 	case EventPostFetch:
 		err = h.postFetch(in, key)
+	case EventPostRun:
+		err = h.postRun(in, key)
 	case EventSessionEnd:
 		err = h.sessionEnd(in, key)
 	}

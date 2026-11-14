@@ -28,6 +28,10 @@ const (
 	KindReissued     = "reissued"
 	// KindFetchedBack: the agent called trove_fetch_full for output a hook trimmed.
 	KindFetchedBack = "fetched_back"
+	// KindExtraRead: the agent read more of a file after hook_read_limit limited a read of it.
+	KindExtraRead = "extra_read"
+	// KindAdopted: the agent used trove_run. Counted once per session, for hook_large_output's guardrail.
+	KindAdopted = "adopted"
 	// KindArmOn and KindArmOff are not decisions. They record which side of a trial a session was
 	// assigned when it started, so a session that never ends is still counted. They go to
 	// experiment_assignments, not hook_events.
@@ -153,7 +157,7 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 
 func validKind(k string) bool {
 	switch k {
-	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindArmOn, KindArmOff:
+	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindArmOn, KindArmOff:
 		return true
 	}
 	return false

@@ -58,6 +58,7 @@ type rig struct {
 	rec     *memRecorder
 	logs    *syncBuffer
 	handler http.Handler
+	srv     *Server
 }
 
 func fixture(t *testing.T, name string) []byte {
@@ -92,9 +93,12 @@ func newRigWith(t *testing.T, upstream http.Handler, tweak func(*Options)) *rig 
 	if err != nil {
 		t.Fatal(err)
 	}
-	gw := httptest.NewServer(s.Handler())
+	// The tests run the same server settings the gateway runs (timeouts and all), not a bare handler.
+	gw := httptest.NewUnstartedServer(nil)
+	gw.Config = s.newHTTPServer()
+	gw.Start()
 	t.Cleanup(gw.Close)
-	return &rig{up: up, gw: gw, rec: rec, logs: logs, handler: s.Handler()}
+	return &rig{up: up, gw: gw, rec: rec, logs: logs, handler: s.Handler(), srv: s}
 }
 
 // reply is the part of a response the tests inspect; do closes the body itself.
@@ -482,7 +486,7 @@ func TestNewRefusesUnsafeUpstreams(t *testing.T) {
 // Transport errors can quote the URL or headers. What reaches the client must be
 // redacted, and redacted before truncation so a secret cannot be cut in half.
 func TestShortErrRedactsBeforeTruncating(t *testing.T) {
-	secret := "sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	secret := "sk-ant-api03-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" // secretscan:allow
 	err := errors.New(strings.Repeat("x", 100) + " Authorization: Bearer " + secret + " failed")
 	got := shortErr(err)
 	if strings.Contains(got, "sk-ant") || strings.Contains(got, "ABCDEFGH") {

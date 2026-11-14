@@ -15,19 +15,37 @@ import (
 // evaluation. See docs/autopilot.md.
 const AutopilotFileName = "autopilot.json"
 
-// AutopilotPolicy is the one policy this version knows. A file naming another
-// policy is ignored, so an older program never applies rules it does not know.
+// AutopilotPolicy is the first policy: lossless optimizers only. A file naming a policy this version does not
+// know is ignored, so an older program never applies rules it does not know.
 const AutopilotPolicy = "lossless-v1"
 
-// AutopilotPolicyV2 adds techniques that are recoverable rather than lossless. Each goes through probation, a
-// session-level A/B comparison, before it is kept (docs/autopilot-probation.md). Nothing offers this policy to a
-// user yet: consent for it is a later step, so no autopilot.json has it unless written by hand.
+// AutopilotPolicyV2 adds two techniques that are recoverable rather than lossless: refusing a repeat read and
+// adding a quiet flag to noisy commands. Each goes through probation, a session-level A/B comparison, before it
+// is kept (docs/autopilot-probation.md). `trove autopilot trials on` offered it in v0.3.0; a user who agreed to
+// it keeps exactly these two until they agree to v3.
 const AutopilotPolicyV2 = "lossless-v2"
+
+// AutopilotPolicyV3 is v2 plus three more recoverable techniques, each with its own guardrail: shortening long
+// test and build output, limiting reads of large files, and hinting at trove_run. It needs its own consent,
+// because it widens what the user agreed to. It is what `trove autopilot trials on` offers now.
+const AutopilotPolicyV3 = "lossless-v3"
 
 // KnownAutopilotPolicy reports whether this version understands the named policy.
 func KnownAutopilotPolicy(name string) bool {
-	return name == AutopilotPolicy || name == AutopilotPolicyV2
+	return name == AutopilotPolicy || name == AutopilotPolicyV2 || name == AutopilotPolicyV3
 }
+
+// hookAssignedTrials are the optimizers whose trial arms are assigned only by the hooks (a hash of the session
+// key, recorded in the spool). The gateway's assigner must never also split sessions for them, or one session
+// could be given two arms. output_trimmer runs in both channels but is trialled through the hooks only, so
+// subscription users can trial it too.
+var hookAssignedTrials = map[string]bool{
+	OptimizerHookRepeatRead: true, OptimizerHookQuietCommands: true, OptimizerHookReadLimit: true,
+	OptimizerHookLargeOutput: true, OptimizerOutputTrimmer: true,
+}
+
+// HookAssignsTrial reports whether the named optimizer's trial arms are assigned by the hooks, never the gateway.
+func HookAssignsTrial(name string) bool { return hookAssignedTrials[name] }
 
 // Autopilot states. Only AutopilotOn raises an optimizer above shadow.
 const (
@@ -57,7 +75,8 @@ type AutopilotFile struct {
 	Paused      bool   `json:"paused"`
 	Policy      string `json:"policy"`
 	ConsentedAt int64  `json:"consented_at_ms"`
-	// TrialsConsentedAt is when the user agreed to trials (policy lossless-v2), 0 if they have not.
+	// TrialsConsentedAt is when the user agreed to trials (policy lossless-v2 or v3, whichever Policy says), 0 if
+	// they have not. A user on v2 who later agrees to v3 gets a new time.
 	TrialsConsentedAt int64                     `json:"trials_consented_ms,omitempty"`
 	Entries           map[string]AutopilotEntry `json:"entries"`
 	LastEvalMS        int64                     `json:"last_eval_ms,omitempty"`
@@ -69,6 +88,11 @@ type AutopilotFile struct {
 	// Plan is the shadow planner's latest advice (see internal/autopilot/planner.go).
 	Plan      []AutopilotPlanItem `json:"plan,omitempty"`
 	PlannedMS int64               `json:"planned_ms,omitempty"`
+}
+
+// HasTrials reports whether the user agreed to trials: the policy is one that has a probation list.
+func (f AutopilotFile) HasTrials() bool {
+	return f.Policy == AutopilotPolicyV2 || f.Policy == AutopilotPolicyV3
 }
 
 // Active reports whether Autopilot may influence optimizer states: the user
@@ -114,7 +138,7 @@ func (f AutopilotFile) states(arms bool) map[string]string {
 
 // Trials returns the optimizers in probation, sorted, or nil when Autopilot is not active.
 func (f AutopilotFile) Trials() []string {
-	if !f.Active() || f.Policy != AutopilotPolicyV2 {
+	if !f.Active() || !f.HasTrials() {
 		return nil
 	}
 	var out []string

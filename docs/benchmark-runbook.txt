@@ -518,13 +518,21 @@ PART C. AUTOPILOT'S LEARNING PERIOD  (NOT BUILT; DO AFTER PARTS 0 TO 11)
 PART D. EACH TRIAL CANDIDATE HOOK BY ITSELF  (GATE G8; DO AFTER PARTS 0 TO 11)
 ======================================================================================================
 
- Why: Autopilot's trials (docs/autopilot-probation.md) may try two hooks that are not lossless:
- hook_repeat_read and hook_quiet_commands. Study B above turns four hooks on together, so it cannot say
- which hook saves or harms. This study switches each one on BY ITSELF against no Trove. It tells you whether
- a hook is worth trying at all, and what saving to expect. It does not replace a trial, which judges one hook
- on one user's real sessions. Two other hooks are not in it: hook_read_limit has no guardrail yet, and
- hook_large_output points at a tool (trove_run) that a benchmark run does not have, so the harness refuses to
- run it alone and says why.
+ Why: Autopilot's trials (docs/autopilot-probation.md) may try five changes that are not lossless (policy
+ lossless-v3): hook_repeat_read, hook_quiet_commands, output_trimmer, hook_large_output and hook_read_limit.
+ Study B above turns four hooks on together, so it cannot say which hook saves or harms. This study switches
+ each one on BY ITSELF against no Trove. It tells you whether a hook is worth trying at all, and what saving to
+ expect. It does not replace a trial, which judges one hook on one user's real sessions.
+
+ What this study can and cannot cover (updated 2026-11-14, when the three new guardrails were built):
+   - hook_repeat_read, hook_quiet_commands and hook_read_limit each have a single-hook condition
+     (alone_hook_repeat_read, alone_hook_quiet_commands, alone_hook_read_limit). hook_read_limit now has its
+     guardrail, so it is in the study; its first real numbers come from here.
+   - hook_large_output points at a tool (trove_run) that a benchmark run does not have, so the harness refuses to
+     run it alone and says why. There is no condition for output_trimmer by itself either: it needs the Trove MCP
+     server and recovery store inside the container, which the harness does not set up. For both, the trial on
+     the user's own sessions is the ONLY evidence, and Part F says to keep them on the list and say the study
+     could not test them. Do not invent a condition to fill the gap.
 
  This is API-key only, like every study here. It cannot say anything about a subscription login.
 
@@ -628,8 +636,11 @@ PART E. A REAL-INSTALL TRIAL RUN  (A PLUMBING CHECK, NOT A RESULT)
                                           # Follow what it says; it tests rewriting inside a session you start
      trove autopilot on --yes
      trove autopilot trials on --yes      # read the consent text it prints; it must match what you intend
-     trove autopilot                      # expect: hook_repeat_read and hook_quiet_commands in shadow,
-                                          # "Trials are on"
+     trove autopilot                      # expect: all five candidates (hook_repeat_read, hook_quiet_commands,
+                                          # output_trimmer, hook_large_output, hook_read_limit) in shadow,
+                                          # "Trials are on", policy lossless-v3. The consent text lists the five.
+     trove hooks status                   # expect no note about a missing trove_run counter; if there is one,
+                                          # `trove hooks install --yes --agent claude --rewrite` was not run with this build
 
  Step E.2  Make shadow evidence. Autopilot needs 10 sessions in which the hook WOULD have acted, and an
      estimated saving of at least 2,000 tokens net of the hook's own 68-token message each time. Start
@@ -655,6 +666,21 @@ PART E. A REAL-INSTALL TRIAL RUN  (A PLUMBING CHECK, NOT A RESULT)
      "Trove: this file is unchanged since you read it earlier" and Claude then carries on from what it
      already has. In an "off" session the second read works normally. Note, for each session, which
      happened (you will compare it with the record in E.4).
+
+ Step E.3b  Check the two new counters (added 2026-11-14), once. They rest on a tool name: the hooks
+     match the Trove MCP tools as `mcp__trove__trove_run` and `mcp__trove__trove_fetch_full`. Claude Code's
+     docs give the form `mcp__<server>__<tool>` (verified 2026-10-29, docs/mcp.md), and Trove registers the
+     server as "trove", but nobody has yet seen the hook fire on a real session. So test it. With `trove mcp install` done and the project's
+     .trove/commands.toml approved (`trove mcp trust`), start one session and say: "Use the trove_run tool to run
+     <a command from commands.toml>, then say done." Then:
+
+         trove hooks status
+
+     Expected: a line for hook_large_output that includes "trove_run used in 1 sessions (measured)". If it
+     never appears although Claude did call the tool, the matcher name is wrong for your Claude Code version:
+     do not trust the hook_large_output guardrail or trial until it is fixed. Likewise a read of a very large
+     file followed by a read past line 400 should show "read more of 1 limited files" for hook_read_limit
+     once it is on.
 
  Step E.4  Check the record, read-only. Wait at least 30 minutes after your last session (a session counts
      only once it has been idle that long), end one more session or run `trove hooks sync`, then:
@@ -734,8 +760,9 @@ PART F. AFTER THE STUDIES: WHAT THE NUMBERS CHANGE
        - It showed no clear difference but ACTED in a small share of runs: keep it on the list, and say the
          study could not test it. The trial on the user's own work is then its only evidence.
        - It was worse, or did not meet the rule although it acted often: take it off
-         PolicyV2().Probation in internal/autopilot/autopilot.go, so no user is asked to trial it, and
-         update the consent text in internal/cli/autopilot.go (trialsConsent), which names both hooks.
+         PolicyV2() and PolicyV3() in internal/autopilot/autopilot.go, so no user is asked to trial it, and
+         update the consent text in internal/cli/autopilot.go (trialCandidates, which trialsConsent builds from the
+         policy), and take it off PolicyV3().Probation as well as PolicyV2() if it was on both lists.
 
  Step F.2  Set the session count from the data, not from taste. The study's per-task cost spread tells
      you how many sessions it takes to see a saving of the size you measured. If the study's saving for a

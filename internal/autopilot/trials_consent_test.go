@@ -8,13 +8,13 @@ import (
 
 func TestEnableTrialsNeedsAutopilotAndChangesNoRequest(t *testing.T) {
 	_, dir := open(t)
-	if _, err := EnableTrials(dir, probNow); err == nil {
+	if _, err := EnableTrials(dir, PolicyV2(), probNow); err == nil {
 		t.Fatal("trials were enabled with Autopilot off")
 	}
 	if _, err := Enable(dir, DefaultPolicy(), probNow); err != nil {
 		t.Fatal(err)
 	}
-	f, err := EnableTrials(dir, probNow)
+	f, err := EnableTrials(dir, PolicyV2(), probNow)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestEnableTrialsNeedsAutopilotAndChangesNoRequest(t *testing.T) {
 func TestDisableTrialsForgetsCandidatesAndKeepsWhatV1Manages(t *testing.T) {
 	_, dir := open(t)
 	_, _ = Enable(dir, DefaultPolicy(), probNow)
-	_, _ = EnableTrials(dir, probNow)
+	_, _ = EnableTrials(dir, PolicyV2(), probNow)
 	f, _ := config.LoadAutopilot(dir)
 	f.Entries["hook_repeat_read"] = config.AutopilotEntry{State: config.AutopilotOn} // kept by a trial
 	f.Entries["noise_normalizer"] = config.AutopilotEntry{State: config.AutopilotOn} // kept under v1

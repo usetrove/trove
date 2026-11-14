@@ -102,7 +102,11 @@ Always available: `trove status`, `trove autopilot off`, `trove autopilot pause`
 ## Trials (a second, separate yes)
 
 The first agreement covers lossless changes only. `trove autopilot trials on` asks for a second one, to let Autopilot
-try changes that are not lossless: today `hook_repeat_read` and `hook_quiet_commands`. It is its own consent because
+try changes that are not lossless. Today (policy `lossless-v3`) there are five, tried one at a time in this order:
+`hook_repeat_read`, `hook_quiet_commands`, `output_trimmer`, `hook_large_output` and `hook_read_limit`. Each has its own
+guardrail that puts it back to shadow by itself (see [hooks.md](hooks.md)), and its cost in added text is declared and
+charged. A user who agreed to the first two under `lossless-v2` keeps exactly those two until they run
+`trove autopilot trials on` again and say yes to the new list; what v2 already kept stays. It is its own consent because
 a trial changes what the model sees for half of the user's sessions. `trove setup`, `--yes` and `--autopilot` never
 give it, and `trove autopilot trials off` withdraws it, which also removes anything a trial kept. Switching Autopilot
 off ends trials as well, and switching it on again is a v1 agreement. The design, the gates and what each step
@@ -111,7 +115,7 @@ beside a setting the user made, and for a user with no gateway only when reading
 
 ## What stays manual
 
-- Optimizers that can change answers (for example output trimming) keep a stricter rule or an explicit choice.
+- Optimizers that can change answers keep a stricter rule or an explicit choice. Output trimming is a trial candidate in v3 (with a guardrail half as tolerant as the rest); `cache_breakpoints` and `volatile_prefix_mover` (custom agents only, never Claude Code), `inflight_dedup` and `spend_cap` (shadow only) are never promoted by Autopilot, and the spend cap should never be automatic.
 - Contributing data stays a separate `trove contribute enable` (rule 1).
 - Anything that needs a new outbound call, a new credential path or a subscription proxy.
 

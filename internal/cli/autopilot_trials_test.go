@@ -33,7 +33,7 @@ func TestTrialsNeedTheirOwnExplicitYes(t *testing.T) {
 	if f.Policy != config.AutopilotPolicy {
 		t.Fatalf("trials turned on with nobody saying yes: policy %q", f.Policy)
 	}
-	for _, want := range []string{"not lossless", "about half of your new sessions", "20 sessions on each side", "never switches sides", "trove autopilot trials off", "Nothing was changed"} {
+	for _, want := range []string{"not lossless", "about half of your new sessions", "20 sessions on each side", "Today that is 5", "shortening very long test and build output", "limiting the first read of a very large file", "trove_run", "its own guardrail", "never switches sides", "trove autopilot trials off", "Nothing was changed"} {
 		if !strings.Contains(h.out.String(), want) {
 			t.Errorf("the consent or the refusal lacks %q:\n%s", want, h.out)
 		}
@@ -48,7 +48,7 @@ func TestTrialsNeedTheirOwnExplicitYes(t *testing.T) {
 	// The first agreement does not cover trials: setup's --autopilot and --yes never reach them.
 	h2, _ := setupHarness(t, "")
 	h2.run("setup", "--yes", "--autopilot")
-	if f, _ := config.LoadAutopilot(apDir(h2)); f.Policy == config.AutopilotPolicyV2 {
+	if f, _ := config.LoadAutopilot(apDir(h2)); f.HasTrials() {
 		t.Fatal("setup turned on trials")
 	}
 }
@@ -60,10 +60,10 @@ func TestTrialsOnListsTheCandidatesInShadowAndOffRemovesThem(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
 	f, _ := config.LoadAutopilot(apDir(h))
-	if f.Policy != config.AutopilotPolicyV2 || f.TrialsConsentedAt == 0 || !f.Active() {
+	if f.Policy != config.AutopilotPolicyV3 || f.TrialsConsentedAt == 0 || !f.Active() {
 		t.Fatalf("after trials on: %+v", f)
 	}
-	for _, n := range []string{"hook_repeat_read", "hook_quiet_commands"} {
+	for _, n := range autopilot.PolicyV3().Probation {
 		if f.Entries[n].State != config.AutopilotShadow {
 			t.Errorf("%s starts %q, want shadow (nothing changes yet)", n, f.Entries[n].State)
 		}
@@ -76,7 +76,7 @@ func TestTrialsOnListsTheCandidatesInShadowAndOffRemovesThem(t *testing.T) {
 		t.Errorf("a candidate must only estimate: %q", got)
 	}
 	// The policy Advance runs is the one the user agreed to.
-	if autopilot.CurrentPolicy(apDir(h)).Name != config.AutopilotPolicyV2 {
+	if autopilot.CurrentPolicy(apDir(h)).Name != config.AutopilotPolicyV3 {
 		t.Error("Advance would still run the v1 policy")
 	}
 
@@ -93,7 +93,7 @@ func TestTrialsOnListsTheCandidatesInShadowAndOffRemovesThem(t *testing.T) {
 	if f.Policy != config.AutopilotPolicy || f.TrialsConsentedAt != 0 {
 		t.Errorf("after trials off: %+v", f)
 	}
-	for _, n := range []string{"hook_repeat_read", "hook_quiet_commands"} {
+	for _, n := range autopilot.PolicyV3().Probation {
 		if _, there := f.Entries[n]; there {
 			t.Errorf("%s still has an entry after trials were withdrawn", n)
 		}

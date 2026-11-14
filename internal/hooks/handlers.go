@@ -201,6 +201,31 @@ func (h *handler) postFetch(in Input, key string) error {
 	return h.emit(key, config.OptimizerOutputTrimmer, KindFetchedBack, 0, 0)
 }
 
+// runTool is trove_run as the agent names it (server "trove").
+const runTool = "mcp__trove__trove_run"
+
+// adoptedKey is the session ledger key that remembers trove_run was already counted for this session.
+const adoptedKey = "a:trove_run"
+
+// postRun is post_tool_run. The first time in a session the agent uses trove_run it counts one adopted event
+// for hook_large_output. The guardrail compares the sessions where the hook gave its hint with the ones where
+// the agent then used trove_run: a hint nobody follows costs its text and saves nothing.
+func (h *handler) postRun(in Input, key string) error {
+	if in.ToolName != runTool {
+		return nil
+	}
+	st := h.session(key, in)
+	sess := h.sess(key, st, in.ToolName)
+	if _, seen := sess.Ledger.Get(adoptedKey); seen {
+		return nil
+	}
+	sess.Ledger.Put(adoptedKey, optimize.ReadEntry{Prompt: sess.Ledger.Prompts(), At: h.now().Unix(), BlockedSum: "counted"})
+	if err := sess.Ledger.Save(); err != nil {
+		return err
+	}
+	return h.emit(key, config.OptimizerHookLargeOutput, KindAdopted, 0, 0)
+}
+
 // sessionEnd is session_end_receipt: it moves the hook counters into the
 // database, runs the hook guardrail, writes this session's receipt, refreshes
 // the snapshot the other hooks read, and forgets the session's ledger.
@@ -248,7 +273,7 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	// Retention must not depend on the gateway running: subscription users never start it. Once a day
 	// across all processes, best effort (an old row surviving a day is never worth failing a hook for).
 	_, _ = db.PurgeIfDue(ctx, cfg.RetentionDays, now)
-	if _, err := measure.EvaluateHooks(ctx, db, cfg.Measure, now); err != nil {
+	if _, err := measure.EvaluateHooksWith(ctx, db, cfg.Measure, now, measure.HookGuardOptions{AdoptionObservable: AdoptionObservable(dir)}); err != nil {
 		return fmt.Errorf("cannot check the hook guardrail: %v", err)
 	}
 	if _, err := external.GuardAll(ctx, db, dir, cfg.Measure, now); err != nil {
