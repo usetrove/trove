@@ -158,6 +158,11 @@ Version 1 of the policy is named `lossless-v1`.
 | Commands | `trove autopilot [on\|off\|pause\|resume]`, and one more consent step in `trove setup` (`--autopilot` for scripts; `--yes` alone does not agree to it) |
 | Status line | adds ` · autopilot learning` or ` · autopilot N on`; no saving figure |
 | Short help | `trove --help` lists 8 commands; `trove advanced` lists the rest, which still work |
+| Receipt line | `trove receipts` and the session-end notice name the optimizers that were on, from the session's pin (`Receipt.On`) |
+| Weekly summary | `trove report` and `trove autopilot` show the last 7 days: what is on, what is collecting evidence, rollbacks and every change (`autopilot.Summarize`); `--json` has an `autopilot` object. No saving figure is stated |
+| Notifications | a desktop notice, once each, when an optimizer is turned on or rolled back; only with `[notifications] desktop = true`, and old events are never replayed (`autopilot.Announce`) |
+| Plugin | `/trove:setup` offers Autopilot with the consent points and runs `autopilot on --yes` only on a yes; `/trove:status` shows `autopilot` |
+| Shadow planner | each check writes advice for every optimizer (`would turn on`, `needs your choice`, `collecting`, `not worth it`) into `autopilot.json`; it changes no state and no request (`internal/autopilot/planner.go`) |
 
 Eligible on day one: `noise_normalizer` and `duplicate_result_collapser`, which are lossless and leave the cached
 prefix alone. `output_trimmer`, `cache_breakpoints` and `volatile_prefix_mover` are not eligible.
@@ -168,12 +173,18 @@ placeholders. `trove autopilot` says so each time it shows them.
 ## Known gaps
 
 - **Thresholds are not validated.** No benchmark has run. Do not describe them as tuned.
-- **Hook-side states and rule 5.** The hooks read a snapshot that is rewritten when any session ends. A session
-  already running in another window could see an Autopilot change before it ends. The gateway is not affected,
-  because it pins each session's states. Fixing this means pinning the snapshot per session in the hooks.
+- **Hook-side states and rule 5 (checked, not a gap).** The hooks read a snapshot that is rewritten when any
+  session ends, but `SessionStart` pins each session's states first, so a running session keeps what it started
+  with (`TestStateIsPinnedForTheSession`, `TestAutopilotStatesReachTheSnapshot`). An earlier note here said
+  otherwise; it was wrong. A session that began before the hooks were installed has no pin and stays off.
 - **Evidence only exists for traffic Trove sees.** A hooks-only subscription user has shadow evidence only from
   what the hooks can estimate, which is from sizes and not from provider usage fields (open question 4).
-- **Not built:** the session-end receipt line and the weekly summary, a notification on rollback, the
-  `/trove:setup` step in the plugin, and the planner (see "Where a planner fits").
+- **The planner is advice only.** It records what it would choose. Making it active needs a session-level A/B that
+  shows it beats the fixed list after its own overhead (build order, step 3); none has been run, so it does not
+  choose anything. It does not look at features of the user's repo yet, only at shadow estimates.
+- **Notifications need a desktop.** They use `osascript` on macOS and `notify-send` on Linux, and are off unless
+  `[notifications] desktop = true`. Without a notifier the events are still recorded and shown in the report.
+- **Receipts record names, not savings per optimizer.** `Receipt.On` lists what was on; the saving shown beside it
+  is the existing estimated figure for the session.
 - **Declared overhead is empty.** The two eligible optimizers inject no text. Any optimizer that does must declare
   its overhead in `Policy.OverheadTokens` before it is made eligible (rule 15).

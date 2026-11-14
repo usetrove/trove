@@ -40,6 +40,8 @@ type autopilotStatusJSON struct {
 	// Thresholds are placeholders until a benchmark sets them.
 	Thresholds string `json:"thresholds,omitempty"`
 	Changed    string `json:"changed,omitempty"`
+	// Summary is the last week: changes, rollbacks and the shadow planner's advice.
+	Summary *autopilot.Summary `json:"summary,omitempty"`
 }
 
 func newAutopilot(a *App) *cobra.Command {
@@ -118,6 +120,7 @@ func runAutopilot(a *App, verb string, yes bool) error {
 		return err
 	}
 	st := autopilotStatusJSON{Enabled: f.Enabled, Paused: f.Paused, Policy: f.Policy, Changed: changed}
+	st.Summary = autopilot.Summarize(f, time.Now(), 7)
 	for _, n := range f.Names() {
 		e := f.Entries[n]
 		st.Optimizers = append(st.Optimizers, autopilotOptimizerJSON{Name: n, State: e.State, Reason: e.Reason})
@@ -152,6 +155,9 @@ func renderAutopilot(s autopilotStatusJSON) string {
 	}
 	if s.Thresholds != "" {
 		b.WriteString("\nIt turns an optimizer on after " + s.Thresholds + ". Savings shown are estimated until measured.\n")
+	}
+	if d := s.Summary.Details(); d != "" {
+		b.WriteString("\n" + d + "\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -214,4 +220,18 @@ func autopilotSuffix(dir string) string {
 		return " · autopilot learning"
 	}
 	return fmt.Sprintf(" · autopilot %d on", on)
+}
+
+// autopilotSummary is the last week of Autopilot for `trove report`. Nil unless the
+// user agreed to it, and nil on any read problem: the report never fails for this.
+func autopilotSummary(a *App) *autopilot.Summary {
+	dir, err := a.ResolveDataDir()
+	if err != nil {
+		return nil
+	}
+	f, err := config.LoadAutopilot(dir)
+	if err != nil {
+		return nil
+	}
+	return autopilot.Summarize(f, time.Now(), 7)
 }

@@ -214,3 +214,54 @@ func TestAutopilotSuffixOnTheStatusLine(t *testing.T) {
 		t.Errorf("paused gave %q, want nothing", got)
 	}
 }
+
+func TestReportShowsAutopilotOnlyAfterTheUserAgreed(t *testing.T) {
+	h := newHarness(t, nil)
+	if code := h.run("report"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	if strings.Contains(h.out.String(), "Autopilot") {
+		t.Errorf("the report mentions Autopilot for someone who never agreed:\n%s", h.out)
+	}
+
+	h = newHarness(t, nil)
+	h.run("autopilot", "on", "--yes")
+	h.out.Reset()
+	if code := h.run("report", "--no-history"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	for _, want := range []string{"Autopilot", "Collecting shadow estimates", "Changes in the last 7 days"} {
+		if !strings.Contains(h.out.String(), want) {
+			t.Errorf("report lacks %q:\n%s", want, h.out)
+		}
+	}
+	h.out.Reset()
+	h.run("report", "--no-history", "--json")
+	var r struct {
+		Autopilot *struct {
+			Days     int      `json:"days"`
+			Learning []string `json:"learning"`
+		} `json:"autopilot"`
+	}
+	if err := json.Unmarshal(h.out.Bytes(), &r); err != nil || r.Autopilot == nil || r.Autopilot.Days != 7 || len(r.Autopilot.Learning) != 2 {
+		t.Errorf("report --json lacks the autopilot summary: %v %s", err, h.out)
+	}
+}
+
+func TestAutopilotStatusShowsChangesAndPlannerAdvice(t *testing.T) {
+	h := newHarness(t, nil)
+	h.run("autopilot", "on", "--yes")
+	dir := apDir(h)
+	f, _ := config.LoadAutopilot(dir)
+	f.Plan = []config.AutopilotPlanItem{{Optimizer: "output_trimmer", Tier: "recoverable", Verdict: "needs_your_choice", Reason: "never automatic"}}
+	_ = config.SaveAutopilot(dir, f)
+	h.out.Reset()
+	if code := h.run("autopilot"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	for _, want := range []string{"Changes in the last 7 days", "Planner advice (changes nothing", "output_trimmer", "needs your choice"} {
+		if !strings.Contains(h.out.String(), want) {
+			t.Errorf("status lacks %q:\n%s", want, h.out)
+		}
+	}
+}

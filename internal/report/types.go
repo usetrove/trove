@@ -10,6 +10,7 @@ import (
 	"github.com/usetrove/trove/internal/store"
 	"time"
 
+	"github.com/usetrove/trove/internal/autopilot"
 	"github.com/usetrove/trove/internal/experiment"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/optimize/suggest"
@@ -61,6 +62,9 @@ type Report struct {
 	// Adapters is what Trove's plugins for other harnesses (OpenCode) did and what
 	// the harness reported, by harness and login type. Nil when none ran.
 	Adapters *Adapters `json:"adapters,omitempty"`
+	// Autopilot is what Autopilot did in the last week. Nil unless the user agreed to it.
+	// It states no saving figure, so nothing in it needs a measured or estimated label.
+	Autopilot *autopilot.Summary `json:"autopilot,omitempty"`
 	// Upstreams is capacity and cost per OpenAI-compatible server (self-hosted or
 	// open-weight). Empty when no such traffic was recorded.
 	Upstreams []measure.UpstreamRow `json:"upstreams,omitempty"`

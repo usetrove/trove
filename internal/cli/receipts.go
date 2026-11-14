@@ -71,6 +71,25 @@ func notifier() func(measure.Receipt) {
 // notifierSync is notifier without the goroutine, for a short-lived process
 // (the session-end hook) that would exit before a background one finished.
 func notifierSync() func(measure.Receipt) {
+	show := textNotifierSync()
+	if show == nil {
+		return nil
+	}
+	return func(r measure.Receipt) { show("Trove", "Session finished: "+report.ReceiptLine(r)) }
+}
+
+// textNotifier shows any short text as a desktop notification, in the background.
+// It is nil where Trove has no way to. Autopilot uses it for turn-on and rollback notices.
+func textNotifier() func(title, body string) {
+	show := textNotifierSync()
+	if show == nil {
+		return nil
+	}
+	return func(title, body string) { go show(title, body) }
+}
+
+// textNotifierSync is the notification itself: a fixed system program with the text as arguments.
+func textNotifierSync() func(title, body string) {
 	var name string
 	var args func(title, body string) []string
 	switch runtime.GOOS {
@@ -88,8 +107,8 @@ func notifierSync() func(measure.Receipt) {
 	if _, err := exec.LookPath(name); err != nil {
 		return nil
 	}
-	return func(r measure.Receipt) {
-		body := strings.NewReplacer("\"", "", "\\", "").Replace("Session finished: " + report.ReceiptLine(r))
-		_ = exec.Command(name, args("Trove", body)...).Run() //nolint:gosec // fixed program, text built from numbers and model names
+	clean := strings.NewReplacer("\"", "", "\\", "")
+	return func(title, body string) {
+		_ = exec.Command(name, args(clean.Replace(title), clean.Replace(body))...).Run() //nolint:gosec // fixed program, text built from names and numbers
 	}
 }

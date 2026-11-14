@@ -75,7 +75,12 @@ func runReport(a *App, pf periodFlags) error {
 	if err != nil {
 		return err
 	}
-	err = a.emit(r, trimNL(report.Render(r, report.Options{Width: a.termWidth(), Color: a.Color()})))
+	r.Autopilot = autopilotSummary(a)
+	text := trimNL(report.Render(r, report.Options{Width: a.termWidth(), Color: a.Color()}))
+	if ap := r.Autopilot.Text(); ap != "" {
+		text += "\n\n" + ap
+	}
+	err = a.emit(r, text)
 	// Only the default period is shared, so every upload covers the same span.
 	// This does nothing unless the user ran `trove contribute enable`.
 	if err == nil && pf == (periodFlags{}) {

@@ -6,6 +6,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ### Added
 - Autopilot (`trove autopilot [on|off|pause|resume]`, a consent step in `trove setup`): after one consent Trove starts the eligible lossless optimizers in shadow, promotes one only from shadow evidence at a session boundary, and rolls it back to shadow if a guardrail trips. Your own `config.toml` setting always wins. State is in `autopilot.json`. Thresholds are placeholders until a benchmark runs. See [docs/autopilot.md](docs/autopilot.md).
+- Autopilot follow-ups: `trove receipts` and the status line name the optimizers that were on; `trove report` and `trove autopilot` show a 7-day summary (and `--json` an `autopilot` object); a once-only desktop notice when an optimizer is turned on or rolled back (needs `[notifications] desktop = true`); `/trove:setup` offers Autopilot and `/trove:status` shows it; and a shadow planner that writes advice for every optimizer and changes nothing.
 
 ### Changed
 - `trove --help` now lists 8 commands. The rest still work and are listed by `trove advanced`.

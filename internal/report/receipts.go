@@ -18,6 +18,9 @@ func ReceiptLine(r measure.Receipt) string {
 	if r.Saved.Value >= 0.01 {
 		parts = append(parts, fmt.Sprintf("saved %s (estimated)", Est(r.Saved)))
 	}
+	if len(r.On) > 0 {
+		parts = append(parts, "on: "+strings.Join(r.On, ", "))
+	}
 	return strings.Join(parts, ", ")
 }
 
