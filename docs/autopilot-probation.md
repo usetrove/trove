@@ -20,7 +20,7 @@ of new sessions and off for the rest, and only a clean comparison promotes it.
 | Piece | Where | What it gives probation |
 |---|---|---|
 | Balanced, randomised, recorded per-session arms, never changed mid-session | `experiment.Assigner` (blocks of 4, table `experiment_assignments`) | the arm for each session; rule 5 holds |
-| The gateway and the hooks both ask it | `measure.Gate.State`, `cli.pluginResolver` | the "off" arm runs the technique in shadow, so shadow evidence keeps flowing |
+| The gateway and the OpenCode-style plugin engine ask it (the Claude Code hooks do not, see "Verified") | `measure.Gate.State`, `cli.pluginResolver` | the "off" arm runs the technique in shadow, so shadow evidence keeps flowing |
 | Analysis with confidence ranges, strata, bootstrap | `experiment.Analyze` (cost, turns, tool errors, abandoned) | `Saves`, `CostsMore`, `WorseOutcomes`, `NoClearEffect`, `NotEnoughData` |
 | Automatic rollback on a measured loss | `experiment.Step` | the safety net, already running |
 | Per-technique guardrails | `measure.EvaluateHooks` (`hook_reread`, `hook_rerun`, `hook_fetch_back`) | fail-fast on the specific failure of each hook |
