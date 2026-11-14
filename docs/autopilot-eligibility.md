@@ -172,8 +172,36 @@ The evidence adapter (gate G2) and the part of G5 that says where a technique ca
   real spool and a real database, and is read back by the adapter.
 
 What this changes today: `noise_normalizer` can now be promoted for a user with no gateway, and the planner says
-why `duplicate_result_collapser` cannot. It widens nothing else: `Policy.Eligible` is still the same two. The
-rest of G5 (MCP server registered, a hook probe that passed for the agent version) and every other gate are still to do.
+why `duplicate_result_collapser` cannot. It widens nothing else: `Policy.Eligible` is still the same two.
+
+### Then the prerequisite checks (G5), 2026-11-14
+
+Before promoting, and at every check after, Autopilot asks whether the optimizer can really act in the user's setup.
+Otherwise the state file says `on` while the program quietly runs it as shadow, and the report claims a saving that
+is not happening.
+
+- **Setup detection** (`autopilot.Setup`): which channels recorded anything, whether the MCP server is registered
+  (`install.Registered`), the custom agents in the configuration, and the stored hook probe record. It reads Trove's
+  own files and database only. It does not run the agent. The plugin already replaces the probe record with a
+  docs-only one when Claude Code is updated, so reading the file is reading the current fact.
+- **One list of what each technique needs.** The registry gained `HookNeeds` (for example `Bash:output`). They are
+  required only when the technique is not running through the gateway: one with a request layer is satisfied by the
+  gateway being in use. `technique.Check` evaluates them against the setup. A test checks the registry against what
+  the hooks really rewrite (`hooks.RewriteKindOf`), so the two cannot drift.
+- **`internal/hookcaps`**: the probe record's types and queries moved to a small leaf package, because `internal/hooks`
+  imports Autopilot and so Autopilot could not import it. `hooks` re-exports the same names, so nothing else changed,
+  and a test checks that what the hooks write is what Autopilot reads.
+- **What a probe has to say.** A record counts only if a live probe or a verified session saw that tool and kind
+  work. A probe that saw it fail, one for another tool or kind, and a docs-only record (for Claude Code) all do not.
+- **A promotion is undone** if the prerequisite goes away: when the probe no longer covers it, the optimizer goes back
+  to shadow with "no longer available in your setup" and earns its way back after a re-test. This is not a guardrail
+  rollback and has no cool-down.
+- With **no traffic recorded** on either channel, prerequisites are not checked: the optimizer is still collecting.
+
+Still to do from G5: the registry carries `Requires` for the MCP server and the recovery store, and Autopilot detects
+the MCP server, but no optimizer that needs it is eligible yet; a check that the recovery store itself opens, not
+only that the MCP server is registered; and an agent-version match for installs that do not use the plugin (the
+plugin's start check handles the update case; `trove doctor` warns otherwise).
 
 ## Suggested order
 

@@ -164,6 +164,7 @@ Version 1 of the policy is named `lossless-v1`.
 | Plugin | `/trove:setup` offers Autopilot with the consent points and runs `autopilot on --yes` only on a yes; `/trove:status` shows `autopilot` |
 | Shadow planner | each check writes advice for every optimizer (`would turn on`, `needs your choice`, `collecting`, `not worth it`) into `autopilot.json`; it changes no state and no request (`internal/autopilot/planner.go`) |
 | Conflict check | before it promotes an optimizer, Autopilot asks the technique registry whether something already on (a built-in the user set, or a wrapped tool such as RTK) cannot run beside it; if so it is held back with the reason, and the planner says `blocked` (`internal/technique`, `autopilot.blockedBy`) |
+| Prerequisite check | before it promotes an optimizer, and at every check after, Autopilot reads the user's real setup (channels used, MCP server registered, custom agents, the stored hook probe record) and asks the technique registry whether the optimizer can really act there. One that cannot is held back as "not available in your setup", and a promotion is undone (back to shadow) if what it needs goes away, for example the hook probe no longer covers it after a Claude Code update (`autopilot.Setup`, `technique.HookNeeds`, `internal/hookcaps`) |
 
 Eligible on day one: `noise_normalizer` and `duplicate_result_collapser`, which are lossless and leave the cached
 prefix alone. `output_trimmer`, `cache_breakpoints` and `volatile_prefix_mover` are not eligible.

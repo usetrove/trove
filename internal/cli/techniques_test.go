@@ -58,7 +58,7 @@ func TestTechniquesCheckExplainsConflictsAndMissingPieces(t *testing.T) {
 	}
 
 	h = newHarness(t, nil)
-	h.run("techniques", "check", "noise_normalizer", "hook_repeat_read", "--login", "subscription")
+	h.run("techniques", "check", "noise_normalizer", "hook_repeat_read", "--login", "subscription", "--hook-probe", "Bash:output")
 	if !strings.Contains(h.out.String(), "can all be on together") {
 		t.Errorf("compatible set was refused:\n%s", h.out)
 	}
@@ -83,6 +83,31 @@ func TestTechniquesCheckExplainsConflictsAndMissingPieces(t *testing.T) {
 func TestTechniquesCheckRejectsABadLoginWithAnExplanation(t *testing.T) {
 	h := newHarness(t, nil)
 	if code := h.run("techniques", "check", "rtk", "--login", "free"); code != 1 || !strings.Contains(h.err.String(), "use api_key, subscription or unknown") {
+		t.Errorf("exit %d, stderr %q", code, h.err)
+	}
+}
+
+// A hook technique needs a probe that saw its rewrite work. Without --hook-probe the check says so and says what
+// to run; with the right one it passes, and a malformed value is refused with an example.
+func TestTechniquesCheckKnowsAboutHookProbes(t *testing.T) {
+	h := newHarness(t, nil)
+	h.run("techniques", "check", "noise_normalizer", "--login", "subscription")
+	if !strings.Contains(h.out.String(), "Bash output rewriting") || !strings.Contains(h.out.String(), "trove hooks verify") {
+		t.Errorf("without a probe:\n%s", h.out)
+	}
+	h = newHarness(t, nil)
+	h.run("techniques", "check", "noise_normalizer", "--login", "subscription", "--hook-probe", "Bash:output")
+	if !strings.Contains(h.out.String(), "can all be on together") {
+		t.Errorf("with the probe:\n%s", h.out)
+	}
+	// The gateway makes the probe unnecessary for a technique that also runs there.
+	h = newHarness(t, nil)
+	h.run("techniques", "check", "noise_normalizer", "--login", "api_key", "--gateway")
+	if !strings.Contains(h.out.String(), "can all be on together") {
+		t.Errorf("with the gateway:\n%s", h.out)
+	}
+	h = newHarness(t, nil)
+	if code := h.run("techniques", "check", "noise_normalizer", "--hook-probe", "Bash"); code != 1 || !strings.Contains(h.err.String(), "Bash:output") {
 		t.Errorf("exit %d, stderr %q", code, h.err)
 	}
 }

@@ -132,7 +132,12 @@ type Technique struct {
 	Overhead     *int     `json:"overhead_tokens,omitempty"`
 	OverheadNote string   `json:"overhead_note,omitempty"`
 	Requires     []string `json:"requires,omitempty"`
-	Claims       []Claim  `json:"claims,omitempty"`
+	// HookNeeds lists the hook capabilities the technique relies on when it runs in the plugin's
+	// hooks, as "Tool:kind" with kind input or output (for example "Bash:output"). They are required
+	// only when it does not run through the gateway: a technique with a request layer is satisfied
+	// by the gateway being in use, because the gateway needs no hook probe.
+	HookNeeds []string `json:"hook_needs,omitempty"`
+	Claims    []Claim  `json:"claims,omitempty"`
 	// Conflicts lists IDs that cannot be on together with this one, beyond what
 	// claims already cover.
 	Conflicts []string `json:"conflicts,omitempty"`
@@ -190,6 +195,9 @@ type Context struct {
 	GatewayOn bool
 	// Have lists the capabilities that exist (CapMCPServer, ...).
 	Have []string
+	// HookCaps lists the hook rewrites a probe has seen work for a probed agent, as "Tool:kind",
+	// in the same form as Technique.HookNeeds.
+	HookCaps []string
 }
 
 func (c Context) has(cap string) bool {
@@ -327,6 +335,13 @@ func (t Technique) unmet(ctx Context) []string {
 			out = append(out, "it needs "+capabilityText(r))
 		}
 	}
+	if len(t.HookNeeds) > 0 && !(t.hasLayer(LayerRequest) && ctx.GatewayOn) {
+		for _, n := range t.HookNeeds {
+			if !ctx.hasHookCap(n) {
+				out = append(out, "it needs a hook probe that showed "+hookNeedText(n)+" works for your agent (run /trove:setup, or `trove hooks verify`)")
+			}
+		}
+	}
 	return out
 }
 
@@ -393,4 +408,34 @@ func OverlappingBuiltins(name string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func (t Technique) hasLayer(l Layer) bool {
+	for _, x := range t.Layers {
+		if x == l {
+			return true
+		}
+	}
+	return false
+}
+
+func (c Context) hasHookCap(n string) bool {
+	for _, h := range c.HookCaps {
+		if h == n {
+			return true
+		}
+	}
+	return false
+}
+
+// hookNeedText turns "Bash:output" into "Bash output rewriting".
+func hookNeedText(n string) string {
+	tool, kind, _ := strings.Cut(n, ":")
+	return tool + " " + kind + " rewriting"
+}
+
+// ValidHookNeed reports whether n is a well-formed "Tool:kind" hook capability.
+func ValidHookNeed(n string) bool {
+	tool, kind, ok := strings.Cut(n, ":")
+	return ok && tool != "" && (kind == "input" || kind == "output")
 }

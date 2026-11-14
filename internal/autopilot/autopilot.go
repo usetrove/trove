@@ -132,6 +132,10 @@ func (p Policy) Decide(cur config.AutopilotEntry, ev Evidence, now time.Time) De
 	case config.AutopilotOn:
 		if ev.RolledBack {
 			set(config.AutopilotRolledBack, "a guardrail rolled it back to shadow")
+		} else if ev.Unavailable != "" {
+			// Something it needs went away, for example Claude Code was updated and the hook probe no longer
+			// covers it. The program already runs it as shadow in that case; say so, and let it earn its way back.
+			set(config.AutopilotShadow, "no longer available in your setup: "+ev.Unavailable)
 		}
 	case config.AutopilotRolledBack:
 		switch {

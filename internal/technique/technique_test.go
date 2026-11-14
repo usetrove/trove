@@ -109,7 +109,8 @@ func hasConflict(r Result, a, b string) bool {
 }
 
 func TestTrovesOwnTechniquesWorkTogether(t *testing.T) {
-	ctx := Context{Login: LoginAPIKey, GatewayOn: true, Have: []string{CapMCPServer, CapRecoveryStore, CapCustomAgent}}
+	ctx := Context{Login: LoginAPIKey, GatewayOn: true, Have: []string{CapMCPServer, CapRecoveryStore, CapCustomAgent},
+		HookCaps: []string{"Bash:output", "Bash:input", "Read:input"}}
 	// Everything built that is meant to run in the same pipeline, by name and by ID.
 	r := Check([]string{"noise_normalizer", "output_trimmer", "duplicate_result_collapser", "hook_large_output", "hook_repeat_read",
 		"hook_read_limit", "hook_quiet_commands", "trove_mcp", "volatile_prefix_mover", "cache_breakpoints", "B12", "B14"}, ctx)
@@ -247,5 +248,64 @@ func TestAllIsInNumericOrder(t *testing.T) {
 	}
 	if !(idx("B9") < idx("B10") && idx("B14") < idx("B15") && idx("B15") < idx("C1") && idx("C13") < idx("W1")) {
 		t.Errorf("order %v", ids)
+	}
+}
+
+func TestHookNeedsAreWellFormed(t *testing.T) {
+	for _, x := range registry {
+		for _, n := range x.HookNeeds {
+			if !ValidHookNeed(n) {
+				t.Errorf("%s: hook need %q is not Tool:input or Tool:output", x.ID, n)
+			}
+		}
+		// A technique that runs only in the hooks (no request layer) and rewrites something needs a probe;
+		// one with a request layer is covered by the gateway when it is in use.
+		if len(x.HookNeeds) > 0 && !x.Subscription {
+			t.Errorf("%s: needs hook capabilities but is not marked as working without the gateway", x.ID)
+		}
+	}
+	for n, want := range map[string]bool{"Bash:output": true, "Read:input": true, "bash:output": true, "Bash": false, "Bash:both": false, ":input": false, "": false} {
+		if got := ValidHookNeed(n); got != want {
+			t.Errorf("ValidHookNeed(%q) = %v, want %v", n, got, want)
+		}
+	}
+}
+
+func TestHookCapabilitiesAreRequiredOnlyWhereTheHooksAreTheWayIn(t *testing.T) {
+	noProbe := Context{Login: LoginSubscription}
+	probed := Context{Login: LoginSubscription, HookCaps: []string{"Bash:output", "Bash:input", "Read:input"}}
+	gateway := Context{Login: LoginAPIKey, GatewayOn: true}
+	cases := []struct {
+		name string
+		ctx  Context
+		want string // "" means no problem
+	}{
+		// noise_normalizer has a request layer, so the gateway satisfies it; without the gateway the hooks need a probe.
+		{"noise_normalizer", noProbe, "Bash output rewriting"},
+		{"noise_normalizer", probed, ""},
+		{"noise_normalizer", gateway, ""},
+		// hook_read_limit and hook_quiet_commands exist only in the hooks, so the gateway never helps.
+		{"hook_read_limit", gateway, "Read input rewriting"},
+		{"hook_read_limit", probed, ""},
+		{"hook_quiet_commands", noProbe, "Bash input rewriting"},
+		{"hook_quiet_commands", probed, ""},
+		// Denying a repeat read is not a rewrite and needs no probe.
+		{"hook_repeat_read", noProbe, ""},
+		// A probe for the wrong tool or kind does not count.
+		{"noise_normalizer", Context{Login: LoginSubscription, HookCaps: []string{"Read:input", "Bash:input"}}, "Bash output rewriting"},
+	}
+	for _, c := range cases {
+		r := Check([]string{c.name}, c.ctx)
+		var got []string
+		for _, u := range r.Unmet {
+			got = append(got, u.Problem)
+		}
+		joined := strings.Join(got, "; ")
+		if (c.want == "") != (joined == "") || !strings.Contains(joined, c.want) {
+			t.Errorf("%s in %+v: problems %q, want one mentioning %q", c.name, c.ctx, joined, c.want)
+		}
+		if c.want != "" && !strings.Contains(joined, "trove hooks verify") {
+			t.Errorf("%s: the problem must say what to do: %q", c.name, joined)
+		}
 	}
 }

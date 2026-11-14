@@ -95,6 +95,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 	if err != nil {
 		return Result{File: f}, fmt.Errorf("cannot tell which channels were used: %v", err)
 	}
+	setup := detectSetup(dir, cfg, traffic)
 	// The baseline counts sessions from both channels, so a person with no gateway can leave it.
 	seen := measure.PhaseFor(cfg.Measure, base.InstalledAt, now, sessionsSeen(base.SessionsSeen, hookSessions))
 	baselineDone := seen.Phase == measure.PhaseActive
@@ -119,7 +120,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 			NetTokens:      int64(tokens) - p.OverheadTokens[name]*int64(sessions),
 			RolledBack:     back,
 			Blocked:        blockedBy(on, name),
-			Unavailable:    unavailableFor(name, traffic),
+			Unavailable:    whyUnavailable(name, setup),
 		}
 		d := p.Decide(cur, ev, now)
 		if d.ClearRollback {
@@ -146,7 +147,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 	}
 	unavailable := map[string]string{}
 	for _, n := range optimize.PipelineNames {
-		if r := unavailableFor(n, traffic); r != "" {
+		if r := whyUnavailable(n, setup); r != "" {
 			unavailable[n] = r
 		}
 	}

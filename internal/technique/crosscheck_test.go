@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/usetrove/trove/internal/autopilot"
@@ -156,5 +157,35 @@ func TestRegistryMatchesTheDocument(t *testing.T) {
 	}
 	if len(extra) > 0 {
 		t.Errorf("in docs/techniques.md but not in the registry: %v", extra)
+	}
+}
+
+// The registry's hook capability needs must agree with what the hooks really do: an optimizer that
+// rewrites a tool's input needs an input capability, one that rewrites output needs an output
+// capability, and one that rewrites nothing (denies a read, or only advises) needs none.
+func TestHookNeedsMatchWhatTheHooksRewrite(t *testing.T) {
+	for _, n := range hooks.OptimizerNames {
+		x, ok := technique.Get(n)
+		if !ok {
+			t.Errorf("%s is not in the registry", n)
+			continue
+		}
+		kind := hooks.RewriteKindOf(n)
+		var kinds []string
+		for _, need := range x.HookNeeds {
+			_, k, _ := strings.Cut(need, ":")
+			kinds = append(kinds, k)
+		}
+		switch {
+		case kind == "" && len(kinds) > 0:
+			t.Errorf("%s rewrites nothing but the registry says it needs %v", n, x.HookNeeds)
+		case kind != "" && len(kinds) == 0:
+			t.Errorf("%s does a %s rewrite but the registry lists no hook capability for it", n, kind)
+		}
+		for _, k := range kinds {
+			if k != kind {
+				t.Errorf("%s: the hooks do a %q rewrite but the registry needs a %q capability", n, kind, k)
+			}
+		}
 	}
 }

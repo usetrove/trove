@@ -2,12 +2,16 @@ package autopilot
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/hookcaps"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -71,6 +75,7 @@ func TestAHooksOnlyUserIsPromoted(t *testing.T) {
 	ctx := context.Background()
 	setInstall(t, db, 30)
 	hookSessions(t, db, "noise_normalizer", 25, 200) // 25 sessions, 10,000 estimated tokens
+	probed(t, dir)                                   // the hooks only act where a probe has seen the rewrite work
 	if _, err := Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -30)); err != nil {
 		t.Fatal(err)
 	}
@@ -123,6 +128,7 @@ func TestTheBaselineCountsHookSessions(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			db, dir := open(t)
 			setInstall(t, db, c.days)
+			probed(t, dir)
 			hookSessions(t, db, "noise_normalizer", c.sessions, 500)
 			Enable(dir, DefaultPolicy(), hookNow.AddDate(0, 0, -c.days))
 			res, err := Advance(context.Background(), db, dir, config.Default(), DefaultPolicy(), hookNow)
@@ -238,5 +244,20 @@ func TestCombineTakesTheLargerOfEachFigure(t *testing.T) {
 	}
 	if sessionsSeen(3, 25) != 25 || sessionsSeen(30, 2) != 30 {
 		t.Error("sessionsSeen must take the larger count")
+	}
+}
+
+// writeProbe stores a hook probe record where the hooks keep it.
+func writeProbe(t *testing.T, dir string, c hookcaps.Capabilities) {
+	t.Helper()
+	b, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(hookcaps.Path(dir)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hookcaps.Path(dir), b, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }

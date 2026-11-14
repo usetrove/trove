@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/usetrove/trove/internal/hookcaps"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -51,5 +52,35 @@ func TestShadowEventsAreWhatAutopilotsAdapterReads(t *testing.T) {
 	}
 	if tr, err := measure.TrafficSeen(ctx, db, w); err != nil || !tr.Hooks || tr.Gateway {
 		t.Errorf("TrafficSeen = %+v, %v; want hooks only", tr, err)
+	}
+}
+
+// Autopilot reads the probe record through internal/hookcaps, and the hooks write it through
+// SaveCapabilities. This keeps the two in step: what is saved is exactly what is read back, and a
+// record a probe made for Bash output is seen as supported by the query Autopilot asks.
+func TestTheProbeRecordTheHooksWriteIsWhatAutopilotReads(t *testing.T) {
+	dir := t.TempDir()
+	want := Capabilities{Entries: []Capability{
+		{Agent: "claude", AgentVersion: "2.1.319", Tool: "Bash", InputRewrite: CapYes, OutputRewrite: CapYes, Method: "live"},
+		{Agent: "claude", AgentVersion: "2.1.319", Tool: "Grep", OutputRewrite: CapNo, Method: "live"},
+	}}
+	if err := SaveCapabilities(dir, want); err != nil {
+		t.Fatal(err)
+	}
+	got := hookcaps.Load(dir)
+	if len(got.Entries) != 2 || got.V != hookcaps.Version {
+		t.Fatalf("what the hooks saved was not read back: %+v", got)
+	}
+	if !got.SupportsAny("Bash", hookcaps.RewriteOutput) || got.SupportsAny("Grep", hookcaps.RewriteOutput) {
+		t.Errorf("Autopilot's query disagrees with the record: %+v", got)
+	}
+	// And the hooks' own view of the same file agrees with Autopilot's.
+	own := LoadCapabilities(dir)
+	for _, tool := range []string{"Bash", "Grep"} {
+		for _, kind := range []string{RewriteInput, RewriteOutput} {
+			if own.Supports("claude", tool, kind) != got.Supports("claude", tool, kind) {
+				t.Errorf("%s %s: the hooks and Autopilot read the record differently", tool, kind)
+			}
+		}
 	}
 }

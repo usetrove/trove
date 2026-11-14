@@ -2,65 +2,35 @@ package hooks
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
+
+	"github.com/usetrove/trove/internal/hookcaps"
 )
 
-// What a hook may change is a fact about the installed agent version, not
-// something to assume: a release has shipped where PostToolUse output was
-// silently ignored for some built-in tools. So a rewrite is only emitted for an
-// agent and tool that a probe (`trove hooks probe`, scripts/hookprobe) has seen
-// work, either in a live probe on the user's API key or in a session the user
-// started themselves (`trove hooks verify`). Anything unknown counts as
-// unsupported; the optimizer then stays in shadow and `trove doctor` says why.
+// What a hook may change is a fact about the installed agent version, not something to assume
+// (see internal/hookcaps, which holds the record's types and the queries on it). This file keeps
+// the names the rest of the program already uses, and owns writing the record.
 
 // Capability results.
 const (
-	CapYes      = "yes"
-	CapNo       = "no"
-	CapUntested = "untested"
+	CapYes      = hookcaps.Yes
+	CapNo       = hookcaps.No
+	CapUntested = hookcaps.Untested
 )
 
 // Capability is what was observed for one tool of one agent.
-type Capability struct {
-	Agent         string `json:"agent"`
-	AgentVersion  string `json:"agent_version"`
-	Tool          string `json:"tool"`
-	InputRewrite  string `json:"input_rewrite"`
-	OutputRewrite string `json:"output_rewrite"`
-	// Method is "live" (Trove ran an agent session on the user's API key and it showed
-	// the model the rewritten value), "session" (the user ran the test in their own
-	// session with `trove hooks verify`; the output result is what they reported) or
-	// "docs" (the agent's documentation says so; nothing was run).
-	Method   string `json:"method"`
-	Evidence string `json:"evidence"`
-	ProbedAt string `json:"probed_at"` // RFC 3339
-}
+type Capability = hookcaps.Capability
 
 // Capabilities is the stored probe result.
-type Capabilities struct {
-	V       int          `json:"v"`
-	Entries []Capability `json:"entries"`
-}
+type Capabilities = hookcaps.Capabilities
 
-const capabilitiesVersion = 1
+const capabilitiesVersion = hookcaps.Version
 
 // CapabilitiesPath is where the probe result is stored.
-func CapabilitiesPath(dir string) string { return filepath.Join(dir, "hooks", "capabilities.json") }
+func CapabilitiesPath(dir string) string { return hookcaps.Path(dir) }
 
-// LoadCapabilities reads the stored probe result. A missing or unreadable file
-// is the empty result, under which nothing is supported.
-func LoadCapabilities(dir string) Capabilities {
-	b, err := os.ReadFile(CapabilitiesPath(dir)) //nolint:gosec // path under Trove's data dir
-	if err != nil {
-		return Capabilities{}
-	}
-	var c Capabilities
-	if json.Unmarshal(b, &c) != nil || c.V != capabilitiesVersion {
-		return Capabilities{}
-	}
-	return c
-}
+// LoadCapabilities reads the stored probe result. A missing or unreadable file is the empty
+// result, under which nothing is supported.
+func LoadCapabilities(dir string) Capabilities { return hookcaps.Load(dir) }
 
 // SaveCapabilities stores c atomically.
 func SaveCapabilities(dir string, c Capabilities) error {
@@ -74,39 +44,6 @@ func SaveCapabilities(dir string, c Capabilities) error {
 
 // Kinds of rewrite.
 const (
-	RewriteInput  = "input"
-	RewriteOutput = "output"
+	RewriteInput  = hookcaps.RewriteInput
+	RewriteOutput = hookcaps.RewriteOutput
 )
-
-// Supports reports whether a hook may rewrite the given tool's input or output
-// for the agent. Only a "yes" from a live probe or a verified session counts.
-func (c Capabilities) Supports(agent, tool, kind string) bool {
-	for _, e := range c.Entries {
-		if e.Agent != agent || e.Tool != tool {
-			continue
-		}
-		// Codex is not available to probe, and its documentation states Bash input
-		// rewriting (learn.chatgpt.com/docs/hooks, read 2026-11-04), so a docs
-		// result counts there for input only. Everything else needs a live probe.
-		if e.Method != "live" && e.Method != "session" && (e.Method != "docs" || agent != "codex" || kind != RewriteInput) {
-			continue
-		}
-		switch kind {
-		case RewriteInput:
-			return e.InputRewrite == CapYes
-		case RewriteOutput:
-			return e.OutputRewrite == CapYes
-		}
-	}
-	return false
-}
-
-// Find returns the entry for an agent and tool.
-func (c Capabilities) Find(agent, tool string) (Capability, bool) {
-	for _, e := range c.Entries {
-		if e.Agent == agent && e.Tool == tool {
-			return e, true
-		}
-	}
-	return Capability{}, false
-}

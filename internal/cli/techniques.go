@@ -33,6 +33,7 @@ func newTechniques(a *App) *cobra.Command {
 		RunE: func(*cobra.Command, []string) error { return runTechniques(a) },
 	}
 	var login string
+	var hookProbe []string
 	var gateway, mcp, custom bool
 	check := &cobra.Command{
 		Use:   "check <name>...",
@@ -45,7 +46,12 @@ func newTechniques(a *App) *cobra.Command {
 			default:
 				return fmt.Errorf("--login is %q; use api_key, subscription or unknown", login)
 			}
-			ctx := technique.Context{Login: l, GatewayOn: gateway}
+			for _, n := range hookProbe {
+				if !technique.ValidHookNeed(n) {
+					return fmt.Errorf("--hook-probe has %q; write each as Tool:input or Tool:output, for example Bash:output", n)
+				}
+			}
+			ctx := technique.Context{Login: l, GatewayOn: gateway, HookCaps: hookProbe}
 			if mcp {
 				ctx.Have = append(ctx.Have, technique.CapMCPServer, technique.CapRecoveryStore)
 			}
@@ -59,6 +65,7 @@ func newTechniques(a *App) *cobra.Command {
 	check.Flags().BoolVar(&gateway, "gateway", false, "the Trove gateway is set up")
 	check.Flags().BoolVar(&mcp, "mcp", false, "Trove's MCP server is registered with your agent")
 	check.Flags().BoolVar(&custom, "custom-agent", false, "you use a custom agent whose prompt Trove may lay out")
+	check.Flags().StringSliceVar(&hookProbe, "hook-probe", nil, "hook rewrites a probe has seen work, as Tool:kind, for example Bash:output,Read:input (see `trove hooks verify`)")
 	c.AddCommand(check)
 	return c
 }
