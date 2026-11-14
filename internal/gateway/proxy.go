@@ -27,6 +27,16 @@ import (
 // It is a variable only so a test can lower it; nothing else changes it.
 var maxRequestBody int64 = 256 << 20
 
+// maxBufferedBodies bounds the request bodies held in memory at the same moment across every in-flight request.
+// One body may be as large as maxRequestBody, and each request is buffered so the optimizer can see it, so
+// without this a few large concurrent requests, or a hostile local client, could take all the memory. A request
+// over the budget is answered with a plain 503 the agent retries; it is never forwarded unread. It is a variable
+// only so a test can lower it.
+var maxBufferedBodies int64 = 1 << 30
+
+// bodyReserve is what a request with no declared length is assumed to need before its real size is known.
+const bodyReserve int64 = 8 << 20
+
 // maxCapture bounds the side copy of a response kept for usage extraction. If
 // a response is larger, usage is recorded as unavailable; the client still
 // receives every byte.
@@ -84,6 +94,15 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, rt *route) {
 		return
 	}
 
+	held := min(max(r.ContentLength, bodyReserve), maxRequestBody)
+	if r.ContentLength > 0 {
+		held = min(r.ContentLength, maxRequestBody)
+	}
+	if !s.reserveBody(held) {
+		plainError(w, http.StatusServiceUnavailable, "Trove is holding too many large requests in memory at once. Wait a moment and send the request again.")
+		return
+	}
+	defer func() { s.bodyBytes.Add(-held) }()
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRequestBody))
 	if err != nil {
 		var tooBig *http.MaxBytesError
@@ -93,6 +112,11 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, rt *route) {
 		}
 		// The client went away or sent a broken body; nothing to forward.
 		return
+	}
+	// Settle the reservation to what was really read, so the budget tracks memory rather than a guess.
+	if n := int64(len(body)); n != held {
+		s.bodyBytes.Add(n - held)
+		held = n
 	}
 
 	path := strings.TrimPrefix(r.URL.Path, prefix)
@@ -348,4 +372,19 @@ func (s *Server) capEnter(r *http.Request) (over bool) {
 		return false
 	}
 	return s.spend.over()
+}
+
+// reserveBody takes n bytes from the in-flight body budget. It reports false, and takes nothing, when that would
+// go over maxBufferedBodies. A single request larger than the whole budget is still let through when nothing else
+// is in flight, so lowering the budget can never make a legitimate large request impossible.
+func (s *Server) reserveBody(n int64) bool {
+	for {
+		cur := s.bodyBytes.Load()
+		if cur > 0 && cur+n > maxBufferedBodies {
+			return false
+		}
+		if s.bodyBytes.CompareAndSwap(cur, cur+n) {
+			return true
+		}
+	}
 }

@@ -114,19 +114,23 @@ func TestFilteredEnvDropsCredentialsAndKeepsToolchain(t *testing.T) {
 		"ANTHROPIC_API_KEY=a", "OPENAI_API_KEY=o", "GITHUB_TOKEN=g", "AWS_PROFILE=p", "AZURE_CLIENT_ID=x",
 		"SSH_AUTH_SOCK=/s", "GPG_AGENT_INFO=g", "DATABASE_URL=postgres://u:p@h/db", "SENTRY_DSN=d",
 		"DEPLOY_PAT=p", "NPM_CONFIG__AUTH=x", "MY_PRIVATE_KEY=k", "SESSION_COOKIE=c", "HTTP_BEARER=b",
+		"SLACK_WEBHOOK_URL=u", "DB_CONNECTION_STRING=c", "REGISTRY_AUTH=a", "STRIPE_SECRET=s", "STRIPE_KEY=k", "DEPLOY_KEY=d", "KUBECONFIG=/k", "VERCEL_ORG_ID=v", "GH_HOST=h",
+		"GIT_AUTHOR_NAME=n", "KEYBOARD_LAYOUT=us", "MONKEY=1", "AUTHORITY=x", "GOPRIVATE=example.com",
 	}
 	got := map[string]bool{}
 	for _, kv := range filteredEnv(in) {
 		k, _, _ := strings.Cut(kv, "=")
 		got[k] = true
 	}
-	for _, keep := range []string{"PATH", "HOME", "GOPATH", "GOFLAGS", "LANG", "TMPDIR", "CI", "PYTHONPATH", "PATHEXT"} {
+	for _, keep := range []string{"PATH", "HOME", "GOPATH", "GOFLAGS", "LANG", "TMPDIR", "CI", "PYTHONPATH", "PATHEXT",
+		"GIT_AUTHOR_NAME", "KEYBOARD_LAYOUT", "MONKEY", "AUTHORITY", "GOPRIVATE"} {
 		if !got[keep] {
 			t.Errorf("%s was dropped but toolchains need it", keep)
 		}
 	}
 	for _, drop := range []string{"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GITHUB_TOKEN", "AWS_PROFILE", "AZURE_CLIENT_ID", "SSH_AUTH_SOCK",
-		"GPG_AGENT_INFO", "DATABASE_URL", "SENTRY_DSN", "DEPLOY_PAT", "NPM_CONFIG__AUTH", "MY_PRIVATE_KEY", "SESSION_COOKIE", "HTTP_BEARER"} {
+		"GPG_AGENT_INFO", "DATABASE_URL", "SENTRY_DSN", "DEPLOY_PAT", "NPM_CONFIG__AUTH", "MY_PRIVATE_KEY", "SESSION_COOKIE", "HTTP_BEARER",
+		"SLACK_WEBHOOK_URL", "DB_CONNECTION_STRING", "REGISTRY_AUTH", "STRIPE_SECRET", "STRIPE_KEY", "DEPLOY_KEY", "KUBECONFIG", "VERCEL_ORG_ID", "GH_HOST"} {
 		if got[drop] {
 			t.Errorf("%s reached the project command", drop)
 		}

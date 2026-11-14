@@ -89,6 +89,7 @@ func String(s string) string {
 	}
 	s = reScheme.ReplaceAllString(s, "$1 "+Placeholder)
 	s = reKeyShape.ReplaceAllString(s, Placeholder)
+	s = reMoreShapes.ReplaceAllString(s, Placeholder)
 	s = reKV.ReplaceAllStringFunc(s, func(m string) string {
 		sub := reKV.FindStringSubmatch(m)
 		if sub[3] == Placeholder || strings.HasSuffix(strings.ToLower(sub[1]), "tokens") {

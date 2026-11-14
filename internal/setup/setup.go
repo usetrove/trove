@@ -679,8 +679,13 @@ func readOptional(path string) ([]byte, error) {
 func writeAtomic(path string, data []byte) error { return writeAtomicMode(path, data, 0o644) }
 
 // writeAtomicMode writes through a temporary file and a rename. An existing
-// file keeps its permissions; a new one gets newMode.
+// file keeps its permissions; a new one gets newMode. A path that is a symbolic link (a dotfiles-managed
+// settings.json, for example) is written through: the file it points to is replaced and the link stays, so the
+// user's setup is not quietly turned into a regular file (finding F-11).
 func writeAtomicMode(path string, data []byte, newMode os.FileMode) error {
+	if target, err := filepath.EvalSymlinks(path); err == nil {
+		path = target
+	}
 	mode := newMode
 	if fi, err := os.Stat(path); err == nil {
 		mode = fi.Mode().Perm()

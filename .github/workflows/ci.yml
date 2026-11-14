@@ -126,6 +126,8 @@ jobs:
         with:
           go-version: stable
           check-latest: true
+      # Every downloaded module must match the hash recorded in go.sum (catches a swapped dependency).
+      - run: go mod verify
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
       - run: govulncheck ./...
 

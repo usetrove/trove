@@ -30,9 +30,12 @@ const (
 	// Names that carry credentials or give access to them. A project command
 	// should not inherit the agent's keys, cloud logins, the ssh/gpg agents or
 	// database URLs. This is a denylist, so it can miss unusual names; it is
-	// documented as a mitigation, not a guarantee.
+	// documented as a mitigation, not a guarantee. An allowlist would be stricter, but
+	// would break toolchains whose variables nobody can list in advance, so the name list is widened instead
+	// (docs/security.md, finding F-28).
 	envDropPatternText = `(?i)(api[_-]?key|token|secret|password|passwd|credential|private[_-]?key|bearer|cookie|` +
-		`^anthropic_|^openai_|^aws_|^azure_|^authorization|^ssh_auth_sock$|^gpg_agent_info$|^database_url$|_dsn$|(^|_)pat$|^npm_config__auth)`
+		`^anthropic_|^openai_|^aws_|^azure_|^authorization|^ssh_auth_sock$|^gpg_agent_info$|^database_url$|_dsn$|(^|_)pat$|^npm_config__auth|` +
+		`webhook|connection[_-]?string|(^|_)auth(_|$)|(^|_)keys?$|^kubeconfig$|^(slack|stripe|twilio|sendgrid|gh|cloudflare|heroku|vercel|netlify)_)`
 )
 
 var (
