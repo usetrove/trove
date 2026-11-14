@@ -43,7 +43,7 @@ func NewRoot(a *App) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "trove",
 		Short:         "The efficiency layer for AI coding agents",
-		Long:          "Trove cuts the tokens your AI coding agents waste, locally, and shows that results did not suffer.\nRun with no command to see your report.",
+		Long:          "Trove cuts the tokens your AI coding agents waste, locally, and shows that results did not suffer.\nRun with no command to see your report. Run `trove advanced` to list the other commands.",
 		Args:          cobra.NoArgs,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -79,6 +79,7 @@ func NewRoot(a *App) *cobra.Command {
 		newUndo(a),
 		newShare(a),
 		newDoctor(a),
+		newAutopilot(a),
 		newPricing(a),
 		newOptimize(a),
 		newMCP(a),
@@ -97,5 +98,6 @@ func NewRoot(a *App) *cobra.Command {
 		newData(a),
 		newUninstall(a),
 	)
+	hideAdvanced(a, root)
 	return root
 }

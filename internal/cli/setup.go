@@ -46,6 +46,8 @@ type setupReport struct {
 	// Options explains who the gateway is for, how API credits on Max, Ultra and
 	// Team plans fit, which cloud backends it handles, and the healthcare caveat.
 	Options []string `json:"options,omitempty"`
+	// AutopilotOn is true when Autopilot is on after this run.
+	AutopilotOn bool `json:"autopilot_on,omitempty"`
 }
 
 // claudeNeedsAPIKey returns an empty string when there is evidence that Claude Code will authenticate with an
@@ -107,21 +109,22 @@ func codexNeedsAPIKey(a *App, planOverride string) string {
 }
 
 func newSetup(a *App) *cobra.Command {
-	var yes, statusLine, gateway bool
+	var yes, statusLine, gateway, autopilotFlag bool
 	c := &cobra.Command{
 		Use:   "setup",
-		Short: "Find your coding agents and, with --gateway, point them at the Trove gateway (shows the change first; asks before applying)",
+		Short: "Find your coding agents and set Trove up (shows every change and asks first)",
 		Long: "Detects Claude Code and Codex CLI. Pointing them at the Trove gateway is opt-in: it happens only with --gateway,\n" +
 			"and then Trove shows the exact change and applies it only with your consent. The original file is backed up and\n" +
 			"`trove undo` reverses everything. Without --gateway, setup changes no agent's gateway setting.\n" +
 			"Shell rc files are never touched. Trove never reads or writes your API keys.\n" +
 			"For Claude Code it then offers, as a separate step, to show your spend and budget pace in the status line.",
 		Args: cobra.NoArgs,
-		RunE: func(*cobra.Command, []string) error { return runSetup(a, yes, statusLine, gateway) },
+		RunE: func(*cobra.Command, []string) error { return runSetup(a, yes, statusLine, gateway, autopilotFlag) },
 	}
 	c.Flags().BoolVar(&yes, "yes", false, "apply the changes shown without asking")
 	c.Flags().BoolVar(&statusLine, "status-line", false, "also add Trove to Claude Code's status line without asking (--yes alone does not)")
 	c.Flags().BoolVar(&gateway, "gateway", false, "opt in to pointing Claude Code and Codex CLI at the Trove gateway (required; without it setup changes no gateway setting)")
+	c.Flags().BoolVar(&autopilotFlag, "autopilot", false, "also turn on Autopilot without asking (--yes alone does not)")
 	return c
 }
 
@@ -129,7 +132,7 @@ func newSetup(a *App) *cobra.Command {
 // extra the user can add, not a step that failed.
 const gatewayOptional = "Optional: route this agent through the Trove gateway with `trove setup --gateway`. Nothing is changed unless you ask."
 
-func runSetup(a *App, yes, statusLine, gateway bool) error {
+func runSetup(a *App, yes, statusLine, gateway, autopilotFlag bool) error {
 	dir, cfg, err := loadConfig(a)
 	if err != nil {
 		return err
@@ -224,10 +227,15 @@ func runSetup(a *App, yes, statusLine, gateway bool) error {
 		if err != nil {
 			return err
 		}
+		apText, err := autopilotStepFor(a, &rep, dir, autopilotFlag)
+		if err != nil {
+			return err
+		}
 		if a.JSON {
 			return a.emit(rep, "")
 		}
 		_, _ = fmt.Fprint(a.Out, statusText)
+		_, _ = fmt.Fprint(a.Out, apText)
 		if gatewayUp {
 			_, _ = fmt.Fprint(a.Out, gatewayGuidance(rep))
 		}
@@ -262,10 +270,16 @@ func runSetup(a *App, yes, statusLine, gateway bool) error {
 		_ = a.emit(rep, "")
 		return fmt.Errorf("%v. Run `trove undo` to reverse anything already applied", err)
 	}
+	apText, err := autopilotStepFor(a, &rep, dir, autopilotFlag)
+	if err != nil {
+		_ = a.emit(rep, "")
+		return err
+	}
 	if a.JSON {
 		return a.emit(rep, "")
 	}
 	_, _ = fmt.Fprint(a.Out, statusText)
+	_, _ = fmt.Fprint(a.Out, apText)
 	_, _ = fmt.Fprint(a.Out, gatewayGuidance(rep))
 	return nil
 }
