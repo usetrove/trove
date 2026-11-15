@@ -7,8 +7,11 @@ revision (the HF repo sha) is read before and after the download and must match,
 Licensing: SWE-bench code is MIT, but the Verified dataset card declares no license and the tasks come from
 upstream repos with their own licenses (bench/LICENSES.md). Manifests stay local; we publish IDs and aggregates only.
 
-Environments: the official per-instance images were NOT verified against documentation, so we do not assume them.
-Each task builds its environment from the repo at its base commit, installing dependencies as they existed on
+Environments: by default each task uses the official prebuilt per-instance image. Confirmed on 2026-11-14 by a real
+`swebench eval verified --gold` run of matplotlib__matplotlib-25960 on x86_64 Ubuntu: the image name pattern, the
+repo at /testbed, a conda env named `testbed` active in a login shell, and tests run as `pytest -rA <test files>`.
+That is one instance: run the official gold check across the candidates before trusting the rest.
+With `fetch --image <base>` a task instead builds its own environment from the repo at its base commit, installing dependencies as they existed on
 the pull request's `created_at` date (`uv pip install --exclude-newer`; created_at and uv's option were read from
 the dataset card and uv docs on 2026-11-14, and the cutoff was seen to reach build dependencies in a manual
 test). Without that cutoff current setuptools, numpy and pyparsing break these old repos. Grading runs the
@@ -114,16 +117,31 @@ def success_cmd(row: dict, test_files: list[str]) -> str:
     return PYTEST + args
 
 
-def row_task(row: dict, revision: str, *, image: str) -> tuple[Task, str]:
+OFFICIAL_PREFIX = "swebench/sweb.eval"
+OFFICIAL_REPO_PATH = "/testbed"
+
+
+def official_image(instance_id: str, arch: str = "x86_64") -> str:
+    """The published per-instance image. Pattern seen in a real harness run on 2026-11-14:
+    swebench/sweb.eval.x86_64.matplotlib_1776_matplotlib-25960:latest for matplotlib__matplotlib-25960."""
+    return f"{OFFICIAL_PREFIX}.{arch}.{instance_id.lower().replace('__', '_1776_')}:latest"
+
+
+def row_task(row: dict, revision: str, *, image: str | None = None, arch: str = "x86_64") -> tuple[Task, str]:
+    """image=None uses the official prebuilt image (repo at /testbed with its own conda environment, which is how
+    SWE-bench itself runs the tests). A given image instead builds our own environment from the repo."""
     test_files = sorted({p for p, _ in split_diff(row["test_patch"])})
-    date = snapshot_date(row)
+    if image is None:
+        env: dict = dict(image=official_image(row["instance_id"], arch), repo_path=OFFICIAL_REPO_PATH, setup=())
+    else:
+        env = dict(image=image, setup=(
+            "apt-get update -qq && apt-get install -y -qq build-essential locales && " + LOCALE_STEP,
+            "pip install -q uv",
+            install_step(snapshot_date(row))))
     task = Task(
         id=f"swebench-{row['instance_id'].lower()}",
         source="swebench", repo=f"https://github.com/{row['repo']}", base_commit=row["base_commit"],
-        license="see-upstream", prompt=row["problem_statement"], image=image,
-        setup=("apt-get update -qq && apt-get install -y -qq build-essential locales && " + LOCALE_STEP,
-               "pip install -q uv",
-               install_step(date)),
+        license="see-upstream", prompt=row["problem_statement"], **env,
         grading_setup=(apply_patch_step(row["test_patch"]),),
         success_cmd=success_cmd(row, test_files),
         timeout_s=1800, dataset_commit=revision,
@@ -134,7 +152,8 @@ def row_task(row: dict, revision: str, *, image: str) -> tuple[Task, str]:
     return task, row["patch"]
 
 
-def generate(rows: list[dict], revision: str, out_dir: Path, *, n: int, seed: int, image: str = "python:3.9-slim") -> list[Task]:
+def generate(rows: list[dict], revision: str, out_dir: Path, *, n: int, seed: int, image: str | None = None,
+             arch: str = "x86_64") -> list[Task]:
     eligible = sorted((r for r in rows if r["repo"] in PYTEST_REPOS), key=lambda r: r["instance_id"])
     if not eligible:
         raise ValueError("No SWE-bench rows use a pytest-based repo; the dataset layout may have changed.")
@@ -142,9 +161,9 @@ def generate(rows: list[dict], revision: str, out_dir: Path, *, n: int, seed: in
     tasks = []
     for row in sorted(chosen, key=lambda r: r["instance_id"]):
         try:
-            task, gold = row_task(row, revision, image=image)
+            task, gold = row_task(row, revision, image=image, arch=arch)
         except ValueError:
-            continue   # test patch too large to pass as one argument
+            continue   # test patch too large to pass as one argument, or (own-environment mode) no created_at date
         write_task(out_dir, task, gold)
         tasks.append(task)
     return tasks

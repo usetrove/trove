@@ -4,7 +4,7 @@ import subprocess
 
 import pytest
 
-from trovebench.manifest import load_tasks
+from trovebench.manifest import load_tasks, parse_task
 from trovebench.sources import mine, polyglot, swebench
 from trovebench.sources.common import apply_patch_step, is_test_path, split_diff
 
@@ -108,7 +108,7 @@ def test_swebench_generate_filters_runners(tmp_path):
 
 
 def test_swebench_environment_is_dated_to_the_pull_request(tmp_path):
-    t = swebench.generate([swe_row(1)], "rev", tmp_path, n=1, seed=1)[0]
+    t = swebench.generate([swe_row(1)], "rev", tmp_path, n=1, seed=1, image="python:3.9-slim")[0]
     install = t.setup[-1]
     # a 2022 task keeps its own date for dependencies but never gets a setuptools older than the floor
     assert "--exclude-newer 2022-03-03 --exclude-newer-package setuptools=2023-01-15 -e . pytest" in install
@@ -133,7 +133,51 @@ def test_swebench_grading_falls_back_to_whole_files():
 
 def test_swebench_row_without_a_date_is_skipped(tmp_path):
     row = {k: v for k, v in swe_row(1).items() if k != "created_at"}
-    assert swebench.generate([row], "rev", tmp_path, n=1, seed=1) == []
+    assert swebench.generate([row], "rev", tmp_path, n=1, seed=1, image="python:3.9-slim") == []
+
+
+def test_swebench_official_image_name():
+    # the pattern seen in a real harness run (2026-11-14)
+    assert (swebench.official_image("matplotlib__matplotlib-25960")
+            == "swebench/sweb.eval.x86_64.matplotlib_1776_matplotlib-25960:latest")
+    assert swebench.official_image("pylint-dev__pylint-7080", "arm64").startswith("swebench/sweb.eval.arm64.pylint-dev_1776_")
+
+
+def test_swebench_defaults_to_the_official_prebuilt_image(tmp_path):
+    t = load_tasks(_gen(tmp_path))[0]
+    assert t.image == swebench.official_image("psf__requests-1")
+    assert t.repo_path == "/testbed" and t.setup == ()     # nothing to clone or install
+    assert t.grading_setup and t.success_cmd.startswith("python -m pytest")
+
+
+def _gen(tmp_path):
+    swebench.generate([swe_row(1)], "rev", tmp_path, n=1, seed=1)
+    return tmp_path
+
+
+def test_prebuilt_dockerfile_links_the_repo_and_skips_clone_and_setup(tmp_path):
+    from trovebench import docker_env as de
+    from trovebench.agent.fake import FakeAgent
+
+    t = load_tasks(_gen(tmp_path))[0]
+    text = de.render_dockerfile(t, FakeAgent(), None)
+    assert text.startswith(f"FROM {t.image}\n")
+    assert "RUN ln -s /testbed /work" in text and "WORKDIR /work" in text
+    assert "git remote add" not in text and "bash\", \"-lc" not in text
+
+
+def test_prebuilt_repo_path_must_be_a_plain_absolute_path():
+    import dataclasses
+
+    from trovebench import docker_env as de
+    from trovebench.agent.fake import FakeAgent
+
+    t = parse_task(dict(id="t", source="swebench", repo="r", base_commit="c", license="MIT", prompt="p",
+                        image="i", success_cmd="true", timeout_s=60, repo_path="/testbed"))
+    assert "RUN ln -s /testbed /work" in de.render_dockerfile(t, FakeAgent(), None)
+    for bad in ("testbed", "/x; rm -rf /", "/a b"):
+        with pytest.raises(de.DockerError):
+            de.render_dockerfile(dataclasses.replace(t, repo_path=bad), FakeAgent(), None)
 
 
 # --- miner ----------------------------------------------------------------------

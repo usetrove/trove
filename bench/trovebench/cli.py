@@ -78,7 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("-n", type=int, default=10, help="how many tasks")
     f.add_argument("--seed", type=int, default=1, help="seed for the random subset")
     f.add_argument("--commit", help="polyglot: exact commit to check out and record")
-    f.add_argument("--image", default="python:3.9-slim", help="swebench: base Docker image for the environment")
+    f.add_argument("--image", default=None,
+                   help="swebench: build our own environment on this base image (for example python:3.9-slim) instead "
+                        "of using the official prebuilt SWE-bench image (the default; recommended)")
     m = sub.add_parser("mine", help="mine tasks from recently merged PRs that close issues (needs GITHUB_TOKEN)")
     m.add_argument("--repos", type=Path, default=BENCH / "repos.yaml", help="allowlist file (see repos.example.yaml)")
     m.add_argument("--since", required=True, help="only PRs merged on or after this date, YYYY-MM-DD")
@@ -276,7 +278,7 @@ def _cmd_fetch(args) -> int:
         rows, rev = swebench.fetch_rows(lambda u: http_get(u))
         tasks = swebench.generate(rows, rev, out, n=args.n, seed=args.seed, image=args.image)
         print(f"Wrote {len(tasks)} SWE-bench Verified task(s) to {out}, dataset revision {rev[:10]}. "
-              "Run `validate` next: environments are built from the repo and many older instances will be rejected.")
+              "Run `validate` next. The first run downloads each task's official image (these are large), so check free disk first.")
     return 0
 
 

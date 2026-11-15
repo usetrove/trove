@@ -79,6 +79,20 @@ def context_hash(root: Path) -> str:
 
 
 def render_dockerfile(task: Task, agent: Agent, agent_version: str | None) -> str:
+    if task.repo_path:
+        # A prebuilt image (for example the official SWE-bench one) already holds the repo at its base commit
+        # and its own Python environment. Add only the agent, and expose the repo at /work, where every
+        # harness command runs.
+        if not task.repo_path.startswith("/") or any(c in task.repo_path for c in " '\"\\$`;&|\n"):
+            raise DockerError(f"{task.id}: repo_path '{task.repo_path}' must be a plain absolute path.")
+        return "\n".join([
+            f"FROM {task.image}",
+            "ENV DEBIAN_FRONTEND=noninteractive",
+            f"RUN apt-get update && apt-get install -y --no-install-recommends {PKGS} && rm -rf /var/lib/apt/lists/*",
+            *agent.install_lines(agent_version),
+            f"RUN ln -s {task.repo_path} /work",
+            "WORKDIR /work",
+        ]) + "\n"
     lines = [
         f"FROM {task.image}",
         "ENV DEBIAN_FRONTEND=noninteractive",

@@ -246,17 +246,35 @@ PART 6. TASKS: FETCH, VALIDATE, PILOT
 
  Step 6.1  Fetch candidate SWE-bench Verified tasks. Ask for more than you need; many are rejected.
 
-     python -m trovebench fetch swebench -n 80 --seed <TASK_SEED> --out bench/tasks/swebench-cand
+     python -m trovebench fetch swebench -n 80 --seed 20261114 --out bench/tasks/swebench-cand
+     # Use a real number for the seed (any integer; 20261114 is the date we chose, and the same seed gives the
+     # same sample). Do not type the angle brackets of a placeholder: the shell reads "<" as a redirect.
      # Writes manifests only. Task text belongs to the upstream projects: keep these local.
+     # Each task uses the OFFICIAL prebuilt SWE-bench image (repo at /testbed, its own conda environment), so
+     # the tests run the way SWE-bench runs them. Needs x86_64, Docker, and about 120 GB free disk (the
+     # SWE-bench README's figure). Check: df -h ~ ; docker system df.
      # (Check how many pytest-repo rows exist: the adapter caps at what the dataset provides.)
+     # `fetch swebench --image python:3.9-slim` instead builds our own environment from the repo. That path
+     # failed on most old tasks (new setuptools, numpy, pyparsing, compilers): use it only for experiments.
 
- Step 6.2  Validate. For each task this builds an image and proves the tests FAIL on the unmodified repo
-     and PASS with the upstream fix. It calls no model, so it spends no API money, but it takes time and
-     disk. Rejected tasks print a reason.
+ Step 6.2  Validate. For each task this proves the tests FAIL on the unmodified repo and PASS with the
+     upstream fix, inside the official image. It calls no model, so it spends no API money, but the first
+     run downloads each image (they are large) and takes time. Rejected tasks print a reason; one task that
+     will not build is rejected and the run continues. Every result line ends with [n/total pct%].
+     Run it inside tmux so a dropped connection does not kill it.
 
      python -m trovebench validate --tasks bench/tasks/swebench-cand | tee /tmp/validate.txt
      grep -c '^OK' /tmp/validate.txt
      grep '^REJECTED' /tmp/validate.txt | head
+
+     Optional independent cross-check with the OFFICIAL harness (SWE-bench README, read 2026-11-14), run
+     outside this repo. For one task:
+         git clone https://github.com/SWE-bench/SWE-bench.git && cd SWE-bench && pip install -e .
+         git clone --depth 1 https://github.com/SWE-bench/swe-bench-tasks.git ../swe-bench-tasks
+         swebench eval verified --gold -i <INSTANCE_ID> --run-id gold-1 --task-repo ../swe-bench-tasks
+     Replace <INSTANCE_ID> with a real id such as matplotlib__matplotlib-25960. "Instances resolved: 1"
+     means the official harness agrees. If its local image build fails for lack of buildx, it falls back
+     to the published image and still runs.
 
  Step 6.3  Build the evaluation set from the validated tasks only. Copy the accepted manifests (the
      folders the validator marked with validation.json) into a new folder, for example
@@ -827,9 +845,13 @@ PART F. AFTER THE STUDIES: WHAT THE NUMBERS CHANGE
 THINGS THAT WILL GO WRONG, AND WHAT TO DO
 ======================================================================================================
 
- - `validate` rejects most tasks.        Expected (see PART 0 item 7). Use what passes. Fetch more
-                                         candidates (-n larger, a different --seed) rather than
-                                         loosening anything.
+ - `validate` rejects most tasks.        With our own environment builds this was expected (they broke on
+                                         old repos). With the official images it should not be most
+                                         tasks: if it is, send me the REJECTED reasons before going on.
+                                         Use what passes. Fetch more candidates (-n larger, a different
+                                         --seed) rather than loosening anything.
+ - `validate` prints nothing.            Check the --tasks path (it is bench/tasks/..., with an s) and that
+                                         Docker is running (docker ps).
  - docker build times out or fills disk. docker system df ; docker image prune (only images you can
                                          rebuild). Leave headroom before a long run.
  - Runs end "error".                     Read runs/<id>/agent_stderr_tail.txt. Rate limits (HTTP 429)
