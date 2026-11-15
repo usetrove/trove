@@ -25,6 +25,29 @@ with and without an edit in between). No real code, paths or secrets.
   reporter (about 500 tests per run), a failing container build rerun after each fix, and incident log pulls. Quote the heavy
   tier as a ceiling for output-heavy work, never as a typical day, and never average it with the everyday tier.
 
+- **custom agent, no caching**: the everyday sessions again, run as a script or home-grown agent that sends no cache markers.
+  The original request is billed as plain input every turn; the optimized one is billed with the cache only if the
+  `cache_breakpoints` optimizer really added a marker. This saving is Anthropic's prompt caching, which Trove switches on for agents
+  that do not use it. It is zero for an agent that already caches, and it does not apply to Claude Code, which manages its own caching.
+  It assumes a 5-minute cache lifetime and a 10% chance of a cold cache on any turn.
+
+## What limits the saving (`--analyze`, or `ANALYZE=1` in the script)
+
+For Claude Code sessions the saving is capped by structure, and the analysis shows where:
+
+1. **Ceiling.** What an oracle that deleted every tool output would save. Most of what is left is the system prompt, the model's own
+   replies and the files it read, none of which a safe optimizer may remove. The gap between "saving now" and the ceiling is mostly
+   file reads and search results.
+2. **Size.** Making every output twice or four times as large does not raise the everyday saving much, because most of the growth is
+   file content. The output trimmer never touches a file the agent read.
+3. **Trimmer thresholds.** The trimmer acts only on output that looks like a test or build run (at least 10 recognizable lines) and is at
+   least 6,000 bytes. Lowering the size thresholds to their allowed minimums changes nothing on these sessions, because the signature gate is the
+   binding one and it is not tunable.
+4. **A modelled optimizer.** Sending a re-read of a changed file as only its changed lines would add under one point to the everyday median,
+   so it was not built. Measuring a feature in the model first is cheaper than shipping one that does not pay.
+
+The size and threshold rows are what-ifs, not claims, and nothing in them changes a shipped default.
+
 ## Nothing lost
 
 A saving only counts if nothing was lost. The run checks that every failure or error line in the original tool output is still

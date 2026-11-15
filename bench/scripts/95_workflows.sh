@@ -6,6 +6,7 @@
 #     SEED=20261108        the sessions' small variations (timings, ids); same seed, same report
 #     MODEL=claude-sonnet-5-5   the pinned model used to price the sessions
 #     OUT=bench/published/workflows   where workflows.md and workflows.json go (must not be git-ignored)
+#     ANALYZE=1            also write analysis.md/json: the ceiling, output-size what-ifs and trimmer thresholds (adds about a minute)
 #     REPLAY=1             ALSO replay your own real Claude Code logs (read-only, counts and bytes only, nothing stored)
 #     REPLAY_DIR=~/.claude/projects   which logs to replay when REPLAY=1
 #
@@ -36,6 +37,11 @@ echo; echo "== Replay the scripted workflows (seed $SEED, model $MODEL)"
 "$SCRATCH/trove" bench workflows --seed "$SEED" --model "$MODEL" --out "$OUT" > "$SCRATCH/report.txt"
 cat "$OUT/workflows.md"
 
+if [ -n "${ANALYZE:-}" ]; then
+  echo; echo "== What limits the saving (ceiling, output-size what-ifs, trimmer thresholds, modelled re-read diffs)"
+  "$SCRATCH/trove" bench workflows --seed "$SEED" --model "$MODEL" --analyze --out "$OUT"
+fi
+
 if [ -n "${REPLAY:-}" ]; then
   RD="${REPLAY_DIR:-$HOME/.claude/projects}"
   echo; echo "== Replay of your own real session logs ($RD): read-only, aggregates only"
@@ -65,6 +71,10 @@ print(f"1. ESTIMATED: on scripted everyday Claude Code workflows the optimizers 
 print(f"2. ESTIMATED: on scripted heavy-output sessions (verbose test runs, build logs, incident logs) the median is "
       f"{v['median_saved_pct']}% (range {v['min_saved_pct']}% to {v['max_saved_pct']}%). That tier was chosen for high waste: quote it as a ceiling "
       f"for output-heavy work, never as a typical day, and never average it with the everyday tier.")
+c = h["custom_agent_no_caching"]
+print(f"2b. ESTIMATED: for a custom agent or script that sends NO cache markers, cache_breakpoints turns on prompt caching and the median is "
+      f"{c['median_saved_pct']}% (range {c['min_saved_pct']}% to {c['max_saved_pct']}%). The saving is Anthropic's prompt caching, which Trove switches on for "
+      f"agents that do not use it. It is zero for an agent that already caches, and it does not apply to Claude Code.")
 print(f"3. MEASURED: nothing lost and cache safe. {h['key_lines_kept']} of {h['key_lines']} failure/error lines still visible to the model; "
       f"{h['prefix_preserved']} of {h['requests']} requests kept the cached prefix byte-identical; {h['violations']} broken invariants; "
       f"repeat runs byte-identical: {h['all_deterministic']}.")

@@ -13,9 +13,10 @@ import (
 
 func newWorkflows(a *App) *cobra.Command {
 	var (
-		seed   uint64
-		model  string
-		outDir string
+		seed    uint64
+		model   string
+		outDir  string
+		analyze bool
 	)
 	c := &cobra.Command{
 		Use:   "workflows",
@@ -28,6 +29,29 @@ func newWorkflows(a *App) *cobra.Command {
 		Example: "  trove bench workflows\n  trove bench workflows --out ./workflows --json",
 		Args:    cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
+			if analyze {
+				an, err := stress.RunWorkflowAnalysis(stress.WorkflowOptions{Seed: seed, Model: model})
+				if err != nil {
+					return err
+				}
+				md := stress.WorkflowAnalysisMarkdown(an)
+				if outDir != "" {
+					if err := os.MkdirAll(outDir, 0o750); err != nil {
+						return fmt.Errorf("could not create %s: %w", outDir, err)
+					}
+					if err := os.WriteFile(filepath.Join(outDir, "analysis.md"), []byte(md), 0o600); err != nil {
+						return fmt.Errorf("could not write analysis.md: %w", err)
+					}
+					b, err := json.MarshalIndent(an, "", "  ")
+					if err != nil {
+						return err
+					}
+					if err := os.WriteFile(filepath.Join(outDir, "analysis.json"), append(b, 10), 0o600); err != nil {
+						return fmt.Errorf("could not write analysis.json: %w", err)
+					}
+				}
+				return a.emit(an, md)
+			}
 			rep, err := stress.RunWorkflows(stress.WorkflowOptions{Seed: seed, Model: model})
 			if err != nil {
 				return err
@@ -61,6 +85,7 @@ func newWorkflows(a *App) *cobra.Command {
 	f := c.Flags()
 	f.Uint64Var(&seed, "seed", defaultJourneySeed, "random seed for the small variations (timings, ids); the same seed gives the same sessions")
 	f.StringVar(&model, "model", "claude-sonnet-5-5", "pinned model id used to price the sessions")
+	f.BoolVar(&analyze, "analyze", false, "instead of the headline numbers, report what limits the saving: the ceiling, output-size what-ifs and trimmer thresholds")
 	f.StringVar(&outDir, "out", "", "also write workflows.md and workflows.json into this folder")
 	return c
 }

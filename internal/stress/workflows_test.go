@@ -30,6 +30,9 @@ func TestWorkflowsRunCleanAndDeterministic(t *testing.T) {
 		t.Errorf("only %d of %d requests kept the cached prefix", h.PrefixPreserved, h.Requests)
 	}
 	for _, r := range rep.Rows {
+		if r.Tier == tierCustom && r.SavedPct <= 0 {
+			t.Errorf("%s: a custom agent with no caching should gain from the cache markers (%.1f%%)", r.Name, r.SavedPct)
+		}
 		if r.SavedPct < -1 {
 			t.Errorf("%s: the optimized arm costs more than the original (%.1f%%)", r.Name, r.SavedPct)
 		}
@@ -86,6 +89,28 @@ func TestWorkflowsHoldAcrossSeeds(t *testing.T) {
 			if r.Tier == tierHeavy && r.SavedPct < 0 {
 				t.Errorf("seed %d: heavy workflow %s costs more optimized (%.1f%%)", seed, r.Name, r.SavedPct)
 			}
+		}
+	}
+}
+
+// A harder pass: the same sessions at other sizes, with the trimmer at its tightest, and with the modelled re-read diff.
+// Nothing may break, whatever the size.
+func TestWorkflowsHoldAtOtherSizesAndTunings(t *testing.T) {
+	cases := []WorkflowOptions{
+		{Seed: 5, Scale: 0.5},
+		{Seed: 5, Scale: 4},
+		{Seed: 5, Scale: 2, Tuning: minTuning()},
+		{Seed: 5, Scale: 2, RereadDiff: true},
+	}
+	for _, c := range cases {
+		rep, err := RunWorkflows(c)
+		if err != nil {
+			t.Fatalf("%+v: %v", c, err)
+		}
+		h := rep.Headline
+		if h.Violations != 0 || !h.AllDeterministic || h.KeyLinesKept != h.KeyLines || h.PrefixPreserved != h.Requests {
+			t.Errorf("scale %v tuning %v diff %v: violations=%d deterministic=%v key lines %d/%d prefix %d/%d", c.Scale, c.Tuning != nil, c.RereadDiff,
+				h.Violations, h.AllDeterministic, h.KeyLinesKept, h.KeyLines, h.PrefixPreserved, h.Requests)
 		}
 	}
 }

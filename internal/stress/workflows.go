@@ -70,6 +70,7 @@ type TierSummary struct {
 type Headline struct {
 	Everyday         TierSummary `json:"everyday"`
 	Heavy            TierSummary `json:"heavy"`
+	CustomAgent      TierSummary `json:"custom_agent_no_caching"`
 	KeyLines         int         `json:"key_lines"`      // measured
 	KeyLinesKept     int         `json:"key_lines_kept"` // measured
 	Requests         int         `json:"requests"`
@@ -84,6 +85,17 @@ type Headline struct {
 type WorkflowOptions struct {
 	Seed  uint64
 	Model string // default claude-sonnet-5-5
+	// Scale multiplies the size of what the scripted sessions read, search and run (default 1). It is an analysis knob:
+	// the headline numbers always use 1.
+	Scale float64
+	// Tuning is the per-session optimizer tuning the engine runs with (default none: the shipped values).
+	Tuning optimize.Tuning
+	// RereadDiff models an optimizer that does not exist: a Read of a file already read earlier in the session is sent as
+	// the lines that changed, not the whole file. Analysis only; it shows what such an optimizer could be worth.
+	RereadDiff bool
+	// CustomAgent runs the session as a custom agent that sends no cache markers (a script or home-grown agent), the
+	// case the cache_breakpoints optimizer exists for. The original arm is then priced with no prompt caching at all.
+	CustomAgent bool
 }
 
 const workflowPrefixTokens = 18000 // Claude Code's system prompt, tool definitions and project context, roughly
@@ -96,12 +108,16 @@ type wfSpec struct {
 const (
 	tierEveryday = "everyday"
 	tierHeavy    = "heavy"
+	tierCustom   = "custom-agent"
 )
 
 // RunWorkflows runs every scripted workflow twice (the second run checks determinism) and prices the first.
 func RunWorkflows(o WorkflowOptions) (WorkflowReport, error) {
 	if o.Model == "" {
 		o.Model = "claude-sonnet-5-5"
+	}
+	if o.Scale <= 0 {
+		o.Scale = 1
 	}
 	tab, err := pricing.Default()
 	if err != nil {
@@ -111,6 +127,22 @@ func RunWorkflows(o WorkflowOptions) (WorkflowReport, error) {
 	var lat []float64
 	for _, w := range workflowSpecs() {
 		row, l, err := runWorkflow(w, o, tab)
+		if err != nil {
+			return rep, err
+		}
+		lat = append(lat, l...)
+		rep.Rows = append(rep.Rows, row)
+	}
+	// The same everyday sessions again, as a custom agent that sets no cache markers.
+	co := o
+	co.CustomAgent = true
+	for _, w := range workflowSpecs() {
+		if w.tier != tierEveryday {
+			continue
+		}
+		cw := w
+		cw.tier, cw.name = tierCustom, w.name+" (custom agent, no caching)"
+		row, l, err := runWorkflow(cw, co, tab)
 		if err != nil {
 			return rep, err
 		}
@@ -135,7 +167,7 @@ func RunWorkflows(o WorkflowOptions) (WorkflowReport, error) {
 		sort.Float64s(xs)
 		return TierSummary{Workflows: len(xs), MedianPct: round1(quantile(xs, 0.5)), MinPct: round1(xs[0]), MaxPct: round1(xs[len(xs)-1])}
 	}
-	h.Everyday, h.Heavy = summ(byTier[tierEveryday]), summ(byTier[tierHeavy])
+	h.Everyday, h.Heavy, h.CustomAgent = summ(byTier[tierEveryday]), summ(byTier[tierHeavy]), summ(byTier[tierCustom])
 	sort.Float64s(lat)
 	h.EngineP50ms, h.EngineP99ms = round2(quantile(lat, 0.5)), round2(quantile(lat, 0.99))
 	rep.Headline = h
@@ -152,7 +184,10 @@ func RunWorkflows(o WorkflowOptions) (WorkflowReport, error) {
 }
 
 func runWorkflow(w wfSpec, o WorkflowOptions, tab *pricing.Table) (WorkflowRow, []float64, error) {
-	turns := buildWorkflow(w, o.Seed)
+	turns := buildWorkflow(w, o.Seed, o.Scale)
+	if o.RereadDiff {
+		turns = rereadAsDiff(turns)
+	}
 	spec := SessionSpec{Name: "wf-" + w.name, PrefixTokens: workflowPrefixTokens, Model: o.Model, Turns: len(turns)}
 	bodies := buildBodies(spec, turns)
 
@@ -179,6 +214,10 @@ func playWorkflow(spec SessionSpec, bodies [][]byte, turns []turn, o WorkflowOpt
 	var row WorkflowRow
 	store := &memStore{}
 	eng := newEngine(allNames(), store, PricingDate)
+	agent := "claude_code"
+	if o.CustomAgent {
+		eng, agent = newCustomEngine(allNames(), store, PricingDate), customAgent
+	}
 	expiry := rng(o.Seed, "wf-expiry", spec.Name)
 	var outs [][]byte
 	var lat []float64
@@ -188,7 +227,7 @@ func playWorkflow(spec SessionSpec, bodies [][]byte, turns []turn, o WorkflowOpt
 		t0 := time.Now()
 		res := eng.TransformRequest(context.Background(), optimize.RequestIn{
 			Provider: "anthropic", Path: "/v1/messages", Header: http.Header{}, Body: orig,
-		}, optimize.Session{Key: "wf-" + spec.Name, Agent: "claude_code", TroveRun: true})
+		}, optimize.Session{Key: "wf-" + spec.Name, Agent: agent, TroveRun: true, Tuning: o.Tuning})
 		lat = append(lat, float64(time.Since(t0).Microseconds())/1000)
 		out := res.Body
 		outs = append(outs, out)
@@ -209,8 +248,20 @@ func playWorkflow(spec SessionSpec, bodies [][]byte, turns []turn, o WorkflowOpt
 		if len(pv) == 0 {
 			row.PrefixOK++
 		}
-		row.OffUSD += requestUSD(tab, spec.Model, prevOff, orig, turns[k].Reply, expired)
-		row.OnUSD += requestUSD(tab, spec.Model, prevOn, out, turns[k].Reply, expired) + overheadUSD(tab, spec.Model, int64(overhead))
+		if o.CustomAgent {
+			// No cache markers from the agent: the original request is billed as plain input every turn. The optimized
+			// request is billed with the cache only if the engine really added a marker to it.
+			row.OffUSD += uncachedUSD(tab, spec.Model, orig, turns[k].Reply)
+			if bytes.Contains(out, []byte(`"cache_control"`)) {
+				row.OnUSD += requestUSD(tab, spec.Model, prevOn, out, turns[k].Reply, expired)
+			} else {
+				row.OnUSD += uncachedUSD(tab, spec.Model, out, turns[k].Reply)
+			}
+			row.OnUSD += overheadUSD(tab, spec.Model, int64(overhead))
+		} else {
+			row.OffUSD += requestUSD(tab, spec.Model, prevOff, orig, turns[k].Reply, expired)
+			row.OnUSD += requestUSD(tab, spec.Model, prevOn, out, turns[k].Reply, expired) + overheadUSD(tab, spec.Model, int64(overhead))
+		}
 		prevOff, prevOn = orig, out
 	}
 	if n := len(bodies); n > 0 {
@@ -259,6 +310,16 @@ func isKeyLine(l string) bool {
 	return false
 }
 
+// uncachedUSD prices a request with no prompt caching: every input token is billed at the plain input rate.
+func uncachedUSD(tab *pricing.Table, model string, body []byte, replyTokens int) float64 {
+	u := pricing.Usage{UncachedInput: tokensOf(len(body)), Output: int64(replyTokens)}
+	c := tab.Cost(pricing.Request{Provider: "anthropic", Model: model, Time: PricingDate, Usage: u})
+	if c.Status != pricing.Priced {
+		return math.NaN()
+	}
+	return c.Total.Float64()
+}
+
 // overheadUSD prices the tokens an optimizer declared it adds, as cache writes (the worst case: never read back).
 func overheadUSD(tab *pricing.Table, model string, tokens int64) float64 {
 	if tokens <= 0 {
@@ -291,8 +352,8 @@ func workflowSpecs() []wfSpec {
 	}
 }
 
-func buildWorkflow(w wfSpec, seed uint64) []turn {
-	b := &wfBuilder{r: rng(seed, "wf", w.name), ver: map[string]int{}}
+func buildWorkflow(w wfSpec, seed uint64, scale float64) []turn {
+	b := &wfBuilder{r: rng(seed, "wf", w.name), ver: map[string]int{}, scale: scale}
 	w.build(b)
 	return b.turns
 }
@@ -300,7 +361,16 @@ func buildWorkflow(w wfSpec, seed uint64) []turn {
 type wfBuilder struct {
 	r     *rand.Rand
 	turns []turn
+	scale float64
 	ver   map[string]int // edits applied to a path so far; a re-read after an edit differs, a re-read without one is identical
+}
+
+// sc scales a count by the analysis knob. Zero stays zero and anything else stays at least one.
+func (b *wfBuilder) sc(n int) int {
+	if n <= 0 || b.scale == 1 || b.scale <= 0 {
+		return n
+	}
+	return max(1, int(float64(n)*b.scale+0.5))
 }
 
 func (b *wfBuilder) add(tool, input, out string) {
@@ -309,7 +379,7 @@ func (b *wfBuilder) add(tool, input, out string) {
 }
 
 func (b *wfBuilder) read(path string, lines int) {
-	b.add("Read", fmt.Sprintf(`{"file_path":%s}`, jstr(path)), fileBody(path, lines, b.ver[path]))
+	b.add("Read", fmt.Sprintf(`{"file_path":%s}`, jstr(path)), fileBody(path, b.sc(lines), b.ver[path]))
 }
 
 func (b *wfBuilder) edit(path string) {
@@ -321,7 +391,7 @@ func (b *wfBuilder) edit(path string) {
 func (b *wfBuilder) grep(pat string, hits int) {
 	var sb strings.Builder
 	h := hash(pat)
-	for i := 0; i < hits; i++ {
+	for i := 0; i < b.sc(hits); i++ {
 		fmt.Fprintf(&sb, "src/%s/%s.py:%d:    result = %s(value, %s)\n", pkgs[(h+uint64(i))%uint64(len(pkgs))], names[(h/3+uint64(i)*7)%uint64(len(names))], 10+i*13, pat, names[(h+uint64(i)*5)%uint64(len(names))])
 	}
 	b.add("Grep", fmt.Sprintf(`{"pattern":%s}`, jstr(pat)), sb.String())
@@ -374,7 +444,7 @@ func fileBody(path string, lines, version int) string {
 func snippet(path string, version int) string { return fileBody(path, 14, version) }
 
 // pytestOut is pytest output. Timings differ run to run, so two runs are never byte-identical.
-func pytestOut(r *rand.Rand, total int, failing []string, ansi bool) string {
+func pytestOut(depth int, r *rand.Rand, total int, failing []string, ansi bool) string {
 	var sb strings.Builder
 	sb.WriteString("============================= test session starts ==============================\n")
 	sb.WriteString("platform linux -- Python 3.12.3, pytest-8.3.2, pluggy-1.5.0\nrootdir: /work/app\nplugins: cov-5.0.0, anyio-4.4.0\n")
@@ -386,8 +456,8 @@ func pytestOut(r *rand.Rand, total int, failing []string, ansi bool) string {
 		sb.WriteString("\n=================================== FAILURES ===================================\n")
 		for _, t := range failing {
 			fmt.Fprintf(&sb, "_______________________________ %s _______________________________\n\n", t)
-			for i := 0; i < 8; i++ {
-				fmt.Fprintf(&sb, "    def step_%d(self):\n>       assert self.%s.fetch(%d) == expected_%d\nE       AssertionError: assert None == %d\n", i, names[i], i, i, i)
+			for i := 0; i < depth; i++ {
+				fmt.Fprintf(&sb, "    def step_%d(self):\n>       assert self.%s.fetch(%d) == expected_%d\nE       AssertionError: assert None == %d\n", i, names[i%len(names)], i, i, i)
 			}
 			sb.WriteString("\ntests/test_service.py:48: AssertionError\n")
 		}
@@ -485,32 +555,32 @@ func wfQuick(b *wfBuilder) {
 }
 
 func wfFixTest(b *wfBuilder) {
-	b.bash("pytest -x -q", pytestOut(b.r, 148, []string{"test_refund_is_idempotent"}, false))
+	b.bash("pytest -x -q", pytestOut(b.sc(8), b.r, 148, []string{"test_refund_is_idempotent"}, false))
 	b.read("tests/test_service.py", 210)
 	b.read("src/billing/service.py", 260)
 	b.grep("refund_id", 9)
 	b.read("src/billing/refunds.py", 140)
 	b.edit("src/billing/refunds.py")
-	b.bash("pytest -x -q", pytestOut(b.r, 148, []string{"test_refund_is_idempotent"}, false))
+	b.bash("pytest -x -q", pytestOut(b.sc(8), b.r, 148, []string{"test_refund_is_idempotent"}, false))
 	b.read("src/billing/refunds.py", 140) // after an edit: differs from the first read
 	b.edit("src/billing/refunds.py")
-	b.bash("pytest -q", pytestOut(b.r, 148, nil, false))
-	b.bash("git status", gitStatus(2))
-	b.bash("git diff", gitDiff(2))
+	b.bash("pytest -q", pytestOut(b.sc(8), b.r, 148, nil, false))
+	b.bash("git status", gitStatus(b.sc(2)))
+	b.bash("git diff", gitDiff(b.sc(2)))
 }
 
 func wfDebugLogs(b *wfBuilder) {
-	b.bash("npm run dev &", logLines(b.r, 25, true))
+	b.bash("npm run dev &", logLines(b.r, b.sc(25), true))
 	b.bash("curl -s localhost:8080/v1/orders/42", "{\"error\":\"internal\",\"request_id\":\"7f3a9c10\"}\n")
-	b.bash("tail -n 200 logs/app.log", logLines(b.r, 200, false))
+	b.bash("tail -n 200 logs/app.log", logLines(b.r, b.sc(200), false))
 	b.grep("ERROR", 18)
 	b.read("src/web/handler.py", 180)
 	b.grep("request_id", 12)
 	b.read("src/core/store.py", 220)
 	b.edit("src/core/store.py")
-	b.bash("npm run dev &", logLines(b.r, 25, true))
+	b.bash("npm run dev &", logLines(b.r, b.sc(25), true))
 	b.bash("curl -s localhost:8080/v1/orders/42", "{\"id\":42,\"status\":\"paid\"}\n")
-	b.bash("tail -n 200 logs/app.log", logLines(b.r, 200, false))
+	b.bash("tail -n 200 logs/app.log", logLines(b.r, b.sc(200), false))
 	b.read("src/core/store.py", 220)
 }
 
@@ -519,12 +589,12 @@ func wfUpgrade(b *wfBuilder) {
 	b.bash("npm install vite@5 @vitejs/plugin-react@4", npmInstall(b.r))
 	b.bash("npm ls --depth=0", strings.Repeat("├── pkg-a@1.2.3\n", 24))
 	b.bash("npm run build", buildWarnings())
-	b.bash("npm test", strings.ReplaceAll(pytestOut(b.r, 96, []string{"renders the dashboard"}, true), "\n", "\r\n"))
+	b.bash("npm test", strings.ReplaceAll(pytestOut(b.sc(8), b.r, 96, []string{"renders the dashboard"}, true), "\n", "\r\n"))
 	b.read("vite.config.ts", 54)
 	b.edit("vite.config.ts")
 	b.bash("npm run build", buildWarnings())
-	b.bash("npm test", strings.ReplaceAll(pytestOut(b.r, 96, nil, true), "\n", "\r\n"))
-	b.bash("git diff", gitDiff(3))
+	b.bash("npm test", strings.ReplaceAll(pytestOut(b.sc(8), b.r, 96, nil, true), "\n", "\r\n"))
+	b.bash("git diff", gitDiff(b.sc(3)))
 }
 
 func wfRename(b *wfBuilder) {
@@ -536,23 +606,23 @@ func wfRename(b *wfBuilder) {
 	for _, f := range files {
 		b.edit(f)
 	}
-	b.bash("npx tsc --noEmit", tscErrors(7))
+	b.bash("npx tsc --noEmit", tscErrors(b.sc(7)))
 	for _, f := range files[:3] {
 		b.read(f, 130+int(hash(f)%90)) // re-read after the edit
 	}
 	b.edit(files[1])
-	b.bash("npx tsc --noEmit", tscErrors(2))
+	b.bash("npx tsc --noEmit", tscErrors(b.sc(2)))
 	b.edit(files[2])
 	b.bash("npx tsc --noEmit", "")
 	b.bash("npx eslint src --max-warnings 0", strings.Repeat("\x1b[32m✓\x1b[0m checked\r\n", 3))
-	b.bash("git status", gitStatus(8))
-	b.bash("git status", gitStatus(8)) // checked twice, nothing changed
+	b.bash("git status", gitStatus(b.sc(8)))
+	b.bash("git status", gitStatus(b.sc(8))) // checked twice, nothing changed
 }
 
 func wfExplore(b *wfBuilder) {
 	b.bash("ls -la", strings.Repeat("drwxr-xr-x  8 dev dev  4096 Nov 12 09:14 src\n", 14))
 	b.bash("git log --oneline -n 30", strings.Repeat("a1b2c3d fix: handle empty cart in checkout flow\n", 30))
-	b.bash("git status", gitStatus(0))
+	b.bash("git status", gitStatus(b.sc(0)))
 	for _, f := range []string{"README.md", "package.json", "src/core/index.ts", "src/api/router.ts", "src/api/handler.ts", "src/core/service.ts", "src/billing/client.ts"} {
 		b.read(f, 90+int(hash(f)%160))
 	}
@@ -561,11 +631,11 @@ func wfExplore(b *wfBuilder) {
 	b.read("src/api/handler.ts", 90+int(hash("src/api/handler.ts")%160))
 	b.read("src/core/service.ts", 90+int(hash("src/core/service.ts")%160))
 	b.bash("git diff main...HEAD --stat", strings.Repeat(" src/billing/client.ts | 42 +++++++++---\n", 12))
-	b.bash("git diff main...HEAD", gitDiff(9))
-	b.bash("git status", gitStatus(0))
+	b.bash("git diff main...HEAD", gitDiff(b.sc(9)))
+	b.bash("git status", gitStatus(b.sc(0)))
 	b.read("src/api/router.ts", 90+int(hash("src/api/router.ts")%160))
 	b.grep("retryPolicy", 8)
-	b.bash("git diff main...HEAD", gitDiff(9)) // second pass over the same diff
+	b.bash("git diff main...HEAD", gitDiff(b.sc(9))) // second pass over the same diff
 }
 
 func wfLong(b *wfBuilder) {
@@ -575,8 +645,8 @@ func wfLong(b *wfBuilder) {
 	wfDebugLogs(b)
 	wfUpgrade(b)
 	for i := 0; i < 6; i++ {
-		b.bash("pytest -q tests/test_service.py", pytestOut(b.r, 40, nil, false))
-		b.bash("git status", gitStatus(3))
+		b.bash("pytest -q tests/test_service.py", pytestOut(b.sc(8), b.r, 40, nil, false))
+		b.bash("git status", gitStatus(b.sc(3)))
 	}
 }
 
@@ -589,6 +659,7 @@ func WorkflowMarkdown(r WorkflowReport) string {
 	sb.WriteString("## The numbers\n\n")
 	fmt.Fprintf(&sb, "1. **Estimated saving, everyday sessions: median %.1f%% of list-price cost across %d workflows (range %.1f%% to %.1f%%).** Estimated.\n", h.Everyday.MedianPct, h.Everyday.Workflows, h.Everyday.MinPct, h.Everyday.MaxPct)
 	fmt.Fprintf(&sb, "2. **Estimated saving, heavy-output sessions: median %.1f%% across %d workflows (range %.1f%% to %.1f%%).** Estimated. These sessions are dominated by large tool output (verbose test runs, build logs, incident logs) and were chosen because waste is high there. A ceiling for that kind of work, not a typical day.\n", h.Heavy.MedianPct, h.Heavy.Workflows, h.Heavy.MinPct, h.Heavy.MaxPct)
+	fmt.Fprintf(&sb, "2b. **Estimated saving, custom agents that send no cache markers: median %.1f%% across %d workflows (range %.1f%% to %.1f%%).** Estimated. Applies only to a script or home-grown agent that does not cache its prompt, where the cache_breakpoints optimizer adds the markers. Claude Code manages its own caching, so this does not apply to it.\n", h.CustomAgent.MedianPct, h.CustomAgent.Workflows, h.CustomAgent.MinPct, h.CustomAgent.MaxPct)
 	fmt.Fprintf(&sb, "3. **Nothing lost, and cache safe: %d of %d failure and error lines in the original output are still visible to the model, trimmed output is recoverable byte for byte, %d of %d requests kept the cached prefix byte-identical, %d broken invariants, repeat runs byte-identical: %v.** Measured by the checkers in this run.\n", h.KeyLinesKept, h.KeyLines, h.PrefixPreserved, h.Requests, h.Violations, h.AllDeterministic)
 	fmt.Fprintf(&sb, "4. **Engine time per request: p50 %.2f ms, p99 %.2f ms.** Measured in-process on this machine; excludes the gateway's forwarding time.\n\n", h.EngineP50ms, h.EngineP99ms)
 	sb.WriteString("## By workflow\n\n| workflow | tier | turns | input tokens (est.) | tokens removed (est.) | outputs trimmed | cost off (est.) | cost on (est.) | saving (est.) | key lines kept | prefix kept | violations |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n")
@@ -701,8 +772,8 @@ func wfCITriage(b *wfBuilder) {
 	b.read("packages/billing/src/ledger.ts", 190)
 	b.edit("packages/billing/src/ledger.ts")
 	b.bash("pnpm -r test", verboseJest(b.r, 520, nil))
-	b.bash("git diff", gitDiff(14))
-	b.bash("git status", gitStatus(4))
+	b.bash("git diff", gitDiff(b.sc(14)))
+	b.bash("git status", gitStatus(b.sc(4)))
 	b.bash("pnpm -r test", verboseJest(b.r, 520, nil)) // a last confirmation run before committing
 }
 
@@ -715,8 +786,8 @@ func wfContainerBuild(b *wfBuilder) {
 	b.bash("docker build -t shop:dev .", dockerBuildLog(b.r, 5, 2))
 	b.edit("Dockerfile")
 	b.bash("docker build -t shop:dev .", dockerBuildLog(b.r, 5, 3))
-	b.bash("docker run --rm shop:dev node server.js", logLines(b.r, 120, true))
-	b.bash("docker logs shop-dev", logLines(b.r, 300, false))
+	b.bash("docker run --rm shop:dev node server.js", logLines(b.r, b.sc(120), true))
+	b.bash("docker logs shop-dev", logLines(b.r, b.sc(300), false))
 	b.read("Dockerfile", 70)
 	b.edit("Dockerfile")
 	b.bash("docker build -t shop:dev .", dockerBuildLog(b.r, 9, 3))
@@ -737,4 +808,33 @@ func wfIncident(b *wfBuilder) {
 	b.bash("kubectl get pods -n checkout", podStatus(0))
 	b.bash("kubectl get pods -n checkout", podStatus(0))
 	b.bash("kubectl logs checkout-service-7d9f8c6b5-3a13 --since=10m", incidentLogs(b.r, 260))
+}
+
+// rereadAsDiff models sending a repeated Read as only its changed lines. The first read of a path is left whole; a later
+// read of the same path is replaced by the lines that differ from the previous read of that path, with a one-line header.
+// A byte-identical re-read is left alone, because the duplicate collapser already handles it.
+func rereadAsDiff(turns []turn) []turn {
+	out := make([]turn, len(turns))
+	copy(out, turns)
+	last := map[string][]string{}
+	for i, t := range out {
+		if t.Name != "Read" {
+			continue
+		}
+		path := t.Input
+		cur := strings.Split(t.Output, "\n")
+		if prev, ok := last[path]; ok && strings.Join(prev, "\n") != t.Output && len(prev) == len(cur) {
+			var sb strings.Builder
+			sb.WriteString("[Re-read of a file already read: only the lines that changed since the earlier read are shown]\n")
+			for j := range cur {
+				if cur[j] != prev[j] {
+					sb.WriteString(cur[j])
+					sb.WriteString("\n")
+				}
+			}
+			out[i].Output = sb.String()
+		}
+		last[path] = cur
+	}
+	return out
 }
