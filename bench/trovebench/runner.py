@@ -6,6 +6,7 @@ with a fake and never needs Docker or an API key.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
@@ -42,7 +43,7 @@ def execute(
     *,
     batch_cap_usd: float,
     run_cap_usd: float,
-    log: Callable[[str], None] = print,
+    log: Callable[[str], None] = lambda s: print(s, flush=True),   # flush, or `| tee` hides progress until exit
 ) -> BatchResult:
     """Run every spec not already in the ledger, in plan order.
 
@@ -53,6 +54,7 @@ def execute(
     """
     ran = skipped = 0
     errors_in_a_row = 0
+    t_batch = time.monotonic()
     todo = [s for s in specs if not ledger.done(s.run_id)]
     skipped = len(specs) - len(todo)
     for i, spec in enumerate(todo):
@@ -61,7 +63,7 @@ def execute(
             log(f"Stopping: ${spent:.2f} spent and the next run could cost up to ${run_cap_usd:.2f}, "
                 f"which would pass the ${batch_cap_usd:.2f} batch cap. Raise limits.batch_cap_usd to continue with --resume.")
             return BatchResult(STOP_CAP, ran, skipped, len(todo) - i, spent)
-        log(f"[{skipped + ran + 1}/{len(specs)}] {spec.run_id}")
+        log(f"[{skipped + ran + 1}/{len(specs)}] starting {spec.run_id} ({len(todo) - i} left, ${spent:.2f} spent)")
         try:
             rec = run_one(spec)
         except KeyboardInterrupt:
@@ -80,6 +82,15 @@ def execute(
             )
         ledger.add(rec)
         ran += 1
+        cost = f"${rec.cost_usd:.2f}" if rec.cost_usd is not None else "cost unknown"
+        verdict = "PASSED" if rec.passed else ("ERROR" if rec.status == "error" else "failed")
+        log(f"    -> {verdict} in {rec.wall_s:.0f}s, {rec.turns} turns, {cost}"
+            + (" (timed out)" if rec.timed_out else "") + f"  [{skipped + ran}/{len(specs)} done, {100 * (skipped + ran) // len(specs)}%]")
+        left = len(todo) - ran
+        mean = (time.monotonic() - t_batch) / ran
+        if left:
+            h, m = divmod(int(left * mean) // 60, 60)
+            log(f"    elapsed {int(time.monotonic() - t_batch) // 60} min, about {h}h{m:02d}m left at the current pace, ${ledger.spent(run_cap_usd):.2f} spent so far")
         errors_in_a_row = errors_in_a_row + 1 if rec.status == "error" else 0
         if errors_in_a_row >= MAX_CONSECUTIVE_ERRORS:
             log(f"Stopping: {MAX_CONSECUTIVE_ERRORS} runs in a row failed before grading ({rec.note}). "

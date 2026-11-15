@@ -356,6 +356,10 @@ PART 7. WRITE AND LOCK THE STUDIES (BEFORE ANY STUDY RUN)
  Each needs condition, claimed_cost_reduction_pct, source_url and retrieved_at (a claim without a
  source is rejected).
 
+ SCRIPTS FOR 6.4 ONWARD (bench/scripts, run in this order; each says what to run next): 10_pilot_report.sh,
+ 20_hook_probe.sh (Study B only), 30_make_studies.sh (writes the files, caps from the pilot), 40_lock_studies.sh
+ (prereg + plan + local commit), 50_run_study.sh A|B, 60_analyze_study.sh A|B, 70_publish_prep.sh A|B.
+ Note: `plan --study` refuses a study that is not locked yet, so the plan can only be read after `prereg`.
  Check each study without spending anything, then lock and commit BEFORE running:
 
      python -m trovebench plan --study bench/studies/swebench-gateway-1.yaml
