@@ -109,8 +109,17 @@ def test_swebench_generate_filters_runners(tmp_path):
 
 def test_swebench_environment_is_dated_to_the_pull_request(tmp_path):
     t = swebench.generate([swe_row(1)], "rev", tmp_path, n=1, seed=1)[0]
-    assert "uv pip install --system --exclude-newer 2022-03-03 -e . pytest" in t.setup
+    install = t.setup[-1]
+    # a 2022 task keeps its own date for dependencies but never gets a setuptools older than the floor
+    assert "--exclude-newer 2022-03-03 --exclude-newer-package setuptools=2023-01-15 -e . pytest" in install
+    assert "|| " in install and "--exclude-newer 2023-01-15 -e . pytest" in install   # fallback: whole cutoff at the floor
     assert any("locale-gen" in s for s in t.setup)
+
+
+def test_swebench_newer_tasks_keep_their_own_date():
+    s = swebench.install_step("2024-05-01")
+    assert "--exclude-newer 2024-05-01 --exclude-newer-package setuptools=2024-05-01" in s
+    assert "--exclude-newer 2024-05-01 -e . pytest" in s.split("||")[1]
 
 
 def test_swebench_grading_falls_back_to_whole_files():

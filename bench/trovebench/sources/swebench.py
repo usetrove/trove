@@ -67,12 +67,31 @@ LOCALE_STEP = ("sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && local
                "printf 'export LANG=en_US.UTF-8\\nexport LC_ALL=en_US.UTF-8\\n' > /etc/profile.d/locale.sh")
 
 
+# Editable installs (`-e .`) need a setuptools new enough for PEP 660. Pre-2022 cutoffs picked a setuptools without
+# `build_editable` and failed (seen 2026-11-14, matplotlib-20826); 2023-01-15 and 2023-07-15 cutoffs got past that
+# step (manual tests). Old tasks therefore get their build tools, and as a fallback all their dependencies, from
+# no earlier than this floor.
+SETUPTOOLS_FLOOR = "2023-01-15"
+# Old C code that newer compilers reject as errors (implicit declarations and the like) is downgraded to warnings.
+CFLAGS = "-Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types -Wno-error=int-conversion"
+
+
 def snapshot_date(row: dict) -> str:
     """The pull request's creation date (YYYY-MM-DD). Dependencies are installed as they existed that day."""
     m = re.match(r"\d{4}-\d{2}-\d{2}", str(row.get("created_at") or ""))
     if not m:
         raise ValueError(f"{row.get('instance_id')}: no usable created_at date, so its environment cannot be dated")
     return m.group(0)
+
+
+def install_step(date: str) -> str:
+    """Install the project with dependencies as of `date`. First try keeping setuptools at the floor while everything
+    else keeps the task's date (the per-package option is not confirmed in uv's docs, so it may be refused or may
+    not reach build dependencies). If that fails, retry with the whole cutoff moved up to the floor."""
+    floor = max(date, SETUPTOOLS_FLOOR)
+    base = f"CFLAGS='{CFLAGS}' uv pip install --system"
+    precise = f"{base} --exclude-newer {date} --exclude-newer-package setuptools={floor} -e . pytest"
+    return f"{precise} || {base} --exclude-newer {floor} -e . pytest"
 
 
 def fail_to_pass(row: dict) -> list[str]:
@@ -104,7 +123,7 @@ def row_task(row: dict, revision: str, *, image: str) -> tuple[Task, str]:
         license="see-upstream", prompt=row["problem_statement"], image=image,
         setup=("apt-get update -qq && apt-get install -y -qq build-essential locales && " + LOCALE_STEP,
                "pip install -q uv",
-               f"uv pip install --system --exclude-newer {date} -e . pytest"),
+               install_step(date)),
         grading_setup=(apply_patch_step(row["test_patch"]),),
         success_cmd=success_cmd(row, test_files),
         timeout_s=1800, dataset_commit=revision,
