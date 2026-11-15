@@ -23,6 +23,8 @@
 #     TASKS=tasks/swebench-main   (relative to bench/) the tasks to reuse
 #     COST_FROM=...     a finished batch whose mean cost sets the caps (default: swebench-gateway-2)
 #     HEADROOM=1.5      batch cap = expected spend x this, plus one run cap
+#     MIN_TASKS=30      fewest tasks allowed (92_long_tasks_study.sh lowers it; under about 12 tasks a task-level interval is unreliable)
+#     NOTE="..."        extra sentence for the study's hypothesis (92 uses it to record how the tasks were chosen)
 #     LOCK=1            also register + commit the study file (needs a clean git tree)
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -33,6 +35,7 @@ SUFFIX="${SUFFIX:-3}"
 TASKS="${TASKS:-tasks/swebench-main}"
 COST_FROM="${COST_FROM:-$(ls -d bench/results/*/swebench-gateway-2 2>/dev/null | sort | tail -1)}"
 HEADROOM="${HEADROOM:-1.5}"
+MIN_TASKS="${MIN_TASKS:-30}"
 STUDY="bench/studies/swebench-gateway-$SUFFIX.yaml"
 
 die() { printf '\nSTOP: %s\n' "$*" >&2; exit 1; }
@@ -42,7 +45,8 @@ command -v python >/dev/null || die "python not found. Activate the virtualenv f
 [ -n "$COST_FROM" ] && [ -f "$COST_FROM/ledger.jsonl" ] || die "COST_FROM has no ledger.jsonl. Point it at a finished batch, e.g. bench/results/2026-11-15/swebench-gateway-2."
 [ "$REPEATS" -ge 2 ] || die "REPEATS must be at least 2 (use the first study if you only want one run per task)."
 NT="$(ls "bench/$TASKS" | wc -l)"
-[ "$NT" -ge 30 ] || die "only $NT tasks in bench/$TASKS; the ship rule needs at least 30."
+[ "$NT" -ge "$MIN_TASKS" ] || die "only $NT tasks in bench/$TASKS; this needs at least $MIN_TASKS (MIN_TASKS=...)."
+[ "$((NT * REPEATS))" -ge 30 ] || die "$NT tasks x $REPEATS repeats is under the ship rule's 30 pairs; raise REPEATS."
 
 echo "== Disk check (this study downloads nothing new; the images for these $NT tasks must still be present)"
 df -h "$HOME" | tail -1
@@ -79,7 +83,7 @@ title: "SWE-bench Verified, $NT tasks x $REPEATS repeats: all safe gateway optim
 hypothesis: >
   Turning on all_safe lowers the billed cost per task by at least 5% against the same gateway with every
   optimizer off, without lowering the share of tasks that pass by more than 5 points. Repeats of one task are
-  analysed as one cluster, so the result covers these $NT tasks only.
+  analysed as one cluster, so the result covers these $NT tasks only. ${NOTE:-}
 primary_metric: billed_cost_usd
 secondary_metrics: [success_rate, latency_s]
 baseline_condition: passthrough
