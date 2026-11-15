@@ -9,7 +9,8 @@ SUFFIX="${SUFFIX:-1}"
 case "${1:-}" in
   A|a) ID="swebench-gateway-$SUFFIX";;
   B|b) ID="swebench-parity-$SUFFIX";;
-  *) echo "usage: bash $0 A|B" >&2; exit 1;;
+  H|h) ID="hooks-single-$SUFFIX";;
+  *) echo "usage: bash $0 A|B|H" >&2; exit 1;;
 esac
 SRC="${RESULTS:-$(ls -d bench/results/*/"$ID" 2>/dev/null | sort | tail -1)}"
 [ -n "$SRC" ] && [ -d "$SRC" ] || { echo "STOP: no results folder for $ID." >&2; exit 1; }

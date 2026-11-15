@@ -4,6 +4,7 @@
 #     export ANTHROPIC_API_KEY=...
 #     bash bench/scripts/50_run_study.sh A        # Study A: gateway optimizers
 #     bash bench/scripts/50_run_study.sh B        # Study B: plugin / hooks parity (needs 20_hook_probe.sh first)
+#     bash bench/scripts/50_run_study.sh H        # Study D: each hook by itself (runbook Part D; see 81_hooks_study.sh)
 # A and B can run at the same time in two tmux windows, but they share API rate limits and each container
 # uses 4 GB RAM and 2 CPUs. Running them one after another is the safer default.
 set -euo pipefail
@@ -15,7 +16,9 @@ case "${1:-}" in
   A|a) STUDY="bench/studies/swebench-gateway-$SUFFIX.yaml"; EXTRA=(); LOG="/tmp/run-A.log";;
   B|b) STUDY="bench/studies/swebench-parity-$SUFFIX.yaml"; EXTRA=(--hook-capabilities "$PROBE"); LOG="/tmp/run-B.log"
        [ -f "$PROBE" ] || { echo "STOP: $PROBE missing. Run bench/scripts/20_hook_probe.sh first." >&2; exit 1; };;
-  *) echo "usage: bash $0 A|B" >&2; exit 1;;
+  H|h) STUDY="bench/studies/hooks-single-$SUFFIX.yaml"; EXTRA=(--hook-capabilities "$PROBE"); LOG="/tmp/run-H.log"
+       [ -f "$PROBE" ] || { echo "STOP: $PROBE missing. Run bench/scripts/20_hook_probe.sh first." >&2; exit 1; };;
+  *) echo "usage: bash $0 A|B|H   (A gateway, B parity, H single hooks)" >&2; exit 1;;
 esac
 [ -n "${ANTHROPIC_API_KEY:-}" ] || { echo "STOP: ANTHROPIC_API_KEY is not set in this shell." >&2; exit 1; }
 [ -f "${STUDY%.yaml}.lock.json" ] || { echo "STOP: ${STUDY} is not locked. Run 40_lock_studies.sh first." >&2; exit 1; }

@@ -8,6 +8,7 @@
 #     REPEATS=3                     repeats per task per condition (lower it if the cost or hours are too high)
 #     SEED_A=20261201 SEED_B=20261202   fresh order/bootstrap seeds, one per study
 #     HEADROOM=1.3                  batch cap = expected spend x this, plus one run cap
+#     BATCH_CAP=90 RUN_CAP=0.5       set the caps yourself instead of deriving them from the pilot (dollars)
 #     SUFFIX=1                      study ids are swebench-gateway-$SUFFIX and swebench-parity-$SUFFIX
 # A registered study file can never be edited. If the files exist already this stops; to change anything use a new SUFFIX.
 set -euo pipefail
@@ -46,6 +47,7 @@ batch = math.ceil((runs * mean * hr + run_cap) / 5) * 5
 print(f"{run_cap:.2f} {batch:.1f} {batch:.1f} {runs * wall / 3600:.1f} {runs * wall / 3600:.1f} {mean:.3f}")
 EOF
 )"
+RUNCAP="${RUN_CAP:-$RUNCAP}"; BATCHA="${BATCH_CAP:-$BATCHA}"; BATCHB="${BATCH_CAP:-$BATCHB}"
 RUNS=$((NTASKS * 4 * REPEATS))
 echo "tasks: $NTASKS   runs per study: $RUNS (4 conditions x $REPEATS repeats)"
 echo "pilot mean cost per run: \$$MEAN  ->  run cap \$$RUNCAP, batch cap \$$BATCHA per study"

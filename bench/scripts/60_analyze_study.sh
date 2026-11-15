@@ -8,12 +8,18 @@ SUFFIX="${SUFFIX:-1}"
 case "${1:-}" in
   A|a) ID="swebench-gateway-$SUFFIX";;
   B|b) ID="swebench-parity-$SUFFIX";;
-  *) echo "usage: bash $0 A|B" >&2; exit 1;;
+  H|h) ID="hooks-single-$SUFFIX";;
+  *) echo "usage: bash $0 A|B|H" >&2; exit 1;;
 esac
 B="${RESULTS:-$(ls -d bench/results/*/"$ID" 2>/dev/null | sort | tail -1)}"
 [ -n "$B" ] && [ -d "$B" ] || { echo "STOP: no results folder for $ID under bench/results/. Has the study run?" >&2; exit 1; }
 [ -f "$B/runs.csv" ] || { echo "STOP: $B/runs.csv missing: the run did not reach its report step." >&2; exit 1; }
 echo "results: $B"
+
+if [ "${1^^}" = H ]; then
+  echo; echo "== Part D.4: read this BEFORE the table. A hook that acted rarely cannot show a difference however good it is."
+  python bench/tools/hook_activity.py "$B"
+fi
 
 echo; echo "== PART 9. Sanity checks (read these before the numbers)"
 B="$B" python - <<'EOF'
