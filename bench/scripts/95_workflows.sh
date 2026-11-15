@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Replay scripted everyday Claude Code sessions through the real optimizer engine, then report three numbers.
+# Replay scripted Claude Code sessions (everyday and heavy-output) through the real optimizer engine, then report the numbers.
 # Offline: no API calls, no money, no Docker, no disk to speak of. Takes well under a minute after the build.
 #     bash bench/scripts/95_workflows.sh
 # Settings (VAR=value before the command):
@@ -9,12 +9,12 @@
 #     REPLAY=1             ALSO replay your own real Claude Code logs (read-only, counts and bytes only, nothing stored)
 #     REPLAY_DIR=~/.claude/projects   which logs to replay when REPLAY=1
 #
-# What the three numbers are, and the only honest way to quote them:
-#   1. ESTIMATED saving (median and range over the scripted workflows). The sessions are scripted, so say "on scripted
-#      everyday workflows", never "you will save".
-#   2. MEASURED cache and correctness: requests whose cached prefix stayed byte-identical, broken invariants, and whether a
-#      repeat run gave the same bytes. This is the safety claim, and it is a strong one.
-#   3. MEASURED engine time per request (p50, p99), in-process; the gateway adds its own forwarding time.
+# What the numbers are, and the only honest way to quote them:
+#   1+2. ESTIMATED saving for two tiers: everyday sessions, and heavy-output sessions (a waste-rich ceiling, never averaged in).
+#      The sessions are scripted, so say "on scripted workflows", never "you will save".
+#   3. MEASURED nothing lost: failure lines still visible, trimmed output recoverable, cached prefix byte-identical, repeat runs
+#      identical. This is the safety claim, and it is a strong one.
+#   4. MEASURED engine time per request (p50, p99), in-process; the gateway adds its own forwarding time.
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 command -v go >/dev/null || { echo "STOP: go is not installed or not on PATH." >&2; exit 1; }
@@ -57,15 +57,21 @@ fi
 python - "$OUT/workflows.json" <<'PY'
 import json, sys
 h = json.load(open(sys.argv[1]))["headline"]
-print("\n== The three numbers, as you could quote them")
+e, v = h["everyday"], h["heavy"]
+print()
+print("== The numbers, as you could quote them")
 print(f"1. ESTIMATED: on scripted everyday Claude Code workflows the optimizers cut list-price cost by a median of "
-      f"{h['median_saved_pct']}% (range {h['min_saved_pct']}% to {h['max_saved_pct']}%).")
-print(f"2. MEASURED: {h['prefix_preserved']} of {h['requests']} requests kept the cached prefix byte-identical; "
-      f"{h['violations']} broken invariants; repeat runs byte-identical: {h['all_deterministic']}.")
-print(f"3. MEASURED: engine time per request p50 {h['engine_p50_ms']} ms, p99 {h['engine_p99_ms']} ms (in-process, excludes gateway forwarding).")
-print("\nDo not drop the words 'scripted' and 'estimated'. The saving is small on short sessions and larger on long, noisy ones;")
-print("the per-workflow table says which. It is not a forecast of anyone's bill.")
+      f"{e['median_saved_pct']}% (range {e['min_saved_pct']}% to {e['max_saved_pct']}%).")
+print(f"2. ESTIMATED: on scripted heavy-output sessions (verbose test runs, build logs, incident logs) the median is "
+      f"{v['median_saved_pct']}% (range {v['min_saved_pct']}% to {v['max_saved_pct']}%). That tier was chosen for high waste: quote it as a ceiling "
+      f"for output-heavy work, never as a typical day, and never average it with the everyday tier.")
+print(f"3. MEASURED: nothing lost and cache safe. {h['key_lines_kept']} of {h['key_lines']} failure/error lines still visible to the model; "
+      f"{h['prefix_preserved']} of {h['requests']} requests kept the cached prefix byte-identical; {h['violations']} broken invariants; "
+      f"repeat runs byte-identical: {h['all_deterministic']}.")
+print(f"4. MEASURED: engine time per request p50 {h['engine_p50_ms']} ms, p99 {h['engine_p99_ms']} ms (in-process, excludes gateway forwarding).")
+print()
+print("Do not drop 'scripted' or 'estimated'. It is not a forecast of anyone's bill.")
 PY
 echo
 echo "Wrote $OUT/workflows.md and $OUT/workflows.json. To publish: git add $OUT && git commit, then update the README"
-echo "with the three lines above, then: go run ./scripts/checkclaims --publish"
+echo "with the numbers above, then: go run ./scripts/checkclaims --publish"

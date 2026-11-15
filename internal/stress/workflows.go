@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ import (
 // WorkflowRow is one scripted workflow, run with the engine off and on.
 type WorkflowRow struct {
 	Name          string  `json:"name"`
+	Tier          string  `json:"tier"` // "everyday" or "heavy"
 	Description   string  `json:"description"`
 	Turns         int     `json:"turns"`
 	Requests      int     `json:"requests"`
@@ -40,6 +42,9 @@ type WorkflowRow struct {
 	Violations    int     `json:"violations"`       // broken invariants (measured by the checkers)
 	PrefixOK      int     `json:"prefix_preserved"` // requests whose cached prefix stayed byte-identical (measured)
 	Deterministic bool    `json:"deterministic"`    // a second run produced byte-identical requests (measured)
+	KeyLines      int     `json:"key_lines"`        // failure, error and traceback lines in the original tool output (measured)
+	KeyLinesKept  int     `json:"key_lines_kept"`   // of those, how many are still visible to the model after optimizing (measured)
+	Trimmed       int     `json:"trimmed_outputs"`  // outputs the engine stored in the recovery store and replaced with a marker
 }
 
 // WorkflowReport is the whole run. Numbers are labelled: "estimated" ones depend on the scripted shape and list
@@ -53,17 +58,26 @@ type WorkflowReport struct {
 	Notes    []string      `json:"notes"`
 }
 
-// Headline is the three figures worth quoting, each with its label and its limits.
+// TierSummary is the estimated saving across one tier of workflows.
+type TierSummary struct {
+	Workflows int     `json:"workflows"`
+	MedianPct float64 `json:"median_saved_pct"` // estimated
+	MinPct    float64 `json:"min_saved_pct"`
+	MaxPct    float64 `json:"max_saved_pct"`
+}
+
+// Headline is the figures worth quoting, each with its label and its limits.
 type Headline struct {
-	MedianSavedPct   float64 `json:"median_saved_pct"` // estimated
-	MinSavedPct      float64 `json:"min_saved_pct"`
-	MaxSavedPct      float64 `json:"max_saved_pct"`
-	Requests         int     `json:"requests"`
-	Violations       int     `json:"violations"`        // measured
-	PrefixPreserved  int     `json:"prefix_preserved"`  // measured
-	AllDeterministic bool    `json:"all_deterministic"` // measured
-	EngineP50ms      float64 `json:"engine_p50_ms"`     // measured, engine only
-	EngineP99ms      float64 `json:"engine_p99_ms"`     // measured, engine only
+	Everyday         TierSummary `json:"everyday"`
+	Heavy            TierSummary `json:"heavy"`
+	KeyLines         int         `json:"key_lines"`      // measured
+	KeyLinesKept     int         `json:"key_lines_kept"` // measured
+	Requests         int         `json:"requests"`
+	Violations       int         `json:"violations"`        // measured
+	PrefixPreserved  int         `json:"prefix_preserved"`  // measured
+	AllDeterministic bool        `json:"all_deterministic"` // measured
+	EngineP50ms      float64     `json:"engine_p50_ms"`     // measured, engine only
+	EngineP99ms      float64     `json:"engine_p99_ms"`     // measured, engine only
 }
 
 // WorkflowOptions configures a run.
@@ -75,9 +89,14 @@ type WorkflowOptions struct {
 const workflowPrefixTokens = 18000 // Claude Code's system prompt, tool definitions and project context, roughly
 
 type wfSpec struct {
-	name, desc string
-	build      func(b *wfBuilder)
+	name, tier, desc string
+	build            func(b *wfBuilder)
 }
+
+const (
+	tierEveryday = "everyday"
+	tierHeavy    = "heavy"
+)
 
 // RunWorkflows runs every scripted workflow twice (the second run checks determinism) and prices the first.
 func RunWorkflows(o WorkflowOptions) (WorkflowReport, error) {
@@ -98,17 +117,25 @@ func RunWorkflows(o WorkflowOptions) (WorkflowReport, error) {
 		lat = append(lat, l...)
 		rep.Rows = append(rep.Rows, row)
 	}
-	saved := make([]float64, 0, len(rep.Rows))
+	byTier := map[string][]float64{}
 	h := Headline{AllDeterministic: true}
 	for _, r := range rep.Rows {
-		saved = append(saved, r.SavedPct)
+		byTier[r.Tier] = append(byTier[r.Tier], r.SavedPct)
+		h.KeyLines += r.KeyLines
+		h.KeyLinesKept += r.KeyLinesKept
 		h.Requests += r.Requests
 		h.Violations += r.Violations
 		h.PrefixPreserved += r.PrefixOK
 		h.AllDeterministic = h.AllDeterministic && r.Deterministic
 	}
-	sort.Float64s(saved)
-	h.MedianSavedPct, h.MinSavedPct, h.MaxSavedPct = round1(quantile(saved, 0.5)), round1(saved[0]), round1(saved[len(saved)-1])
+	summ := func(xs []float64) TierSummary {
+		if len(xs) == 0 {
+			return TierSummary{}
+		}
+		sort.Float64s(xs)
+		return TierSummary{Workflows: len(xs), MedianPct: round1(quantile(xs, 0.5)), MinPct: round1(xs[0]), MaxPct: round1(xs[len(xs)-1])}
+	}
+	h.Everyday, h.Heavy = summ(byTier[tierEveryday]), summ(byTier[tierHeavy])
 	sort.Float64s(lat)
 	h.EngineP50ms, h.EngineP99ms = round2(quantile(lat, 0.5)), round2(quantile(lat, 0.99))
 	rep.Headline = h
@@ -118,6 +145,8 @@ func RunWorkflows(o WorkflowOptions) (WorkflowReport, error) {
 		"The cache model is the realism layer's: the cached prefix is what matches the previous request byte for byte, and each turn has a 10% chance of a cold cache in both arms.",
 		"Engine timings are measured in-process on this machine and exclude the gateway's own forwarding time.",
 		"Savings from these sessions say what the optimizers do on these patterns. They are not a forecast of any user's bill.",
+		"The heavy tier was written to be waste-rich. Its saving is where large, repetitive tool output dominates the session; do not quote it as what a typical session saves, and never average it with the everyday tier.",
+		"A saving only counts if nothing was lost: every failure or error line in the original output must still be visible to the model, and every output the engine trimmed must be recoverable from the recovery store byte for byte. The report counts both.",
 	}
 	return rep, nil
 }
@@ -129,7 +158,7 @@ func runWorkflow(w wfSpec, o WorkflowOptions, tab *pricing.Table) (WorkflowRow, 
 
 	first, lat, row := playWorkflow(spec, bodies, turns, o, tab)
 	second, _, _ := playWorkflow(spec, bodies, turns, o, tab)
-	row.Name, row.Description, row.Turns = w.name, w.desc, len(turns)
+	row.Name, row.Tier, row.Description, row.Turns = w.name, w.tier, w.desc, len(turns)
 	row.Deterministic = len(first) == len(second)
 	for i := range first {
 		if row.Deterministic && !bytes.Equal(first[i], second[i]) {
@@ -184,7 +213,50 @@ func playWorkflow(spec SessionSpec, bodies [][]byte, turns []turn, o WorkflowOpt
 		row.OnUSD += requestUSD(tab, spec.Model, prevOn, out, turns[k].Reply, expired) + overheadUSD(tab, spec.Model, int64(overhead))
 		prevOff, prevOn = orig, out
 	}
+	if n := len(bodies); n > 0 {
+		// The last request holds every tool output. Everything the engine stored must be byte-identical to an original,
+		// and every failure line in the original must still be visible to the model (or have been a duplicate of one that is).
+		row.Violations += len(CheckRecovery(bodies[n-1], store.snapshot()))
+		row.Trimmed = len(store.snapshot())
+		row.KeyLines, row.KeyLinesKept = keyLinesKept(bodies[n-1], outs[n-1])
+		if row.KeyLinesKept < row.KeyLines {
+			row.Violations++
+		}
+	}
 	return outs, lat, row
+}
+
+// keyLinesKept counts the lines of the original request that report a failure (test failures, assertion errors, type
+// errors, tracebacks, ERROR log lines) and how many of them are still present in the optimized request. A line the
+// noise normalizer only cleaned (colors removed) still counts as present.
+func keyLinesKept(orig, out []byte) (total, kept int) {
+	// The request is JSON, so a tool output's line breaks are the two characters backslash and n, and a color code
+	// is the six characters backslash-u-0-0-1-b. Work on that escaped text; a preserved line appears identically in out.
+	seen := map[string]bool{}
+	for _, raw := range strings.Split(string(orig), `\n`) {
+		line := ansiRE.ReplaceAllString(raw, "")
+		line = strings.TrimSpace(strings.TrimSuffix(line, `\r`))
+		if len(line) < 12 || seen[line] || !isKeyLine(line) {
+			continue
+		}
+		seen[line] = true
+		total++
+		if bytes.Contains(out, []byte(line)) {
+			kept++
+		}
+	}
+	return total, kept
+}
+
+var ansiRE = regexp.MustCompile(`\\u001b\[[0-9;]*[A-Za-z]`)
+
+func isKeyLine(l string) bool {
+	for _, m := range []string{"FAILED ", "AssertionError", "error TS", "Traceback", "ERROR ", "Error:", "FAIL "} {
+		if strings.Contains(l, m) {
+			return true
+		}
+	}
+	return false
 }
 
 // overheadUSD prices the tokens an optimizer declared it adds, as cache writes (the worst case: never read back).
@@ -206,13 +278,16 @@ func round4(x float64) float64 { return math.Round(x*10000) / 10000 }
 
 func workflowSpecs() []wfSpec {
 	return []wfSpec{
-		{"quick-question", "Three turns: read a file, search, answer. The case where little can help.", wfQuick},
-		{"fix-failing-test", "pytest fails, read the test and source, edit, rerun twice until green.", wfFixTest},
-		{"debug-with-logs", "Run the app, read noisy colored logs, search them, fix, restart and read the same startup noise again.", wfDebugLogs},
-		{"dependency-upgrade", "npm install with progress noise, build warnings that repeat, CRLF test output, fix, rebuild.", wfUpgrade},
-		{"rename-across-codebase", "Search every usage, read and edit many files, type-check, re-read, fix, type-check again.", wfRename},
-		{"explore-and-review", "Orient in an unfamiliar repo: many reads, repeated status and diff, a second pass over key files.", wfExplore},
-		{"long-feature-session", "About 90 turns: explore, implement across files, test, debug, refactor. A normal long day.", wfLong},
+		{"quick-question", tierEveryday, "Three turns: read a file, search, answer. The case where little can help.", wfQuick},
+		{"fix-failing-test", tierEveryday, "pytest fails, read the test and source, edit, rerun twice until green.", wfFixTest},
+		{"debug-with-logs", tierEveryday, "Run the app, read noisy colored logs, search them, fix, restart and read the same startup noise again.", wfDebugLogs},
+		{"dependency-upgrade", tierEveryday, "npm install with progress noise, build warnings that repeat, CRLF test output, fix, rebuild.", wfUpgrade},
+		{"rename-across-codebase", tierEveryday, "Search every usage, read and edit many files, type-check, re-read, fix, type-check again.", wfRename},
+		{"explore-and-review", tierEveryday, "Orient in an unfamiliar repo: many reads, repeated status and diff, a second pass over key files.", wfExplore},
+		{"long-feature-session", tierEveryday, "About 90 turns: explore, implement across files, test, debug, refactor. A normal long day.", wfLong},
+		{"ci-failure-triage", tierHeavy, "Monorepo with a verbose test reporter (about 500 tests per run): four full runs while fixing failures one by one.", wfCITriage},
+		{"container-build-debug", tierHeavy, "A failing container build: long build logs rerun after each Dockerfile fix, plus container logs.", wfContainerBuild},
+		{"incident-log-forensics", tierHeavy, "Pull production logs repeatedly: long logs with the same stack trace over and over, and polling the same cluster status.", wfIncident},
 	}
 }
 
@@ -509,23 +584,157 @@ func wfLong(b *wfBuilder) {
 func WorkflowMarkdown(r WorkflowReport) string {
 	var sb strings.Builder
 	h := r.Headline
-	fmt.Fprintf(&sb, "# Scripted workflows: what the optimizers do on everyday Claude Code sessions\n\n")
+	fmt.Fprintf(&sb, "# Scripted workflows: what the optimizers do on Claude Code sessions\n\n")
 	fmt.Fprintf(&sb, "Model %s, list prices as of %s, seed %d. Scripted sessions, not real users: see the limits at the end.\n\n", r.Model, r.Pricing, r.Seed)
-	sb.WriteString("## Three numbers\n\n")
-	fmt.Fprintf(&sb, "1. **Estimated saving: median %.1f%% of list-price cost across %d scripted workflows (range %.1f%% to %.1f%%).** Estimated. Depends on the scripted shape of each session.\n", h.MedianSavedPct, len(r.Rows), h.MinSavedPct, h.MaxSavedPct)
-	fmt.Fprintf(&sb, "2. **Cache and correctness: %d of %d requests kept the cached prefix byte-identical, %d broken invariants, repeat runs byte-identical: %v.** Measured by the checkers in this run.\n", h.PrefixPreserved, h.Requests, h.Violations, h.AllDeterministic)
-	fmt.Fprintf(&sb, "3. **Engine time per request: p50 %.2f ms, p99 %.2f ms.** Measured in-process on this machine; excludes the gateway's forwarding time.\n\n", h.EngineP50ms, h.EngineP99ms)
-	sb.WriteString("## By workflow\n\n| workflow | turns | input tokens (est.) | tokens removed (est.) | overhead charged (tokens) | cost off (est.) | cost on (est.) | saving (est.) | prefix kept | violations |\n|---|---|---|---|---|---|---|---|---|---|\n")
+	sb.WriteString("## The numbers\n\n")
+	fmt.Fprintf(&sb, "1. **Estimated saving, everyday sessions: median %.1f%% of list-price cost across %d workflows (range %.1f%% to %.1f%%).** Estimated.\n", h.Everyday.MedianPct, h.Everyday.Workflows, h.Everyday.MinPct, h.Everyday.MaxPct)
+	fmt.Fprintf(&sb, "2. **Estimated saving, heavy-output sessions: median %.1f%% across %d workflows (range %.1f%% to %.1f%%).** Estimated. These sessions are dominated by large tool output (verbose test runs, build logs, incident logs) and were chosen because waste is high there. A ceiling for that kind of work, not a typical day.\n", h.Heavy.MedianPct, h.Heavy.Workflows, h.Heavy.MinPct, h.Heavy.MaxPct)
+	fmt.Fprintf(&sb, "3. **Nothing lost, and cache safe: %d of %d failure and error lines in the original output are still visible to the model, trimmed output is recoverable byte for byte, %d of %d requests kept the cached prefix byte-identical, %d broken invariants, repeat runs byte-identical: %v.** Measured by the checkers in this run.\n", h.KeyLinesKept, h.KeyLines, h.PrefixPreserved, h.Requests, h.Violations, h.AllDeterministic)
+	fmt.Fprintf(&sb, "4. **Engine time per request: p50 %.2f ms, p99 %.2f ms.** Measured in-process on this machine; excludes the gateway's forwarding time.\n\n", h.EngineP50ms, h.EngineP99ms)
+	sb.WriteString("## By workflow\n\n| workflow | tier | turns | input tokens (est.) | tokens removed (est.) | outputs trimmed | cost off (est.) | cost on (est.) | saving (est.) | key lines kept | prefix kept | violations |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, w := range r.Rows {
-		fmt.Fprintf(&sb, "| %s | %d | %d | %d | %d | $%.4f | $%.4f | %.1f%% | %d/%d | %d |\n", w.Name, w.Turns, w.InputTokens, w.TokensCut, w.OverheadToks, w.OffUSD, w.OnUSD, w.SavedPct, w.PrefixOK, w.Requests, w.Violations)
+		fmt.Fprintf(&sb, "| %s | %s | %d | %d | %d | %d | $%.4f | $%.4f | %.1f%% | %d/%d | %d/%d | %d |\n", w.Name, w.Tier, w.Turns, w.InputTokens, w.TokensCut, w.Trimmed, w.OffUSD, w.OnUSD, w.SavedPct, w.KeyLinesKept, w.KeyLines, w.PrefixOK, w.Requests, w.Violations)
 	}
 	sb.WriteString("\n")
 	for _, w := range r.Rows {
-		fmt.Fprintf(&sb, "- **%s**: %s\n", w.Name, w.Description)
+		fmt.Fprintf(&sb, "- **%s** (%s): %s\n", w.Name, w.Tier, w.Description)
 	}
 	sb.WriteString("\n## Limits (say these when you quote the numbers)\n\n")
 	for _, n := range r.Notes {
 		fmt.Fprintf(&sb, "- %s\n", n)
 	}
 	return sb.String()
+}
+
+// --- heavy tier: sessions dominated by large tool output -------------------------------------------------------
+// These are chosen to be waste-rich on purpose. They show what the optimizers do when output dominates the
+// session (a monorepo CI loop, a container build, an incident), not what a typical session saves.
+
+// verboseJest is a test reporter that lists every test (jest --verbose style), then the failures with stack frames.
+func verboseJest(r *rand.Rand, tests int, failing []string) string {
+	var sb strings.Builder
+	sb.WriteString("\x1b[1m> monorepo@1.0.0 test\x1b[22m\n> pnpm -r --workspace-concurrency=4 test\n\n")
+	suites := tests / 12
+	for s := 0; s < suites; s++ {
+		fmt.Fprintf(&sb, "\x1b[0m\x1b[7m\x1b[1m\x1b[32m PASS \x1b[39m\x1b[22m\x1b[27m\x1b[0m \x1b[2mpackages/%s/src/%s.test.ts\x1b[22m\n", pkgs[s%8], names[s%10])
+		for t := 0; t < 12; t++ {
+			fmt.Fprintf(&sb, "  %s\n    \x1b[32m✓\x1b[39m \x1b[2mhandles %s case %d (%d ms)\x1b[22m\n", names[(s+t)%10], names[(s*3+t)%10], t, 1+r.IntN(40))
+		}
+	}
+	for _, f := range failing {
+		fmt.Fprintf(&sb, "\x1b[0m\x1b[7m\x1b[1m\x1b[31m FAIL \x1b[39m\x1b[22m\x1b[27m\x1b[0m \x1b[2mpackages/billing/src/%s.test.ts\x1b[22m\n  \x1b[1m\x1b[31m● %s › retries the charge\x1b[39m\x1b[22m\n\n    expect(received).toEqual(expected)\n\n    Expected: 3\n    Received: 2\n\n", f, f)
+		for i := 0; i < 9; i++ {
+			fmt.Fprintf(&sb, "      at Object.<anonymous> (packages/billing/src/%s.ts:%d:%d)\n      at processTicksAndRejections (node:internal/process/task_queues:95:5)\n", names[i%10], 40+i*7, 11+i)
+		}
+		sb.WriteString("\n")
+	}
+	fmt.Fprintf(&sb, "\nTest Suites: %d failed, %d passed, %d total\nTests:       %d failed, %d passed, %d total\nTime:        %.3f s\n", len(failing), suites-len(failing), suites, len(failing), tests-len(failing), tests, 20+r.Float64()*25)
+	return sb.String()
+}
+
+// dockerBuildLog is a BuildKit log. Cached steps repeat verbatim between rebuilds; the failing step differs.
+func dockerBuildLog(r *rand.Rand, failAt int, round int) string {
+	var sb strings.Builder
+	sb.WriteString("#0 building with \"default\" instance using docker driver\n\n#1 [internal] load build definition from Dockerfile\n#1 transferring dockerfile: 1.2kB done\n#1 DONE 0.0s\n\n")
+	for step := 2; step <= 9; step++ {
+		fmt.Fprintf(&sb, "#%d [%d/9] RUN step-%d\n", step, step-1, step)
+		if step < failAt {
+			fmt.Fprintf(&sb, "#%d CACHED\n\n", step)
+			continue
+		}
+		for i := 0; i < 70; i++ {
+			fmt.Fprintf(&sb, "#%d %d.%03d npm http fetch GET 200 https://registry.npmjs.org/%s-%d 31ms (cache %s)\n", step, i/10, r.IntN(1000), names[i%10], i, []string{"hit", "miss", "stale"}[i%3])
+		}
+		if step == failAt && round < 3 {
+			fmt.Fprintf(&sb, "#%d ERROR: process \"/bin/sh -c npm ci\" did not complete successfully: exit code: 1\nnpm ERR! code ERESOLVE\nnpm ERR! ERESOLVE could not resolve dependency %d\n", step, round)
+			break
+		}
+		fmt.Fprintf(&sb, "#%d DONE %d.%ds\n\n", step, 3+r.IntN(40), r.IntN(10))
+	}
+	return sb.String()
+}
+
+// incidentLogs is an application log where one failing request path throws the same exception again and again, and
+// a health check line repeats between real requests.
+func incidentLogs(r *rand.Rand, n int) string {
+	var sb strings.Builder
+	trace := "java.lang.IllegalStateException: connection pool exhausted\n"
+	for i := 0; i < 14; i++ {
+		trace += fmt.Sprintf("\tat com.shop.%s.%s.handle(%s.java:%d)\n", pkgs[i%8], names[i%10], names[i%10], 40+i*11)
+	}
+	for i := 0; i < n; i++ {
+		switch {
+		case i%9 == 0:
+			sb.WriteString("GET /healthz 200 1ms\nGET /healthz 200 1ms\nGET /healthz 200 1ms\nGET /healthz 200 1ms\n")
+		case i%5 == 0:
+			fmt.Fprintf(&sb, "ERROR checkout failed request=%08x\n%s", r.Uint32(), trace)
+		default:
+			fmt.Fprintf(&sb, "INFO  order accepted id=%d total=%d.%02d latency=%dms\n", 90000+i, r.IntN(300), r.IntN(100), 5+r.IntN(400))
+		}
+	}
+	return sb.String()
+}
+
+func podStatus(restarts int) string {
+	var sb strings.Builder
+	sb.WriteString("NAME                           READY   STATUS             RESTARTS   AGE\n")
+	for i := 0; i < 22; i++ {
+		st, rs := "Running", 0
+		if i == 3 {
+			st, rs = "CrashLoopBackOff", restarts
+		}
+		fmt.Fprintf(&sb, "checkout-%s-7d9f8c6b5-%04x   1/1     %-18s %-10d %dh\n", names[i%10], 0x3a10+i, st, rs, 5+i)
+	}
+	return sb.String()
+}
+
+func wfCITriage(b *wfBuilder) {
+	b.bash("pnpm -r test", verboseJest(b.r, 520, []string{"retry", "refund", "ledger", "invoice"}))
+	b.read("packages/billing/src/retry.test.ts", 180)
+	b.read("packages/billing/src/retry.ts", 160)
+	b.grep("maxAttempts", 11)
+	b.edit("packages/billing/src/retry.ts")
+	b.bash("pnpm -r test", verboseJest(b.r, 520, []string{"refund", "ledger", "invoice"}))
+	b.read("packages/billing/src/refund.ts", 210)
+	b.edit("packages/billing/src/refund.ts")
+	b.bash("pnpm -r test", verboseJest(b.r, 520, []string{"ledger"}))
+	b.read("packages/billing/src/ledger.ts", 190)
+	b.edit("packages/billing/src/ledger.ts")
+	b.bash("pnpm -r test", verboseJest(b.r, 520, nil))
+	b.bash("git diff", gitDiff(14))
+	b.bash("git status", gitStatus(4))
+	b.bash("pnpm -r test", verboseJest(b.r, 520, nil)) // a last confirmation run before committing
+}
+
+func wfContainerBuild(b *wfBuilder) {
+	b.read("Dockerfile", 70)
+	b.bash("docker build -t shop:dev .", dockerBuildLog(b.r, 5, 1))
+	b.grep("ERESOLVE", 6)
+	b.read("package.json", 60)
+	b.edit("package.json")
+	b.bash("docker build -t shop:dev .", dockerBuildLog(b.r, 5, 2))
+	b.edit("Dockerfile")
+	b.bash("docker build -t shop:dev .", dockerBuildLog(b.r, 5, 3))
+	b.bash("docker run --rm shop:dev node server.js", logLines(b.r, 120, true))
+	b.bash("docker logs shop-dev", logLines(b.r, 300, false))
+	b.read("Dockerfile", 70)
+	b.edit("Dockerfile")
+	b.bash("docker build -t shop:dev .", dockerBuildLog(b.r, 9, 3))
+	b.bash("docker images", strings.Repeat("shop   dev   3f2a91c0b4d1   2 minutes ago   412MB\n", 20))
+}
+
+func wfIncident(b *wfBuilder) {
+	b.bash("kubectl get pods -n checkout", podStatus(7))
+	b.bash("kubectl logs checkout-service-7d9f8c6b5-3a13 --tail=1500", incidentLogs(b.r, 520))
+	b.grep("connection pool", 8)
+	b.read("src/jobs/pool.java", 240)
+	b.bash("kubectl get pods -n checkout", podStatus(7))
+	b.bash("kubectl logs checkout-service-7d9f8c6b5-3a13 --tail=1500", incidentLogs(b.r, 520))
+	b.edit("src/jobs/pool.java")
+	b.bash("kubectl rollout restart deploy/checkout-service -n checkout", "deployment.apps/checkout-service restarted\n")
+	b.bash("kubectl get pods -n checkout", podStatus(7))
+	b.bash("kubectl logs checkout-service-7d9f8c6b5-3a13 --tail=1500", incidentLogs(b.r, 520))
+	b.bash("kubectl get pods -n checkout", podStatus(0))
+	b.bash("kubectl get pods -n checkout", podStatus(0))
+	b.bash("kubectl logs checkout-service-7d9f8c6b5-3a13 --since=10m", incidentLogs(b.r, 260))
 }

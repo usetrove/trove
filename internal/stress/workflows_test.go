@@ -14,6 +14,12 @@ func TestWorkflowsRunCleanAndDeterministic(t *testing.T) {
 		t.Fatalf("want at least 6 workflows, got %d", len(rep.Rows))
 	}
 	h := rep.Headline
+	if h.KeyLinesKept != h.KeyLines || h.KeyLines == 0 {
+		t.Errorf("%d of %d failure lines survived optimizing; every one must, and there must be some to check", h.KeyLinesKept, h.KeyLines)
+	}
+	if h.Heavy.Workflows == 0 || h.Everyday.Workflows == 0 {
+		t.Error("both tiers must have workflows")
+	}
 	if h.Violations != 0 {
 		t.Errorf("%d broken invariants in scripted workflows", h.Violations)
 	}
@@ -59,6 +65,27 @@ func TestWorkflowMarkdownLabelsEveryFigure(t *testing.T) {
 	for _, want := range []string{"Estimated", "Measured", "scripted", "not a forecast"} {
 		if !strings.Contains(strings.ToLower(md), strings.ToLower(want)) {
 			t.Errorf("report lacks %q", want)
+		}
+	}
+}
+
+// A saving only counts if nothing was lost. Across several seeds, every failure line must survive, trimmed output must
+// be recoverable, and a heavy session must never cost more than the original.
+func TestWorkflowsHoldAcrossSeeds(t *testing.T) {
+	for _, seed := range []uint64{1, 2, 3, 20261108, 99999} {
+		rep, err := RunWorkflows(WorkflowOptions{Seed: seed})
+		if err != nil {
+			t.Fatalf("seed %d: %v", seed, err)
+		}
+		h := rep.Headline
+		if h.Violations != 0 || !h.AllDeterministic || h.KeyLinesKept != h.KeyLines || h.PrefixPreserved != h.Requests {
+			t.Errorf("seed %d: violations=%d deterministic=%v key lines %d/%d prefix %d/%d", seed, h.Violations,
+				h.AllDeterministic, h.KeyLinesKept, h.KeyLines, h.PrefixPreserved, h.Requests)
+		}
+		for _, r := range rep.Rows {
+			if r.Tier == tierHeavy && r.SavedPct < 0 {
+				t.Errorf("seed %d: heavy workflow %s costs more optimized (%.1f%%)", seed, r.Name, r.SavedPct)
+			}
 		}
 	}
 }

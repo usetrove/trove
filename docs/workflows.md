@@ -9,13 +9,27 @@ explore and review a repo, and a ~90-turn feature session. All tool output is ge
 (pytest and tsc output, noisy colored logs, npm progress with CR/LF, repeated `git status` and `git diff`, files re-read
 with and without an edit in between). No real code, paths or secrets.
 
-## The three numbers
+## The numbers
 
 | number | label | meaning |
 |---|---|---|
 | median and range of the saving across the workflows | **estimated** | list-price cost, off vs on, same cache model in both arms, declared optimizer overhead charged to the "on" arm |
 | requests that kept the cached prefix byte-identical, broken invariants, repeat-run determinism | **measured** | the stress suite's checkers, run on every request |
 | engine time per request, p50 and p99 | **measured** | in-process; the gateway adds its own forwarding time |
+
+## Two tiers, never averaged
+
+- **everyday**: a quick question, fix a failing test, debug with logs, a dependency upgrade, a rename across a codebase, explore
+  and review, and a ~90-turn feature session.
+- **heavy**: sessions dominated by large tool output, chosen because waste is high there: a monorepo test loop with a verbose
+  reporter (about 500 tests per run), a failing container build rerun after each fix, and incident log pulls. Quote the heavy
+  tier as a ceiling for output-heavy work, never as a typical day, and never average it with the everyday tier.
+
+## Nothing lost
+
+A saving only counts if nothing was lost. The run checks that every failure or error line in the original tool output is still
+visible to the model, that every output the engine trimmed is stored in the recovery store byte for byte, that the cached prefix
+stays byte-identical, and that a repeat run produces identical bytes. Any miss makes the command exit non-zero.
 
 ## What this does not show
 

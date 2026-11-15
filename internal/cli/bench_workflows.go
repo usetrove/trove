@@ -19,7 +19,7 @@ func newWorkflows(a *App) *cobra.Command {
 	)
 	c := &cobra.Command{
 		Use:   "workflows",
-		Short: "Replay scripted everyday Claude Code sessions through the engine and report three numbers",
+		Short: "Replay scripted everyday Claude Code sessions through the engine and report the numbers",
 		Long: "Runs hand-scripted sessions (fix a failing test, rename across a codebase, debug with logs, upgrade a\n" +
 			"dependency, explore a repo, a long feature session, a quick question) through the real optimizer engine, offline:\n" +
 			"no provider call and no spend. Reports an estimated saving, a measured cache-and-correctness check, and a measured\n" +
