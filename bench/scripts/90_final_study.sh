@@ -1,95 +1,91 @@
 #!/usr/bin/env bash
-# A study sized to reach a verdict other than NEED MORE DATA, if the optimizer really works.
-# Two conditions only (passthrough vs all_safe), so there is one comparison and no Holm penalty.
-# One run per task (REPEATS=1): every pair is a different task, so the bootstrap's independence assumption holds.
+# A tighter second study of passthrough vs all_safe on the 35 tasks that are ALREADY prepared (no new downloads,
+# no new disk use, nothing is deleted). Each task runs REPEATS times per condition.
 #
-# Why about 350 tasks: the ship rule needs the 95% interval of the SUCCESS difference to stay above -5 points
-# (stats.py compare()). With pass/fail disagreeing on ~12% of tasks that takes roughly 350-400 pairs for an 80%
-# chance of passing, if the optimizer truly costs no accuracy. The cost rule alone needs far fewer (about 100 pairs for a
-# true 15% saving). These are estimates from the interval widths of study swebench-gateway-2, not exact: the script
-# prints a better figure from that study's own pairs.csv when it is available (POWER_FROM=...).
+# What this can and cannot do (read before spending):
+#   - Repeats of one task are not independent. The analysis resamples whole TASKS (stats.compare, inference.py), so the
+#     interval is honest: it narrows only as far as repeats really add information. Repeats mostly shrink the
+#     run-to-run noise; they do not add new kinds of task, so the answer covers THESE 35 tasks, not SWE-bench in general.
+#   - It cannot create a saving. If all_safe does not lower cost on these tasks the verdict will say NEED MORE DATA or
+#     DON'T SHIP, and that is what gets published.
 #
-# It does NOT spend API money. It downloads Docker images (disk!), validates tasks, writes + registers the study.
-#     tmux new -s final
-#     bash bench/scripts/90_final_study.sh
-# Then, in order (these spend money; the last two are free):
-#     SUFFIX=3 ONLY_A=1 bash bench/scripts/40_lock_studies.sh      (run by this script when LOCK=1)
+# Spends no API money until you run 50_run_study.sh. Run in tmux, inside the virtualenv:
+#     cd ~/trove && source .venv/bin/activate
+#     bash bench/scripts/90_final_study.sh                       # writes the study file, shows the plan
+#     SUFFIX=3 ONLY_A=1 bash bench/scripts/40_lock_studies.sh    # register + commit it (or LOCK=1 here)
+#     export ANTHROPIC_API_KEY=...
 #     SUFFIX=3 bash bench/scripts/50_run_study.sh A
 #     SUFFIX=3 bash bench/scripts/60_analyze_study.sh A
-#     SUFFIX=3 bash bench/scripts/70_publish_prep.sh A
 # Settings (VAR=value before the command):
-#     MAIN=350          tasks in the study (each runs once per condition)
-#     N=500             candidates to fetch (SWE-bench Verified has 500 in total, so this is the ceiling)
-#     SEED=20261201     task sample seed. SEED_S=20261203 is the order/bootstrap seed.
+#     REPEATS=6         runs per task per condition. Total runs = tasks x 2 x REPEATS
+#     SEED_S=20261203   order/bootstrap seed
 #     SUFFIX=3          study id is swebench-gateway-$SUFFIX
-#     COST_FROM=bench/results/2026-11-15/swebench-gateway-2   a finished batch whose mean cost sets the caps
+#     TASKS=tasks/swebench-main   (relative to bench/) the tasks to reuse
+#     COST_FROM=...     a finished batch whose mean cost sets the caps (default: swebench-gateway-2)
 #     HEADROOM=1.5      batch cap = expected spend x this, plus one run cap
 #     LOCK=1            also register + commit the study file (needs a clean git tree)
-#     DISK_GB=250       free space required before fetching (500 images are far more than the 120 GB of a 35-task set)
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-MAIN="${MAIN:-350}"
-N="${N:-500}"
-SEED="${SEED:-20261201}"
+REPEATS="${REPEATS:-6}"
 SEED_S="${SEED_S:-20261203}"
 SUFFIX="${SUFFIX:-3}"
+TASKS="${TASKS:-tasks/swebench-main}"
 COST_FROM="${COST_FROM:-$(ls -d bench/results/*/swebench-gateway-2 2>/dev/null | sort | tail -1)}"
 HEADROOM="${HEADROOM:-1.5}"
-DISK_GB="${DISK_GB:-250}"
-TASKROOT="bench/tasks/final"                       # git-ignored by bench/tasks/*/
 STUDY="bench/studies/swebench-gateway-$SUFFIX.yaml"
 
 die() { printf '\nSTOP: %s\n' "$*" >&2; exit 1; }
+command -v python >/dev/null || die "python not found. Activate the virtualenv first:  source .venv/bin/activate"
 [ ! -e "$STUDY" ] || die "$STUDY already exists. A study file is never rewritten; use SUFFIX=4 for a new one."
-[ "$MAIN" -ge 30 ] || die "MAIN must be at least 30 (the ship rule's minimum pairs)."
+[ -d "bench/$TASKS" ] || die "bench/$TASKS not found. It is the task set the first study used."
 [ -n "$COST_FROM" ] && [ -f "$COST_FROM/ledger.jsonl" ] || die "COST_FROM has no ledger.jsonl. Point it at a finished batch, e.g. bench/results/2026-11-15/swebench-gateway-2."
+[ "$REPEATS" -ge 2 ] || die "REPEATS must be at least 2 (use the first study if you only want one run per task)."
+NT="$(ls "bench/$TASKS" | wc -l)"
+[ "$NT" -ge 30 ] || die "only $NT tasks in bench/$TASKS; the ship rule needs at least 30."
 
-echo "== 0. Better sample-size estimate from your own data (free)"
-python bench/scripts/power_check.py "$COST_FROM" || echo "(power check skipped; continuing with the rule-of-thumb size MAIN=$MAIN)"
+echo "== Disk check (this study downloads nothing new; the images for these $NT tasks must still be present)"
+df -h "$HOME" | tail -1
+AVAIL_GB="$(df -BG --output=avail "$HOME" | tail -1 | tr -dc '0-9')"
+[ "${AVAIL_GB:-0}" -ge 5 ] || die "only ${AVAIL_GB} GB free; the runs write logs and containers. Free space first (docker system df shows what Docker holds)."
+echo "images present for the first study's tasks (a missing one is re-downloaded on first use):"
+docker images --format '{{.Repository}}' 2>/dev/null | grep -c . || true
 
-if [ ! -d "$TASKROOT/swebench-main" ]; then
-  echo; echo "== 1. Fetch + validate tasks (slow, downloads images, no API money)"
-  AVAIL_GB="$(df -BG --output=avail "$HOME" | tail -1 | tr -dc '0-9')"
-  [ "${AVAIL_GB:-0}" -ge "$DISK_GB" ] || die "only ${AVAIL_GB} GB free; $N tasks need about $DISK_GB GB. Free space (docker system prune), or lower N and MAIN (then the study is smaller and may still say NEED MORE DATA)."
-  # WARM=1 because prepare_tasks.sh wants a warm-up set; this study does not use it.
-  TASKS="$TASKROOT" SEED="$SEED" N="$N" MAIN="$MAIN" WARM=1 PILOT=1 LOGDIR="bench/results/prep-final" \
-    bash bench/scripts/prepare_tasks.sh
-else
-  echo "== 1. $TASKROOT/swebench-main already exists: reusing it."
-fi
-NT="$(ls "$TASKROOT/swebench-main" | wc -l)"
-[ "$NT" -ge 30 ] || die "only $NT validated tasks in the study set."
-[ "$NT" -ge "$MAIN" ] || echo "NOTE: only $NT of the $MAIN wanted tasks validated. The study will have $NT pairs, so it may still say NEED MORE DATA."
+echo; echo "== Estimate from your own first study (ESTIMATED; free)"
+python bench/scripts/power_check.py "$COST_FROM" || echo "(power check skipped)"
+echo "Note: that estimate treats runs as independent tasks. Here only $NT distinct tasks exist, so the real interval will be wider"
+echo "than the estimate for the cost rule. The honest answer is whatever 60_analyze_study.sh prints."
 
-echo; echo "== 2. Write the study file (caps from the measured mean cost of $COST_FROM)"
+echo; echo "== Write the study file (caps from the measured mean cost of $COST_FROM)"
 STATS="$(python bench/scripts/pilot_stats.py "$COST_FROM" --json)"
-read -r RUNCAP BATCH HOURS MEAN <<<"$(STATS="$STATS" NT="$NT" HR="$HEADROOM" python - <<'EOF'
+read -r RUNCAP BATCH HOURS MEAN RUNS <<<"$(STATS="$STATS" NT="$NT" RP="$REPEATS" HR="$HEADROOM" python - <<'EOF'
 import json, math, os, sys
-s = json.loads(os.environ["STATS"]); nt = int(os.environ["NT"]); hr = float(os.environ["HR"])
+s = json.loads(os.environ["STATS"]); nt = int(os.environ["NT"]); rp = int(os.environ["RP"]); hr = float(os.environ["HR"])
 if s["ok"] < 3 or s["mean_cost_usd"] is None:
     sys.exit("STOP: COST_FROM has fewer than 3 ok runs with a known cost.")
 mean, mx, wall = s["mean_cost_usd"], s["max_cost_usd"], s["mean_wall_s"]
 run_cap = max(0.5, math.ceil(mx * 1.5 * 4) / 4)
-runs = nt * 2
+runs = nt * 2 * rp
 batch = math.ceil((runs * mean * hr + run_cap) / 5) * 5
-print(f"{run_cap:.2f} {batch:.1f} {runs * wall / 3600:.1f} {mean:.3f}")
+print(f"{run_cap:.2f} {batch:.1f} {runs * wall / 3600:.1f} {mean:.3f} {runs}")
 EOF
 )"
-echo "tasks: $NT   runs: $((NT * 2))   mean cost per run \$$MEAN   run cap \$$RUNCAP   batch cap \$$BATCH   about $HOURS hours (runs go one after another)"
+echo "tasks: $NT   repeats: $REPEATS   runs: $RUNS   mean cost per run \$$MEAN   run cap \$$RUNCAP   batch cap \$$BATCH   about $HOURS hours (one after another)"
+echo "If that is too much, rerun with a lower REPEATS (before locking)."
 
 cat > "$STUDY" <<EOF
 id: swebench-gateway-$SUFFIX
-title: "SWE-bench Verified, $NT tasks: all safe gateway optimizers vs the same gateway with them off"
+title: "SWE-bench Verified, $NT tasks x $REPEATS repeats: all safe gateway optimizers vs the same gateway with them off"
 hypothesis: >
   Turning on all_safe lowers the billed cost per task by at least 5% against the same gateway with every
-  optimizer off, without lowering the share of tasks that pass by more than 5 points.
+  optimizer off, without lowering the share of tasks that pass by more than 5 points. Repeats of one task are
+  analysed as one cluster, so the result covers these $NT tasks only.
 primary_metric: billed_cost_usd
 secondary_metrics: [success_rate, latency_s]
 baseline_condition: passthrough
 conditions: [passthrough, all_safe]
-tasks: tasks/final/swebench-main
-repeats: 1
+tasks: $TASKS
+repeats: $REPEATS
 order_seed: $SEED_S
 cost_basis: agent
 analysis:
@@ -108,7 +104,7 @@ EOF
 echo "wrote $STUDY"
 
 if [ -n "${LOCK:-}" ]; then
-  echo; echo "== 3. Register + commit"
+  echo; echo "== Register + commit"
   SUFFIX="$SUFFIX" ONLY_A=1 bash bench/scripts/40_lock_studies.sh
 else
   cat <<EOF
