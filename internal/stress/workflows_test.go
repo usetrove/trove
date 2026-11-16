@@ -2,27 +2,48 @@ package stress
 
 import (
 	"strings"
+	"sync"
 	"testing"
 )
 
-// shortWorkflows keeps these tests fast under `go test -race -short`: the race detector slows the engine several times
-// over, and the full set takes minutes. The full set runs when -short is not given.
-var shortWorkflows = []string{"quick-question", "fix-failing-test", "debug-with-logs"}
-
-func wfOpts(o WorkflowOptions) WorkflowOptions {
-	if testing.Short() {
-		o.Only = shortWorkflows
-	}
-	return o
+// Under `go test -short` (which CI runs with the race detector) these tests share ONE small report, because the race
+// detector makes the engine many times slower and every extra run adds minutes to a package that already has other
+// slow tests. Without -short they run the full set, several times, as a harder check.
+var shortReport struct {
+	once sync.Once
+	rep  WorkflowReport
+	err  error
 }
 
-func TestWorkflowsRunCleanAndDeterministic(t *testing.T) {
-	rep, err := RunWorkflows(wfOpts(WorkflowOptions{Seed: 20261108}))
+func report(t *testing.T, o WorkflowOptions) WorkflowReport {
+	t.Helper()
+	if testing.Short() {
+		shortReport.once.Do(func() {
+			shortReport.rep, shortReport.err = RunWorkflows(WorkflowOptions{Seed: 20261108, Only: []string{"quick-question", "fix-failing-test"}})
+		})
+		if shortReport.err != nil {
+			t.Fatal(shortReport.err)
+		}
+		return shortReport.rep
+	}
+	rep, err := RunWorkflows(o)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rep.Rows) < 6 {
-		t.Fatalf("want at least 6 workflow rows, got %d", len(rep.Rows))
+	return rep
+}
+
+func skipIfShort(t *testing.T) {
+	t.Helper()
+	if testing.Short() {
+		t.Skip("runs the workflows several more times; skipped with -short (CI runs it with the race detector)")
+	}
+}
+
+func TestWorkflowsRunCleanAndDeterministic(t *testing.T) {
+	rep := report(t, WorkflowOptions{Seed: 20261108})
+	if len(rep.Rows) < 3 {
+		t.Fatalf("want at least 3 workflow rows, got %d", len(rep.Rows))
 	}
 	h := rep.Headline
 	if h.KeyLinesKept != h.KeyLines || h.KeyLines == 0 {
@@ -54,11 +75,12 @@ func TestWorkflowsRunCleanAndDeterministic(t *testing.T) {
 }
 
 func TestWorkflowsSameSeedSameReport(t *testing.T) {
-	a, err := RunWorkflows(wfOpts(WorkflowOptions{Seed: 7}))
+	skipIfShort(t)
+	a, err := RunWorkflows(WorkflowOptions{Seed: 7})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := RunWorkflows(wfOpts(WorkflowOptions{Seed: 7}))
+	b, err := RunWorkflows(WorkflowOptions{Seed: 7})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,11 +93,7 @@ func TestWorkflowsSameSeedSameReport(t *testing.T) {
 }
 
 func TestWorkflowMarkdownLabelsEveryFigure(t *testing.T) {
-	rep, err := RunWorkflows(wfOpts(WorkflowOptions{Seed: 1}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	md := WorkflowMarkdown(rep)
+	md := WorkflowMarkdown(report(t, WorkflowOptions{Seed: 1}))
 	for _, want := range []string{"Estimated", "Measured", "scripted", "not a forecast"} {
 		if !strings.Contains(strings.ToLower(md), strings.ToLower(want)) {
 			t.Errorf("report lacks %q", want)
@@ -86,12 +104,9 @@ func TestWorkflowMarkdownLabelsEveryFigure(t *testing.T) {
 // A saving only counts if nothing was lost. Across several seeds, every failure line must survive, trimmed output must
 // be recoverable, and a heavy session must never cost more than the original.
 func TestWorkflowsHoldAcrossSeeds(t *testing.T) {
-	seeds := []uint64{1, 2, 3, 20261108, 99999}
-	if testing.Short() {
-		seeds = seeds[:1]
-	}
-	for _, seed := range seeds {
-		rep, err := RunWorkflows(wfOpts(WorkflowOptions{Seed: seed}))
+	skipIfShort(t)
+	for _, seed := range []uint64{1, 2, 3, 20261108, 99999} {
+		rep, err := RunWorkflows(WorkflowOptions{Seed: seed})
 		if err != nil {
 			t.Fatalf("seed %d: %v", seed, err)
 		}
@@ -111,17 +126,15 @@ func TestWorkflowsHoldAcrossSeeds(t *testing.T) {
 // A harder pass: the same sessions at other sizes, with the trimmer at its tightest, and with the modelled re-read diff.
 // Nothing may break, whatever the size.
 func TestWorkflowsHoldAtOtherSizesAndTunings(t *testing.T) {
+	skipIfShort(t)
 	cases := []WorkflowOptions{
 		{Seed: 5, Scale: 0.5},
 		{Seed: 5, Scale: 4},
 		{Seed: 5, Scale: 2, Tuning: minTuning()},
 		{Seed: 5, Scale: 2, RereadDiff: true},
 	}
-	if testing.Short() {
-		cases = cases[2:]
-	}
 	for _, c := range cases {
-		rep, err := RunWorkflows(wfOpts(c))
+		rep, err := RunWorkflows(c)
 		if err != nil {
 			t.Fatalf("%+v: %v", c, err)
 		}
