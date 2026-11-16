@@ -20,7 +20,7 @@ import (
 // CRC-32 of everything before it) is the documented event stream encoding as widely
 // described, but the page I could fetch was empty. The decoder is tested against
 // hand-built frames only. Check it against a real capture before relying on it
-// (docs/gateway-manual-test.md, Part D).
+// (the gateway manual test, Part D).
 
 const (
 	preludeLen   = 12

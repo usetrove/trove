@@ -299,7 +299,7 @@ func explainSteps(dir string, cfg config.Config) []string {
 }
 
 // optionsNotes is the part of setup that says who the gateway is for. The
-// sources and dates are in docs/compliance.md (checked 2026-11-04).
+// sources and dates: checked 2026-11-04.
 func optionsNotes() []string {
 	return []string{
 		"Who the gateway is for:",

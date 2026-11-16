@@ -9,7 +9,7 @@ import (
 
 // `trove setup` must never point Claude Code at the gateway unless Claude Code will authenticate with an API key:
 // otherwise its Claude.ai login token would be sent to the gateway before the gateway refuses it (CLAUDE.md
-// rules 3 and 10, docs/compliance.md question 1).
+// rules 3 and 10).
 
 func setupWith(t *testing.T, env map[string]string, settings string) (h *harness, claudePath string) {
 	t.Helper()

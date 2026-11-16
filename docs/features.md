@@ -99,7 +99,7 @@ An earlier version without the substring filter took about 0.56 ms and 69 ms for
 the same two cases. The hook's own deadline for `post_tool_output` is 250 ms, and
 extraction failures are ignored. I have not measured the whole hook process end to
 end; on Windows, antivirus rescans make the per-call file append cost about 17 ms
-regardless of size (see docs/hooks-verification.md), so the budget is not enforced
+regardless of size, so the budget is not enforced
 there.
 
 ## Token overhead (rule 15)

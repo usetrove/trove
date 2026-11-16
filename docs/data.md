@@ -537,7 +537,7 @@ Rules the design must keep:
 - **Individual views are opt-in by the individual.** A person sees their own numbers locally; an admin
   never sees one person's numbers unless that person chooses to share them.
 - **Notice and consent.** Every member sees what is shared before it is shared. Regional notes, for a lawyer to
-  check, are in [privacy-law.md](privacy-law.md): employee monitoring is regulated differently in Canada,
+  check, are kept outside this repository: employee monitoring is regulated differently in Canada,
   the EU and UK, and individual US states (notice, consent, proportionality, works-council or union
   involvement).
 - **New outbound call.** Sending anything to a team server needs a new rule in CLAUDE.md first (rule 1).

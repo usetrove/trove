@@ -159,7 +159,7 @@ These are changes to the agent's own settings files, not optimizer states. Autop
 - **`trove_mcp` (B9), scout and cascade (B11):** installed or written with their own consent flows.
 - **Candidates not built** (fan-out, response cache, model swap, tool-output rewrite for more tools, terse replies):
   they cannot be eligible before they exist. Fan-out was verified and is not recommended
-  ([fan-out.md](fan-out.md)).
+.
 
 ## Policy versions as built (2026-11-14)
 

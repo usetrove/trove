@@ -90,8 +90,8 @@ Text that originates outside Trove is limited to: model name (cut to 100 bytes),
 tool names from your agent logs, and the agent label. [`TestClientControlledFieldsAreCappedInTheRecord`]
 Every table with a time in it follows `retention_days` (default 90), except the state tables marked "kept". The purge runs
 at most once a day, from whichever Trove process runs first (the gateway, a hook at the end of a session, or
-`trove report`), so it no longer depends on the gateway [`TestEveryTableHasARetentionDecision`,
-`TestPurgeDeletesOldRowsFromEveryAgedTable`; closes finding F-8 in [docs/security-findings.md](docs/security-findings.md)].
+`trove report`), so it no longer depends on the gateway `TestEveryTableHasARetentionDecision`,
+`TestPurgeDeletesOldRowsFromEveryAgedTable`; closes finding F-8 of the security review.
 `trove uninstall --purge-data` deletes all of it.
 
 ### Other files in the data folder
@@ -168,4 +168,4 @@ if a field is added without review]
 ## What is not covered here
 
 Your provider's handling of the requests you send (see their terms), and your agent's own logs and telemetry.
-Trove does not change either. See [docs/compliance.md](docs/compliance.md).
+Trove does not change either.

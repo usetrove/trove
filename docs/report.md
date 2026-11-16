@@ -2,7 +2,6 @@
 
 Written 2026-10-29. Code: `internal/report` (and `internal/report/share`). Commands: `trove`,
 `trove report`, `trove budget`, `trove receipts`, `trove status-line`, `trove share`.
-How to check it yourself, step by step: `docs/report-verification.md`.
 
 Every number comes from the measurement layer (`internal/measure`) unchanged and carries a label:
 

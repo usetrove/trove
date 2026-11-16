@@ -16,7 +16,7 @@ import { classifyV1, cleanId } from "./guard.ts";
 // so "deny" is declared as something this harness cannot do and the engine only
 // counts what it would have blocked.
 //
-// Not verified until run on a real OpenCode (docs/opencode-verification.md): that
+// Not verified until run on a real OpenCode (see the OpenCode verification checklist): that
 // tool.execute.after runs before OpenCode's own output truncation, and that a
 // changed `output.args` is what the tool then runs with.
 

@@ -221,7 +221,7 @@ output writes the full text to the recovery store first. Past the deadline the o
 
 Measured on a Windows 11 dev machine with real-time antivirus: about 14 ms median over an empty Go program for the
 whole process, and 21 ms median for the handler alone, almost all of it a fixed ~17 ms the system adds when a file
-is opened right after it was written. See `docs/hooks-verification.md` for the numbers to check on macOS and Linux.
+is opened right after it was written.
 
 ## Where the hooks go
 
@@ -264,7 +264,7 @@ Verified 2026-10-29 / 2026-10-30. Re-check when either agent changes.
   `file.content`; the hooks leave those shapes unchanged rather than guess at a replacement.
 - The probe judges an input rewrite by what the `PostToolUse` hook is told the tool ran with, and an output rewrite
   by whether the model repeated a marker. It does not show that the rewritten output stays in later requests'
-  history or in the prompt cache (`docs/non-gateway-optimization.md`, Q2).
+  history or in the prompt cache.
 - The rewrite guardrails count only what the hooks can see. A rewrite that costs extra turns, or a fetch-back
   by an agent without the `post_tool_fetch` hook installed, goes unseen; judge rewrites with the A/B comparison.
 - Hook rewrites are Claude Code only for output; Codex gets Bash input rewriting from documentation, untested live.

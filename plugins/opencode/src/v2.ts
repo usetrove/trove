@@ -18,7 +18,7 @@ import type { Login } from "./types.ts";
 //   - session "context"            learn the session's provider (no changes made)
 //   - ctx.event.subscribe          read usage and tool errors the harness reports
 //
-// Not verified until run on a real OpenCode (docs/opencode-verification.md):
+// Not verified until run on a real OpenCode (see the OpenCode verification checklist):
 // that assigning a new Request to event.request is honoured (the docs only show
 // header mutation); the built-in tools' V2 argument names; that a provider id is
 // the integration id connection.active() expects; the event envelope of

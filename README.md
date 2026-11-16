@@ -23,7 +23,7 @@ One small program. No account. Nothing to sign up for.
 - **Proves before acting.** Every optimization is opt-in, estimated in shadow mode first, measured once on, and rolled back if its guardrails trip.
 - **Works with** Claude Code and Codex CLI, on a subscription plan or with your own API keys. Claude Code is the best tested; see [Supported agents](#supported-agents) for exactly what works where.
 
-<!-- DEMO GIF: record from docs/launch/demo-script.md, save as docs/assets/demo.gif, then replace this comment with: <img src="./docs/assets/demo.gif" /> -->
+<!-- DEMO GIF: record a short terminal demo, save as docs/assets/demo.gif, then replace this comment with: <img src="./docs/assets/demo.gif" /> -->
 
 ## Get started
 
@@ -335,8 +335,8 @@ If you want to help check Trove's savings claims, `trove contribute` shows a sma
 |---|---|
 | **Using Trove** | [Getting started](docs/getting-started.md) · [Reports](docs/report.md) · [Gateway](docs/gateway.md) · [Optimizers](docs/optimize.md) · [Supported agents](docs/supported-agents.md) |
 | **Trusting Trove** | [Measurement method](docs/measurement-method.md) · [Benchmark methodology](docs/benchmark-methodology.md) · [Scripted workflows](docs/workflows.md) · [Pricing and updates](docs/pricing.md) |
-| **Safety and privacy** | [Privacy](PRIVACY.md) · [Security](SECURITY.md) · [Threat model](docs/threat-model.md) · [Compliance](docs/compliance.md) |
-| **Contributing** | [Contributing](CONTRIBUTING.md) · [Beta checklist](docs/beta-checklist.md) |
+| **Safety and privacy** | [Privacy](PRIVACY.md) · [Security](SECURITY.md) · [Threat model](docs/threat-model.md) |
+| **Contributing** | [Contributing](CONTRIBUTING.md) |
 
 ## License
 

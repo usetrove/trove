@@ -138,4 +138,4 @@ Verified on 2026-10-29 against current documentation:
   default on macOS, Linux and WSL, where Claude Code searches through `Bash`, so the use figure undercounts
   searches there.
 - Codex CLI: `[mcp_servers.<name>]` fields and `codex mcp add` (learn.chatgpt.com/docs/extend/mcp). That page
-  does not say how tools from a server are named, so see `docs/mcp-verification.md`.
+  does not say how tools from a server are named.

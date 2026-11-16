@@ -9,6 +9,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - Benchmark scripts: `90_final_study.sh` (a larger two-condition study on the tasks already prepared), `91_optimizer_activity.sh` (what the optimizers actually removed in a study), `92_long_tasks_study.sh`, `93_labelled_numbers.sh`, `94_other_levers.sh`, and `power_check.py` (how many pairs the ship rule needs, estimated from a finished batch).
 
 ### Changed
+- The repository now carries only the user-facing and test-required docs. Internal process notes (verification and release checklists, legal and research notes, launch drafts) are no longer tracked; they remain in the history and in earlier releases. Issue and pull request templates were added.
 - `output_trimmer` now recognizes BuildKit (`docker build`) logs as build output. It still keeps failures and stack traces and stores the full output.
 - The benchmark verdict (`stats.compare`) resamples whole tasks, so repeats of one task cannot make an interval look tighter than the data allows. With one run per task the results are identical to before.
 
@@ -62,11 +63,11 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [0.2.2] - 2026-11-12
 
-Published as a regular release, not a pre-release. The release checklist ([docs/release-checklist.md](docs/release-checklist.md)) still has open items, listed under "Known gaps in this release" below. The notes under 0.1.0 were written before the earlier 0.2.0 and 0.2.1 tags and are folded into this release.
+Published as a regular release, not a pre-release. The release checklist still has open items, listed under "Known gaps in this release" below. The notes under 0.1.0 were written before the earlier 0.2.0 and 0.2.1 tags and are folded into this release.
 
 ### Added
 - Data controls: `trove data export` (every table as CSV plus Trove's own files, never the backups; recovery store only with `--include-recovery`) and `trove data delete` (usage data; keeps what `trove undo` needs; prints the request that asks the sharing receiver to delete a contributed summary, and sends nothing). `trove uninstall --purge-data` now also removes the consent record.
-- `docs/data.md`: every stored field, every field sent after opting in, and a marked design (not built) for any team edition, each with purpose and retention. A test fails if it drifts from the schema. `docs/privacy-law.md` (for lawyer review, sources dated), a verbatim-clauses update and lawyer/Anthropic question lists in `docs/compliance.md`.
+- `docs/data.md`: every stored field, every field sent after opting in, and a marked design (not built) for any team edition, each with purpose and retention. A test fails if it drifts from the schema. privacy-law notes for lawyer review (kept outside the repository), a verbatim-clauses update and lawyer/Anthropic question lists, also kept outside the repository.
 - Tests in CI: canary strings never reach the database, the data folder or anything shared (`internal/privacy`); every table has a retention decision (`internal/store`); no banned word in our own names (`internal/naming`).
 - `trove reconcile`: compare Trove's recorded total for a period with a provider invoice; a difference within 2% (adjustable) counts as a match.
 - `trove feedback`: build a prefilled GitHub issue with diagnostics (versions, agent names, counts, error classes), shown in full before anything is opened.
@@ -95,7 +96,7 @@ Published as a regular release, not a pre-release. The release checklist ([docs/
 - Internal renames for the naming rule: `internal/logs/claudecode` is `cchistory`, `internal/logs/codex` is `cxhistory`, and the benchmark agent module is `trovebench.agent.cc`. No user-visible command, config key or route changed.
 
 ### Known gaps in this release
-- Install, uninstall, Homebrew and `install.sh` have not been verified by hand on clean macOS or Linux machines ([docs/install-verification.md](docs/install-verification.md) is still blank). Automated tests run on Windows locally and on Linux in CI.
+- Install, uninstall, Homebrew and `install.sh` have not been verified by hand on clean macOS or Linux machines (the install verification checklist is still blank). Automated tests run on Windows locally and on Linux in CI.
 - The Claude Code plugin has not been run end to end on a real login on macOS or Linux, and the OpenCode plugin has not been run on a real OpenCode.
 - `cosign verify-blob` has not been run against the published release, and the Homebrew formula has not been installed from the tap. The install script and the npm wrapper check the SHA-256 only, not the signature.
 - The compliance, legal and agent-integration documents were last re-checked on 2026-11-06 and were not re-checked for this release.
