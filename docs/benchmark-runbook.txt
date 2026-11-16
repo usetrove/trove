@@ -1,34 +1,9 @@
 TROVE BENCHMARK RUNBOOK
 From a blank SSH session to a results table.
 
-Written 2026-11-14 from the code in bench/ (trovebench) at this checkout, and updated the same day for
-release v0.4.0 (see "STATE OF THE RELEASE" below). Where I could not check
+Written 2026-11-14 from the code in bench/ (trovebench) at this checkout. Where I could not check
 something, it says so. Commands assume a Debian or Ubuntu server and bash; change the package
 manager lines for anything else. Angle brackets like <THIS> are values you fill in.
-
-======================================================================================================
-STATE OF THE RELEASE (2026-11-14)
-======================================================================================================
-
- Test v0.4.0 or later, not v0.3.0. v0.4.0 is the first release with the guardrails for hook_read_limit,
- hook_large_output and the trimmer, the lossless-v3 trial policy, and the security hardening. It is
- published at https://github.com/usetrove/trove/releases/tag/v0.4.0 (merge commit 5e8cea4).
-
- Checked by command on 2026-11-14: CI was green on the release commit (27 checks, including the strace
- privacy test, -race on Linux, secret scan, the rebuild-and-compare job, and the macOS and Windows
- smoke tests); the linux/amd64 archive matches checksums.txt; and `gh attestation verify` passes for that
- archive and for checksums.txt.
-
- NOT checked, so do not assume it: the cosign signature (cosign verify-blob) was not run by hand; the
- Homebrew formula was not installed; install.sh was not run against the real release; nothing in this
- runbook has been run. One CI test (the macOS status-line latency budget) missed its limit once and passed
- on a rerun, so a timing test failing under load is not by itself a bug. A hook that times out can
- probably count a session twice in `adopted` (seen once under heavy load, not understood): if the
- hook_large_output numbers look doubled, suspect that before the hook.
-
- Before Part E, and before any hook trial: an install made with v0.3.0 or earlier does NOT have the
- trove_run counter. Run `trove hooks install --yes --agent claude --rewrite` again with the v0.4.0
- binary. Part E.1 does this; `trove hooks status` tells you if it is missing.
 
 ======================================================================================================
 ORDER OF WORK: EVERYTHING THAT IS LEFT FOR YOU
@@ -186,8 +161,8 @@ PART 3. GET THE CODE AT A KNOWN COMMIT
      git clone <REPO_URL> trove
      cd trove
      git fetch --all --tags
-     git checkout <COMMIT_OR_TAG>        # the commit you will name in the report. Use the release tag, v0.4.0
-                                         # or later (v0.3.0 has no guardrails), so the studies measure what users get
+     git checkout <COMMIT_OR_TAG>        # the commit you will name in the report. Use the release tag, v0.3.0
+                                         # or later, so the studies measure what users actually get
      git status --porcelain              # must print NOTHING (clean tree)
      git rev-parse HEAD                  # write this down
 
@@ -649,23 +624,11 @@ PART E. A REAL-INSTALL TRIAL RUN  (A PLUMBING CHECK, NOT A RESULT)
  !! forget, Trove writes into ~/.trove. On the Windows machine this project was written on, ~/.trove holds
  !! a different product's database; never point this at it.
 
- Step E.0  Check what you are about to test (about a minute, optional but worth it). With the v0.4.0 archive
-     for your platform and checksums.txt from the release page in one folder:
-
-         sha256sum -c --ignore-missing checksums.txt       # on macOS: shasum -a 256 -c --ignore-missing checksums.txt
-         gh attestation verify <the archive> --repo usetrove/trove    # exit 0 means a signed build record exists
-         cosign verify-blob --bundle checksums.txt.sigstore.json checksums.txt \
-           --certificate-identity 'https://github.com/usetrove/trove/.github/workflows/release.yml@refs/tags/v0.4.0' \
-           --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
-
-     A failure of any of these is a result: do not run the trial, and hand the output back. (The cosign
-     command is the one in SECURITY.md; it has not been run by hand against v0.4.0 yet.)
-
  Step E.1  Set up, in one terminal that you keep open:
 
      export TROVE_DATA_DIR="$HOME/trove-trial-test"
      mkdir -p "$TROVE_DATA_DIR"
-     trove --version                      # must print 0.4.0 or later, the release you are testing
+     trove --version                      # must print the release you are testing
      printf '[measure]\nbaseline_days = 0\nbaseline_sessions = 0\n' > "$TROVE_DATA_DIR/config.toml"
          # Only so a short test is not held back by the 7-day baseline. A real install keeps the default.
      trove hooks install --yes --agent claude --rewrite     # shows the change, then applies it
