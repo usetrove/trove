@@ -79,9 +79,15 @@ func main() {
 	files := flag.Args()
 	if len(files) == 0 {
 		var err error
-		if files, err = filepath.Glob(filepath.Join(*root, "docs", "launch", "*.md")); err != nil || len(files) == 0 {
-			fmt.Fprintln(os.Stderr, "checkclaims: no files given and none found in docs/launch. Pass file paths.")
+		if files, err = filepath.Glob(filepath.Join(*root, "docs", "launch", "*.md")); err != nil {
+			fmt.Fprintf(os.Stderr, "checkclaims: cannot list docs/launch: %v\n", err)
 			os.Exit(2)
+		}
+		if len(files) == 0 {
+			// Launch drafts are kept out of the repository, so a clean checkout has none to check. Pass file paths to
+			// check a draft kept elsewhere.
+			fmt.Println("checkclaims: no launch drafts in docs/launch, nothing to check")
+			return
 		}
 	}
 	bad := 0
