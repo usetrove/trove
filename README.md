@@ -6,7 +6,7 @@
 
 Find the tokens your agent wastes, fix them with changes you approve one at a time, and check that your results did not suffer.
 
-![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square) ![Go](https://img.shields.io/badge/Go-1.27.3%2B-00ADD8?style=flat-square) ![Platforms](https://img.shields.io/badge/macOS%20%7C%20Linux-supported-brightgreen?style=flat-square) ![Status](https://img.shields.io/badge/status-pre--release-orange?style=flat-square)
+![Release](https://img.shields.io/github/v/release/usetrove/trove?style=flat-square) ![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square) ![Go](https://img.shields.io/badge/Go-1.27.3%2B-00ADD8?style=flat-square) ![Platforms](https://img.shields.io/badge/macOS%20%7C%20Linux-supported-brightgreen?style=flat-square) ![Status](https://img.shields.io/badge/status-pre--release-orange?style=flat-square)
 
 [Get started](#get-started) · [How it works](#how-it-works) · [Measured results](#measured-results) · [Docs](docs/getting-started.md) · [FAQ](#faq)
 
@@ -21,14 +21,14 @@ One small program. No account. Nothing to sign up for.
 - **Local-first.** Everything lives in `~/.trove`. Nothing is sent anywhere unless you opt in.
 - **Honest numbers.** Every figure is labeled **measured** (counted from usage the provider reported) or **estimated** (derived from list prices or an assumption). Dollar figures are estimates, not invoices.
 - **Proves before acting.** Every optimization is opt-in, estimated in shadow mode first, measured once on, and rolled back if its guardrails trip.
-- **Works with** Claude Code and Codex CLI, on a subscription plan or with your own API keys.
+- **Works with** Claude Code and Codex CLI, on a subscription plan or with your own API keys. Claude Code is the best tested; see [Supported agents](#supported-agents) for exactly what works where.
 
 <!-- DEMO GIF: record from docs/launch/demo-script.md, save as docs/assets/demo.gif, then replace this comment with: <img src="./docs/assets/demo.gif" /> -->
 
 ## Get started
 
 > [!NOTE]
-> Trove 0.1.0 has not been published yet, so the install commands below will not work until it is. Until then, [try it from source](#try-it-from-source).
+> **Latest release: [v0.4.0](https://github.com/usetrove/trove/releases/tag/v0.4.0)** (2026-11-14). See [what's new](#whats-new-in-v040). Trove is still early: read [Measured results](#measured-results) before you expect a saving.
 
 ### 1. Install
 
@@ -36,9 +36,9 @@ Every path checks the download against the release's SHA-256 checksums before it
 
 **macOS / Linux (supported):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | TROVE_VERSION=0.1.0-beta.1 sh
+curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | sh
 ```
-During the beta, pin the version as shown: a `-beta` release is a pre-release, so "latest" does not pick it.
+This installs the latest release (v0.4.0). To pin a version, set `TROVE_VERSION=0.4.0` before `sh`. If you have [cosign](https://github.com/sigstore/cosign) installed, the script also verifies the release's signature; set `TROVE_REQUIRE_SIGNATURE=1` to refuse an install it cannot verify.
 
 **Homebrew (macOS / Linux):**
 ```bash
@@ -48,10 +48,10 @@ brew install usetrove/trove/trove
 <details>
 <summary><b>Windows (experimental)</b></summary>
 
-Download the `trove_<version>_windows_amd64.zip` from the release page, check it, then unzip it. In PowerShell (replace the version with your release's):
+Download `trove_0.4.0_windows_amd64.zip` (or `windows_arm64`) from the [release page](https://github.com/usetrove/trove/releases/tag/v0.4.0), check it, then unzip it. In PowerShell (replace the version with your release's):
 
 ```powershell
-$v = "0.1.0-beta.1"
+$v = "0.4.0"
 Invoke-WebRequest "https://github.com/usetrove/trove/releases/download/v$v/trove_${v}_windows_amd64.zip" -OutFile trove.zip
 Invoke-WebRequest "https://github.com/usetrove/trove/releases/download/v$v/checksums.txt" -OutFile checksums.txt
 $want = (Select-String -Path checksums.txt -Pattern "trove_${v}_windows_amd64.zip").Line.Split(" ")[0]
@@ -151,6 +151,34 @@ All are off by default, run in shadow mode first, and fail open: any error forwa
 - **Cache safe.** Transformations are deterministic, so the same history always produces the same bytes and cached prefixes stay valid.
 - **Prove before acting.** See [measurement](docs/measurement.md).
 
+## Supported agents
+
+Trove works with **Claude Code** and **Codex CLI**, and ships an experimental **OpenCode** plugin. Claude Code is the best tested. The table says what exists and how well it has been checked; the full test record, with versions, is in [docs/supported-agents.md](docs/supported-agents.md).
+
+| Feature | Claude Code | Codex CLI |
+|---|---|---|
+| History report and waste finding (`trove`) | Yes. Parsed against real session files (Claude Code 2.1.302) | Yes, but the parser has **not been verified on a real Codex install** |
+| Fixes (`trove fix`) | Yes | Some: the default-model suggestion (`~/.codex/config.toml`), and cache-breaker and context-size findings in `AGENTS.md`. Pruning unused MCP servers is Claude Code only |
+| Hooks | All of them, including repeat-read prevention and output rewrites | Session reset and session-end receipt; large-output advice on request. No repeat-read prevention (Codex names no file-read tool to match) |
+| MCP tool server (`trove mcp install`) | Yes (needs `claude` on your `PATH`) | Yes, at user level (`~/.codex/config.toml`) |
+| Optional gateway | Yes, **API-key use only**. Optimizers rewrite Anthropic Messages requests | Yes, **API-key use only** (`OPENAI_API_KEY`). Trove records metadata; the optimizers do **not** rewrite OpenAI-format requests |
+| Subscription logins (Claude Pro/Max, ChatGPT) | Reports, fixes, hooks and MCP work. The gateway refuses them | Same. A ChatGPT or Codex login is refused by the gateway, and Trove never opens `~/.codex/auth.json` |
+
+> [!NOTE]
+> Codex CLI support is built from its documentation and open-source code but **has not been run on a real Codex install**. Treat it as experimental. If you try it, `trove feedback` is the fastest way to tell us what broke. The test record (last reviewed 2026-10-30) also lists macOS and Linux as not yet tested on real machines; its automated tests ran on Windows 11 and in CI.
+
+## What's new in v0.4.0
+
+Released 2026-11-14. Full notes in the [changelog](CHANGELOG.md) and on the [release page](https://github.com/usetrove/trove/releases/tag/v0.4.0).
+
+- **Autopilot trial policy `lossless-v3`.** Adds three candidates to the two from v2 (`output_trimmer`, `hook_large_output`, `hook_read_limit`), tried one at a time. It needs its own yes (`trove autopilot trials on` shows what is added and asks again), and anyone who agreed to v2 keeps exactly v2 until then. The consent text is generated from the policy, so it cannot list fewer changes than the policy makes. All trial thresholds are still unvalidated placeholders. See [docs/autopilot-eligibility.md](docs/autopilot-eligibility.md).
+- **New guardrails.** A trial candidate drops back to shadow on its own if `hook_read_limit` is followed by reads of more of the file at more than twice the shared rate, or if the `hook_large_output` hint is given and `trove_run` is then used in fewer than 10 percent of those sessions. If you installed hooks with v0.3.0 or earlier, run `trove hooks install --rewrite` again to get the counter.
+- **`output_trimmer` declares its overhead.** Its marker is netted inside its estimate and the 351 tokens of Trove MCP tool definitions are charged per session, so Autopilot can trial it. It can be trialled through hooks alone, so subscription users can too.
+- **A harder gateway.** A 5-minute whole-request read timeout (streamed responses are not limited), a 1 GiB cap on request bodies held in memory (an excess gets a plain 503 the agent retries), and free-text redaction that now also covers AWS, GitHub, Google, Slack, Stripe and npm keys and PEM private keys.
+- **Security and supply chain.** A full [security document](docs/security.md) listing every control and what it does not protect against, a fuller [SECURITY.md](SECURITY.md) with how to verify a release, Dependabot, CodeQL and `go mod verify` in CI, cosign verification in `install.sh`, SLSA build provenance on release archives (`gh attestation verify`), a secret scan over tracked files, and a reproducible-build check. The provenance and rebuild checks are new and unproven on a release.
+
+Known gaps are listed in the changelog. The main one: Autopilot's thresholds are placeholders, and `output_trimmer` and `hook_large_output` have no benchmark study, so their trials on your own sessions are their only evidence.
+
 ## Measured results
 
 > [!IMPORTANT]
@@ -237,7 +265,7 @@ The history report, fixes, hooks and MCP server do. The gateway is for API-key u
 <details>
 <summary><b>Which agents and versions?</b></summary>
 
-Claude Code and Codex CLI. See [supported agents](docs/supported-agents.md) for what has and has not been tested.
+Claude Code and Codex CLI, plus an experimental OpenCode plugin. See [Supported agents](#supported-agents) above, and [docs/supported-agents.md](docs/supported-agents.md) for the test record. Codex support has not been run on a real install yet.
 
 </details>
 
