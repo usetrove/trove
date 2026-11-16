@@ -9,9 +9,12 @@
 #   TROVE_BASE_URL     release download base (default: GitHub Releases); for testing
 #   TROVE_COSIGN       cosign command to use (default: cosign); for testing
 #   TROVE_REQUIRE_SIGNATURE  set to 1 to refuse to install unless cosign verifies the release signature
+#   TROVE_NO_PATH      set to 1 to leave PATH alone (the default is to add the install folder to your user PATH)
+#   TROVE_PATH_SCOPE   which PATH to edit: User (default) or Process; Process is for testing
 #   TROVE_ARCH         override CPU detection (amd64|arm64); for testing
 #
-# Like install.sh, this never edits your PATH or any shell profile: it prints the one command that would.
+# So that 'trove' works straight away, this adds the install folder to your USER PATH (no administrator needed, and it
+# says so). It edits nothing else: no shell profile, no machine-wide setting.
 
 function Install-Trove {
     $ErrorActionPreference = 'Stop'
@@ -105,10 +108,30 @@ function Install-Trove {
     }
 
     Write-Host "Installed $dest\trove.exe ($signature)."
-    $onPath = ($env:Path -split ';') | Where-Object { $_.TrimEnd('\') -ieq $dest.TrimEnd('\') }
-    if (-not $onPath) {
-        Write-Host "Add it to your PATH to run 'trove' from anywhere (open a new terminal afterwards):"
-        Write-Host "  [Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path','User') + ';$dest', 'User')"
+    $same = { param($entry) $entry -and ($entry.TrimEnd('\') -ieq $dest.TrimEnd('\')) }
+    if (-not (($env:Path -split ';') | Where-Object { & $same $_ })) {
+        if ($env:TROVE_NO_PATH -eq '1') {
+            Write-Host "TROVE_NO_PATH=1 is set, so PATH was left alone. To run 'trove' from anywhere, add $dest to your PATH."
+        }
+        else {
+            $scope = if ($env:TROVE_PATH_SCOPE) { $env:TROVE_PATH_SCOPE } else { 'User' }
+            try {
+                # Read the stored value without expanding %VARIABLES%, so entries that use them are written back unchanged.
+                $current = if ($scope -eq 'User') { (Get-Item -Path 'HKCU:\Environment').GetValue('Path', '', 'DoNotExpandEnvironmentNames') } else { [Environment]::GetEnvironmentVariable('Path', $scope) }
+                if (-not (($current -split ';') | Where-Object { & $same $_ })) {
+                    $new = if ($current) { $current.TrimEnd(';') + ';' + $dest } else { $dest }
+                    [Environment]::SetEnvironmentVariable('Path', $new, $scope)
+                }
+                if (-not (($env:Path -split ';') | Where-Object { & $same $_ })) {
+                    $env:Path = $env:Path.TrimEnd(';') + ';' + $dest   # this window too, so 'trove' works right now
+                }
+                Write-Host "Added $dest to your $scope PATH, so 'trove' works now in this window and in new ones."
+                Write-Host "To undo that: Settings > System > About > Advanced system settings > Environment Variables, then remove it from Path."
+            }
+            catch {
+                Write-Host "Could not update PATH ($($_.Exception.Message)). To run 'trove' from anywhere, add $dest to your PATH."
+            }
+        }
     }
 }
 

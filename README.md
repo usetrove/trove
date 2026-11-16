@@ -32,25 +32,29 @@ One small program. No account. Nothing to sign up for.
 
 Every path checks the download against the release's SHA-256 checksums before it runs anything.
 
-**macOS / Linux (supported):**
-```bash
-curl -fsSL https://raw.githubusercontent.com/usetrove/trove/main/install.sh | sh
-```
-This installs the latest release (v0.4.0). To pin a version, set `TROVE_VERSION=0.4.0` before `sh`. If you have [cosign](https://github.com/sigstore/cosign) installed, the script also verifies the release's signature; set `TROVE_REQUIRE_SIGNATURE=1` to refuse an install it cannot verify.
-
-**Homebrew (macOS / Linux):**
+**macOS / Linux, with Homebrew:**
 ```bash
 brew install usetrove/trove/trove
 ```
 
 **Windows (PowerShell, experimental):**
 ```powershell
-irm https://raw.githubusercontent.com/usetrove/trove/main/install.ps1 | iex
+irm https://github.com/usetrove/trove/raw/main/install.ps1 | iex
 ```
-This installs `trove.exe` for your user (no administrator needed) into `%LOCALAPPDATA%\Programs\trove`, after checking the download against the release's SHA-256 checksums (and its cosign signature, if cosign is installed). It refuses to install on a mismatch, and it never edits your `PATH`: it prints the one command that would. Set `$env:TROVE_VERSION = "0.4.0"` first to pin a version.
+That is all there is to it. It installs `trove.exe` for your user (no administrator needed) and adds it to your user `PATH`, so `trove` works straight away in that window and in new ones. It checks the download against the release's SHA-256 checksums (and its cosign signature, if cosign is installed) and refuses to install on a mismatch. To leave your `PATH` alone, set `$env:TROVE_NO_PATH = "1"` first; to pin a version, set `$env:TROVE_VERSION = "0.4.0"`. To undo the `PATH` change, remove the folder under Settings, System, About, Advanced system settings, Environment Variables.
 
 <details>
-<summary>Prefer to download and check it yourself?</summary>
+<summary>macOS or Linux without Homebrew</summary>
+
+```bash
+curl -fsSL https://github.com/usetrove/trove/raw/main/install.sh | sh
+```
+This installs the latest release (v0.4.0) into `~/.local/bin`. To pin a version, set `TROVE_VERSION=0.4.0` before `sh`. If you have [cosign](https://github.com/sigstore/cosign) installed, the script also verifies the release's signature; set `TROVE_REQUIRE_SIGNATURE=1` to refuse an install it cannot verify. It never edits your shell profile: if `~/.local/bin` is not on your `PATH`, it tells you to add it.
+
+</details>
+
+<details>
+<summary>Windows: prefer to download and check it yourself?</summary>
 
 Download `trove_0.4.0_windows_amd64.zip` (or `windows_arm64`) from the [release page](https://github.com/usetrove/trove/releases/tag/v0.4.0), check it, then unzip it. In PowerShell (replace the version with your release's):
 
@@ -272,6 +276,7 @@ Nothing changes until you approve it. Each change is shown first, the original f
 | `trove hooks install` | Hooks in Claude Code and Codex CLI settings | `trove hooks uninstall` |
 | `trove mcp install` | Registers the Trove MCP server with your agents | `trove mcp uninstall` |
 | `trove gateway start --background` | Installs a user background service | `trove gateway stop`, or `trove uninstall` |
+| Windows install script (`install.ps1`) | Adds its folder to your user `PATH` (opt out with `TROVE_NO_PATH=1`); changes no other setting | Remove the folder from Path under Environment Variables, and delete `%LOCALAPPDATA%\Programs\trove` |
 | Normal use | Creates `~/.trove` (database, backups, settings) | `trove uninstall --purge-data` |
 
 Shell rc files are never touched. Trove never reads or writes your API keys.
