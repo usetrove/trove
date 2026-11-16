@@ -16,7 +16,8 @@ function Check([string]$name, [bool]$ok) {
 }
 
 # Runs the installer the way users do (read it, pipe it to Invoke-Expression) and returns everything it printed.
-function Run-Installer { (Get-Content -Raw $installer | Invoke-Expression *>&1 | Out-String) }
+# -Width keeps a long line (the install path is long on CI) from being wrapped, which would split it across two lines.
+function Run-Installer { (Get-Content -Raw $installer | Invoke-Expression *>&1 | Out-String -Width 4096) }
 
 # How many PATH entries equal the install folder.
 function Count-OnPath([string]$pathValue, [string]$folder) {
