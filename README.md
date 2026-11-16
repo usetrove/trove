@@ -1,8 +1,6 @@
 <div align="center">
 
-# Trove
-
-**The efficiency layer for AI coding agents.**
+<img src="docs/assets/trove-banner.svg" alt="Trove: the efficiency layer for AI coding agents" width="720">
 
 Find the tokens your agent wastes, fix them with changes you approve one at a time, and check that your results did not suffer.
 
