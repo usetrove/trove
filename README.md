@@ -66,10 +66,14 @@ The Claude Code plugin's hooks on Windows also need `sh` (Git Bash) on your `PAT
 
 ### 2. Add the Claude Code plugin
 
+A Claude Code plugin is an add-on for Claude Code, like a browser extension. It is how Trove gets inside your sessions: it registers small **hooks** (commands Claude Code runs when a session starts, around tool calls and when a session ends), adds the `/trove:` slash commands, and includes a launcher that finds the `trove` program. Type these in a terminal:
+
 ```
 claude plugin marketplace add usetrove/trove
 claude plugin install trove@trove
 ```
+
+The launcher uses the program you installed in step 1. If it finds none, it downloads the matching release itself and checks its SHA-256 first. So for Claude Code on its own, this step is enough; step 1 is what gives you the `trove` command in a terminal.
 
 Then start a session and run **`/trove:setup`**. It shows each change, says what it costs, and asks before anything is turned on.
 
@@ -111,6 +115,21 @@ $env:TROVE_DATA_DIR = Join-Path $env:TEMP "trove-demo"
 </details>
 
 Always set `TROVE_DATA_DIR` (or pass `--data-dir`) when experimenting. Without it Trove uses `~/.trove`. What to expect, the API-key gateway walkthrough, configuration and checksum verification are in [docs/getting-started.md](docs/getting-started.md). If you have Go and want the program on your `PATH`, `go install github.com/usetrove/trove/cmd/trove@latest` builds it from source (no checksum check).
+
+## What using Trove looks like
+
+Once it is set up there is nothing to run day to day:
+
+1. **Install and add the plugin** (the two steps above).
+2. **Start Claude Code.** On the first session Trove reads your existing history (read-only, metadata only) and shows a report: what you spent, the waste it found, and what it would suggest.
+3. **Run `/trove:setup` once.** It shows one screen, in plain English, and asks you to choose **Turn on Autopilot** or **Just show me reports**. It also offers optional extras (a status line, Trove's MCP tools, a scout subagent) and shows what each costs in tokens first. **Nothing is switched on until you say yes.**
+4. **Use Claude Code as normal.** With Autopilot on, each optimization starts in **shadow**, where it runs on a copy and only records what it would have saved, after paying for its own overhead. It is promoted only if it clears the bar over enough of your own sessions, and only at the start of a new session, never in the middle of one. Once on, it is measured, and it drops back to shadow by itself if the net saving goes negative, outcomes get worse, or errors rise. If anything fails inside Trove, your original request is forwarded unchanged.
+5. **Glance at it now and then.** A status line, a one-line receipt when a session ends, and a weekly summary. You are only interrupted when a decision is needed, such as a rollback.
+
+Most people need three commands: `/trove:setup` once, `trove` for the report, and `trove status` to see what is on. To step back, use `trove autopilot pause`, `trove autopilot off`, `trove undo` or `trove uninstall`. The other commands are optional: finer control (`trove fix`, `trove hooks install`, `trove mcp install`), the API-key gateway, and developer tools (`trove bench`, `trove stress`).
+
+> [!NOTE]
+> Autopilot is a first version: its thresholds are unvalidated placeholders, and the riskier optimizations need a separate, second yes (`trove autopilot trials on`). The plugin and hook paths have not yet been run on a real Claude Code install. See [Supported agents](#supported-agents) and [Measured results](#measured-results).
 
 ## How it works
 
@@ -308,7 +327,7 @@ We welcome your feedback. Run `trove feedback`: it builds a GitHub issue with ve
 
 Trove collects nothing by default. It has no analytics or telemetry that runs on its own, and the only network calls it makes are the ones below. In gateway mode it forwards your own API requests to the provider you configured, as your agent would have. What it stores locally (token counts, sizes, hashes, model names, timings, outcome signals) is listed in [PRIVACY.md](PRIVACY.md); you can delete all of it with `trove uninstall --purge-data`.
 
-If you want to help check Trove's savings claims, `trove contribute` shows a small anonymous summary (counts, whole-number percents and fixed labels; no prompts, paths, model names or dollar amounts), and `trove contribute --export file.json` saves it so you can share it yourself. Trove sends nothing unless you also run `trove contribute enable`, which shows the exact text, asks, and then shares that same summary at most once a week until you run `trove contribute disable`. It carries a random install id so you can ask for your data to be deleted. Details are in [PRIVACY.md](PRIVACY.md).
+If you want to help check Trove's savings claims, `trove contribute` shows a small anonymous summary (counts, whole-number percents and fixed labels; no prompts, paths, model names or dollar amounts), and `trove contribute --export file.json` saves it so you can share it yourself. Trove sends nothing unless you also run `trove contribute enable`, which shows the exact text, asks, and then shares that same summary at most once a week until you run `trove contribute disable`. It carries a random install id so you can ask for your data to be deleted. The code of the server that receives these summaries is in [`server/worker`](server/worker/README.md), so you can read exactly what it does with them. It never sees your prompts, code, paths, keys or individual requests: Trove never sends those anywhere. Details are in [PRIVACY.md](PRIVACY.md).
 
 ## Documentation
 
