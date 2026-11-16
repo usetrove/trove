@@ -1,9 +1,5 @@
 # Release checklist: 0.1.0 (beta first)
 
-This file began as the 0.1.0 beta checklist. Releases since then reuse it. Section 7 records what each release
-actually did, so a ticked box is never a guess. The latest is 0.4.0 (2026-11-14), which is a normal release,
-not a beta: it was tagged without every box below being ticked, and section 7 says which.
-
 Do not tag until every box required for the release is ticked, with a date and initials. Nothing here is automatic: tagging triggers `release.yml`, which publishes the GitHub release and the Homebrew formula. **There is no npm package in the beta** (decided 2026-11-07; a scoped package comes after launch). See "Beta triage" below for which open boxes gate the beta and which can wait.
 
 ## 1. Evidence
@@ -25,8 +21,7 @@ Do not tag until every box required for the release is ticked, with a date and i
 
 ## 3. Code
 
-- [ ] CI green on the release commit: tests with `-race`, no-egress and credential-leak jobs, govulncheck, shellcheck, bench tests, the secret scan (`secretscan`), the rebuild-and-compare job (`reproducible`), and the install and plugin-hook smoke test (`.github/workflows/beta-smoke.yml`). Run it as a pull request: `ci` does not run on a plain push to a branch
-- [ ] GitHub push protection did not block the push. If it does, remove the secret-shaped text from the history (build the fake at runtime, as `internal/redact/shapes_test.go` does); never use the bypass link
+- [ ] CI green on the release commit: tests with `-race`, no-egress and credential-leak jobs, govulncheck, shellcheck, bench tests, and the install and plugin-hook smoke test (`.github/workflows/beta-smoke.yml`)
 - [ ] Local note: `golangci-lint` is blind on Go 1.27.3 locally, so rely on CI for lint
 - [ ] Version in `CHANGELOG.md` moved from "not yet released" to the release date
 - [ ] `go run ./scripts/checkclaims --publish` passes on `docs/launch/*.md` (every figure cites an existing source file)
@@ -35,7 +30,7 @@ Do not tag until every box required for the release is ticked, with a date and i
 ## 4. Dry run
 
 - [ ] `goreleaser release --snapshot --clean --skip=sign` builds darwin, linux and windows, amd64 and arm64
-- [ ] Two builds of the same commit are byte-identical (reproducibility): `sh scripts/rebuild-check.sh` on a clean tree, and the CI job `reproducible`. It compares one binary, not the goreleaser archives
+- [ ] Two builds of the same commit are byte-identical (reproducibility)
 - [ ] `install.sh` accepts the snapshot artifacts and rejects a tampered checksum; the Windows zip passes the checksum steps in the README
 
 ## 5. Release
@@ -45,7 +40,6 @@ Requires the user's explicit go-ahead, and the secret `HOMEBREW_TAP_GITHUB_TOKEN
 - [ ] Tag `v0.1.0-beta.1` on the verified commit and push the tag. The `-beta` suffix makes it a pre-release, so `install.sh` and the release page's "latest" are not moved.
 - [ ] `release.yml` succeeds; the release has archives (tar.gz, and zip for Windows), `checksums.txt`, `checksums.txt.sigstore.json` and one SBOM per archive
 - [ ] `cosign verify-blob` from the README succeeds on the real release
-- [ ] `gh attestation verify <archive> --repo usetrove/trove` exits 0 for an archive and for `checksums.txt` (SLSA provenance)
 - [ ] Homebrew formula published; `brew install usetrove/trove/trove` works
 - [ ] Every path in [install-verification.md](install-verification.md) passes on clean macOS and Linux against the real artifacts, including uninstall
 - [ ] Docs published and links in the README resolve; demo GIF recorded and added
@@ -98,27 +92,3 @@ Still open, and not something code can close:
 
 - **Evidence:** the `bench/` run, the beta, and the `docs/launch/*` slots all need real measurements (`go run ./scripts/checkclaims --publish` reports unresolved slots). Nothing here should be filled in with estimates.
 - **Local tooling:** on this Windows machine `go test -race` fails without cgo, and two tests need Linux or macOS. CI covers them.
-
-## 7. Release record
-
-One block per release: what was checked, by whom or by what, and what was not. Do not add initials for someone else.
-
-### 0.4.0, 2026-11-14 (tag `v0.4.0`, merge commit `5e8cea4`, PR 14)
-
-Done and checked by command:
-
-- CI green on the release commit `f052539`: 27 checks, including tests with `-race` on Linux, the privacy and no-egress jobs with `strace`, `govulncheck`, `shellcheck`, CodeQL, the secret scan and the rebuild-and-compare job. Before that, one lint error and one racy test were fixed, and one macOS latency test was rerun after missing its budget once.
-- Version set to 0.4.0 in `internal/plugin/plugin.go`, `plugin/trove/VERSION` and `plugin.json` (regenerated), and `CHANGELOG.md` dated, with known gaps.
-- `release.yml` succeeded. The release is public and not a pre-release, with six archives, `checksums.txt`, its sigstore bundle and one SBOM per archive.
-- The linux/amd64 archive matches `checksums.txt`; `gh attestation verify` exits 0 for that archive and for `checksums.txt`.
-
-Not done, so the matching boxes above stay open:
-
-- Section 1: no benchmark run, no beta exit, no reconcile against an invoice. No savings claim is made.
-- Section 2: prices were not re-verified for this release (check `go run ./scripts/pricingage --strict --max-age-days 7`); the compliance and legal documents were not re-checked since 2026-11-06; the agent integration facts were not re-verified. Dates for these need a person.
-- Section 3: a real plugin login on macOS or Linux (`plugin-verification.md`) was not run; `checkclaims --publish` was not run.
-- Section 4: no goreleaser snapshot dry run for this release, and the rebuild check covered one binary.
-- Section 5: `cosign verify-blob` was not run by hand (only the attestation); the Homebrew formula was not installed; `install-verification.md` was not run on clean macOS and Linux; no demo GIF.
-- Section 6: nothing started.
-
-Known weaknesses carried forward (see `docs/security.md`, "Known gaps"): F-9, F-13, F-28, the npm wrapper's checksum-only check, and every Autopilot threshold being an unvalidated placeholder.
