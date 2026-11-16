@@ -43,8 +43,14 @@ This installs the latest release (v0.4.0). To pin a version, set `TROVE_VERSION=
 brew install usetrove/trove/trove
 ```
 
+**Windows (PowerShell, experimental):**
+```powershell
+irm https://raw.githubusercontent.com/usetrove/trove/main/install.ps1 | iex
+```
+This installs `trove.exe` for your user (no administrator needed) into `%LOCALAPPDATA%\Programs\trove`, after checking the download against the release's SHA-256 checksums (and its cosign signature, if cosign is installed). It refuses to install on a mismatch, and it never edits your `PATH`: it prints the one command that would. Set `$env:TROVE_VERSION = "0.4.0"` first to pin a version.
+
 <details>
-<summary><b>Windows (experimental)</b></summary>
+<summary>Prefer to download and check it yourself?</summary>
 
 Download `trove_0.4.0_windows_amd64.zip` (or `windows_arm64`) from the [release page](https://github.com/usetrove/trove/releases/tag/v0.4.0), check it, then unzip it. In PowerShell (replace the version with your release's):
 
@@ -58,9 +64,9 @@ Expand-Archive trove.zip -DestinationPath "$HOME\trove"
 & "$HOME\trove\trove.exe" doctor
 ```
 
-The Claude Code plugin's hooks on Windows also need `sh` (Git Bash) on your `PATH`; `trove doctor` warns when it is missing.
-
 </details>
+
+The Claude Code plugin's hooks on Windows also need `sh` (Git Bash) on your `PATH`; `trove doctor` warns when it is missing.
 
 ### 2. Add the Claude Code plugin
 

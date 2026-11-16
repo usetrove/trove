@@ -118,6 +118,17 @@ jobs:
       - run: shellcheck install.sh plugin/trove/bin/trove
       - run: sh install_test.sh
 
+  install-script-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: install.ps1 on Windows PowerShell 5.1 (what most Windows users have)
+        shell: powershell
+        run: .\install_test.ps1
+      - name: install.ps1 on PowerShell 7
+        shell: pwsh
+        run: ./install_test.ps1
+
   vulncheck:
     runs-on: ubuntu-latest
     steps:
