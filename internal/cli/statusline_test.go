@@ -110,8 +110,14 @@ func TestStatusLineReadsClaudeCodeInputAndIsFast(t *testing.T) {
 	sort.Slice(ds, func(i, j int) bool { return ds[i] < ds[j] })
 	p95 := ds[len(ds)*95/100]
 	t.Logf("status-line over 50,000 requests: median %v, p95 %v", ds[len(ds)/2], p95)
-	if p95 > 50*time.Millisecond {
-		t.Errorf("p95 is %v; the status line must finish in under 50 ms", p95)
+	// The budget is 50 ms for a normal build. The race detector slows code roughly ten times, so under it the same check
+	// allows ten times as long; the strict budget is still enforced by the ordinary (non-race) test run.
+	budget := 50 * time.Millisecond
+	if raceEnabled {
+		budget *= 10
+	}
+	if p95 > budget {
+		t.Errorf("p95 is %v; the status line must finish in under %v", p95, budget)
 	}
 }
 
