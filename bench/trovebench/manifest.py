@@ -39,6 +39,7 @@ class Task:
     dataset_commit: str = ""  # pinned revision of the dataset this came from
     tags: tuple[str, ...] = ()
     attribution: str = ""     # required credit line for upstream content
+    repo_path: str = ""       # prebuilt image: the repo is already checked out at this path (e.g. /testbed), so skip clone and setup
     base_dir: str = ""        # directory of the manifest file; set by the loader, never read from YAML
 
 
@@ -66,7 +67,7 @@ def parse_task(data: Any, origin: str = "<memory>") -> Task:
             raise ManifestError(f"{origin}: '{key}' must be a list of strings.")
         values[key] = tuple(raw)
     for key in ("id", "source", "repo", "base_commit", "license", "prompt", "image", "success_cmd",
-                "issue_url", "dataset_commit", "attribution"):
+                "issue_url", "dataset_commit", "attribution", "repo_path"):
         if key in values and not isinstance(values[key], str):
             raise ManifestError(f"{origin}: '{key}' must be a string.")
     if isinstance(values["timeout_s"], bool) or not isinstance(values["timeout_s"], int) or values["timeout_s"] <= 0:

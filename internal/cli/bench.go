@@ -26,6 +26,7 @@ func newBench(a *App) *cobra.Command {
 	}
 	c.AddCommand(newJourneys(a))
 	c.AddCommand(newStress(a))
+	c.AddCommand(newWorkflows(a))
 	return c
 }
 

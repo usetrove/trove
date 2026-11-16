@@ -20,7 +20,7 @@ of `plugins/opencode`. The package is not published to npm yet, so install it fr
   `file://` URL. The V2 docs say a configured local path must be a directory.
 - **OpenCode 1.x** (`opencode-ai`): put the folder where OpenCode loads local plugins (`.opencode/plugins/` in a
   project, `~/.config/opencode/plugins/` for everything) or list it under `plugin`. How a *folder* plugin is
-  loaded in 1.x is not verified (see [opencode-verification.md](opencode-verification.md)).
+  loaded in 1.x is not verified.
 
 One package serves both: its default export has `server` (1.x) and `setup` (2.x). OpenCode ships both plugin APIs
 side by side today and V1 plugins do not run in V2 (V2 migration guide, `anomalyco/opencode`, read 2026-11-05).
@@ -90,8 +90,7 @@ config file for a key if you want 1.x to change content. 2.x has no such limit.
 | A plugin that changes request content | **Not addressed by any of the texts reviewed** | None of the three providers' terms, as read, says whether a third-party plugin may modify prompts or tool results while the user signs in normally. This document does not claim it is permitted. |
 
 So: ChatGPT logins are held (shadow-only) until OpenAI's own terms have been read and confirm the use; Copilot is
-enabled because GitHub supports OpenCode explicitly, with the caveat in the last row. Decision recorded in
-[compliance.md](compliance.md).
+enabled because GitHub supports OpenCode explicitly, with the caveat in the last row..
 
 ## Measurement
 
@@ -148,7 +147,7 @@ call that takes longer than its timeout is abandoned and the original is used.
 
 ## Known gaps
 
-- Not run on a real OpenCode yet. Everything in [opencode-verification.md](opencode-verification.md) is unchecked
+- Not run on a real OpenCode yet. Everything on the OpenCode verification checklist is unchecked
   until it is: how a local folder plugin loads in 1.x, whether a changed `output.args` is what the tool then runs
   with, whether `tool.execute.after` sees output before OpenCode's own truncation (2000 lines / 50 KB), whether
   assigning a new `Request` to `event.request` is honoured in 2.x (the docs only show header changes), the V2

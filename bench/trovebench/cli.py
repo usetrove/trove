@@ -78,7 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("-n", type=int, default=10, help="how many tasks")
     f.add_argument("--seed", type=int, default=1, help="seed for the random subset")
     f.add_argument("--commit", help="polyglot: exact commit to check out and record")
-    f.add_argument("--image", default="python:3.9-slim", help="swebench: base Docker image for the environment")
+    f.add_argument("--image", default=None,
+                   help="swebench: build our own environment on this base image (for example python:3.9-slim) instead "
+                        "of using the official prebuilt SWE-bench image (the default; recommended)")
     m = sub.add_parser("mine", help="mine tasks from recently merged PRs that close issues (needs GITHUB_TOKEN)")
     m.add_argument("--repos", type=Path, default=BENCH / "repos.yaml", help="allowlist file (see repos.example.yaml)")
     m.add_argument("--since", required=True, help="only PRs merged on or after this date, YYYY-MM-DD")
@@ -276,7 +278,7 @@ def _cmd_fetch(args) -> int:
         rows, rev = swebench.fetch_rows(lambda u: http_get(u))
         tasks = swebench.generate(rows, rev, out, n=args.n, seed=args.seed, image=args.image)
         print(f"Wrote {len(tasks)} SWE-bench Verified task(s) to {out}, dataset revision {rev[:10]}. "
-              "Run `validate` next: environments are built from the repo and many older instances will be rejected.")
+              "Run `validate` next. The first run downloads each task's official image (these are large), so check free disk first.")
     return 0
 
 
@@ -300,9 +302,14 @@ def _cmd_validate(args) -> int:
     cfg = load_config(args.config)
     agent = get_agent(cfg.agent)
     bad = 0
-    for t in load_tasks(args.tasks):
+    tasks = load_tasks(args.tasks)
+    total = len(tasks)
+    for i, t in enumerate(tasks, 1):
+        # Progress notes go to stderr so a piped result file keeps only result lines; results stay line-leading
+        # OK / REJECTED so `grep '^OK'` keeps working.
+        print(f"[{i}/{total}] validating {t.id} ...", file=sys.stderr, flush=True)
         v = validate_task(t, agent, cfg.claude_version)
-        print(f"{v.status.upper():9} {v.task_id}: {v.reason}")
+        print(f"{v.status.upper():9} {v.task_id}: {v.reason}  [{i}/{total} {100 * i // total}%]", flush=True)
         bad += v.status == "rejected"
     return 1 if bad else 0
 

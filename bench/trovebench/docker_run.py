@@ -6,10 +6,13 @@ import json
 import os
 import shutil
 import tempfile
+import threading
 import time
 from dataclasses import dataclass, field
+from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
+from typing import Callable, Iterator
 
 from . import docker_env as de
 from .agent.base import Agent
@@ -32,6 +35,33 @@ class RunEnvError(RuntimeError):
     pass
 
 
+def _say(msg: str) -> None:
+    print(msg, flush=True)   # flush, or `| tee` shows nothing until the end
+
+
+HEARTBEAT_S = 60
+
+
+@contextmanager
+def heartbeat(what: str, log: Callable[[str], None], every_s: float = HEARTBEAT_S) -> Iterator[None]:
+    """Print "<what> ... still going (Nm Ss)" every `every_s` seconds while a long step runs."""
+    stop = threading.Event()
+    t0 = time.monotonic()
+
+    def beat() -> None:
+        while not stop.wait(every_s):
+            m, sec = divmod(int(time.monotonic() - t0), 60)
+            log(f"      {what} ... still going ({m}m{sec:02d}s)")
+
+    th = threading.Thread(target=beat, daemon=True)
+    th.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        th.join(timeout=1)
+
+
 @dataclass
 class ContainerRunner:
     agent: Agent
@@ -50,6 +80,7 @@ class ContainerRunner:
     arch: str = ""
     # JSON written by `go run ./scripts/hookprobe --live`; required by hooks conditions.
     hook_capabilities: Path | None = None
+    log: Callable[[str], None] = _say
 
     # --- batch setup ----------------------------------------------------------------
     def prepare(self, task_ids: list[str]) -> None:
@@ -59,13 +90,17 @@ class ContainerRunner:
         bin_dir = self.batch_dir / "bin"
         bin_dir.mkdir(parents=True, exist_ok=True)
         self.trove_bin = bin_dir / "trove"
+        self.log("  building the Trove binary ...")
         de.go_build_linux("./cmd/trove", self.trove_bin, self.arch)
         if self.fake:
             self.fake_bin = bin_dir / "benchfake"
             de.go_build_linux("./bench/tools/benchfake", self.fake_bin, self.arch)
-        for tid in task_ids:
+        for n, tid in enumerate(task_ids, 1):
             if tid not in self.images:
-                self.images[tid] = de.build_task_image(self.tasks[tid], self.agent, self.claude_version)
+                self.log(f"  [{n}/{len(task_ids)}] task image for {tid} (first time downloads it) ...")
+                with heartbeat("image", self.log):
+                    self.images[tid] = de.build_task_image(self.tasks[tid], self.agent, self.claude_version)
+        self.log(f"  {len(task_ids)} task image(s) ready.")
 
     def versions(self) -> dict:
         any_image = next(iter(self.images.values()))[0] if self.images else None
@@ -113,6 +148,7 @@ class ContainerRunner:
 
     def _run_in(self, c: de.Container, td: Path, run_dir: Path, spec: RunSpec, task: Task, cond: Condition,
                 secrets: tuple[str, ...]) -> RunRecord:
+        self.log("      container up; setting up (gateway/hooks if the condition uses them) ...")
         c.exec("mkdir -p /bench", workdir="/")
         (td / "prompt.txt").write_text(task.prompt, encoding="utf-8", newline="\n")
         c.put(td / "prompt.txt", "/bench/prompt.txt")
@@ -161,15 +197,19 @@ class ContainerRunner:
 
         timeout = min(task.timeout_s, self.run_timeout_s)
         t0 = time.monotonic()
-        res = c.exec(self.agent.command(model=self.model, max_budget_usd=self.run_cap_usd, prompt_path="/bench/prompt.txt",
-                                           effort=spec.effort, bare=not cond.uses_hooks),
-                     timeout=timeout, env=agent_env)
+        self.log(f"      agent working (limit {timeout // 60} min, ${self.run_cap_usd:.2f}) ...")
+        with heartbeat("agent", self.log):
+            res = c.exec(self.agent.command(model=self.model, max_budget_usd=self.run_cap_usd, prompt_path="/bench/prompt.txt",
+                                               effort=spec.effort, bare=not cond.uses_hooks),
+                         timeout=timeout, env=agent_env)
         wall = time.monotonic() - t0
         (run_dir / "agent_stdout.txt").write_text(redact(res.out, secrets), encoding="utf-8", newline="\n")
         (run_dir / "agent_stderr_tail.txt").write_text(redact(res.err[-4000:], secrets), encoding="utf-8", newline="\n")
 
-        grade = c.exec(" && ".join([*task.grading_setup, task.success_cmd]) if task.grading_setup else task.success_cmd,
-                       timeout=GRADE_TIMEOUT_S)
+        self.log(f"      agent finished in {wall:.0f}s; grading ...")
+        with heartbeat("grading", self.log):
+            grade = c.exec(" && ".join([*task.grading_setup, task.success_cmd]) if task.grading_setup else task.success_cmd,
+                           timeout=GRADE_TIMEOUT_S)
         (run_dir / "grading_tail.txt").write_text(redact((grade.out + grade.err)[-4000:], secrets), encoding="utf-8", newline="\n")
 
         stats = None

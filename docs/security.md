@@ -4,7 +4,6 @@ Written 2026-11-14. This is the one place that lists every security control in T
 does not, and the test that keeps it in place. It does not repeat the reasoning in the other three documents:
 
 - [threat-model.md](threat-model.md): the attackers considered and the residual risks (R1 to R8).
-- [security-findings.md](security-findings.md): the review's findings and their status.
 - [../PRIVACY.md](../PRIVACY.md) and [data.md](data.md): what is stored, field by field.
 
 How to report a problem, and how to check a release, is in [../SECURITY.md](../SECURITY.md).
@@ -101,7 +100,7 @@ Autopilot changes what the model sees, so it has its own controls.
 | Hook events hold a hashed session key, a kind and two numbers; unknown kinds are dropped and the table refuses them | `TestNewKindsSurviveTheSpoolIntoTheDatabase`, `TestHookGuardrailKindsMigrationKeepsExistingRows` |
 | A trial reads the agent's local history only while a hook trial runs, only with `[history] enabled`, with a bounded line reader, counts and hashes only, within a 700 ms budget | `trialscan` tests, `privacy` canary |
 
-All thresholds are **placeholders** until the benchmark runbook sets them (`docs/benchmark-runbook.txt`, Part F).
+All thresholds are **placeholders** until the benchmark runbook sets them.
 That is a statement about accuracy, not about security, but it is repeated here so nobody reads a threshold as proven.
 
 ### 6. Supply chain and releases

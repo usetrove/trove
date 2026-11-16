@@ -21,7 +21,7 @@ request or response is modified in this mode; Trove only records metadata.
   Point the matching Claude Code variable at the route: `ANTHROPIC_VERTEX_BASE_URL`,
   `ANTHROPIC_FOUNDRY_BASE_URL`, `ANTHROPIC_BEDROCK_BASE_URL`, each set to
   `http://127.0.0.1:8787/<route>` (names per the Claude Code docs, checked 2026-11-04). The cloud
-  routes are tested with fake servers only, not live (see `docs/compliance.md`).
+  routes are tested with fake servers only, not live.
 
 ## Guards
 - Binds to loopback only (`--listen` with a non-loopback address is refused).
@@ -104,7 +104,6 @@ Add the header `X-Trove-Kind: automated` (or `interactive`) to label a session; 
 Code: `ANTHROPIC_CUSTOM_HEADERS="X-Trove-Kind: automated"`. The header is removed before forwarding. Trove does not
 infer kind from the User-Agent. `trove report` shows spend by kind when any request declares one.
 
-See [legal-and-credentials.md](legal-and-credentials.md) for the provider terms behind these rules.
 
 ## What is recorded (metadata only)
 One row per response: provider, model, endpoint (no query string), streamed, status, latency, time to

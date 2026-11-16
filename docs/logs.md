@@ -1,6 +1,6 @@
 # Reading your agents' history
 
-Written 2026-10-29. Code: `internal/logs`. Step-by-step check: [logs-verification.md](logs-verification.md).
+Written 2026-10-29. Code: `internal/logs`.
 
 `trove` can report without the gateway. It reads the session history that Claude Code (and Codex CLI) already keep on your disk, works out what the usage cost and where tokens were wasted, and shows the same report. Run `trove`, wait a few seconds, read the report.
 
@@ -38,7 +38,7 @@ Facts Trove relies on for Claude Code:
 - Tool results arrive on later `user` lines, matched by `tool_use_id`. Their size and a hash (for spotting repeats) are kept; the text is dropped.
 - The cache write split (`ephemeral_5m` / `ephemeral_1h`) is present, so requests price exactly. A write with no split is left unpriced, as the gateway does.
 
-**Codex is unverified.** Codex was not installed where this was written and OpenAI's docs do not describe the session files. The token fields and `session_meta` / `turn_context` fields were checked in the open-source repo. The `{timestamp, type, payload}` wrapper and the tool-call item names come from community write-ups only. Check it on a real install with the steps in `logs-verification.md` before trusting Codex numbers.
+**Codex is unverified.** Codex was not installed where this was written and OpenAI's docs do not describe the session files. The token fields and `session_meta` / `turn_context` fields were checked in the open-source repo. The `{timestamp, type, payload}` wrapper and the tool-call item names come from community write-ups only. Check it on a real install before trusting Codex numbers.
 
 ## Format changes between versions
 

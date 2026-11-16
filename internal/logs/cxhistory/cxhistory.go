@@ -17,7 +17,7 @@
 // {"timestamp", "type", "payload"} with type session_meta, turn_context,
 // event_msg or response_item, and tool calls are response_item payloads of type
 // function_call (name, call_id) and function_call_output (call_id, output).
-// Run `trove logs scan` on a real install and check docs/logs-verification.md
+// Run `trove logs scan` on a real install and check the logs verification notes
 // before relying on these numbers. CODEX_HOME relocates the directory (documented).
 package cxhistory
 

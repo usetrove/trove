@@ -39,7 +39,7 @@ If a report is empty, your agent has probably not written history yet, or lives 
 
 ## Route Claude Code through the gateway (API key only)
 
-Skip this if you use a Claude Pro/Max subscription. The gateway refuses subscription traffic on purpose. It is the only part that edits your real agent config (`~/.claude/settings.json`, backed up first), so it is the one place the throwaway data folder does not protect you. Only the curl part of this path has been verified end to end; the Claude Code part has not been completed yet. Full steps, expected results and troubleshooting: [gateway-manual-test.md](gateway-manual-test.md).
+Skip this if you use a Claude Pro/Max subscription. The gateway refuses subscription traffic on purpose. It is the only part that edits your real agent config (`~/.claude/settings.json`, backed up first), so it is the one place the throwaway data folder does not protect you. Only the curl part of this path has been verified end to end; the Claude Code part has not been completed yet.
 
 1. Have `ANTHROPIC_API_KEY` set in the terminal you will start `claude` from. Trove never reads or stores it.
 2. Terminal A: `./trove gateway start` (stays running; Ctrl-C stops it). Default address is `127.0.0.1:8787`.
@@ -48,7 +48,7 @@ Skip this if you use a Claude Pro/Max subscription. The gateway refuses subscrip
 5. Use your agent, then `./trove gateway status` (request count should rise) and `./trove` (the report now includes gateway-measured numbers).
 6. To go back: `./trove undo`, then Ctrl-C the gateway. Background service mode (`--background`) works on macOS and Linux only.
 
-If you get a 401 "API-key authentication only", Claude Code is still using your claude.ai login; see the troubleshooting section of [gateway-manual-test.md](gateway-manual-test.md).
+If you get a 401 "API-key authentication only", Claude Code is still using your claude.ai login.
 
 ## Apply a fix, add the status line
 

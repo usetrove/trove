@@ -22,7 +22,7 @@ import (
 
 // The inputs in testdata/ are written from the examples in the agents' hook
 // documentation (code.claude.com/docs/en/hooks, learn.chatgpt.com/docs/hooks,
-// 2026-10-29/30), not captured from a live agent; docs/hooks-verification.md has
+// 2026-10-29/30), not captured from a live agent; the hooks verification notes have
 // the checks to run against a real install.
 
 const sessionID = "sess-abc-123"
@@ -742,7 +742,7 @@ func timeCalls(r *rig, paths []string, workers, n int) []time.Duration {
 
 // TestHandlerTiming checks the in-process time of one hook call: alone, and with
 // several hooks running at once. The process start-up on top of this is the Go
-// runtime's and is measured on the built binary (docs/hooks-verification.md).
+// runtime's and is measured on the built binary (the hooks verification notes).
 func TestHandlerTiming(t *testing.T) {
 	if testing.Short() {
 		t.Skip("timing test")
@@ -772,7 +772,7 @@ func TestHandlerTiming(t *testing.T) {
 		// last opened, at a fixed ~17 ms per open regardless of size (measured while
 		// building this test), and every hook call reads the journal the previous
 		// call appended to. So the 20 ms budget is only enforced elsewhere.
-		t.Logf("not enforcing the 20 ms budget on Windows; see docs/hooks-verification.md")
+		t.Logf("not enforcing the 20 ms budget on Windows; see the hooks verification notes")
 		return
 	}
 	if alone > 20*time.Millisecond {

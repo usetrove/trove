@@ -1,0 +1,229 @@
+{
+  "seed": 20261108,
+  "model": "claude-sonnet-5-5",
+  "pricing_date": "2026-11-08",
+  "ceiling": [
+    {
+      "name": "quick-question",
+      "tier": "everyday",
+      "saved_pct": 0,
+      "ceiling_pct": 6.5,
+      "tool_output_share_pct": 10.6
+    },
+    {
+      "name": "fix-failing-test",
+      "tier": "everyday",
+      "saved_pct": 0,
+      "ceiling_pct": 25.1,
+      "tool_output_share_pct": 32.5
+    },
+    {
+      "name": "debug-with-logs",
+      "tier": "everyday",
+      "saved_pct": 3.7,
+      "ceiling_pct": 27.8,
+      "tool_output_share_pct": 49.7
+    },
+    {
+      "name": "dependency-upgrade",
+      "tier": "everyday",
+      "saved_pct": 5.1,
+      "ceiling_pct": 11.7,
+      "tool_output_share_pct": 17.6
+    },
+    {
+      "name": "rename-across-codebase",
+      "tier": "everyday",
+      "saved_pct": 0,
+      "ceiling_pct": 36,
+      "tool_output_share_pct": 45.7
+    },
+    {
+      "name": "explore-and-review",
+      "tier": "everyday",
+      "saved_pct": 7,
+      "ceiling_pct": 36.6,
+      "tool_output_share_pct": 50.3
+    },
+    {
+      "name": "long-feature-session",
+      "tier": "everyday",
+      "saved_pct": 8.6,
+      "ceiling_pct": 56.9,
+      "tool_output_share_pct": 61.3
+    },
+    {
+      "name": "ci-failure-triage",
+      "tier": "heavy",
+      "saved_pct": 50.7,
+      "ceiling_pct": 64.3,
+      "tool_output_share_pct": 71
+    },
+    {
+      "name": "container-build-debug",
+      "tier": "heavy",
+      "saved_pct": 19.3,
+      "ceiling_pct": 36.7,
+      "tool_output_share_pct": 54.6
+    },
+    {
+      "name": "incident-log-forensics",
+      "tier": "heavy",
+      "saved_pct": 2.5,
+      "ceiling_pct": 65.7,
+      "tool_output_share_pct": 90.3
+    }
+  ],
+  "variants": [
+    {
+      "label": "shipped settings, sizes as scripted",
+      "everyday": {
+        "workflows": 7,
+        "median_saved_pct": 3.7,
+        "min_saved_pct": 0,
+        "max_saved_pct": 8.6
+      },
+      "heavy": {
+        "workflows": 3,
+        "median_saved_pct": 19.3,
+        "min_saved_pct": 2.5,
+        "max_saved_pct": 50.7
+      },
+      "key_lines": 698,
+      "key_lines_kept": 698,
+      "violations": 0
+    },
+    {
+      "label": "outputs half as large",
+      "everyday": {
+        "workflows": 7,
+        "median_saved_pct": 2.2,
+        "min_saved_pct": 0,
+        "max_saved_pct": 6.6
+      },
+      "heavy": {
+        "workflows": 3,
+        "median_saved_pct": 20.4,
+        "min_saved_pct": 2.5,
+        "max_saved_pct": 53.1
+      },
+      "key_lines": 505,
+      "key_lines_kept": 505,
+      "violations": 0
+    },
+    {
+      "label": "outputs twice as large",
+      "everyday": {
+        "workflows": 7,
+        "median_saved_pct": 4.9,
+        "min_saved_pct": 0,
+        "max_saved_pct": 10.7
+      },
+      "heavy": {
+        "workflows": 3,
+        "median_saved_pct": 18.6,
+        "min_saved_pct": 2.4,
+        "max_saved_pct": 46.4
+      },
+      "key_lines": 1076,
+      "key_lines_kept": 1076,
+      "violations": 0
+    },
+    {
+      "label": "outputs four times as large",
+      "everyday": {
+        "workflows": 7,
+        "median_saved_pct": 4.6,
+        "min_saved_pct": 0,
+        "max_saved_pct": 12.2
+      },
+      "heavy": {
+        "workflows": 3,
+        "median_saved_pct": 17.5,
+        "min_saved_pct": 2.3,
+        "max_saved_pct": 39.7
+      },
+      "key_lines": 1880,
+      "key_lines_kept": 1880,
+      "violations": 0
+    },
+    {
+      "label": "trimmer at its smallest allowed thresholds, sizes as scripted",
+      "everyday": {
+        "workflows": 7,
+        "median_saved_pct": 3.7,
+        "min_saved_pct": 0,
+        "max_saved_pct": 8.6
+      },
+      "heavy": {
+        "workflows": 3,
+        "median_saved_pct": 19.3,
+        "min_saved_pct": 2.5,
+        "max_saved_pct": 50.7
+      },
+      "key_lines": 698,
+      "key_lines_kept": 698,
+      "violations": 0
+    },
+    {
+      "label": "trimmer at its smallest allowed thresholds, outputs twice as large",
+      "everyday": {
+        "workflows": 7,
+        "median_saved_pct": 4.9,
+        "min_saved_pct": 0,
+        "max_saved_pct": 10.7
+      },
+      "heavy": {
+        "workflows": 3,
+        "median_saved_pct": 18.6,
+        "min_saved_pct": 2.4,
+        "max_saved_pct": 46.4
+      },
+      "key_lines": 1076,
+      "key_lines_kept": 1076,
+      "violations": 0
+    },
+    {
+      "label": "MODELLED, no such optimizer exists: a re-read of a changed file sent as only its changed lines",
+      "everyday": {
+        "workflows": 7,
+        "median_saved_pct": 3.7,
+        "min_saved_pct": 0,
+        "max_saved_pct": 9.1
+      },
+      "heavy": {
+        "workflows": 3,
+        "median_saved_pct": 19.4,
+        "min_saved_pct": 2.5,
+        "max_saved_pct": 50.7
+      },
+      "key_lines": 698,
+      "key_lines_kept": 698,
+      "violations": 0
+    },
+    {
+      "label": "MODELLED, same, outputs twice as large",
+      "everyday": {
+        "workflows": 7,
+        "median_saved_pct": 4.9,
+        "min_saved_pct": 0,
+        "max_saved_pct": 11.4
+      },
+      "heavy": {
+        "workflows": 3,
+        "median_saved_pct": 18.9,
+        "min_saved_pct": 2.4,
+        "max_saved_pct": 46.4
+      },
+      "key_lines": 1076,
+      "key_lines_kept": 1076,
+      "violations": 0
+    }
+  ],
+  "notes": [
+    "Everything here is estimated from scripted sessions at list price. The size and tuning rows are what-ifs: they say what would happen if real outputs were that large or the trimmer ran that tight, not that they are.",
+    "The ceiling is generous: it removes every tool output, including the ones a model needs to see. No safe optimizer reaches it.",
+    "Smaller trimmer thresholds trim more outputs, and each trimmed output costs the model a fetch if it needs the rest. The key-lines column shows no failure line was lost; it does not measure whether the model loses time fetching.",
+    "A threshold or default change is not a result until it has been measured on real tasks (success, not just cost). Nothing here changes a shipped default."
+  ]
+}

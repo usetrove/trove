@@ -3,8 +3,7 @@
 Trove handles API traffic in memory and is designed never to store or log credentials. What it stores and
 where is listed in [PRIVACY.md](PRIVACY.md). Every security control, what it does not protect against, and the
 test that holds each one in place are in [docs/security.md](docs/security.md). The attackers considered are in
-[docs/threat-model.md](docs/threat-model.md), and the review findings, including open ones, are in
-[docs/security-findings.md](docs/security-findings.md).
+[docs/threat-model.md](docs/threat-model.md).
 
 ## Supported versions
 

@@ -7,13 +7,13 @@ Last reviewed: 2026-10-30.
 | Agent | Feature | Version tested | OS tested | Status |
 |---|---|---|---|---|
 | Claude Code | History parser (`trove logs`) | 2.1.302 (format inspected on a local install) | Windows 11 | Parsed against real files |
-| Claude Code | Gateway via custom endpoint | | | Not yet tested on a real install ([gateway-manual-test.md](gateway-manual-test.md)) |
-| Claude Code | Hooks | | | Not yet tested on a real install ([hooks-verification.md](hooks-verification.md)) |
-| Claude Code | MCP server | | | Not yet tested on a real install ([mcp-verification.md](mcp-verification.md)) |
-| Claude Code | Status line | | | Not yet run by a person ([report-verification.md](report-verification.md)) |
-| Claude Code | `trove fix` | | | Not yet tested on a real install ([fixer-verification.md](fixer-verification.md)) |
-| OpenCode 1.x | Plugin (`plugins/opencode`), tool-level | | | Not yet run on a real OpenCode ([opencode-verification.md](opencode-verification.md)). Hook shapes read from 1.19.5; engine side tested against a real `trove engine serve` |
-| OpenCode 2.x | Plugin (`plugins/opencode`), tool-level and request-level (Anthropic) | | | Not yet run on a real OpenCode ([opencode-verification.md](opencode-verification.md)). Hook shapes read from 2.2.5; engine side tested against a real `trove engine serve` |
+| Claude Code | Gateway via custom endpoint | | | Not yet tested on a real install |
+| Claude Code | Hooks | | | Not yet tested on a real install |
+| Claude Code | MCP server | | | Not yet tested on a real install |
+| Claude Code | Status line | | | Not yet run by a person |
+| Claude Code | `trove fix` | | | Not yet tested on a real install |
+| OpenCode 1.x | Plugin (`plugins/opencode`), tool-level | | | Not yet run on a real OpenCode. Hook shapes read from 1.19.5; engine side tested against a real `trove engine serve` |
+| OpenCode 2.x | Plugin (`plugins/opencode`), tool-level and request-level (Anthropic) | | | Not yet run on a real OpenCode. Hook shapes read from 2.2.5; engine side tested against a real `trove engine serve` |
 | Codex CLI | History parser | | | Format not verified on a real install ([logs.md](logs.md)) |
 | Codex CLI | Gateway, hooks, MCP | | | Not yet tested |
 

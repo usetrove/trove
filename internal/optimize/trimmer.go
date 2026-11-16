@@ -97,7 +97,7 @@ func TrimThresholdsFrom(t Tuning) TrimThresholds {
 
 var (
 	// signatureRe marks lines typical of test runners and build tools.
-	signatureRe = regexp.MustCompile(`^\s*(?:=== (?:RUN|PAUSE|CONT)|--- (?:PASS|FAIL|SKIP)|ok\s+\S+\s|PASS\b|FAIL\b|collected \d+ items|running \d+ tests?|test \S+ \.\.\. |Test Suites:|Tests:|[✓✔✗✘×]|\S+\.py [.FEsx]+|BUILD |\[INFO\]|\[ERROR\]|npm ERR!|Compiling |error\[E\d+\])`)
+	signatureRe = regexp.MustCompile(`^\s*(?:=== (?:RUN|PAUSE|CONT)|--- (?:PASS|FAIL|SKIP)|ok\s+\S+\s|PASS\b|FAIL\b|collected \d+ items|running \d+ tests?|test \S+ \.\.\. |Test Suites:|Tests:|[✓✔✗✘×]|\S+\.py [.FEsx]+|BUILD |\[INFO\]|\[ERROR\]|npm ERR!|Compiling |#\d+ (?:\[\d+/\d+\]|DONE|CACHED)|error\[E\d+\])`)
 	// failureRe marks lines that carry a failure or the start of a stack trace.
 	failureRe = regexp.MustCompile(`^\s*(?:--- FAIL|FAIL\b|FAILED\b|ERROR\b|Error:|error:|error\[|panic:|fatal:|Traceback \(most recent call last\)|AssertionError|[✗✘×●] |npm ERR!|\[ERROR\]|E {3}|thread '.*' panicked)|\b(?:FAILED|panicked at)\b|\w*Exception\b`)
 	// frameRe marks stack-frame lines.

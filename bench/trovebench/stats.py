@@ -67,6 +67,28 @@ def bootstrap_ci(
     return lo, hi
 
 
+def cluster_index_bootstrap(
+    clusters: list[list[int]],
+    stat: Callable[[list[int]], float],
+    *,
+    resamples: int,
+    seed: int,
+    confidence: float,
+) -> tuple[float, float]:
+    """Percentile CI of stat(indices) when whole clusters (all pair indices of one task) are resampled with replacement."""
+    if not clusters:
+        raise ValueError("bootstrap needs at least one cluster.")
+    rng = random.Random(seed)
+    k = len(clusters)
+    draws = []
+    for _ in range(resamples):
+        idx = [i for _ in range(k) for i in clusters[int(rng.random() * k)]]
+        draws.append(stat(idx))
+    draws.sort()
+    alpha = (1 - confidence) / 2
+    return draws[int(alpha * resamples)], draws[min(resamples - 1, int((1 - alpha) * resamples))]
+
+
 @dataclass(frozen=True)
 class Pair:
     task_id: str
@@ -145,9 +167,15 @@ def compare(pairs: Sequence[Pair], treated: str, rule: ShipRule) -> Comparison:
         raise ValueError(f"Reference condition '{rule.reference}' has zero total cost, so a percent change is meaningless. Check the cost data.")
 
     everyone = list(range(n))
+    # Repeats of one task are not independent, so resample whole tasks, never single runs. With one run per task
+    # this draws exactly what the plain pair bootstrap drew (pairs are sorted by task), so those results do not move.
+    by_task: dict[str, list[int]] = {}
+    for i, p in enumerate(pairs):
+        by_task.setdefault(p.task_id, []).append(i)
+    clusters = [by_task[k] for k in sorted(by_task)]
     kw = dict(resamples=rule.bootstrap_resamples, confidence=rule.confidence)
-    cost_ci = bootstrap_ci(n, cost_pct, seed=rule.bootstrap_seed, **kw)
-    succ_ci = bootstrap_ci(n, succ_pts, seed=rule.bootstrap_seed + 1, **kw)
+    cost_ci = cluster_index_bootstrap(clusters, cost_pct, seed=rule.bootstrap_seed, **kw)
+    succ_ci = cluster_index_bootstrap(clusters, succ_pts, seed=rule.bootstrap_seed + 1, **kw)
     cost_est, succ_est = cost_pct(everyone), succ_pts(everyone)
 
     x, m = rule.min_cost_reduction_pct, rule.success_margin_pts

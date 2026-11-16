@@ -6,7 +6,7 @@ Claude Code to the `trove` program: hooks, slash commands and a first-run report
 program, so the plugin, the gateway and the other adapters behave the same.
 
 Facts about Claude Code below were checked against code.claude.com/docs on **2026-11-05** (pages named in each
-section). Re-check them before a release ([release-checklist.md](release-checklist.md)).
+section). Re-check them before a release.
 
 ## Install
 
@@ -145,7 +145,7 @@ Trove is also a separate local gateway for API-key traffic ([gateway.md](gateway
 
 - Whether hooks run for every login type is **not stated** in the hooks documentation. The plugin never reads
   the login, so it should, but this must be confirmed on a Pro/Max, a Team and an API-key login
-  ([plugin-verification.md](plugin-verification.md)).
+.
 - Whether `systemMessage` from a SessionStart hook is displayed is **not stated** for that event; the report is
   always available as `/trove:report`.
 - The slash commands are namespaced `/trove:<name>` by Claude Code (components docs, 2026-11-05).

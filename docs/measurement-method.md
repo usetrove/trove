@@ -18,9 +18,9 @@ A dollar figure is always an estimate: tokens are measured, but the price is a l
 
 ## How accuracy is checked
 
-- **Reconciliation.** `trove reconcile` compares Trove's recorded total for a period with the total on your provider invoice. A difference within 2% (adjustable with `--tolerance`) is a match. Beta results and any fixed discrepancies are recorded in [beta-checklist.md](beta-checklist.md).
+- **Reconciliation.** `trove reconcile` compares Trove's recorded total for a period with the total on your provider invoice. A difference within 2% (adjustable with `--tolerance`) is a match.
 - **Benchmarks.** `bench/` runs fixed tasks with and without Trove and compares cost and task success. Results are published only from real runs, with the run's files as the source ([bench/README.md](../bench/README.md)). As of 2026-10-30 no benchmark run has been completed.
-- **Pricing freshness.** Prices are compiled into the binary with a verified date per model. `trove doctor` warns when any is older than 30 days; releases require all of them within 7 days ([release-checklist.md](release-checklist.md)).
+- **Pricing freshness.** Prices are compiled into the binary with a verified date per model. `trove doctor` warns when any is older than 30 days; releases require all of them within 7 days.
 
 ## What Trove cannot know
 

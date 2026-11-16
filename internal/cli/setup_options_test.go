@@ -7,7 +7,7 @@ import (
 )
 
 // The options note carries the compliance guidance; its claims are pinned here so
-// a rewrite cannot silently drop one (sources and dates: docs/compliance.md).
+// a rewrite cannot silently drop one.
 func TestSetupExplainsCreditsSubscriptionsAndHealthcare(t *testing.T) {
 	h := newHarness(t, map[string]string{"TROVE_DATA_DIR": t.TempDir()}, "claude")
 	agentHome(t, h)

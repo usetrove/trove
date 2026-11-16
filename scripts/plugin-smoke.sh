@@ -1,7 +1,7 @@
 #!/bin/sh
 # Smoke test for the Claude Code plugin's hooks, run through the plugin's own wrapper (plugin/trove/bin/trove),
 # with no model call. Every hook is fed a fixture from internal/hooks/testdata; the live probe runs the zero-spend
-# stub agent (qa/stubagent) and checks that the budgets it was handed add up to no more than the cap.
+# stub agent (scripts/stubagent) and checks that the budgets it was handed add up to no more than the cap.
 #
 #   TROVE_DATA_DIR=<scratch folder> sh scripts/plugin-smoke.sh <path-to-stubagent>
 #

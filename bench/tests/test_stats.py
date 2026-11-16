@@ -22,7 +22,7 @@ def verdict(records, rule=RULE):
         ("saving but success collapses", paired_runs(40, 1.0, 0.8, tr_pass=lambda i: False), DONT_SHIP),
         ("costs more", paired_runs(40, 1.0, 1.3), DONT_SHIP),
         ("noisy saving straddles threshold",
-         paired_runs(40, 1.0, lambda i: 0.5 if i % 2 else 1.2), NEED_MORE_DATA),
+         paired_runs(40, 1.0, lambda i: 0.5 if (i // 2) % 2 else 1.2), NEED_MORE_DATA),   # noise between tasks
     ],
 )
 def test_ship_rule_table(name, runs, want):
@@ -95,3 +95,21 @@ def test_summarize_empty():
 def test_rule_validation(bad):
     with pytest.raises(ValueError):
         ShipRule.from_dict(bad)
+
+
+def test_interval_resamples_whole_tasks_not_runs():
+    # 40 tasks, 5 repeats each. A task's cost change is the same across its repeats, so repeats add runs but no
+    # independent information: the interval must match one run per task, not shrink with the run count.
+    def runs(repeats):
+        out = []
+        for t in range(40):
+            tr = 0.6 if t % 2 else 1.3          # half the tasks get cheaper, half dearer
+            for s in range(repeats):
+                out.append(rec(f"task{t:02d}", s, "passthrough", 1.0))
+                out.append(rec(f"task{t:02d}", s, "all_safe", tr))
+        return out
+
+    one, five = verdict(runs(1)), verdict(runs(5))
+    assert five.n_pairs == 200 and one.n_pairs == 40
+    assert five.cost_ci == pytest.approx(one.cost_ci)
+    assert five.verdict == one.verdict

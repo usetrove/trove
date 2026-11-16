@@ -129,3 +129,52 @@ func TestOutputTrimmerCannotBeSwitchedOn(t *testing.T) {
 		}
 	}
 }
+
+// buildKitLog is a long docker build log whose last step fails.
+func buildKitLog(npmLines int) string {
+	var sb strings.Builder
+	sb.WriteString("#0 building with \"default\" instance using docker driver\n\n")
+	for step := 2; step <= 8; step++ {
+		fmt.Fprintf(&sb, "#%d [%d/9] RUN step-%d\n", step, step-1, step)
+		if step < 6 {
+			fmt.Fprintf(&sb, "#%d CACHED\n\n", step)
+			continue
+		}
+		for i := 0; i < npmLines; i++ {
+			fmt.Fprintf(&sb, "#%d %d.%03d npm http fetch GET 200 https://registry.example.test/pkg-%d 31ms\n", step, i/10, i, i)
+		}
+		if step == 8 {
+			sb.WriteString("#8 ERROR: process \"/bin/sh -c npm ci\" did not complete successfully: exit code: 1\nnpm ERR! code ERESOLVE\n")
+			break
+		}
+		fmt.Fprintf(&sb, "#%d DONE 4.2s\n\n", step)
+	}
+	return sb.String()
+}
+
+func TestTrimOutputRecognizesBuildKitLogsAndKeepsTheFailure(t *testing.T) {
+	in := buildKitLog(80)
+	out, changed := trimOutput(in)
+	if !changed || len(out) >= len(in)/2 {
+		t.Fatalf("expected a large reduction on a BuildKit log: %d -> %d", len(in), len(out))
+	}
+	for _, must := range []string{"#8 ERROR: process", "npm ERR! code ERESOLVE", "#0 building with"} {
+		if !strings.Contains(out, must) {
+			t.Errorf("dropped %q", must)
+		}
+	}
+	again, changed2 := trimOutput(out)
+	if changed2 || again != out {
+		t.Error("trimming a trimmed BuildKit log must change nothing")
+	}
+	if a, _ := trimOutput(in); a != out {
+		t.Error("trimming is not deterministic")
+	}
+}
+
+func TestTrimOutputLeavesAShortBuildKitLogAlone(t *testing.T) {
+	short := buildKitLog(2)
+	if out, changed := trimOutput(short); changed || out != short {
+		t.Error("a short build log must be left as it is")
+	}
+}

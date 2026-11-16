@@ -6,7 +6,7 @@
 # trying at all, and what saving to expect; this study answers that. It does not replace the trial, which judges
 # one hook on one user's real sessions.
 #
-# To use it (docs/benchmark-runbook.txt, Part D):
+# To use it (the benchmark runbook, Part D):
 #   1. Copy it to bench/studies/hooks-single-1.yaml (or a new id) and replace every <PLACEHOLDER>.
 #      <NEW_SEED> is a fresh number, used for both seeds. <FROM_PILOT> comes from a pilot, as for the other studies.
 #   2. python -m trovebench plan   --study bench/studies/hooks-single-1.yaml --hook-capabilities /tmp/hookprobe.json
