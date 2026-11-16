@@ -30,7 +30,7 @@ import (
 //     no session identifier. Session keys are derived from paths in memory and never leave the function.
 //   - Errors name no path and no content. A log that cannot be read is counted, not described.
 //
-// The engine is run in the same states as qa/replay: noise normalization and duplicate collapsing on, the
+// The engine is run with noise normalization and duplicate collapsing on, the
 // trimmer in shadow (it estimates and never changes the request). Every figure is an estimate.
 
 // replayMaxBody is the gateway's own limit: larger requests are not optimized and are counted as too big.
