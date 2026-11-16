@@ -93,9 +93,24 @@ type WorkflowOptions struct {
 	// RereadDiff models an optimizer that does not exist: a Read of a file already read earlier in the session is sent as
 	// the lines that changed, not the whole file. Analysis only; it shows what such an optimizer could be worth.
 	RereadDiff bool
+	// Only limits the run to the named workflows (default: all). Tests use it to stay fast under the race detector.
+	Only []string
 	// CustomAgent runs the session as a custom agent that sends no cache markers (a script or home-grown agent), the
 	// case the cache_breakpoints optimizer exists for. The original arm is then priced with no prompt caching at all.
 	CustomAgent bool
+}
+
+// wants reports whether the run includes the named workflow.
+func (o WorkflowOptions) wants(name string) bool {
+	if len(o.Only) == 0 {
+		return true
+	}
+	for _, n := range o.Only {
+		if n == name {
+			return true
+		}
+	}
+	return false
 }
 
 const workflowPrefixTokens = 18000 // Claude Code's system prompt, tool definitions and project context, roughly
@@ -126,6 +141,9 @@ func RunWorkflows(o WorkflowOptions) (WorkflowReport, error) {
 	rep := WorkflowReport{Seed: o.Seed, Pricing: PricingDate.Format("2006-01-02"), Model: o.Model}
 	var lat []float64
 	for _, w := range workflowSpecs() {
+		if !o.wants(w.name) {
+			continue
+		}
 		row, l, err := runWorkflow(w, o, tab)
 		if err != nil {
 			return rep, err
@@ -137,7 +155,7 @@ func RunWorkflows(o WorkflowOptions) (WorkflowReport, error) {
 	co := o
 	co.CustomAgent = true
 	for _, w := range workflowSpecs() {
-		if w.tier != tierEveryday {
+		if w.tier != tierEveryday || !o.wants(w.name) {
 			continue
 		}
 		cw := w
