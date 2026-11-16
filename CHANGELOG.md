@@ -4,6 +4,18 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+- `trove bench workflows`: replays ten hand-scripted Claude Code sessions through the real optimizer engine, offline (no API call, no spend), in three tiers: everyday sessions, output-heavy sessions, and the everyday sessions again as a custom agent that sends no cache markers. It reports estimated savings per tier, and measured checks that nothing was lost (every failure line still visible to the model, trimmed output recoverable byte for byte, cached prefix byte-identical, repeat runs identical) and engine time per request. `--analyze` adds the oracle ceiling, output-size and trimmer-threshold what-ifs, and a modelled re-read diff. See [docs/workflows.md](docs/workflows.md) and `bench/scripts/95_workflows.sh`.
+- Benchmark scripts: `90_final_study.sh` (a larger two-condition study on the tasks already prepared), `91_optimizer_activity.sh` (what the optimizers actually removed in a study), `92_long_tasks_study.sh`, `93_labelled_numbers.sh`, `94_other_levers.sh`, and `power_check.py` (how many pairs the ship rule needs, estimated from a finished batch).
+
+### Changed
+- `output_trimmer` now recognizes BuildKit (`docker build`) logs as build output. It still keeps failures and stack traces and stores the full output.
+- The benchmark verdict (`stats.compare`) resamples whole tasks, so repeats of one task cannot make an interval look tighter than the data allows. With one run per task the results are identical to before.
+
+### Known gaps
+- The scripted-session savings are estimates from sessions written by hand; how often a file is re-read or how noisy a shell is are assumptions, not measurements of real users.
+- The SWE-bench study `swebench-gateway-2` (35 tasks, NEED MORE DATA) ran on a separate machine and its result files are not yet committed.
+
 ## [0.4.0] - 2026-11-14
 
 ### Added
