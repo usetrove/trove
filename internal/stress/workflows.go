@@ -3,6 +3,7 @@ package stress
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"math"
@@ -93,9 +94,24 @@ type WorkflowOptions struct {
 	// RereadDiff models an optimizer that does not exist: a Read of a file already read earlier in the session is sent as
 	// the lines that changed, not the whole file. Analysis only; it shows what such an optimizer could be worth.
 	RereadDiff bool
+	// Only limits the run to the named workflows (default: all). Tests use it to stay fast under the race detector.
+	Only []string
 	// CustomAgent runs the session as a custom agent that sends no cache markers (a script or home-grown agent), the
 	// case the cache_breakpoints optimizer exists for. The original arm is then priced with no prompt caching at all.
 	CustomAgent bool
+}
+
+// wants reports whether the run includes the named workflow.
+func (o WorkflowOptions) wants(name string) bool {
+	if len(o.Only) == 0 {
+		return true
+	}
+	for _, n := range o.Only {
+		if n == name {
+			return true
+		}
+	}
+	return false
 }
 
 const workflowPrefixTokens = 18000 // Claude Code's system prompt, tool definitions and project context, roughly
@@ -126,6 +142,9 @@ func RunWorkflows(o WorkflowOptions) (WorkflowReport, error) {
 	rep := WorkflowReport{Seed: o.Seed, Pricing: PricingDate.Format("2006-01-02"), Model: o.Model}
 	var lat []float64
 	for _, w := range workflowSpecs() {
+		if !o.wants(w.name) {
+			continue
+		}
 		row, l, err := runWorkflow(w, o, tab)
 		if err != nil {
 			return rep, err
@@ -137,7 +156,7 @@ func RunWorkflows(o WorkflowOptions) (WorkflowReport, error) {
 	co := o
 	co.CustomAgent = true
 	for _, w := range workflowSpecs() {
-		if w.tier != tierEveryday {
+		if w.tier != tierEveryday || !o.wants(w.name) {
 			continue
 		}
 		cw := w
@@ -365,6 +384,34 @@ type wfBuilder struct {
 	ver   map[string]int // edits applied to a path so far; a re-read after an edit differs, a re-read without one is identical
 }
 
+// The tool inputs are built with json.Marshal from typed values, so every string is escaped by the encoder and no JSON is
+// assembled by hand. Field order is the struct order, which keeps the bytes deterministic.
+type readIn struct {
+	FilePath string `json:"file_path"`
+}
+
+type editIn struct {
+	FilePath  string `json:"file_path"`
+	OldString string `json:"old_string"`
+	NewString string `json:"new_string"`
+}
+
+type grepIn struct {
+	Pattern string `json:"pattern"`
+}
+
+type bashIn struct {
+	Command string `json:"command"`
+}
+
+func toolInput(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err) // these types always marshal
+	}
+	return string(b)
+}
+
 // sc scales a count by the analysis knob. Zero stays zero and anything else stays at least one.
 func (b *wfBuilder) sc(n int) int {
 	if n <= 0 || b.scale == 1 || b.scale <= 0 {
@@ -379,12 +426,12 @@ func (b *wfBuilder) add(tool, input, out string) {
 }
 
 func (b *wfBuilder) read(path string, lines int) {
-	b.add("Read", fmt.Sprintf(`{"file_path":%s}`, jstr(path)), fileBody(path, b.sc(lines), b.ver[path]))
+	b.add("Read", toolInput(readIn{FilePath: path}), fileBody(path, b.sc(lines), b.ver[path]))
 }
 
 func (b *wfBuilder) edit(path string) {
 	b.ver[path]++
-	b.add("Edit", fmt.Sprintf(`{"file_path":%s,"old_string":%s,"new_string":%s}`, jstr(path), jstr("old_value = compute(x)"), jstr("old_value = compute(x, strict=True)")),
+	b.add("Edit", toolInput(editIn{FilePath: path, OldString: "old_value = compute(x)", NewString: "old_value = compute(x, strict=True)"}),
 		fmt.Sprintf("The file %s has been updated. Here's the result of running `cat -n` on a snippet of the edited file:\n%s", path, snippet(path, b.ver[path])))
 }
 
@@ -394,11 +441,11 @@ func (b *wfBuilder) grep(pat string, hits int) {
 	for i := 0; i < b.sc(hits); i++ {
 		fmt.Fprintf(&sb, "src/%s/%s.py:%d:    result = %s(value, %s)\n", pkgs[(h+uint64(i))%uint64(len(pkgs))], names[(h/3+uint64(i)*7)%uint64(len(names))], 10+i*13, pat, names[(h+uint64(i)*5)%uint64(len(names))])
 	}
-	b.add("Grep", fmt.Sprintf(`{"pattern":%s}`, jstr(pat)), sb.String())
+	b.add("Grep", toolInput(grepIn{Pattern: pat}), sb.String())
 }
 
 func (b *wfBuilder) bash(cmd, out string) {
-	b.add("Bash", fmt.Sprintf(`{"command":%s}`, jstr(cmd)), out)
+	b.add("Bash", toolInput(bashIn{Command: cmd}), out)
 }
 
 var (

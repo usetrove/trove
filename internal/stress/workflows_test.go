@@ -5,19 +5,30 @@ import (
 	"testing"
 )
 
+// shortWorkflows keeps these tests fast under `go test -race -short`: the race detector slows the engine several times
+// over, and the full set takes minutes. The full set runs when -short is not given.
+var shortWorkflows = []string{"quick-question", "fix-failing-test", "debug-with-logs"}
+
+func wfOpts(o WorkflowOptions) WorkflowOptions {
+	if testing.Short() {
+		o.Only = shortWorkflows
+	}
+	return o
+}
+
 func TestWorkflowsRunCleanAndDeterministic(t *testing.T) {
-	rep, err := RunWorkflows(WorkflowOptions{Seed: 20261108})
+	rep, err := RunWorkflows(wfOpts(WorkflowOptions{Seed: 20261108}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(rep.Rows) < 6 {
-		t.Fatalf("want at least 6 workflows, got %d", len(rep.Rows))
+		t.Fatalf("want at least 6 workflow rows, got %d", len(rep.Rows))
 	}
 	h := rep.Headline
 	if h.KeyLinesKept != h.KeyLines || h.KeyLines == 0 {
 		t.Errorf("%d of %d failure lines survived optimizing; every one must, and there must be some to check", h.KeyLinesKept, h.KeyLines)
 	}
-	if h.Heavy.Workflows == 0 || h.Everyday.Workflows == 0 {
+	if !testing.Short() && (h.Heavy.Workflows == 0 || h.Everyday.Workflows == 0) {
 		t.Error("both tiers must have workflows")
 	}
 	if h.Violations != 0 {
@@ -43,11 +54,11 @@ func TestWorkflowsRunCleanAndDeterministic(t *testing.T) {
 }
 
 func TestWorkflowsSameSeedSameReport(t *testing.T) {
-	a, err := RunWorkflows(WorkflowOptions{Seed: 7})
+	a, err := RunWorkflows(wfOpts(WorkflowOptions{Seed: 7}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := RunWorkflows(WorkflowOptions{Seed: 7})
+	b, err := RunWorkflows(wfOpts(WorkflowOptions{Seed: 7}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +71,7 @@ func TestWorkflowsSameSeedSameReport(t *testing.T) {
 }
 
 func TestWorkflowMarkdownLabelsEveryFigure(t *testing.T) {
-	rep, err := RunWorkflows(WorkflowOptions{Seed: 1})
+	rep, err := RunWorkflows(wfOpts(WorkflowOptions{Seed: 1}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,8 +86,12 @@ func TestWorkflowMarkdownLabelsEveryFigure(t *testing.T) {
 // A saving only counts if nothing was lost. Across several seeds, every failure line must survive, trimmed output must
 // be recoverable, and a heavy session must never cost more than the original.
 func TestWorkflowsHoldAcrossSeeds(t *testing.T) {
-	for _, seed := range []uint64{1, 2, 3, 20261108, 99999} {
-		rep, err := RunWorkflows(WorkflowOptions{Seed: seed})
+	seeds := []uint64{1, 2, 3, 20261108, 99999}
+	if testing.Short() {
+		seeds = seeds[:1]
+	}
+	for _, seed := range seeds {
+		rep, err := RunWorkflows(wfOpts(WorkflowOptions{Seed: seed}))
 		if err != nil {
 			t.Fatalf("seed %d: %v", seed, err)
 		}
@@ -102,8 +117,11 @@ func TestWorkflowsHoldAtOtherSizesAndTunings(t *testing.T) {
 		{Seed: 5, Scale: 2, Tuning: minTuning()},
 		{Seed: 5, Scale: 2, RereadDiff: true},
 	}
+	if testing.Short() {
+		cases = cases[2:]
+	}
 	for _, c := range cases {
-		rep, err := RunWorkflows(c)
+		rep, err := RunWorkflows(wfOpts(c))
 		if err != nil {
 			t.Fatalf("%+v: %v", c, err)
 		}
