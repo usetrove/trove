@@ -61,3 +61,13 @@ written in `internal/stress/workflows.go`. It is not a measurement of real users
 do on these patterns. It is not a forecast of anyone's bill, and the report says so. For real sessions use
 `REPLAY=1 bash bench/scripts/95_workflows.sh`, which replays your own Claude Code logs read-only (aggregates only, nothing stored).
 For a bill comparison use the paired study (`docs/benchmark-methodology.md`).
+
+## Tests
+
+`go test ./internal/stress` runs the workflow tests against one shared report (two small workflows under `-short`, the
+whole set otherwise). The heavier sweeps, which replay the sessions across several seeds, at other output sizes and with a
+repeat run, are opt-in because each replay is slow, especially under the race detector:
+
+```
+TROVE_FULL_WORKFLOW_TESTS=1 go test ./internal/stress -run Workflow
+```

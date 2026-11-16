@@ -1,47 +1,45 @@
 package stress
 
 import (
+	"os"
 	"strings"
 	"sync"
 	"testing"
 )
 
-// Under `go test -short` (which CI runs with the race detector) these tests share ONE small report, because the race
-// detector makes the engine many times slower and every extra run adds minutes to a package that already has other
-// slow tests. Without -short they run the full set, several times, as a harder check.
-var shortReport struct {
+// CI runs these tests twice: with -race -short, and again without either. Each full workflow run is heavy, so every test here
+// shares ONE report (two small workflows under -short, the whole set otherwise). The sweeps that need many more runs (several
+// seeds, other output sizes, a repeat run) are opt-in: set TROVE_FULL_WORKFLOW_TESTS=1 to run them.
+var sharedReport struct {
 	once sync.Once
 	rep  WorkflowReport
 	err  error
 }
 
-func report(t *testing.T, o WorkflowOptions) WorkflowReport {
+func report(t *testing.T) WorkflowReport {
 	t.Helper()
-	if testing.Short() {
-		shortReport.once.Do(func() {
-			shortReport.rep, shortReport.err = RunWorkflows(WorkflowOptions{Seed: 20261108, Only: []string{"quick-question", "fix-failing-test"}})
-		})
-		if shortReport.err != nil {
-			t.Fatal(shortReport.err)
+	sharedReport.once.Do(func() {
+		o := WorkflowOptions{Seed: 20261108}
+		if testing.Short() {
+			o.Only = []string{"quick-question", "fix-failing-test"}
 		}
-		return shortReport.rep
+		sharedReport.rep, sharedReport.err = RunWorkflows(o)
+	})
+	if sharedReport.err != nil {
+		t.Fatal(sharedReport.err)
 	}
-	rep, err := RunWorkflows(o)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return rep
+	return sharedReport.rep
 }
 
-func skipIfShort(t *testing.T) {
+func skipUnlessFull(t *testing.T) {
 	t.Helper()
-	if testing.Short() {
-		t.Skip("runs the workflows several more times; skipped with -short (CI runs it with the race detector)")
+	if os.Getenv("TROVE_FULL_WORKFLOW_TESTS") != "1" {
+		t.Skip("a sweep of many workflow runs; set TROVE_FULL_WORKFLOW_TESTS=1 to run it")
 	}
 }
 
 func TestWorkflowsRunCleanAndDeterministic(t *testing.T) {
-	rep := report(t, WorkflowOptions{Seed: 20261108})
+	rep := report(t)
 	if len(rep.Rows) < 3 {
 		t.Fatalf("want at least 3 workflow rows, got %d", len(rep.Rows))
 	}
@@ -75,7 +73,7 @@ func TestWorkflowsRunCleanAndDeterministic(t *testing.T) {
 }
 
 func TestWorkflowsSameSeedSameReport(t *testing.T) {
-	skipIfShort(t)
+	skipUnlessFull(t)
 	a, err := RunWorkflows(WorkflowOptions{Seed: 7})
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +91,7 @@ func TestWorkflowsSameSeedSameReport(t *testing.T) {
 }
 
 func TestWorkflowMarkdownLabelsEveryFigure(t *testing.T) {
-	md := WorkflowMarkdown(report(t, WorkflowOptions{Seed: 1}))
+	md := WorkflowMarkdown(report(t))
 	for _, want := range []string{"Estimated", "Measured", "scripted", "not a forecast"} {
 		if !strings.Contains(strings.ToLower(md), strings.ToLower(want)) {
 			t.Errorf("report lacks %q", want)
@@ -104,7 +102,7 @@ func TestWorkflowMarkdownLabelsEveryFigure(t *testing.T) {
 // A saving only counts if nothing was lost. Across several seeds, every failure line must survive, trimmed output must
 // be recoverable, and a heavy session must never cost more than the original.
 func TestWorkflowsHoldAcrossSeeds(t *testing.T) {
-	skipIfShort(t)
+	skipUnlessFull(t)
 	for _, seed := range []uint64{1, 2, 3, 20261108, 99999} {
 		rep, err := RunWorkflows(WorkflowOptions{Seed: seed})
 		if err != nil {
@@ -126,7 +124,7 @@ func TestWorkflowsHoldAcrossSeeds(t *testing.T) {
 // A harder pass: the same sessions at other sizes, with the trimmer at its tightest, and with the modelled re-read diff.
 // Nothing may break, whatever the size.
 func TestWorkflowsHoldAtOtherSizesAndTunings(t *testing.T) {
-	skipIfShort(t)
+	skipUnlessFull(t)
 	cases := []WorkflowOptions{
 		{Seed: 5, Scale: 0.5},
 		{Seed: 5, Scale: 4},
