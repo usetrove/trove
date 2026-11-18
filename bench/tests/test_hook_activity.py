@@ -65,3 +65,16 @@ def test_a_database_without_the_table_is_not_an_error(tmp_path):
     sqlite3.connect(d / "trove.db").close()
     write_csv(tmp_path, [{"run_id": "a", "condition": "hooks"}])
     assert ha.summarise(tmp_path)["hooks"]["acted_runs"] == 0
+
+
+def test_plugin_hooks_dir_and_tokens_are_counted(tmp_path):
+    # passthrough_plugin keeps the hooks' data in trove-hooks-data; launch-1's table missed it.
+    d = tmp_path / "runs" / "r1" / "trove-hooks-data" / "hooks"
+    d.mkdir(parents=True)
+    (d / "events.jsonl").write_text(
+        json.dumps({"h": "hook_repeat_read", "k": "blocked", "n": 120}) + "\n"
+        + json.dumps({"h": "hook_large_output", "k": "advised", "n": 999}) + "\n", encoding="utf-8")
+    write_csv(tmp_path, [{"run_id": "r1", "condition": "passthrough_plugin"}])
+    s = ha.summarise(tmp_path)["passthrough_plugin"]
+    assert s["acted_runs"] == 1 and s["tokens"] == 120
+    assert "120" in ha.render({"passthrough_plugin": s})

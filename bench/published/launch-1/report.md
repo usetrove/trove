@@ -191,3 +191,20 @@ Rule: ship only if, over at least **30** pairs against `passthrough`, the 98% in
 ## Data use
 
 Transcripts of these runs, if kept, are for analysis and debugging only. No model is trained on anything produced by these runs. Task content belongs to its upstream projects (see `bench/LICENSES.md`); this report publishes only task IDs and aggregates.
+
+## Correction (added 2026-11-18, after the results; numbers and verdicts above are unchanged)
+
+- **The plugin comparison is confounded.** `passthrough` ran Claude Code with `--bare`; `passthrough_plugin` and
+  `trove_full` could not, because plugins and hooks do not load in bare mode. Bare mode gives Claude only Bash, file
+  read and file edit and leaves out Claude Code's system reminders and skills list (code.claude.com/docs/en/headless,
+  checked 2026-11-18). So the treated arms also paid for the full Claude Code setup, which the baseline did not. The
+  +40.6% for `passthrough_plugin` measures the plugin plus that difference, not the plugin alone; Trove's MCP tool
+  definitions are about 351 tokens per request (estimated, `trove mcp schema-size`). `trove_full` carried the same
+  handicap. From launch-2 on, every arm of a batch launches the agent the same way (`agent_launch_mode` in versions.json).
+- **Two cost figures.** The table above shows the median per-pair change; the decision rule uses the total cost change
+  (total treated cost over total baseline cost): `passthrough_plugin` +18.7% (98% CI -15.2% to +41.6%), `trove_full`
+  -17.3% (98% CI -41.8% to -0.03%), both estimated, from `comparisons.csv`. Later reports show both.
+- **Cost source.** The note "token counts the agent itself reported" is wrong for this study: every run was priced from
+  the usage the gateway recorded (`cost_source` = gateway in `runs.csv`).
+- **Activity table.** It counted only the gateway's trimming. The hooks' own trimming (most of what the plugin does)
+  was not counted, so "0 tokens removed" does not mean nothing was trimmed.

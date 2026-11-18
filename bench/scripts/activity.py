@@ -83,12 +83,13 @@ def main() -> None:
 
     if a.markdown:
         print("### What the gateway optimizers did in this study\n")
-        print("| condition | runs | input tokens (measured) | tokens removed (estimated) | share of input removed (estimated) | requests changed |")
-        print("|---|---|---|---|---|---|")
+        print("| condition | runs | input tokens (measured) | tokens removed (estimated) | share of input removed (estimated) | requests changed | runs with a gateway optimizer on |")
+        print("|---|---|---|---|---|---|---|")
         for r in rows:
-            print(f"| {r['cond']} | {r['runs']} | {r['input']:,} | {r['removed']:,} | {r['removed_pct']:.2f}% | {r['trimmed_req_pct']:.1f}% |")
-        print("\nTokens removed are estimates (removed bytes over a bytes-per-token ratio). They are not a bill saving: "
-              "the bill is compared in the study report, where cost is also estimated (agent-reported usage at list price) "
+            print(f"| {r['cond']} | {r['runs']} | {r['input']:,} | {r['removed']:,} | {r['removed_pct']:.2f}% | {r['trimmed_req_pct']:.1f}% | {r['pinned_on']} |")
+        print("\nThis table counts the gateway only; what the hooks kept out of the context is in the next table. "
+              "Tokens removed are estimates (removed bytes over a bytes-per-token ratio). They are not a bill saving: "
+              "the bill is compared in the study report, where cost is also estimated (list price applied to the usage the gateway recorded) "
               "and pass/fail is measured. Say what the study does not cover: these tasks only, one model, one agent version.")
         return
 

@@ -92,6 +92,13 @@ class ContainerRunner:
     hook_capabilities: Path | None = None
     log: Callable[[str], None] = _say
 
+    def bare(self) -> bool:
+        """One launch mode for the whole batch. --bare drops the full built-in tool set, the skills list and Claude
+        Code's system reminders, and plugins cannot load in it (code.claude.com/docs/en/headless, checked 2026-11-18).
+        If any condition needs hooks, Trove's MCP server or a feature, every condition runs without it, so the arms
+        differ only in Trove. launch-1 mixed the two modes; that confounded its plugin comparison."""
+        return not any(c.uses_hooks or c.uses_mcp or c.feature for c in self.conditions.values())
+
     # --- batch setup ----------------------------------------------------------------
     def prepare(self, task_ids: list[str]) -> None:
         self.arch = de.host_arch()
@@ -131,6 +138,7 @@ class ContainerRunner:
             "image_ids": {k: v[1] for k, v in sorted(self.images.items())},
             "docker_arch": self.arch,
             "fake_agent": self.fake,
+            "agent_launch_mode": "bare" if self.bare() else "full",
         }
 
     # --- one run --------------------------------------------------------------------
@@ -238,7 +246,7 @@ class ContainerRunner:
                     self.log(f"      stopping before follow-up {i}: out of {why}")
                     break
                 res = c.exec(self.agent.command(model=cond.model or self.model, max_budget_usd=round(left_usd, 4), prompt_path=path,
-                                                   effort=spec.effort, bare=not (cond.uses_hooks or cond.uses_mcp or cond.feature), resume=session,
+                                                   effort=spec.effort, bare=self.bare(), resume=session,
                                                    persist=len(prompts) > 1),
                              timeout=max(1, int(left_s)), env=agent_env)
                 outs.append(res.out)

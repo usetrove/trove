@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Free. After 03_run.sh: build the report, gather only the publishable files into bench/published/launch-1/,
+# Free. After 03_run.sh: build the report, gather only the publishable files into bench/published/<study id>/,
 # regenerate the recommender defaults, benchmark priors and Autopilot thresholds from every published study, and commit.
 #     bash bench/scripts/launch/04_report.sh
 # It never copies runs/ (agent output) or any task text. It does not push: review the commit, then `git push`.
@@ -11,6 +11,7 @@ say "Report"
 python -m trovebench report --batch "$BATCH"
 python -m trovebench stage --batch "$BATCH" > "$BATCH/stage.json" || true
 python bench/scripts/activity.py "$BATCH" --markdown > "$BATCH/activity.md" || echo "  (optimizer activity summary unavailable)"
+{ printf '\n### What the hooks did in this study\n\n'; python bench/tools/hook_activity.py "$BATCH"; } >> "$BATCH/activity.md" || echo "  (hook activity summary unavailable)"
 
 say "Publishable files -> $DST"
 mkdir -p "$DST/charts"

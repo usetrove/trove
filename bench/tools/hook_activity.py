@@ -21,43 +21,55 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 ACTED = ("blocked", "rewritten", "advised")
+# Kinds whose recorded tokens were really kept out of the context. "advised" only suggested something.
+REMOVED = ("blocked", "rewritten")
 WOULD = ("would_block", "would_rewrite", "would_advise")
 
 
-def run_events(run_dir: Path) -> Counter:
-    """Counts of (hook, kind) for one run, from the hooks' database and any spool not yet ingested."""
+def run_events(run_dir: Path, tokens: Counter | None = None) -> Counter:
+    """Counts of (hook, kind) for one run, from the hooks' database and any spool not yet ingested. The hooks write
+    to trove-data, or to trove-hooks-data when the gateway only records (passthrough_plugin). If `tokens` is given,
+    it also sums the estimated tokens each (hook, kind) recorded."""
     out: Counter = Counter()
-    data = run_dir / "trove-data"
-    db = data / "trove.db"
-    if db.is_file():
-        con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
-        try:
-            for hook, kind, n in con.execute("SELECT hook, kind, COUNT(*) FROM hook_events GROUP BY hook, kind"):
-                out[(hook, kind)] += n
-        except sqlite3.DatabaseError:
-            pass  # no hook_events table: the hooks recorded nothing in this run
-        finally:
-            con.close()
-    spool = data / "hooks" / "events.jsonl"
-    if spool.is_file():
-        for line in spool.read_text(encoding="utf-8", errors="replace").splitlines():
+    for data in (run_dir / "trove-data", run_dir / "trove-hooks-data"):
+        db = data / "trove.db"
+        if db.is_file():
+            con = sqlite3.connect(f"file:{db.as_posix()}?mode=ro", uri=True)
             try:
-                e = json.loads(line)
-            except json.JSONDecodeError:
-                continue  # a torn line
-            if e.get("h") and e.get("k"):
-                out[(e["h"], e["k"])] += 1
+                for hook, kind, n, t in con.execute(
+                        "SELECT hook, kind, COUNT(*), COALESCE(SUM(tokens),0) FROM hook_events GROUP BY hook, kind"):
+                    out[(hook, kind)] += n
+                    if tokens is not None:
+                        tokens[(hook, kind)] += t
+            except sqlite3.DatabaseError:
+                pass  # no hook_events table: the hooks recorded nothing in this run
+            finally:
+                con.close()
+        spool = data / "hooks" / "events.jsonl"
+        if spool.is_file():
+            for line in spool.read_text(encoding="utf-8", errors="replace").splitlines():
+                try:
+                    e = json.loads(line)
+                except json.JSONDecodeError:
+                    continue  # a torn line
+                if e.get("h") and e.get("k"):
+                    out[(e["h"], e["k"])] += 1
+                    if tokens is not None:
+                        tokens[(e["h"], e["k"])] += int(e.get("n") or 0)
     return out
 
 
 def summarise(batch_dir: Path) -> dict[str, dict]:
     """Per condition: runs, runs in which a hook acted, runs that only noted what it would do, and total acts by hook."""
     rows = list(csv.DictReader((batch_dir / "runs.csv").open(encoding="utf-8")))
-    res: dict[str, dict] = defaultdict(lambda: {"runs": 0, "acted_runs": 0, "would_only_runs": 0, "acts": Counter()})
+    res: dict[str, dict] = defaultdict(lambda: {"runs": 0, "acted_runs": 0, "would_only_runs": 0, "acts": Counter(),
+                                                "tokens": 0})
     for r in rows:
         c = res[r["condition"]]
         c["runs"] += 1
-        ev = run_events(batch_dir / "runs" / r["run_id"])
+        tok: Counter = Counter()
+        ev = run_events(batch_dir / "runs" / r["run_id"], tok)
+        c["tokens"] += sum(n for k, n in tok.items() if k[1] in REMOVED)
         acted = {k: n for k, n in ev.items() if k[1] in ACTED}
         if acted:
             c["acted_runs"] += 1
@@ -69,11 +81,11 @@ def summarise(batch_dir: Path) -> dict[str, dict]:
 
 
 def render(summary: dict[str, dict]) -> str:
-    lines = ["condition | runs | hook acted in | only noted what it would do | acts by hook"]
+    lines = ["condition | runs | hook acted in | only noted what it would do | tokens kept out (estimated) | acts by hook"]
     for cond, c in sorted(summary.items()):
         pct = 100 * c["acted_runs"] / c["runs"] if c["runs"] else 0.0
         acts = ", ".join(f"{h} {n}" for h, n in sorted(c["acts"].items())) or "-"
-        lines.append(f"{cond} | {c['runs']} | {c['acted_runs']} ({pct:.0f}%) | {c['would_only_runs']} | {acts}")
+        lines.append(f"{cond} | {c['runs']} | {c['acted_runs']} ({pct:.0f}%) | {c['would_only_runs']} | {c['tokens']:,} | {acts}")
     lines.append("")
     lines.append("If a single-hook condition shows a hook acted in only a small share of runs, a result of 'no clear "
                  "difference' says the hook rarely had anything to do on these tasks, not that it does nothing.")

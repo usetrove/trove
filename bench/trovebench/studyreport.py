@@ -231,9 +231,13 @@ def _markdown(study: Study, lock: dict, an: StudyAnalysis, recs, versions: dict,
     a(f"- Efforts: {', '.join(study.efforts) if study.efforts else 'model default only'}; repeats: {study.repeats}; order seed: {study.order_seed}")
     a(f"- Locked {lock.get('locked_at')} at commit `{(lock.get('git_commit') or 'unknown')[:10]}`, file hash `{lock.get('study_sha256', '')[:12]}`. "
       "Every comparison below was registered before the first run; anything added afterwards is marked exploratory.\n")
-    a("**How to read the numbers.** Pass/fail, wall time and token counts are *measured*. Cost is *estimated*: list price applied to the "
-      f"token counts the agent itself reported, using the same source for every condition (`{study.cost_basis}` basis). It is not an invoice. "
-      "Cost changes are the median of per-pair changes against the baseline, with a bootstrap interval that resamples whole tasks, "
+    source = ("the usage the gateway recorded for each request" if study.cost_basis == "recorded"
+              else "the token counts the agent itself reported")
+    a("**How to read the numbers.** Pass/fail, wall time and token counts are *measured*. Cost is *estimated*: list price applied to "
+      f"{source}, using the same source for every condition (`{study.cost_basis}` basis). It is not an invoice. "
+      "Two cost changes are shown against the baseline. The *total cost change* (total treated cost over total baseline cost) is "
+      "the figure the decision rule uses, with its interval at the rule's confidence level. The *median cost change* is the typical "
+      "per-pair change, for context. Both intervals come from a bootstrap that resamples whole tasks, "
       "because repeats of one task are not independent.\n")
     if an.incomplete_units:
         a(f"> {an.incomplete_units} of {an.total_units} unit(s) (a task, repeat and effort level) are missing a gradeable run in at least one condition. "
@@ -314,16 +318,17 @@ def _markdown(study: Study, lock: dict, an: StudyAnalysis, recs, versions: dict,
 
 
 def _table(rows: Sequence[CompRow], stratum: str) -> str:
-    out = ["| Condition | Pairs | Median cost change, est. (CI) | Success diff, pts (CI) | Median latency diff | p (primary, adj.) | Verdict |",
-           "|---|---:|---|---|---|---|---|"]
+    out = ["| Condition | Pairs | Total cost change, est. (rule CI) | Median cost change, est. (CI) | Success diff, pts (CI) | Median latency diff | p (primary, adj.) | Verdict |",
+           "|---|---:|---|---|---|---|---|---|"]
     for r in rows:
         if r.stratum != stratum:
             continue
         i = r.inference
         if i is None:
-            out.append(f"| `{r.condition}` | 0 | - | - | - | - | {VERDICT_TEXT[NEED_MORE_DATA]} |")
+            out.append(f"| `{r.condition}` | 0 | - | - | - | - | - | {VERDICT_TEXT[NEED_MORE_DATA]} |")
             continue
-        out.append(f"| `{r.condition}` | {i.n_pairs} | {i.median_cost_change_pct:+.1f}% ({_ci(i.median_cost_change_ci, 1, '%')}) | "
+        total = f"{r.ship.cost_change_pct:+.1f}% ({_ci(r.ship.cost_ci, 1, '%')})" if r.ship else "-"
+        out.append(f"| `{r.condition}` | {i.n_pairs} | {total} | {i.median_cost_change_pct:+.1f}% ({_ci(i.median_cost_change_ci, 1, '%')}) | "
                    f"{i.success_diff_pts:+.1f} ({_ci(i.success_diff_ci)}) | {i.median_latency_diff_s:+.1f}s ({_ci(i.median_latency_diff_ci, 1, 's')}) | "
                    f"{r.p_primary:.3f}, {r.p_adjusted:.3f} | {VERDICT_TEXT[r.verdict]} |")
     return "\n".join(out) + "\n"

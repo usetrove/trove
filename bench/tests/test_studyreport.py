@@ -124,3 +124,18 @@ def test_claim_and_parity_validation(tmp_path, over, msg):
 
     with pytest.raises(StudyError, match=msg):
         study(tmp_path, **over)
+
+
+@pytest.mark.parametrize("basis,source", [("agent", "the agent itself reported"), ("recorded", "the gateway recorded")])
+def test_report_shows_the_rule_figure_and_the_true_cost_source(tmp_path, basis, source):
+    # launch-1: the verdict used the total-cost change, but the table showed only the median, and the cost note
+    # named the agent's usage when the gateway's records priced every run.
+    p, s = study(tmp_path, cost_basis=basis)
+    write_lock(p)
+    s, lock = verify_lock(p)
+    out = tmp_path / "out"
+    write_study_report(out, s, lock, make_records(), {"agent": "fake", "model": "m", "fake_agent": True}, p.read_text())
+    md = (out / "report.md").read_text(encoding="utf-8")
+    assert "Total cost change, est. (rule CI)" in md
+    assert source in md
+    assert "-30.0%" in md      # all_safe costs 0.70 of direct in total: the rule's figure is in the table
