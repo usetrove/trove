@@ -44,7 +44,7 @@ const taskIdle = 30 * time.Minute
 // analyzeOne analyses one optimizer. Scout and cascade have their arms assigned by the hooks and may belong to
 // a user with no gateway, so they are compared on the agent's history like any other hook trial.
 func analyzeOne(ctx context.Context, db *store.DB, n string, x config.Experiment, priors Priors, now time.Time) (Result, error) {
-	if n == tasks.FeatureScout || n == tasks.FeatureCascade || n == tasks.FeatureSubagentModel {
+	if n == tasks.FeatureScout || n == tasks.FeatureCascade || n == tasks.FeatureSubagentModel || isHandoffTool(n) {
 		return AnalyzeHookTrial(ctx, db, n, x, 0, now, taskIdle)
 	}
 	return Analyze(ctx, db, n, x, priors)
@@ -160,4 +160,10 @@ func (r Result) rows() []store.ExperimentRow {
 		add(o)
 	}
 	return out // empty while there is not enough data: nothing measured, nothing stored
+}
+
+// isHandoffTool reports whether n is a third-party hook tool whose sessions the hooks split (ext_<tool>, plan item
+// 9.3). Rule-set trials share the prefix but are judged by Autopilot's own rule-trial path, so they are excluded.
+func isHandoffTool(n string) bool {
+	return strings.HasPrefix(n, "ext_") && !config.IsRuleTrial(n)
 }

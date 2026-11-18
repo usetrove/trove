@@ -149,8 +149,9 @@ func (h *handler) reset(in Input, key string) ([]byte, error) {
 				}
 			}
 		}
-		// An installed scout or cascade is split the same way, so it is judged by a session-level A/B.
-		for _, n := range h.snap.TaskTrial {
+		// An installed scout or cascade is split the same way, so it is judged by a session-level A/B, and so is
+		// every third-party hook tool Trove hands calls to.
+		for _, n := range append(append([]string{}, h.snap.TaskTrial...), h.snap.HandoffTrial...) {
 			if measure.Arm(key, n) == config.StateOn {
 				st.do(op{T: "pin", N: n, V: stateOn})
 				_ = h.emit(key, n, KindArmOn, 0, 0)
@@ -463,6 +464,7 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 		if feats, _, err := installedTasks(ctx, db); err == nil {
 			snap.TaskTrial = feats
 		}
+		snap.HandoffTrial = HandoffTools(external.ActiveStates(ctx, db.ExternalTools()))
 		// A damaged autopilot.json starts no trial (rule 4).
 		if f, err := config.LoadAutopilot(dir); err == nil {
 			snap.RuleTrial = f.RuleTrials()

@@ -121,6 +121,27 @@ Trove"; Trove's measured prompt tokens per request and cost per session, on vers
 estimated overhead; the license class; and the reason if Trove switched it off. The claimed and
 measured figures are never combined.
 
+## Randomized test for hook tools (plan item 9.3)
+
+For a tool that acts as a Bash hook (RTK, ZTK), Trove does not write the tool's own hook. It writes its own,
+`trove hook handoff <tool>`, and hands calls to the tool per session:
+
+- Each new Claude Code session is assigned an arm at SessionStart by a hash of its key, and the arm is recorded (names
+  and times only, like every hook trial).
+- In the "on" arm the hand-off is transparent: the tool gets the agent's hook input byte for byte, and its stdout,
+  stderr and exit code go back to the agent unchanged.
+- In the "off" arm nothing runs and the call goes ahead as if no tool were installed.
+- A session that began before the test, or whose state cannot be read, keeps the tool, as before. A tool that cannot
+  be started lets the call through with no output.
+
+So a hook tool is judged by a randomized session A/B, not by comparing a period before it with a period after, which
+mixes in everything else that changed. The comparison is the same hook-trial analysis the scout and cascade use.
+
+Checked live on 2026-11-18 on Claude Code 2.1.327, with a stand-in tool named `ztk` that rewrites `echo probe-N` the
+way ZTK rewrites commands: of six sessions, the two the hash put in the "on" arm returned the rewritten output
+(`HANDED-OFF-3`, `HANDED-OFF-4`) and the four in the "off" arm returned the original, and the recorded arms matched
+each session. The real RTK and ZTK binaries were not run (they install with Homebrew, which this machine lacks).
+
 ## Privacy and safety
 
 - Manifests are built into the binary. Trove does not load install commands from files on disk.
@@ -131,8 +152,8 @@ measured figures are never combined.
 
 ## Known gaps
 
-- Per-session on/off switching is not possible for config-wired tools, so evaluation is
-  sequential.
+- Per-session on/off switching is possible for hook tools (see "Randomized test for hook tools") but not for
+  config-wired ones (rules files), so those are still evaluated before against after.
 - Hooks-only sessions (no gateway) write no session pins, so they cannot yet be compared. Users
   without the gateway see the claim, overhead and license, but not a measured verdict.
 - RTK's hook entry is built from its documentation, not from running it. After a first real

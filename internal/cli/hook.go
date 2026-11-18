@@ -17,6 +17,10 @@ func RunHook(args []string, stdin io.Reader, stdout io.Writer) int {
 	if runProbeHook(args, stdin, stdout) {
 		return 0
 	}
+	if len(args) > 0 && args[0] == hooks.EventHandoff {
+		// The one hook whose exit code is not always 0: it passes on the third-party tool's own (plan item 9.3).
+		return hooks.Handoff(hooks.Env{Args: args, Stdin: stdin, Stdout: stdout, Getenv: os.Getenv}, os.Stderr)
+	}
 	return hooks.Main(hooks.Env{Args: args, Stdin: stdin, Stdout: stdout, Getenv: os.Getenv, Notify: notifierSync(), NotifyText: textNotifierSync()})
 }
 

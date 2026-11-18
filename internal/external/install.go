@@ -40,6 +40,10 @@ type Env struct {
 	// BuiltinsOn lists built-in optimizers whose state is "on" (for conflict checks).
 	BuiltinsOn func() []string
 	Manifests  []Manifest
+	// HandoffCommand, when set, is the command of Trove's own hook that hands a hook tool's calls to it only in the
+	// "on" arm of a randomized session test (`trove hook handoff <tool>`, plan item 9.3). Trove then writes that
+	// command into the agent's settings instead of the tool's own. Unset, the tool's command is written directly.
+	HandoffCommand func(tool string) string
 }
 
 func (e Env) now() time.Time {
@@ -148,8 +152,12 @@ func wireHook(e Env, m Manifest) ([]*setup.Edit, error) {
 	if e.ClaudeDir == "" {
 		return nil, errors.New("Trove could not find your agent's config folder, so it cannot add the hook. Set it up with the agent first")
 	}
+	command := m.Wire.HookCommand
+	if e.HandoffCommand != nil {
+		command = e.HandoffCommand(m.Name)
+	}
 	ed, err := setup.PlanExternalHook(m.Name, filepath.Join(e.ClaudeDir, "settings.json"),
-		setup.HookSpec{Event: m.Wire.HookEvent, Matcher: m.Wire.HookMatcher, Command: m.Wire.HookCommand})
+		setup.HookSpec{Event: m.Wire.HookEvent, Matcher: m.Wire.HookMatcher, Command: command})
 	if err != nil {
 		return nil, err
 	}

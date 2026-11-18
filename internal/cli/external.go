@@ -56,6 +56,13 @@ func externalEnv(a *App) (external.Env, config.Config, func(), error) {
 		DataDir: dir, ClaudeDir: claudeDir, Runner: external.ExecRunner{}, Store: db.ExternalTools(), Manifests: ms,
 		BuiltinsOn: func() []string { return builtinsOn(cfg) },
 	}
+	// Trove owns a hook tool's Bash hook and hands calls to it per session arm, so its effect is measured by a
+	// randomized test (plan item 9.3). If the Trove binary cannot be found, the tool's own command is written.
+	if _, build, err := hookCommands(a, dir, ""); err == nil {
+		env.HandoffCommand = func(tool string) string {
+			return strings.Replace(build("handoff"), " hook handoff", " hook handoff "+tool, 1)
+		}
+	}
 	return env, cfg, func() { _ = db.Close() }, nil
 }
 

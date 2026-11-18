@@ -77,6 +77,10 @@ type Snapshot struct {
 	// assigned an arm by a hash of its key and the arm is recorded; unlike Trial it needs no Autopilot, because
 	// the user installed the feature themselves and the comparison only measures it.
 	TaskTrial []string `json:"task_trial,omitempty"`
+	// HandoffTrial lists the enabled third-party hook tools (ext_<tool>) whose Bash hook Trove owns and hands off
+	// (EventHandoff). Each new Claude Code session is assigned an arm by a hash of its key; the tool runs only in
+	// the "on" arm, so its effect is measured by a randomized session A/B (plan item 9.3).
+	HandoffTrial []string `json:"handoff_trial,omitempty"`
 	// RuleTrial lists the rule-set trials the user started (autopilot.json entries named ext_<tool>, see
 	// autopilot.StartRuleTrial). Each new Claude Code session is assigned an arm by a hash of its key; in the
 	// "on" arm the hooks add the rule set's text to the session's context at every SessionStart.

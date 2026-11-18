@@ -72,7 +72,7 @@ Status: todo | doing | done | blocked(<reason>). Update the Status column when y
 | 8.2 | Subscription budget warning | 0.8 | S | agent | 1.7 | done |
 | 9.1 | RTK, ZTK, Headroom lib/CLI | 0.8 | M | agent | - | done |
 | 9.2 | Ponytail + Caveman on referee list | 0.8 | S | agent | 6.1, 6.2 | done |
-| 9.3 | Randomized hand-off A/B for external tools | 0.9 | L | agent+human | probe | todo |
+| 9.3 | Randomized hand-off A/B for external tools | 0.9 | L | agent+human | probe | done |
 | 9.4 | Claim vs verdict side by side | 0.9 | S | agent | - | done |
 | 10.1 | Real installs macOS/Linux/Windows | cont. | - | human | - | todo |
 | 10.2 | Codex real install | cont. | - | human | - | todo |
