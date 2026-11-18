@@ -1,0 +1,15 @@
+{
+  "study": "launch-3",
+  "look_alpha": 0.025,
+  "comparisons": [
+    {
+      "condition": "passthrough_plugin",
+      "verdict": "dont_ship"
+    },
+    {
+      "condition": "trove_full",
+      "verdict": "ship"
+    }
+  ],
+  "decided": true
+}

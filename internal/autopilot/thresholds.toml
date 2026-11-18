@@ -6,14 +6,14 @@ version = 1
 [tiers.T1]
 probation_min_sessions_per_arm = 200
 test_fail_margin_pts = 5
-pairs = 90
-cost_change_sd = 0.217107
-source = "bench:launch-1@40d12e203919"
+pairs = 120
+cost_change_sd = 0.242644
+source = "bench:launch-1@40d12e203919, bench:launch-3@cfc8f2404fc4"
 # T2: 0 pairs, fewer than 30; placeholders stay.
 
 [tiers.T3]
 probation_min_sessions_per_arm = 200
 test_fail_margin_pts = 5
-pairs = 90
-cost_change_sd = 0.188366
-source = "bench:launch-1@40d12e203919"
+pairs = 120
+cost_change_sd = 0.193315
+source = "bench:launch-1@40d12e203919, bench:launch-3@cfc8f2404fc4"
