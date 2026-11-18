@@ -25,6 +25,8 @@ import (
 // The history is synthetic: tokens per session are the same for both sides except for a planted effect.
 func runTrial(t *testing.T, onFactor float64, sessions int) (config.AutopilotEntry, int, int) {
 	t.Helper()
+	// Trial mechanics, not the shipped benchmark thresholds (which change whenever a study is published).
+	t.Cleanup(autopilot.UsePlaceholderThresholdsForTest())
 	r := newRig(t, nil)
 	start := r.now
 	trialStarted := start.Add(-time.Hour)

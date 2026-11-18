@@ -13,6 +13,18 @@ import (
 //go:embed thresholds.toml
 var embeddedThresholds []byte
 
+// activeThresholds is what DefaultThresholds reads: the shipped file, except in tests.
+var activeThresholds = embeddedThresholds
+
+// UsePlaceholderThresholdsForTest makes DefaultPolicy ignore the shipped benchmark thresholds until restore is
+// called, so tests of trial mechanics do not change whenever a published study regenerates thresholds.toml.
+// Tests only; nothing in the binary calls it.
+func UsePlaceholderThresholdsForTest() (restore func()) {
+	prev := activeThresholds
+	activeThresholds = []byte("version = 1\n")
+	return func() { activeThresholds = prev }
+}
+
 // TierThresholds are the trial numbers a pre-registered benchmark set for one technique tier (plan item 10.7).
 // `python -m trovebench thresholds` writes them from published results; bench/scripts/launch/04_report.sh runs it.
 type TierThresholds struct {
@@ -54,7 +66,7 @@ func LoadThresholds(b []byte) (Thresholds, error) {
 // DefaultThresholds returns the thresholds shipped in the binary. An unreadable file means none (placeholders stay),
 // never wrong numbers.
 func DefaultThresholds() Thresholds {
-	t, err := LoadThresholds(embeddedThresholds)
+	t, err := LoadThresholds(activeThresholds)
 	if err != nil {
 		return Thresholds{}
 	}
