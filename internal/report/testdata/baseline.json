@@ -176,6 +176,11 @@
         "effective": "off"
       },
       {
+        "name": "effort_tool_turns",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
         "name": "volatile_prefix_mover",
         "configured": "off",
         "effective": "off"

@@ -80,8 +80,12 @@ agent is checked by running it once against a fake provider.
    replaces the older one, so probe again after an agent upgrade.
 5. Restart the gateway. `trove optimize status` names the agents that passed.
 
-Status: built and tested against recorded requests. No real agent has been probed yet, so plan item 8.1 is
-blocked on this manual probe.
+Status: built and tested against recorded requests. Evidence from a real agent, 2026-11-18: Claude Code 2.1.327,
+pointed at a loopback server answering every request with the Anthropic-shape refusal above, sent exactly one
+request, printed `API Error: 402 Trove spend cap reached: about $10.00 of your $10.00 budget is spent this month
+(estimated at list prices). Trove did not send this request to the provider. To continue, ...` and exited with
+code 1 after 5 seconds. That is the `stops` behaviour. The verdict file is still written only by a person at a
+terminal running `trove budget probe`, so plan item 8.1 waits on that one step.
 
 ## What was not built, and why
 

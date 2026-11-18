@@ -160,6 +160,7 @@ def test_trove_full_turns_on_everything_and_names_the_route():
     for o in ("noise_normalizer", "duplicate_result_collapser", "verbosity_steer", "model_router", "output_trimmer"):
         assert st[o] == "on"
     assert st["volatile_prefix_mover"] == "off" and st["cache_breakpoints"] == "off"   # custom agents only
+    assert st["effort_tool_turns"] == "off"      # measured by itself (alone:effort_tool_turns)
     cfg = tomllib.loads(render_config_toml(c))
     assert cfg["optimize"] == {"route_to": "claude-haiku-5-5"}
     for bad in ("trove_full", "trove_full:Not A Model", "alone:model_router"):

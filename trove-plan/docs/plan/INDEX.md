@@ -63,12 +63,12 @@ Status: todo | doing | done | blocked(<reason>). Update the Status column when y
 | 7.1 | Cascade/scout/settings studies | 0.8 | L | agent+human | paid benchmark runs | todo |
 | 7.2 | Sticky model step-down at gateway | 0.8 | L | agent | 2.2, 2.4 | blocked(A/B needs live API-key sessions; shadow built) |
 | 7.3 | Model-per-subagent fix | 0.8 | M | agent | 2.2 | blocked(session A/B needs a verified per-session model override; before/after built) |
-| 7.4 | Lower effort on tool turns | 0.8 | M | agent | cache-break check | blocked(cache-break check needs live API-key sessions; check built) |
+| 7.4 | Lower effort on tool turns | 0.8 | M | agent | cache-break check | blocked(check done: keeps on Sonnet/Haiku 5.5; optimizer built; A/B is bench condition alone:effort_tool_turns, needs a study run) |
 | 7.5 | model_default with measured estimate | 0.8 | S | agent | 1.4 | todo |
 | 7.6 | Ollama offload for subagents | 0.8 | L | agent+human | open-weight study | todo |
 | 7.7 | Verify Codex/OpenCode subagents | 0.8 | M | human | real installs | todo |
 | 7.8 | Batch API suggestion re-labeled T1 | 0.8 | S | agent | 0.1 | done |
-| 8.1 | Spend cap warn 80% then stop | 0.8 | M | agent+human | refused-request probe | blocked(refused-request probe on a real agent; steps in docs/spend-cap.md) |
+| 8.1 | Spend cap warn 80% then stop | 0.8 | M | agent+human | refused-request probe | blocked(evidence: Claude Code stops after one refusal; a person must record it with `trove budget probe`) |
 | 8.2 | Subscription budget warning | 0.8 | S | agent | 1.7 | done |
 | 9.1 | RTK, ZTK, Headroom lib/CLI | 0.8 | M | agent | - | done |
 | 9.2 | Ponytail + Caveman on referee list | 0.8 | S | agent | 6.1, 6.2 | done |
@@ -79,7 +79,7 @@ Status: todo | doing | done | blocked(<reason>). Update the Status column when y
 | 10.3 | Live hook probe + hooks-vs-gateway bench | cont. | - | human | API key | todo |
 | 10.4 | Run per-hook studies | cont. | - | human | API key | todo |
 | 10.5 | Long-session task suite | cont. | M | agent | - | done |
-| 10.6 | Benchmark output_trimmer, hook_large_output | cont. | - | agent+human | API key | todo |
+| 10.6 | Benchmark output_trimmer, hook_large_output | cont. | - | agent+human | API key | blocked(conditions built with the MCP server registered; needs a study run) |
 | 10.7 | Benchmark-derived Autopilot thresholds | 0.8 | S | agent | 10.3-10.6 | todo |
 | 10.8 | Commit SWE-bench results + fix flaky test | 0.9 | S | agent+human | - | blocked(flaky test fixed; swebench-gateway-2 result files are on another machine) |
 | 11.1 | Docs around the three tiers | each | S | agent | 0.1 | todo |

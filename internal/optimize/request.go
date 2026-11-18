@@ -73,8 +73,12 @@ type Request struct {
 	Model string
 	// ModelSpan is the JSON string value of "model" (zero if absent or not a string).
 	ModelSpan Span
-	System    Span // zero if absent
-	Tools     Span // zero if absent
+	// Effort is output_config.effort when it is a string, and EffortSpan its JSON
+	// string value (zero if absent).
+	Effort     string
+	EffortSpan Span
+	System     Span // zero if absent
+	Tools      Span // zero if absent
 	// SystemBlocks is set when system is an array; a string system leaves it nil.
 	SystemBlocks []SystemBlock
 	// ToolSpans are the elements of the tools array.
@@ -208,6 +212,19 @@ func scanRequest(body []byte) (*Request, error) {
 			return ve, err
 		case "messages":
 			return r.parseMessages(vs)
+		case "output_config":
+			ve, err := scanValue(body, vs)
+			if err == nil && body[vs] == '{' {
+				_, _ = walkObject(body, vs, func(k []byte, s int) (int, error) {
+					e, err := scanValue(body, s)
+					if err == nil && string(k) == "effort" && body[s] == '"' {
+						r.Effort, _ = decodeString(body[s:e])
+						r.EffortSpan = Span{s, e}
+					}
+					return e, err
+				})
+			}
+			return ve, err
 		}
 		return scanValue(body, vs)
 	})

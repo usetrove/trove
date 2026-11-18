@@ -9,6 +9,7 @@ duplicate_result_collapser = "on"
 cache_breakpoints = "off"
 verbosity_steer = "off"
 model_router = "off"
+effort_tool_turns = "off"
 
 [measure]
 baseline_days = 0

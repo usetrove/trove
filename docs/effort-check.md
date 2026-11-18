@@ -21,9 +21,36 @@ are compared with turns where it did not:
 
 The counts come from provider-reported usage, so they are labeled measured.
 
-## Manual steps (blocked: needs live API-key sessions)
-1. Run API-key sessions through `trove gateway` with an agent or SDK script whose effort changes
-   between turns, plus sessions where it does not. Use each model you care about.
-2. Run `trove optimize effort-check`.
-3. Only for a model whose verdict is keeps: build the tool-turn effort optimizer and run its
-   session A/B. Then set item 7.4 to done.
+## Result, 2026-11-18 (live API-key sessions)
+
+Fifty-six requests went through a local `trove gateway`, sent by a script that calls the Messages API directly
+(not an agent). Per model there were four 7-turn sessions on an ~8.6k-token cached system prompt: two switched
+`output_config.effort` between `high` and `low` every turn, and two kept `high`. Each session's system prompt began
+with its own nonce, so no session could read another's cache.
+
+| Model | Changed pairs (lost) | Control pairs (lost) | Verdict |
+|---|---:|---:|---|
+| claude-sonnet-5-5 | 10 (0) | 10 (0) | keeps |
+| claude-haiku-5-5 | 10 (0) | 10 (0) | keeps |
+
+Every turn after an effort switch read back the whole earlier prefix. The counts are provider-reported usage, so
+they are measured. They cover these two models only, and short turns. Rerun the check before relying on it for
+another model.
+
+## The tool-turn effort optimizer (`effort_tool_turns`)
+
+Built after the keeps verdicts above. It is off by default and is a gateway optimizer for API-key traffic only. In
+the OpenCode plugin it is shadow-only for any login that is not an API key.
+
+- It acts only on a tool turn, a request whose newest user message holds only tool results. A turn where a person
+  is waiting for a reply is never touched.
+- It sets `output_config.effort` to `low` only when the request already asks for a higher level. It never adds the
+  field and never raises a level.
+- It acts only on models listed in `EffortCacheKeeps` (internal/optimize/effort.go), which are the models measured
+  above. Every other model is forwarded unchanged.
+- It runs right after `model_router`, so a routed request is judged for the model that will serve it.
+- Overhead: none (it adds no text). Technique C6, class effort, so T3 in the plan's tiers. It is judged by session
+  A/B on cost, test failures and turns, never assumed to save anything.
+
+What is left is the session A/B. That is a benchmark condition (`alone:effort_tool_turns` in bench/), registered in
+the components study for a later run.

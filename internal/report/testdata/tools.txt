@@ -31,6 +31,7 @@ Optimizers
   Baseline in progress: day 61 of 7 and 0 of 20 sessions. Until both pass, every
   optimizer only estimates and changes nothing.
   model_router: off
+  effort_tool_turns: off
   volatile_prefix_mover: off
   noise_normalizer: off
   output_trimmer: off

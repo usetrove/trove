@@ -170,7 +170,7 @@ var registry = []Technique{
 		Layers: []Layer{LayerRequest}, Route: RouteNative, Status: StatusPartial, Effect: tierLossless,
 		Gateway: true, Overhead: none(), Claims: gatewayClaim, Licence: "Trove project",
 		Note: "built: shadow estimates and on-mode pings (max_tokens 0, the documented pre-warm request), each recorded as its own billed row, with a ping cap, a daily spend cap and a spend guardrail. Approved with its limits in docs/decisions/keep-warm.md; checked live 2026-11-17 on one model with curl (docs/keep-warm.md); not yet checked inside a real agent session"},
-	{ID: "C6", Class: ClassEffort, Title: "Effort level per task", Names: []string{"effortLevel"},
+	{ID: "C6", Class: ClassEffort, Title: "Effort level per task", Names: []string{"effortLevel", "effort_tool_turns"},
 		Layers: []Layer{LayerConfig}, Route: RouteConfig, Status: StatusPartial, Effect: tierBehavior, Prefix: true,
 		Subscription: true, Overhead: none(), Licence: "Trove project",
 		Note: "the setting is verified and writable; no profile sets a value without a benchmark. A change of effort can invalidate cached message blocks, so it applies to new sessions only"},

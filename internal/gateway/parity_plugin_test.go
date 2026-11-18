@@ -90,6 +90,10 @@ func requestOnlyBody(name string) []byte {
 		// A typed turn then a tool turn: with a route_to target the tool turn would step down.
 		return []byte(`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"go"},` +
 			`{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}]}`)
+	case "effort_tool_turns":
+		// A tool turn on a measured model with an explicit high effort: lowered to low.
+		return []byte(`{"model":"claude-sonnet-5-5","output_config":{"effort":"high"},"messages":[{"role":"user","content":"go"},` +
+			`{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}]}`)
 	case "verbosity_steer":
 		return []byte(`{"model":"claude-opus-5-5","system":[{"type":"text","text":"You are a coding agent.","cache_control":{"type":"ephemeral"}}],"messages":[{"role":"user","content":"hi"}]}`)
 	case "duplicate_result_collapser":

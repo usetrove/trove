@@ -33,6 +33,7 @@ Biggest leaks (estimated, overlapping, not additive)
 
 Optimizers
   model_router: off
+  effort_tool_turns: off
   volatile_prefix_mover: off
   noise_normalizer: shadow (set to on)
     Rolled back: repeated tool calls rose 45% against the comparison sessions

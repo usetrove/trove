@@ -201,17 +201,19 @@ func AppliedJSON(reports []Report, failures []Failure) []byte {
 // Pipeline returns the optimizers in their fixed run order:
 //
 //  1. model_router               picks the model first, so later steps see the final one
-//  2. volatile_prefix_mover      system prompt layout, before anything reads it
-//  3. noise_normalizer           clean tool output first...
-//  4. output_trimmer             ...then trim what is left...
-//  5. duplicate_result_collapser ...then compare cleaned results for exact repeats
-//  6. verbosity_steer            a fixed note at the very end of the system prompt
-//  7. cache_breakpoints          last, so the size check sees the final prompt
+//  2. effort_tool_turns          lowers effort on tool turns, for the model chosen above
+//  3. volatile_prefix_mover      system prompt layout, before anything reads it
+//  4. noise_normalizer           clean tool output first...
+//  5. output_trimmer             ...then trim what is left...
+//  6. duplicate_result_collapser ...then compare cleaned results for exact repeats
+//  7. verbosity_steer            a fixed note at the very end of the system prompt
+//  8. cache_breakpoints          last, so the size check sees the final prompt
 //
 // The order is part of the cache-safety contract: changing it changes bytes.
 func Pipeline() []Optimizer {
 	return []Optimizer{
 		ModelRouter{},
+		EffortToolTurns{},
 		VolatilePrefixMover{},
 		NoiseNormalizer{memo: newSpanMemo()},
 		newOutputTrimmer(),
@@ -229,6 +231,7 @@ var GatewayNames = config.GatewayBehaviors
 // PipelineNames is the fixed order of names, for documentation and status output.
 var PipelineNames = []string{
 	OptimizerModelRouter,
+	OptimizerEffortToolTurns,
 	"volatile_prefix_mover",
 	"noise_normalizer",
 	config.OptimizerOutputTrimmer,

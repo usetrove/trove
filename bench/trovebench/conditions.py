@@ -26,7 +26,7 @@ OPTIMIZERS = (
 # Gateway optimizers outside the safe (T1) set. verbosity_steer is T2 (it asks for shorter replies) and
 # model_router is T3 (it sends tool turns to a cheaper model), so `all_safe` never includes them; they are on
 # only in conditions that name them. Listing them here makes every condition pin them explicitly.
-BEHAVIOR_OPTIMIZERS = ("verbosity_steer", "model_router")
+BEHAVIOR_OPTIMIZERS = ("verbosity_steer", "model_router", "effort_tool_turns")
 ALL_GATEWAY = OPTIMIZERS + BEHAVIOR_OPTIMIZERS
 MODEL_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{2,80}$")
 
@@ -138,7 +138,9 @@ def parse_condition(spec: str, agent: str, route_to: str = "") -> Condition:
         model = spec.split(":", 1)[1]
         if not MODEL_RE.match(model):
             raise ConditionError(f"'{spec}': '{model}' is not a model ID. Write trove_full:<model>, e.g. trove_full:claude-haiku-5-5.")
-        return Condition("trove_full", uses_gateway=True, on=supported + BEHAVIOR_OPTIMIZERS, uses_hooks=True,
+        # effort_tool_turns is left out: on tool turns already routed to the cheaper model it saves little, and it
+        # has its own condition (alone:effort_tool_turns) so its effect on success is measured by itself.
+        return Condition("trove_full", uses_gateway=True, on=supported + ("verbosity_steer", "model_router"), uses_hooks=True,
                          hooks_on=PLUGIN_ON, uses_mcp=True, route_to=model)
     if spec == "trove_full" and route_to:
         return parse_condition(f"trove_full:{route_to}", agent)
@@ -155,6 +157,9 @@ def parse_condition(spec: str, agent: str, route_to: str = "") -> Condition:
         raise ConditionError("alone:model_router needs the cheaper model: write alone:model_router:<model>.")
     if spec in ("alone:verbosity_steer", "alone_verbosity_steer"):
         return Condition("alone_verbosity_steer", uses_gateway=True, on=("verbosity_steer",))
+    if spec in ("alone:effort_tool_turns", "alone_effort_tool_turns"):
+        # Lowers effort on tool turns (plan item 7.4); acts only on models whose effort cache check said keeps.
+        return Condition("alone_effort_tool_turns", uses_gateway=True, on=("effort_tool_turns",))
     if spec.startswith("alone:"):
         name = spec.split(":", 1)[1]
         if name in HOOK_OPTIMIZERS:
