@@ -15,6 +15,30 @@ const FeatureSubagentModel = "task_subagent_model"
 // RoleSubagent is the role of a user's own subagent file.
 const RoleSubagent = "subagent"
 
+// ModelMarker is the YAML comment line SetModel writes just above the model line it adds, so the hooks can tell
+// a model line Trove wrote from one the user wrote, by reading the file, with nothing stored. Claude Code reads
+// frontmatter with a comment line as before (checked live 2026-11-18 on Claude Code 2.1.327: the subagent still
+// ran on the model in the file).
+const ModelMarker = "# trove:subagent-model (set by Trove; trove undo removes it)"
+
+// TroveSetModel reports whether content carries a model line SetModel wrote.
+func TroveSetModel(content []byte) bool {
+	return bytes.Contains(content, []byte(ModelMarker))
+}
+
+// ModelAlias maps a model ID to the alias the Agent tool's per-invocation model accepts. Checked live
+// 2026-11-18 on Claude Code 2.1.327: a PreToolUse rewrite of the Agent tool's input to model "sonnet" ran the
+// subagent on Sonnet even when its file said haiku, while "inherit" and a full model ID made the call fail.
+// An alias names the newest model of its family, so ok is false for anything that is not a Claude family.
+func ModelAlias(model string) (string, bool) {
+	for _, fam := range []string{"opus", "sonnet", "haiku", "fable"} {
+		if strings.HasPrefix(model, "claude-"+fam) || model == fam {
+			return fam, true
+		}
+	}
+	return "", false
+}
+
 // SetModel returns content with "model: <model>" added as the last frontmatter field,
 // or a reason it must not be changed. A file that already has a model line (including
 // "inherit") is the user's choice, and is left alone with an empty reason and nil.
@@ -57,7 +81,7 @@ func SetModel(content []byte, model string) ([]byte, string) {
 		return nil, "the frontmatter block has no closing ---, so Trove cannot add a field safely"
 	}
 	at := len("---"+nl) + end
-	return []byte(s[:at] + "model: " + model + nl + s[at:]), ""
+	return []byte(s[:at] + ModelMarker + nl + "model: " + model + nl + s[at:]), ""
 }
 
 // ValidateSubagentModel checks the model task_subagent_model would write.

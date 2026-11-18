@@ -54,7 +54,7 @@ func TestSubagentModelOnlyFillsUnsetFilesAndUndoes(t *testing.T) {
 	if _, err := Apply(context.Background(), f.env, ids(fixes)); err != nil {
 		t.Fatal(err)
 	}
-	if got := f.read(unset); !strings.Contains(got, "description: reviews\nmodel: haiku\n---\n") {
+	if got := f.read(unset); !strings.Contains(got, "description: reviews\n"+tasks.ModelMarker+"\nmodel: haiku\n---\n") {
 		t.Errorf("file after apply:\n%s", got)
 	}
 	if !strings.Contains(f.read(chosen), "model: opus") || strings.Contains(f.read(chosen), "haiku") {

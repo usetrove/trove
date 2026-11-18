@@ -62,7 +62,7 @@ Status: todo | doing | done | blocked(<reason>). Update the Status column when y
 | 6.6 | Autopilot trials for rule sets | 0.7 | M | agent | 1.1-1.3, 6.1 | done |
 | 7.1 | Cascade/scout/settings studies | 0.8 | L | agent+human | paid benchmark runs | todo |
 | 7.2 | Sticky model step-down at gateway | 0.8 | L | agent | 2.2, 2.4 | blocked(A/B needs live API-key sessions; shadow built) |
-| 7.3 | Model-per-subagent fix | 0.8 | M | agent | 2.2 | blocked(session A/B needs a verified per-session model override; before/after built) |
+| 7.3 | Model-per-subagent fix | 0.8 | M | agent | 2.2 | blocked(override probed live and session A/B built; data comes from real sessions with the fix applied) |
 | 7.4 | Lower effort on tool turns | 0.8 | M | agent | cache-break check | blocked(check done: keeps on Sonnet/Haiku 5.5; optimizer built; A/B is bench condition alone:effort_tool_turns, needs a study run) |
 | 7.5 | model_default with measured estimate | 0.8 | S | agent | 1.4 | done |
 | 7.6 | Ollama offload for subagents | 0.8 | L | agent+human | open-weight study | todo |

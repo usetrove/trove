@@ -52,7 +52,8 @@ func detectSubagentModel(e *Env) ([]*Fix, error) {
 		}
 		f.Notes = append(f.Notes,
 			"Overhead: none. The model line is read by Claude Code, not sent to the model.",
-			"No saving is estimated yet. After you apply it, `trove report` compares sessions before and after; a session A/B is not possible, because a file cannot be switched off for half of the sessions.",
+			"No saving is estimated yet. After you apply it, `trove report` compares sessions before and after, and with experiments on, half of new sessions run this subagent on the main conversation's model instead (a session A/B).",
+			"A comment line marks the model line as Trove's, so the hooks can tell it from one you wrote.",
 			"Applied only between sessions, backed up, and reversed with `trove undo`.")
 		switch {
 		case e.getenv("CLAUDE_CODE_SUBAGENT_MODEL_FORCE") != "":

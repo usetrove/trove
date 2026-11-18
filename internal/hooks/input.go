@@ -21,8 +21,11 @@ type Input struct {
 	Event     string `json:"hook_event_name"`
 	Cwd       string `json:"cwd"` // a common input field (code.claude.com/docs/en/hooks, checked 2026-11-05); only hashed, never stored
 	ToolName  string `json:"tool_name"`
-	Reason    string `json:"reason"`
-	Source    string `json:"source"`
+	// TranscriptPath is the session's transcript file (a common input field, seen live 2026-11-18 on Claude Code
+	// 2.1.327). Only the model of the newest main-thread reply is read from it, in memory; it is never stored.
+	TranscriptPath string `json:"transcript_path"`
+	Reason         string `json:"reason"`
+	Source         string `json:"source"`
 	// Model is the session's model, sent with SessionStart (code.claude.com/docs/en/hooks, checked 2026-11-17).
 	// Only its family is used, to pick the learned bytes-per-token ratio; it is never stored.
 	Model string `json:"model"`

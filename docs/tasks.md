@@ -65,11 +65,29 @@ Verified 2026-11-17 on code.claude.com/docs/en/sub-agents.md: when `model` is om
 uses the per-invocation model, then `CLAUDE_CODE_SUBAGENT_MODEL`, then the main conversation's model.
 Each subagent runs in its own context window.
 
-Measurement: `trove report` shows before-and-after figures (`task_subagent_model`). There is no
-session A/B. A model line cannot be switched off for half the sessions, so both arms would be
-identical, and the hooks therefore assign no arms for it. Blocked: a control arm needs a verified
-way to override the model per session (for example the per-invocation model parameter, through a
-PreToolUse rewrite). Probe that live before building it.
+The model line Trove writes has a comment line just above it (`# trove:subagent-model ...`), so
+the hooks can tell it from one the user wrote by reading the file; nothing about the file is
+stored.
+
+Measurement: `trove report` shows before-and-after figures (`task_subagent_model`), and with
+experiments on, the hooks run a session A/B. Each new Claude Code session is assigned an arm by a
+hash of its key, as for the scout and cascade. In the "off" arm, a PreToolUse rewrite of an `Agent`
+call to a subagent whose model line Trove wrote sets the call's per-invocation `model` to the main
+conversation's model, read from the newest main-thread reply in the session transcript, so the
+subagent runs as it did before the fix. Anything uncertain goes through untouched: a call that
+names a model itself, a subagent the user configured, an unreadable transcript, a model with no
+alias, a rolled-back feature.
+
+Checked live on 2026-11-18 on Claude Code 2.1.327 with an API key:
+- a PreToolUse `updatedInput` that adds `model: "sonnet"` to an `Agent` call ran the subagent on
+  Sonnet even when its file said `model: haiku`, so the per-invocation model wins over the file;
+- `"inherit"` and a full model ID (`claude-haiku-5-5`) as the per-invocation model made the call
+  fail, so only the family aliases (`sonnet`, `opus`, `haiku`, `fable`) are used. An alias names
+  the newest model of its family, so a main conversation on an older model gets that family's
+  newest model in the off arm;
+- a YAML comment line in the frontmatter does not change how the file is read;
+- hook inputs carry no model field in a print-mode session (SessionStart, UserPromptSubmit and
+  PreToolUse were logged), which is why the transcript is read.
 
 ## Safety
 

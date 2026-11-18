@@ -212,6 +212,9 @@ func (h *handler) subagent(in Input, key string) ([]byte, error) {
 	if in.ToolName != "Agent" && in.ToolName != "Task" {
 		return nil, nil
 	}
+	if out := h.subagentModelControl(in, key); out != nil {
+		return out, nil
+	}
 	if in.ToolInput.SubagentType != tasks.ScoutName {
 		return nil, nil
 	}
