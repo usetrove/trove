@@ -23,7 +23,7 @@ secondary_metrics: [success_rate, latency_s]
 baseline_condition: direct
 conditions: [direct, hooks, all_safe, hooks_gateway]
 efforts: [low, medium, high]
-tasks: tasks/polyglot        # generate with: python -m trovebench fetch polyglot -n 20
+tasks: tasks/polyglot30      # 30 tasks; generate with: python -m trovebench fetch polyglot -n 30
 repeats: 3
 order_seed: 20261106
 cost_basis: agent            # every condition priced from the agent's own usage report: the only like-for-like basis

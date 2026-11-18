@@ -6,55 +6,75 @@
         "agent": "codex",
         "agent_version": "",
         "tool": "Bash",
-        "input_rewrite": "yes",
+        "input_rewrite": "untested",
         "output_rewrite": "no",
         "method": "docs",
-        "evidence": "documentation only (not run): PreToolUse updatedInput works for Bash with a string command; PostToolUse output replacement is parsed but not supported",
-        "probed_at": "2026-11-05T06:01:26Z"
+        "evidence": "documentation only (not run): updatedInput is accepted only with permissionDecision \"allow\", which Trove does not send, so input rewriting needs a live probe; no PostToolUse field replaces Bash output",
+        "probed_at": "2026-11-18T05:14:51Z"
+      },
+      {
+        "agent": "cursor",
+        "agent_version": "",
+        "tool": "Bash",
+        "input_rewrite": "untested",
+        "output_rewrite": "no",
+        "method": "docs",
+        "evidence": "documentation only (not run): preToolUse documents updated_input; postToolUse replaces output for MCP tools only",
+        "probed_at": "2026-11-18T05:14:51Z"
+      },
+      {
+        "agent": "gemini",
+        "agent_version": "",
+        "tool": "Bash",
+        "input_rewrite": "untested",
+        "output_rewrite": "untested",
+        "method": "docs",
+        "evidence": "documentation only (not run): BeforeTool hookSpecificOutput.tool_input merges into the arguments; AfterTool decision \"deny\" replaces the result with reason",
+        "probed_at": "2026-11-18T05:14:51Z"
       },
       {
         "agent": "claude",
-        "agent_version": "2.1.318",
+        "agent_version": "2.1.319",
         "tool": "Bash",
         "input_rewrite": "yes",
         "output_rewrite": "yes",
         "method": "live",
         "evidence": "the tool ran with the rewritten input (seen by the PostToolUse hook); the model's reply contained the replacement output",
-        "probed_at": "2026-11-05T06:01:26Z"
+        "probed_at": "2026-11-18T05:14:51Z"
       },
       {
         "agent": "claude",
-        "agent_version": "2.1.318",
+        "agent_version": "2.1.319",
         "tool": "Read",
         "input_rewrite": "yes",
         "output_rewrite": "yes",
         "method": "live",
         "evidence": "the tool ran with the rewritten input (seen by the PostToolUse hook); the model's reply contained the replacement output",
-        "probed_at": "2026-11-05T06:01:26Z"
+        "probed_at": "2026-11-18T05:14:51Z"
       },
       {
         "agent": "claude",
-        "agent_version": "2.1.318",
+        "agent_version": "2.1.319",
         "tool": "Grep",
         "input_rewrite": "yes",
         "output_rewrite": "yes",
         "method": "live",
         "evidence": "the tool ran with the rewritten input (seen by the PostToolUse hook); the model's reply contained the replacement output",
-        "probed_at": "2026-11-05T06:01:26Z"
+        "probed_at": "2026-11-18T05:14:51Z"
       },
       {
         "agent": "claude",
-        "agent_version": "2.1.318",
+        "agent_version": "2.1.319",
         "tool": "Glob",
         "input_rewrite": "yes",
         "output_rewrite": "yes",
         "method": "live",
         "evidence": "the tool ran with the rewritten input (seen by the PostToolUse hook); the model's reply contained the replacement output",
-        "probed_at": "2026-11-05T06:01:26Z"
+        "probed_at": "2026-11-18T05:14:51Z"
       }
     ]
   },
-  "agent_version": "2.1.318",
+  "agent_version": "2.1.319",
   "live": true,
-  "spent_usd": 0.01589515
+  "spent_usd": 0.00248819
 }
