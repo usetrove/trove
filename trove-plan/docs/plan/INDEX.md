@@ -76,7 +76,7 @@ Status: todo | doing | done | blocked(<reason>). Update the Status column when y
 | 9.4 | Claim vs verdict side by side | 0.9 | S | agent | - | done |
 | 10.1 | Real installs macOS/Linux/Windows | cont. | - | human | - | todo |
 | 10.2 | Codex real install | cont. | - | human | - | todo |
-| 10.3 | Live hook probe + hooks-vs-gateway bench | cont. | - | human | API key | blocked(launch-1 ran but its plugin arm was confounded by --bare; launch-3, the launch-day study, ready to run) |
+| 10.3 | Live hook probe + hooks-vs-gateway bench | cont. | - | human | API key | done |
 | 10.4 | Run per-hook studies | cont. | - | human | API key | blocked(components-1 study ready to lock and run) |
 | 10.5 | Long-session task suite | cont. | M | agent | - | done |
 | 10.6 | Benchmark output_trimmer, hook_large_output | cont. | - | agent+human | API key | blocked(conditions built with the MCP server registered; needs a study run) |

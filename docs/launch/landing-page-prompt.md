@@ -1,8 +1,8 @@
 # Landing page redesign prompt
 
-Written 2026-11-16. Paste everything below the line into the tool that builds troverelay.com.
+Written 2026-11-16, results updated 2026-11-18 with the `launch-3` study. Paste everything below the line into the tool that builds troverelay.com.
 Every number in it is copied from README.md "Measured results" and `bench/published/workflows/workflows.md`
-as of v0.4.0 (2026-11-14). If those change, change this file first.
+as of v0.4.0 (2026-11-14), and from `bench/published/launch-3/report.md` (2026-11-18). If those change, change this file first.
 
 ---
 
@@ -86,7 +86,7 @@ Sub-copy: "Trove reads the history your coding agent already keeps, shows where 
 
 Primary button: "Install" (links to /install). Beside it a copyable command chip: `brew install usetrove/trove/trove`.
 
-Footnote: "Works with Claude Code today. Sends nothing by default. Trove has not yet shown a saving on real coding tasks; see the benchmarks."
+Footnote: "Works with Claude Code today. Sends nothing by default. Measured on 30 long Claude Code sessions: 25% lower estimated cost with model routing on (API keys only). The plugin alone has not shown a saving yet; see the benchmarks."
 
 Pill tabs and stage (each tab swaps the terminal in the stage; use these exact terminal contents):
 
@@ -115,11 +115,11 @@ Pill tabs and stage (each tab swaps the terminal in the stage; use these exact t
 
 Below the stage, a section headed "What the benchmarks say" with three stat tiles and one line each. Figures in Figtree 800 at 3.5rem, label in a small mono chip beside each:
 
-- "3.7%" chip "estimated". "Median cost saving on 7 scripted everyday sessions (range 0.0% to 8.6%)."
+- "25%" chip "estimated". "Lower cost per session on 30 long Claude Code sessions on Sonnet with model routing on (98% interval 21% to 29%), with no drop in tasks passed (measured). Pre-registered. API-key traffic only."
 - "19.3%" chip "estimated". "Median on 3 scripted output-heavy sessions (range 2.5% to 50.7%). A ceiling for that kind of work, not a typical day."
 - "698 of 698" chip "measured". "Failure and error lines still visible to the model after trimming. 400 of 400 requests kept their cached prefix byte-identical."
 
-Under the tiles, in `--ink-soft`: "Scripted sessions replayed through the real engine, no API calls. On real tasks, two pre-registered studies found no saving distinguishable from noise. Read all of it on the benchmarks page." Link: "See the benchmarks" to /benchmarks.
+Under the tiles, in `--ink-soft`: "The 25% is model routing, an opt-in option for API keys; it never runs on a subscription. The plugin alone and the safe optimizers have not yet shown a saving on real tasks. The 19.3% comes from scripted sessions replayed through the real engine, no API calls. Read all of it on the benchmarks page." Link: "See the benchmarks" to /benchmarks.
 
 Then a four-step row headed "Nothing changes until it's proven":
 - 01 Watch. "Trove reads the session history your agent already keeps. It changes nothing."
@@ -157,11 +157,20 @@ Note at the bottom: "Autopilot is a first version. Its promotion thresholds are 
 
 This page is the measured-results section of the README, laid out properly. Open with a boxed bottom line in `--paper-2`:
 
-"Bottom line. Trove has not yet shown that it saves money on real coding tasks. Two pre-registered studies found no saving that can be told apart from noise, and the short tasks they used leave little for an optimizer to remove. Scripted sessions show where it does help: output-heavy work and agents that do not cache their prompts. Trove makes no savings promise."
+"Bottom line. In a pre-registered study of 30 long Claude Code sessions on Sonnet (launch-3, 2026-11-18), Trove's full setup with model routing on cut the estimated cost per session by 25% (98% interval 21% to 29%), with no drop in tasks passed (measured). The saving comes from model routing, an opt-in option for API-key traffic that sends tool turns to a cheaper model; it never runs on a subscription. The Claude Code plugin alone and the safe optimizers have not yet shown a saving on real tasks: on the tasks studied they had almost nothing to remove. Trove makes no savings promise beyond what a study shows."
 
 Then "Decision rule": "Trove recommends an optimizer for automatic use only if its cost reduction is at least 5% and the whole 95% interval lies at or below −5%, with the success rate not falling by more than 5 points and at least 30 pairs. Otherwise the verdict is NEED MORE DATA or DON'T SHIP. A result is never rounded up."
 
-Section 1, "Real tasks, two pre-registered studies". Lead: "Does the gateway with its safe optimizers on cost less than the same gateway with every optimizer off? Costs are estimated (list price on the token counts the agent reports). Pass or fail is measured." Table:
+Section 1, "Long Claude Code sessions (launch-3)". Lead: "Does the Trove plugin cut cost, and does the plugin plus the gateway with model routing cut it further? 30 long-session Python exercises, Claude Code 2.1.319, claude-sonnet-5-5 routing to claude-haiku-5-5, API-key auth, every arm launched the same way. Pre-registered; costs are estimated (list price on the usage the gateway recorded), pass or fail is measured." Table:
+
+| Compared with no Trove | Total cost change, estimated (98% interval) | Tasks passed (measured) | Verdict |
+|---|---|---|---|
+| Plugin + gateway + model routing | −25.3% (−29.2% to −21.4%) | 30 of 30 vs 30 of 30 | SHIP |
+| Plugin alone | +3.5% (−0.6% to +7.7%) | 30 of 30 vs 30 of 30 | DON'T SHIP: even the best case saves less than 5% |
+
+Under it: "The saving is model routing: the safe optimizers removed no tokens in this study, and input tokens rose because a model switch rewrites the cache, which the cheaper model more than paid for. Routing and brevity steering were both on; both are off by default and need an explicit opt-in, and routing never runs on a subscription. The plugin's hooks acted in 2 of 30 runs, so these tasks gave them little to do. Every arm passed every task, so the tasks were easy. Routed sessions took a median 9.4 s longer (measured)." Link: "Full report" to bench/published/launch-3/report.md on GitHub.
+
+Section 2, "Real tasks, two pre-registered studies". Lead: "Does the gateway with its safe optimizers on cost less than the same gateway with every optimizer off? Costs are estimated (list price on the token counts the agent reports). Pass or fail is measured." Table:
 
 | | Aider polyglot, 30 tasks | SWE-bench Verified, 35 tasks |
 |---|---|---|
@@ -175,7 +184,7 @@ Section 1, "Real tasks, two pre-registered studies". Lead: "Does the gateway wit
 
 Under it: "The two studies point in opposite directions, which shows how wide the noise is. In the SWE-bench study the two single optimizers were also within noise: noise_normalizer 0.0% (−11.0% to +20.0%) and duplicate_result_collapser +1.9% (−11.6% to +26.0%). The gateway's own records say the optimizers had almost nothing to remove: the median SWE-bench session was 5 turns, and all_safe removed about 0.2% of input tokens (estimated). A saving of that size cannot move a bill."
 
-Section 2, "Scripted everyday sessions, replayed through the real engine". Lead: "Short benchmark tasks cannot show a long working day, so `trove bench workflows` replays hand-scripted Claude Code sessions through the real optimizer engine, offline: no API call, no spend. How often a file is re-read, how noisy a shell is and how long a session runs are assumptions, so these figures say what the optimizers do on these patterns. They are not a forecast of anyone's bill." Model claude-sonnet-5-5, list prices as of 2026-11-08.
+Section 3, "Scripted everyday sessions, replayed through the real engine". Lead: "Short benchmark tasks cannot show a long working day, so `trove bench workflows` replays hand-scripted Claude Code sessions through the real optimizer engine, offline: no API call, no spend. How often a file is re-read, how noisy a shell is and how long a session runs are assumptions, so these figures say what the optimizers do on these patterns. They are not a forecast of anyone's bill." Model claude-sonnet-5-5, list prices as of 2026-11-08.
 
 Tier table:
 
@@ -212,11 +221,11 @@ Then a horizontal bar chart, one bar per workflow, grouped by tier, bars in `--i
 | explore-and-review (no caching) | custom agent | 20 | $1.4643 | $0.4097 | 72.0% | 0/0 | 20/20 |
 | long-feature-session (no caching) | custom agent | 94 | $16.4598 | $3.3321 | 79.8% | 89/89 | 94/94 |
 
-Section 3, "Nothing lost for the saving (measured)": four stat tiles. "698 of 698" failure and error lines still visible to the model. "400 of 400" requests kept the cached prefix byte-identical. "0" broken invariants; repeat runs byte-identical. "2.54 ms" engine time per request at p50 (p99 17.09 ms), measured in-process on one machine, excluding the gateway's forwarding time.
+Section 4, "Nothing lost for the saving (measured)": four stat tiles. "698 of 698" failure and error lines still visible to the model. "400 of 400" requests kept the cached prefix byte-identical. "0" broken invariants; repeat runs byte-identical. "2.54 ms" engine time per request at p50 (p99 17.09 ms), measured in-process on one machine, excluding the gateway's forwarding time.
 
-Section 4, "Caveats", as a bulleted list: two models and two Claude Code versions across the real-task studies; results may differ for other models, versions or longer sessions. Costs are list-price estimates, never an invoice. Token counts in the scripted runs use the engine's bytes-per-token ratio, not provider counts. The heavy tier was written to be waste-rich. The SWE-bench study ran on a separate machine and its result files are not yet in the repository.
+Section 5, "Caveats", as a bulleted list: the one confirmed saving is model routing for API-key traffic, on easy tasks that every arm passed, with one model and one Claude Code version; two models and two Claude Code versions across the real-task studies; results may differ for other models, versions or longer sessions. Costs are list-price estimates, never an invoice. Token counts in the scripted runs use the engine's bytes-per-token ratio, not provider counts. The heavy tier was written to be waste-rich. The SWE-bench study ran on a separate machine and its result files are not yet in the repository.
 
-Section 5, "Reproduce": two code blocks.
+Section 6, "Reproduce": two code blocks.
 ```
 python -m trovebench fetch polyglot -n 30 --seed 20261108
 python -m trovebench run --study studies/gateway-cost-2.yaml --tasks <that folder> --batch <folder> --yes
@@ -269,7 +278,7 @@ Then "The one opt-in": "`trove contribute enable` turns on an anonymous aggregat
 ### 4.6 FAQ
 
 - Does it change my agent's behavior? Only if an optimizer is on. Everything starts in shadow mode, which changes nothing, and Autopilot promotes a fix only from shadow evidence and only between sessions.
-- Will it save me money? Not proven yet. Two pre-registered studies on real tasks found no saving distinguishable from noise. Scripted sessions show savings where there is real waste: output-heavy work and agents that do not cache. Run `trove` and see your own number.
+- Will it save me money? With an API key and model routing on, a pre-registered study of 30 long Claude Code sessions on Sonnet measured 25% lower estimated cost per session with no drop in tasks passed. On a subscription, or with only the plugin and the safe optimizers, a saving is not proven yet. Run `trove` and see your own number.
 - Does it work with a subscription (Pro, Max, Team)? Yes, through the Claude Code plugin. It never touches your login.
 - Does it work with API keys? Yes, through the plugin or the optional local gateway.
 - Does Trove send my data anywhere? No. Nothing leaves your machine unless you run `trove contribute enable`.
