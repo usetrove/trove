@@ -166,8 +166,8 @@ def generate(seed_text: str, result_dirs: list[Path], *, allow_simulated: bool =
         out_rules.append(r)
     have = {(r["kind"], r["name"]) for r in out_rules}
     for key, f in sorted(best.items(), key=lambda kv: kv[1].rule_id):
-        if key in have or key in dropped:
-            continue
+        if key in have or key in dropped or f.kind == "prior":
+            continue    # a "prior" finding feeds priors.toml only; it never becomes a recommender rule
         if not f.reason.strip():
             raise DefaultsError(f"{f.study_id} found support for {f.name} but registered no `reason` template and the seed has no rule for it.")
         out_rules.append({"id": f.rule_id, "kind": f.kind, "name": f.name, "action": "shadow" if f.kind == "optimizer" else "use_profile",
@@ -197,7 +197,7 @@ def generate(seed_text: str, result_dirs: list[Path], *, allow_simulated: bool =
            "# Each table is one optimizer's result from a pre-registered, real benchmark study, as fractions (-0.08 = 8% cheaper).",
            "version = 1"]
     for (kind, name), f in sorted(best.items()):
-        if kind != "optimizer":
+        if kind not in ("optimizer", "prior"):
             continue
         pri += ["", f"[optimizers.{name}]", f"cost_change = {_v(f.cost_change)}", f"cost_ci_low = {_v(f.cost_ci[0])}",
                 f"cost_ci_high = {_v(f.cost_ci[1])}", f"success_diff = {_v(f.success_diff)}", f"success_ci_low = {_v(f.success_ci_low)}",

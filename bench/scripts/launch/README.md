@@ -36,9 +36,30 @@ Each script stops with a plain message if something is wrong. Do not continue pa
 
 ## What the result means
 
-- Each comparison gets SHIP, DON'T SHIP or NEED MORE DATA under the registered rule: the whole 95%-level interval of
-  the cost change at or below -5% (at the stricter per-look level), task success not more than 5 points lower, at
-  least 30 pairs.
+- Each comparison gets one of three verdicts under the registered rule (the report's own labels in brackets):
+  - **saving confirmed** (SHIP): the whole interval of the cost change is at or below -5% (at the stricter per-look
+    level), task success is not more than 5 points lower, and there are at least 30 pairs. You can call it verified.
+  - **not proven yet** (NEED MORE DATA): the evidence does not settle it either way. Show the numbers only as early.
+  - **worse** (DON'T SHIP): it cost more or lowered task success. Make no savings claim for it.
 - The claim covers long, multi-prompt sessions on Sonnet with this Claude Code version. It says nothing about
   one-shot tasks, other models or other agents.
-- Publish whatever comes back, including NEED MORE DATA.
+- Publish whatever comes back, including "not proven yet".
+
+## Later studies
+
+The same scripts run the other registered studies; pass the study file in `STUDY` to steps 2 to 4:
+
+```sh
+STUDY=bench/studies/models-1.yaml bash bench/scripts/launch/02_pilot.sh
+STUDY=bench/studies/models-1.yaml bash bench/scripts/launch/03_run.sh
+STUDY=bench/studies/models-1.yaml bash bench/scripts/launch/04_report.sh
+```
+
+| Study | What it answers | Plan items | Cap |
+|---|---|---|---|
+| `launch-1` | no optimization vs the plugin vs plugin + gateway + routing, long Sonnet sessions | 10.3, launch claim | $70 |
+| `models-1` | cascade, scout, model routing, a cheaper default, a settings profile; one-shot Sonnet tasks | 7.1, 7.2, 7.5 prior | $50 |
+| `components-1` | every optimizer and hook by itself, long Sonnet sessions | 10.4, 10.6, 7.4, 1.4 priors | $90 |
+
+`04_report.sh` regenerates the recommender defaults and the benchmark priors from every study published so far, so
+plan items 1.4 (priors) and 7.5 (the model_default evidence) fill in from the results with no other step.

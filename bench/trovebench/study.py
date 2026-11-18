@@ -136,9 +136,9 @@ def _validate(s: Study, path: Path) -> None:
         raise StudyError(f"{path}: repeats must be at least 1.")
     if s.staged and s.repeats < 2:
         raise StudyError(f"{path}: a staged study looks at the data after each repeat, so it needs repeats of at least 2.")
-    routed = [c for c in s.conditions if c in ("trove_full", "alone_model_router")]
+    routed = [c for c in s.conditions if c in ("trove_full", "alone_model_router", "default_model")]
     if routed and not s.route_to:
-        raise StudyError(f"{path}: condition {routed[0]} turns on model_router, so the study must name its cheaper model in route_to.")
+        raise StudyError(f"{path}: condition {routed[0]} uses the cheaper model, so the study must name it in route_to.")
     bad = [e for e in s.efforts if e not in EFFORTS]
     if bad or len(set(s.efforts)) != len(s.efforts):
         raise StudyError(f"{path}: efforts must be unique values from {', '.join(EFFORTS)}; got {list(s.efforts)}.")
@@ -157,8 +157,9 @@ def _validate(s: Study, path: Path) -> None:
     for cond, r in s.recommends.items():
         if cond not in s.conditions or cond == s.baseline_condition:
             raise StudyError(f"{path}: recommends names '{cond}', which must be a non-baseline condition of this study.")
-        if not set(r) <= _RECOMMEND or not {"rule_id", "kind", "name"} <= set(r) or r["kind"] not in ("optimizer", "profile"):
-            raise StudyError(f"{path}: recommends.{cond} needs rule_id, kind (optimizer or profile) and name; reason is optional.")
+        if not set(r) <= _RECOMMEND or not {"rule_id", "kind", "name"} <= set(r) or r["kind"] not in ("optimizer", "profile", "prior"):
+            raise StudyError(f"{path}: recommends.{cond} needs rule_id, kind (optimizer, profile or prior) and name; reason is optional. "
+                             "kind prior writes only a benchmark prior (internal/experiment/priors.toml), never a recommender rule.")
     for c in s.claims:
         if set(c) != _CLAIM:
             raise StudyError(f"{path}: each claim needs exactly {', '.join(sorted(_CLAIM))}; a claim without a source cannot be checked.")

@@ -29,7 +29,7 @@ grep -q "fake agent" bench/results/launch/check-fake/report.md || stop "the fake
 # solve it, so "failed" is expected; what matters is that every run is gradeable (status ok), not an error.
 FAKE_TASKS=bench/results/launch/fake-long-tasks
 rm -rf "$FAKE_TASKS" && mkdir -p "$FAKE_TASKS" && cp -r "$TASKS/$(ls "$TASKS" | head -1)" "$FAKE_TASKS/"
-python bench/scripts/launch/make_config.py bench/results/launch/fake-long.yaml claude-haiku-5-5 1 0.5 passthrough all_safe >/dev/null
+python bench/scripts/launch/make_config.py bench/results/launch/fake-long.yaml claude-haiku-5-5 1 0.5 - passthrough all_safe >/dev/null
 python -m trovebench run --fake --config bench/results/launch/fake-long.yaml --tasks "$FAKE_TASKS" \
   --batch bench/results/launch/check-fake-long || true
 python - <<'EOF'

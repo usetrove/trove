@@ -220,6 +220,25 @@ the MCP server, but no optimizer that needs it is eligible yet; a check that the
 only that the MCP server is registered; and an agent-version match for installs that do not use the plugin (the
 plugin's start check handles the update case; `trove doctor` warns otherwise).
 
+## Benchmark thresholds per tier (plan item 10.7, built 2026-11-18)
+
+Two of the trial placeholders are now set from the benchmark, per technique tier, the moment a study is published:
+
+- **Sessions per side of a trial** (`ProbationMinSessionsPerArm`): how many finished sessions each side needs to
+  detect a 5% cost change (the ship rule's minimum) at 80% power and a two-sided 5% level, given how much the per-pair
+  cost change varied in the benchmark for techniques of that tier. n = 2 (1.96 + 0.84)^2 sd^2 / 0.05^2, clamped to
+  10 to 200. A user's own sessions vary more than a fixed task suite, so this is a floor.
+- **Test-failure margin** (`TestFailMarginPts`): the success margin the studies registered (5 points so far), so a
+  trial holds a technique to the same success rule its benchmark used.
+
+`python -m trovebench thresholds --results <published studies>` writes `internal/autopilot/thresholds.toml`, which the
+binary embeds; `bench/scripts/launch/04_report.sh` runs it after every study. A tier needs at least 30 benchmark pairs;
+a tier with fewer keeps the placeholders, and the file says so. Every entry names its study and lock hash, and a value
+outside the generator's range is refused rather than used. Tiers: T1 for the hooks, the safe gateway optimizers, the
+plugin bundle and settings profiles; T2 for `verbosity_steer`; T3 for `model_router`, `effort_tool_turns`, a cheaper
+default model, the cascade, the scout and the full bundle. Until a study is published, the file is empty and every
+number above remains a placeholder.
+
 ## Suggested order
 
 1. **The evidence adapter for hooks (G2).** One piece of work that fixes hooks-only users for `noise_normalizer` and is

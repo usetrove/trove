@@ -1,0 +1,87 @@
+# Components study: each Trove optimizer and hook switched on BY ITSELF, against no Trove, on long Sonnet sessions.
+# It answers which parts of Trove do what, so each can carry its own benchmark evidence. Plan items: 10.4 (per-hook
+# studies), 10.6 (output_trimmer and hook_large_output, now measurable with Trove's MCP server registered), the A/B of
+# 7.4 (effort_tool_turns), and the per-optimizer priors of 1.4 (`recommends` below).
+#
+# Run it after the launch study, with the same runbook (bench/scripts/launch/), passing STUDY=bench/studies/components-1.yaml
+# (see bench/scripts/launch/README.md, "Later studies"). Same Claude Code version, API-key auth and long-session
+# tasks as launch-1.
+#
+# Cost basis `agent`: no condition here changes the model, so Claude Code's own usage report prices every condition
+# the same way, including the hook conditions, which have no gateway.
+#
+# What to expect, stated before the run: with eleven comparisons, Holm's correction makes each one harder to clear,
+# so small effects will read NEED MORE DATA. A hook that rarely acts on these tasks (hook_quiet_commands acts on a few
+# install commands) may show no difference because it had little to do; run  python bench/tools/hook_activity.py  on
+# the results before reading the table.
+
+id: components-1
+title: "Each Trove optimizer and hook by itself, against no Trove, on long Sonnet sessions"
+hypothesis: >
+  Each optimizer or hook switched on by itself lowers the cost per long session against no Trove, without lowering the
+  share of tasks that pass.
+primary_metric: billed_cost_usd
+secondary_metrics: [success_rate, latency_s]
+baseline_condition: direct
+conditions:
+  - direct
+  - alone_hook_repeat_read
+  - alone_hook_read_limit
+  - alone_hook_quiet_commands
+  - alone_hook_output_dedup
+  - alone_hook_read_outline
+  - alone_hook_large_output
+  - alone_output_trimmer
+  - alone_noise_normalizer
+  - alone_duplicate_result_collapser
+  - alone_verbosity_steer
+  - alone_effort_tool_turns
+tasks: tasks/longsession30
+repeats: 1
+order_seed: 20261119
+model: claude-sonnet-5-5
+cost_basis: agent
+analysis:
+  alpha: 0.05
+  bootstrap_resamples: 10000
+  bootstrap_seed: 20261119
+  multiple_comparison: holm
+ship_rule:
+  min_cost_reduction_pct: 5
+  success_margin_pts: 5
+  min_pairs: 30
+budget:
+  batch_cap_usd: 90.0
+  run_cap_usd: 1.50
+recommends:
+  alone_hook_repeat_read: {rule_id: block-repeat-reads, kind: optimizer, name: hook_repeat_read}
+  alone_hook_read_limit: {rule_id: limit-big-reads, kind: optimizer, name: hook_read_limit}
+  alone_hook_quiet_commands: {rule_id: quiet-test-commands, kind: optimizer, name: hook_quiet_commands}
+  alone_hook_large_output: {rule_id: hint-large-output, kind: optimizer, name: hook_large_output}
+  alone_output_trimmer: {rule_id: trim-large-test-output, kind: optimizer, name: output_trimmer}
+  alone_noise_normalizer: {rule_id: normalize-noisy-output, kind: optimizer, name: noise_normalizer}
+  alone_hook_output_dedup:
+    rule_id: dedup-repeated-output
+    kind: optimizer
+    name: hook_output_dedup
+    reason: "Over your last {sessions} sessions here, identical tool output came back about {dup_ratio} of the time. Output dedup in shadow mode counts what it would have replaced with a short pointer."
+  alone_hook_read_outline:
+    rule_id: outline-large-reads
+    kind: optimizer
+    name: hook_read_outline
+    reason: "This repo is in size bucket {size} and sessions read about {files_read} files each. Outline-first reads in shadow mode estimate what showing an outline before a large file would save."
+  alone_duplicate_result_collapser:
+    rule_id: collapse-duplicate-results
+    kind: optimizer
+    name: duplicate_result_collapser
+    reason: "Sessions here repeat identical tool results about {repeat_reads} times (over {sessions} sessions). Collapsing duplicates in shadow mode estimates the saving."
+  alone_verbosity_steer:
+    rule_id: steer-shorter-replies
+    kind: optimizer
+    name: verbosity_steer
+    reason: "Over {sessions} sessions here, replies were long relative to the work. Verbosity steering in shadow mode estimates what shorter replies would save."
+  alone_effort_tool_turns:
+    rule_id: lower-effort-on-tool-turns
+    kind: optimizer
+    name: effort_tool_turns
+    reason: "Over {sessions} sessions here, most turns only returned tool results. Lower effort on those turns in shadow mode estimates the saving."

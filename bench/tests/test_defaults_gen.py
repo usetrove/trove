@@ -133,3 +133,17 @@ def test_cli_refuses_simulated_results(batch, tmp_path, capsys):
     out = tmp_path / "d.toml"
     assert main(["defaults", "--results", str(batch), "--out", str(out), "--priors-out", str(tmp_path / "p.toml")]) == 2
     assert "simulated" in capsys.readouterr().err and not out.exists()
+
+
+def test_a_prior_kind_writes_a_prior_and_never_a_rule(tmp_path):
+    # kind "prior" (for example model_default, which `trove optimize suggest` reads) feeds priors.toml only.
+    study = {**STUDY, "recommends": {"alone_duplicate_result_collapser": {"rule_id": "cheaper-default", "kind": "prior", "name": "model_default"}}}
+    b = run_study(tmp_path, study=study)
+    defaults, priors, findings = generate(SEED, [b], allow_simulated=True)
+    f = next(x for x in findings if x.name == "model_default")
+    assert f.kind == "prior"
+    assert "cheaper-default" not in defaults and "model_default" not in defaults
+    if f.status == SUPPORTED:
+        assert "[optimizers.model_default]" in priors
+    else:
+        assert "model_default" not in priors

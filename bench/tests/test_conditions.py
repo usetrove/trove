@@ -193,3 +193,30 @@ def test_single_hooks_can_sit_in_one_study_with_the_other_conditions():
     names = [c.name for c in parse_conditions(
         ["direct", "alone_hook_repeat_read", "alone_hook_quiet_commands", "hooks", "all_safe"], "claude_code")]
     assert len(set(names)) == 5
+
+
+# ---- Trove features installed in the repo (plan item 7.1) -------------------------------------------------------
+
+def test_feature_conditions_install_then_check_and_record_through_the_gateway():
+    from trovebench.conditions import feature_prompt, feature_setup
+    s = parse_condition("task_scout", "claude_code")
+    assert s.uses_gateway and s.on == () and not s.uses_hooks and s.feature == "scout"
+    assert feature_setup(s, "x") == ["trove tasks apply scout --yes --project .", "test -f .claude/agents/trove-scout.md"]
+    assert feature_prompt(s, "fix it") == "fix it"
+    c = parse_condition("task_cascade", "claude_code")
+    cmds = feature_setup(c, "cd a && python -m pytest -q")
+    assert "--test-cmd 'cd a && python -m pytest -q'" in cmds[0] and cmds[1].startswith("test -f")
+    assert feature_prompt(c, "fix it") == "/trove-cascade fix it"
+    p = parse_condition("profile:quick-fix", "claude_code")
+    assert p.name == "profile_quick_fix" and parse_condition("profile_quick_fix", "claude_code").feature == "profile:quick-fix"
+    assert "--allow-unproven" in feature_setup(p, "x")[0]
+    with pytest.raises(ConditionError, match="profile"):
+        parse_condition("profile:feature", "claude_code")     # changes nothing for Claude Code
+    assert set(s.effective_states().values()) == {"off"}
+
+
+def test_default_model_runs_the_whole_session_on_the_cheaper_model():
+    c = parse_condition("default_model", "claude_code", route_to="claude-haiku-5-5")
+    assert c.model == "claude-haiku-5-5" and c.uses_gateway and c.on == () and not c.route_to
+    with pytest.raises(ConditionError, match="route_to"):
+        parse_condition("default_model", "claude_code")

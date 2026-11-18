@@ -13,6 +13,7 @@ by reading the code, not assumed):
 from __future__ import annotations
 
 import re
+import shlex
 from dataclasses import dataclass
 
 OPTIMIZERS = (
@@ -28,6 +29,11 @@ OPTIMIZERS = (
 # only in conditions that name them. Listing them here makes every condition pin them explicitly.
 BEHAVIOR_OPTIMIZERS = ("verbosity_steer", "model_router", "effort_tool_turns")
 ALL_GATEWAY = OPTIMIZERS + BEHAVIOR_OPTIMIZERS
+# Settings profiles that change something for Claude Code (`trove settings plan --task X --allow-unproven`, checked
+# 2026-11-18 on Claude Code 2.1.327): quick-fix and exploration both set outputStyle = Concise in the project's
+# .claude/settings.json. feature and refactor change nothing for Claude Code, so a condition for them would
+# measure nothing.
+PROFILE_TASKS = ("quick-fix", "exploration")
 MODEL_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{2,80}$")
 
 # Hook-side optimizers (internal/hooks). They run in the agent's own hooks, with
@@ -94,6 +100,12 @@ class Condition:
     # The gateway only records: it gets its own data dir with every optimizer off, so hook-side settings that
     # share a name with a gateway optimizer (noise_normalizer, output_trimmer) act in the hooks alone.
     recording_gateway: bool = False
+    # A Trove feature installed in the task's repo before the agent runs (plan item 7.1): "scout", "cascade" or
+    # "profile:<task type>". Each runs behind a gateway that only records, so it is priced like every condition.
+    feature: str = ""
+    # The model the agent is started with in this condition, when it differs from the study's model: the
+    # "cheaper default model" a model_default fix would set (plan item 7.5). "" means the study's model.
+    model: str = ""
 
     @property
     def measurable(self) -> bool:
@@ -132,6 +144,21 @@ def parse_condition(spec: str, agent: str, route_to: str = "") -> Condition:
         # price a plugin-only run when the study prices every condition from the gateway's records.
         return Condition("passthrough_plugin", uses_gateway=True, uses_hooks=True, hooks_on=PLUGIN_ON, uses_mcp=True,
                          recording_gateway=True)
+    if spec == "default_model":
+        # The whole session on the study's cheaper model (route_to), as if the default model were changed: the
+        # comparison that gives `trove optimize suggest` its model_default prior.
+        if not route_to:
+            raise ConditionError("default_model needs the cheaper model: the study names it in route_to.")
+        return Condition("default_model", uses_gateway=True, model=route_to)
+    if spec in ("task_scout", "task_cascade"):
+        # Trove's scout subagent, or its test-gated cascade (cheap worker first, strong model on failing tests).
+        return Condition(spec, uses_gateway=True, feature=spec.removeprefix("task_"))
+    if spec.startswith("profile_") or spec.startswith("profile:"):
+        # Records spell the condition profile_quick_fix; the profile itself is quick-fix.
+        task = spec.split(":", 1)[1] if ":" in spec else spec.removeprefix("profile_").replace("_", "-")
+        if task not in PROFILE_TASKS:
+            raise ConditionError(f"'{spec}': unknown settings profile '{task}'. Use one of {', '.join(PROFILE_TASKS)}.")
+        return Condition(f"profile_{task.replace('-', '_')}", uses_gateway=True, feature=f"profile:{task}")
     if spec.startswith("trove_full:"):
         # Everything Trove offers an API-key user of this agent: the whole plugin, every safe gateway optimizer,
         # verbosity_steer (T2) and model_router (T3) stepping tool turns down to the named model.
@@ -238,3 +265,34 @@ def render_config_toml(cond: Condition, *, retention_days: int = 3650) -> str:
         "",
     ]
     return "\n".join(lines)
+
+
+def feature_setup(cond: Condition, task_success_cmd: str) -> list[str]:
+    """Shell commands, run in the task's repo inside the container, that install the condition's Trove feature.
+
+    Every command is a documented `trove` command run with --yes, which writes only inside the repo and the
+    container's own Claude Code settings; the container is thrown away after the run. The cascade gets the task's
+    own test command, because it refuses to escalate on a guess. Settings profiles pass --allow-unproven because
+    the benchmark is how a profile's values earn evidence.
+    """
+    f = cond.feature
+    if not f:
+        return []
+    # Each install is followed by a check that its file exists. `trove` queues a change instead of applying it
+    # when it sees a recently active session; a fresh container has none, and the check makes sure of it, so an
+    # install that changed nothing fails the run instead of being measured as a no-op.
+    if f == "scout":
+        return ["trove tasks apply scout --yes --project .", "test -f .claude/agents/trove-scout.md"]
+    if f == "cascade":
+        return [f"trove tasks apply cascade --yes --project . --test-cmd {shlex.quote(task_success_cmd)}",
+                "test -f .claude/commands/trove-cascade.md"]
+    if f.startswith("profile:"):
+        return [f"trove settings apply --task {shlex.quote(f.split(':', 1)[1])} --allow-unproven --yes --project .",
+                "test -f .claude/settings.json"]
+    raise ConditionError(f"unknown feature {f!r} in condition {cond.name!r}.")
+
+
+def feature_prompt(cond: Condition, prompt: str) -> str:
+    """The first prompt for the condition: the cascade is started with its slash command (checked live
+    2026-11-18: a project command runs from `claude -p "/name args"`); every other condition gets the task as is."""
+    return f"/trove-cascade {prompt}" if cond.feature == "cascade" else prompt

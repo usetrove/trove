@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Free. After 03_run.sh: build the report, gather only the publishable files into bench/published/launch-1/,
-# regenerate the recommender defaults and benchmark priors from every published study, and commit.
+# regenerate the recommender defaults, benchmark priors and Autopilot thresholds from every published study, and commit.
 #     bash bench/scripts/launch/04_report.sh
 # It never copies runs/ (agent output) or any task text. It does not push: review the commit, then `git push`.
 . "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
@@ -25,19 +25,22 @@ say "Recommender defaults and benchmark priors from every published study (plan 
 RESULTS=()
 for d in bench/published/*/; do [ -f "$d/study.lock.json" ] && [ -f "$d/comparisons.csv" ] && RESULTS+=("${d%/}"); done
 python -m trovebench defaults --results "${RESULTS[@]}"
-go test ./internal/recommend/... ./internal/experiment/... >/dev/null && echo "generated files load in Go: ok"
+say "Autopilot trial thresholds per tier from every published study (plan item 10.7)"
+python -m trovebench thresholds --results "${RESULTS[@]}"
+go test ./internal/recommend/... ./internal/experiment/... ./internal/autopilot/... >/dev/null && echo "generated files load in Go: ok"
 
 say "Verdicts"
 python - "$BATCH/stage.json" <<'EOF'
 import json, sys
 d = json.load(open(sys.argv[1]))
+plain = {"ship": "saving confirmed", "need_more_data": "not proven yet", "dont_ship": "worse: no savings claim"}
 for c in d["comparisons"]:
-    print(f"  {c['condition']:<22} {c['verdict'].upper().replace('_', ' ')}")
+    print(f"  {c['condition']:<26} {plain.get(c['verdict'], c['verdict'])}")
 EOF
 echo "Full report: $DST/report.md"
 
 say "Commit"
-git add "$DST" internal/recommend/defaults.toml internal/experiment/priors.toml
+git add "$DST" internal/recommend/defaults.toml internal/experiment/priors.toml internal/autopilot/thresholds.toml
 git commit -m "bench: publish $STUDY_ID results" -m "Report, verdicts and per-run metadata from the pre-registered study; no agent output or task text." || echo "(nothing new to commit)"
 echo
 echo "Review with: git show --stat HEAD   then push with: git push"

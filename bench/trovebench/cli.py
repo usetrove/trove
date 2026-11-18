@@ -80,6 +80,9 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--priors-out", type=Path, default=BENCH.parent / "internal" / "experiment" / "priors.toml")
     d.add_argument("--dry-run", action="store_true", help="show what each result supports; write nothing")
 
+    th = sub.add_parser("thresholds", help="derive Autopilot's trial thresholds per tier from published study results")
+    th.add_argument("--results", type=Path, nargs="*", default=[], help="finished study folders")
+    th.add_argument("--out", type=Path, default=BENCH.parent / "internal" / "autopilot" / "thresholds.toml")
     f = sub.add_parser("fetch", help="generate task manifests from polyglot, the long-session suite or SWE-bench Verified")
     f.add_argument("source", choices=["polyglot", "longsession", "swebench"])
     f.add_argument("--out", type=Path, help="output folder (default bench/tasks/<source>)")
@@ -129,7 +132,7 @@ def _setup(args, *, smoke: bool = False) -> tuple[Config, list[Task], list, list
     if not tasks:
         raise UserError(f"No task manifests (*.yaml) found under {tasks_dir}.")
     conds = parse_conditions(list(cfg.conditions), "claude_code" if cfg.agent == "fake" else cfg.agent,
-                             route_to=study.route_to if study else "")
+                             route_to=study.route_to if study else cfg.route_to)
     if study:
         base = next((c for c in conds if c.name == study.baseline_condition), None)
         if base is None or not base.measurable:
@@ -390,6 +393,12 @@ def _cmd_defaults(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.cmd == "thresholds":
+            from .thresholds import generate as gen_thresholds
+
+            args.out.write_text(gen_thresholds(list(args.results)), encoding="utf-8", newline="\n")
+            print(f"Wrote {args.out}")
+            return 0
         if args.cmd == "stage":
             return _cmd_stage(args)
         if args.cmd == "defaults":

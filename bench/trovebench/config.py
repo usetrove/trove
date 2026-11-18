@@ -12,7 +12,7 @@ from .cost import Profile
 from .stats import ShipRule
 
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / "config.yaml"
-_TOP = {"agent", "model", "claude_version", "repeats", "order_seed", "limits", "conditions", "ship_rule", "estimate"}
+_TOP = {"agent", "model", "claude_version", "repeats", "order_seed", "limits", "conditions", "ship_rule", "estimate", "route_to"}
 _LIMITS = {"batch_cap_usd", "run_cap_usd", "run_timeout_s"}
 
 
@@ -34,6 +34,7 @@ class Config:
     ship_rule: ShipRule
     profile: Profile
     sha256: str
+    route_to: str = ""        # the cheaper model for trove_full, alone_model_router and default_model conditions
 
 
 def load_config(path: Path | None = None) -> Config:
@@ -60,6 +61,7 @@ def load_config(path: Path | None = None) -> Config:
             ship_rule=ShipRule.from_dict(d.get("ship_rule") or {}),
             profile=Profile.from_dict(d.get("estimate") or {}),
             sha256=hashlib.sha256(raw_text.encode()).hexdigest(),
+            route_to=str(d.get("route_to") or ""),
         )
     except KeyError as e:
         raise ConfigError(f"{p}: missing required key {e}. See the default bench/config.yaml.") from e

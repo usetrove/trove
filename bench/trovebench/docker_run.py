@@ -17,7 +17,7 @@ from typing import Callable, Iterator
 from . import docker_env as de
 from .agent.base import Agent, AgentResult, combine_results
 from .collect import build_record, read_gateway_db
-from .conditions import Condition, recording_config_toml, render_config_toml
+from .conditions import Condition, feature_prompt, feature_setup, recording_config_toml, render_config_toml
 from .hooks_env import HooksSetupError, capabilities_for, check_snapshot, install_command
 from .manifest import Task
 from .plan import RunSpec
@@ -160,7 +160,7 @@ class ContainerRunner:
                 secrets: tuple[str, ...]) -> RunRecord:
         self.log("      container up; setting up (gateway/hooks if the condition uses them) ...")
         c.exec("mkdir -p /bench", workdir="/")
-        (td / "prompt.txt").write_text(task.prompt, encoding="utf-8", newline="\n")
+        (td / "prompt.txt").write_text(feature_prompt(cond, task.prompt), encoding="utf-8", newline="\n")
         c.put(td / "prompt.txt", "/bench/prompt.txt")
         if task.repo.startswith("local:"):
             sol = Path(task.base_dir) / "solution.sh"
@@ -210,6 +210,12 @@ class ContainerRunner:
 
         if cond.uses_hooks:
             self._setup_hooks(c, td, cond)
+        if cond.feature and not self.fake:
+            # The feature's files must exist before the agent starts (rule 5: features change only between sessions).
+            for cmd in feature_setup(cond, task.success_cmd):
+                r = c.exec(f"TROVE_DATA_DIR={TROVE_DATA} {cmd}")
+                if r.rc != 0:
+                    raise RunEnvError(f"installing {cond.feature} failed in the container: {(r.out + r.err)[-300:]}")
 
         timeout = min(task.timeout_s, self.run_timeout_s)
         prompts = ["/bench/prompt.txt"]
@@ -231,8 +237,8 @@ class ContainerRunner:
                     why = "time" if left_s < 30 else ("budget" if left_usd <= 0.01 else "no session id to resume")
                     self.log(f"      stopping before follow-up {i}: out of {why}")
                     break
-                res = c.exec(self.agent.command(model=self.model, max_budget_usd=round(left_usd, 4), prompt_path=path,
-                                                   effort=spec.effort, bare=not (cond.uses_hooks or cond.uses_mcp), resume=session,
+                res = c.exec(self.agent.command(model=cond.model or self.model, max_budget_usd=round(left_usd, 4), prompt_path=path,
+                                                   effort=spec.effort, bare=not (cond.uses_hooks or cond.uses_mcp or cond.feature), resume=session,
                                                    persist=len(prompts) > 1),
                              timeout=max(1, int(left_s)), env=agent_env)
                 outs.append(res.out)

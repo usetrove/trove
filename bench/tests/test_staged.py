@@ -43,6 +43,7 @@ def test_staged_study_tests_each_look_at_alpha_over_repeats(tmp_path):
 @pytest.mark.parametrize("over,msg", [
     ({"repeats": 1}, "repeats of at least 2"),
     ({"route_to": ""}, "route_to"),
+    ({"route_to": "", "conditions": ["passthrough", "default_model"], "staged": False}, "route_to"),
 ])
 def test_invalid_staged_or_routed_study(tmp_path, over, msg):
     with pytest.raises(StudyError, match=msg):

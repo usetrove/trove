@@ -55,10 +55,18 @@ type Policy struct {
 	// margin for routing (T3) techniques. Placeholders until a benchmark sets them.
 	TestFailMarginPts   float64
 	TestFailMarginPtsT3 float64
+	// ProbationMinByTier and TestFailMarginByTier replace the placeholders above for every tier a pre-registered
+	// benchmark set them for (thresholds.toml, plan item 10.7); ThresholdSource names that benchmark per tier.
+	ProbationMinByTier   map[technique.Tier]int
+	TestFailMarginByTier map[technique.Tier]float64
+	ThresholdSource      map[technique.Tier]string
 }
 
 // testFailMargin is the test_fail_rate margin for a tier: stricter for T3 than for T1 and T2.
 func (p Policy) testFailMargin(t technique.Tier) float64 {
+	if m, ok := p.TestFailMarginByTier[t]; ok {
+		return m
+	}
 	if t == technique.T3 {
 		return p.TestFailMarginPtsT3
 	}
@@ -79,7 +87,7 @@ func DefaultPolicy() Policy {
 		TestFailMinSessions: 10,
 		TestFailMarginPts:   10,
 		TestFailMarginPtsT3: 5,
-	}
+	}.withThresholds(DefaultThresholds())
 }
 
 // PolicyV2 is "lossless-v2": the v1 list, plus two recoverable optimizers that must pass probation, a
@@ -342,12 +350,12 @@ func (p Policy) decideProbation(cur config.AutopilotEntry, ev Evidence, now time
 		set(config.AutopilotShadow, "the trial cannot continue: "+ev.CanProbation)
 	case pe.Status == "costs_more" || pe.Status == "worse_outcomes":
 		set(config.AutopilotRolledBack, "the trial showed it makes sessions worse (measured); back to shadow")
-	case pe.Status == "saves" && pe.NOn >= p.ProbationMinSessionsPerArm && pe.NOff >= p.ProbationMinSessionsPerArm:
+	case pe.Status == "saves" && pe.NOn >= p.probationMin(ev.Tests.Tier) && pe.NOff >= p.probationMin(ev.Tests.Tier):
 		set(config.AutopilotOn, "kept after a clean trial against sessions without it (measured)")
 	case now.Sub(time.UnixMilli(cur.SinceMS)) >= time.Duration(p.ProbationMaxDays)*24*time.Hour:
 		set(config.AutopilotShadow, fmt.Sprintf("no measurable benefit after %d days of trial; leaving it in shadow", p.ProbationMaxDays))
 	default:
-		next.Reason = fmt.Sprintf("trial running: %d sessions with it on and %d with it off so far, each side needs %d", pe.NOn, pe.NOff, p.ProbationMinSessionsPerArm)
+		next.Reason = fmt.Sprintf("trial running: %d sessions with it on and %d with it off so far, each side needs %d", pe.NOn, pe.NOff, p.probationMin(ev.Tests.Tier))
 	}
 	return Decision{Entry: next}
 }

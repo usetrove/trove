@@ -123,13 +123,13 @@ func DecideRuleTrial(cur config.AutopilotEntry, ev Evidence, v experiment.Result
 		set(config.AutopilotOff, "the trial cannot continue: "+ev.CanProbation)
 	case v.Status == experiment.CostsMore || v.Status == experiment.WorseOutcomes:
 		set(config.AutopilotRolledBack, "trial stopped: sessions with the rules came out worse (measured). Verdict: "+verdict)
-	case v.Status == experiment.Saves && v.NOn >= p.ProbationMinSessionsPerArm && v.NOff >= p.ProbationMinSessionsPerArm:
+	case v.Status == experiment.Saves && v.NOn >= p.probationMin(ev.Tests.Tier) && v.NOff >= p.probationMin(ev.Tests.Tier):
 		set(config.AutopilotOff, "trial finished: sessions with the rules came out better (measured). Autopilot does not turn rule sets on; turn it on yourself if you want it. Verdict: "+verdict)
 	case now.Sub(time.UnixMilli(cur.SinceMS)) >= time.Duration(p.ProbationMaxDays)*24*time.Hour:
 		set(config.AutopilotOff, fmt.Sprintf("trial finished after %d days with no clear benefit. Verdict: %s", p.ProbationMaxDays, verdict))
 	default:
 		next.Reason = fmt.Sprintf("trial running: %d sessions with the rules and %d without so far, each side needs %d. So far: %s",
-			v.NOn, v.NOff, p.ProbationMinSessionsPerArm, verdict)
+			v.NOn, v.NOff, p.probationMin(ev.Tests.Tier), verdict)
 	}
 	return Decision{Entry: next}
 }
