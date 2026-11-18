@@ -1,9 +1,9 @@
 # Shared settings and checks for the study scripts. Sourced, never run directly.
-# The study defaults to the final launch study (launch-2); pass another with STUDY=bench/studies/<id>.yaml.
+# The study defaults to the launch-day study (launch-3); pass another with STUDY=bench/studies/<id>.yaml.
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
-STUDY="${STUDY:-bench/studies/launch-2.yaml}"
+STUDY="${STUDY:-bench/studies/launch-3.yaml}"
 [ -f "$STUDY" ] || { echo "STOP: no study file at $STUDY" >&2; exit 1; }
 study_field() { python -c 'import sys,yaml; v=yaml.safe_load(open(sys.argv[1])).get(sys.argv[2]); print(" ".join(map(str,v)) if isinstance(v,list) else ("" if v is None else v))' "$STUDY" "$1"; }
 STUDY_ID="$(study_field id)"

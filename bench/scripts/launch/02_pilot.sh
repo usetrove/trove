@@ -20,7 +20,9 @@ RUN_CAP="$(python -c 'import sys,yaml; print(yaml.safe_load(open(sys.argv[1]))["
 python bench/scripts/launch/make_config.py "$CFG" "$MODEL" 20 "$RUN_CAP" "${ROUTE_TO:--}" "${CONDS[@]}" >/dev/null
 
 say "Pilot for $STUDY_ID: 2 tasks x ${#CONDS[@]} conditions on $MODEL (hard cap \$20)"
+PILOT_START=$SECONDS
 python -m trovebench run --config "$CFG" --tasks "$PILOT_TASKS" --batch "$PILOT_BATCH" --hook-capabilities "$CAPS" --yes || true
+export PILOT_ELAPSED_S=$((SECONDS - PILOT_START))
 
 say "Pilot summary"
 python bench/scripts/pilot_stats.py "$PILOT_BATCH"

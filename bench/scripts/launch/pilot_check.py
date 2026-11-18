@@ -8,19 +8,23 @@ Stops (exit 1) unless:
   * default_model ran every request on route_to,
   * plugin conditions really ran with the plugin (hook data saved next to the run).
 Then writes <pilot batch>/sizing.json with the mean cost per run and how many looks (repeats) of the study fit the
-budget, which 03_run.sh reads. The pilot's pass/fail results are never used.
+budget, which 03_run.sh reads, and prints how long the study will take (estimated; PILOT_ELAPSED_S, set by
+02_pilot.sh, adds the per-session container and grading time to the agent's own). The pilot's pass/fail results are never used.
 """
 
 from __future__ import annotations
 
 import json
 import math
+import os
 import sqlite3
 import statistics as st
 import sys
 from pathlib import Path
 
 import yaml
+
+from trovebench.timing import describe, estimate_time
 
 batch, study_path, budget = Path(sys.argv[1]), Path(sys.argv[2]), float(sys.argv[3])
 study = yaml.safe_load(study_path.read_text(encoding="utf-8"))
@@ -81,13 +85,20 @@ fit = math.floor(budget / per_look) if per_look > 0 else repeats
 looks = min(repeats, fit) if staged else (repeats if per_look * repeats <= budget else 0)
 sizing = {"study": study["id"], "mean_cost_usd": round(mean, 4), "assumed_run_usd": round(per_run, 4),
           "per_look_usd": round(per_look, 2), "budget_usd": budget, "looks_that_fit": looks, "staged": staged}
+walls = [r.get("wall_s") or 0 for r in runs if r["status"] == "ok"]
+elapsed = float(os.environ["PILOT_ELAPSED_S"]) if os.environ.get("PILOT_ELAPSED_S") else None
+eta = estimate_time(walls, elapsed, units_per_look, max(looks, 0))
+if eta:
+    sizing.update(est_session_min=round(eta.per_session_s / 60, 2), est_look_hours=round(eta.per_look_h, 2),
+                  est_total_hours=round(eta.total_h, 2))
 (batch / "sizing.json").write_text(json.dumps(sizing, indent=2) + "\n", encoding="utf-8")
 print(f"\nMean cost per run ${mean:.3f} (estimated, from the run records). Sizing with ${per_run:.3f} per run:")
 print(f"one repeat ({n_tasks} tasks x {len(study['conditions'])} conditions) is about ${per_look:.2f}; "
       + (f"{looks} of {repeats} look(s) fit ${budget:.0f}." if staged else
          f"the whole study ({repeats} repeat(s)) {'fits' if looks else 'does NOT fit'} ${budget:.0f}."))
+print(describe(eta) if eta else "Time: no timed pilot session, so no estimate.")
 if looks < 1:
     print("STOP: the study does not fit the budget. Raise BUDGET_USD (up to the study's batch cap), or tell Claude the "
           "pilot cost so the study can be resized before it is registered.")
     sys.exit(1)
-print("Next: bash bench/scripts/launch/03_run.sh" + ("" if "launch-2" in study_path.name else f"   (with STUDY={study_path})"))
+print("Next: bash bench/scripts/launch/03_run.sh" + ("" if "launch-3" in study_path.name else f"   (with STUDY={study_path})"))
