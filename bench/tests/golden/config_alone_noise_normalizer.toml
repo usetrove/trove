@@ -7,6 +7,8 @@ noise_normalizer = "on"
 output_trimmer = "off"
 duplicate_result_collapser = "off"
 cache_breakpoints = "off"
+verbosity_steer = "off"
+model_router = "off"
 
 [measure]
 baseline_days = 0

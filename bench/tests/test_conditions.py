@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from trovebench.conditions import (
+    ALL_GATEWAY,
     OPTIMIZERS,
     ConditionError,
     parse_condition,
@@ -32,7 +33,7 @@ def test_all_safe_only_includes_supported_for_claude_code():
     assert c.on == ("noise_normalizer", "duplicate_result_collapser")
 
 
-@pytest.mark.parametrize("name", ["volatile_prefix_mover", "cache_breakpoints", "output_trimmer"])
+@pytest.mark.parametrize("name", ["volatile_prefix_mover", "cache_breakpoints"])
 def test_unsupported_alone_is_marked_not_errored(name):
     c = parse_condition(f"alone:{name}", "claude_code")
     assert not c.measurable
@@ -63,7 +64,7 @@ def test_rendered_toml_parses_and_matches_golden(spec):
     assert parsed["measure"] == {"baseline_days": 0, "baseline_sessions": 0, "interleave": False}
     # The experiment assigner must be off, or sessions are sent to the "off" arm and "on" becomes shadow.
     assert parsed["experiment"] == {"enabled": False}
-    assert set(parsed["optimizers"]) == set(OPTIMIZERS)
+    assert set(parsed["optimizers"]) == set(ALL_GATEWAY)
     golden = GOLDEN / f"config_{c.name}.toml"
     assert text == golden.read_text(encoding="utf-8"), f"update {golden} if the change is intended"
 
@@ -124,11 +125,54 @@ def test_single_hook_config_matches_golden(hook):
     assert text == golden.read_text(encoding="utf-8"), f"update {golden} if the change is intended"
 
 
-def test_hook_large_output_cannot_be_measured_alone_and_says_why():
-    c = parse_condition("alone:hook_large_output", "claude_code")
-    assert not c.measurable and "MCP" in c.unsupported_reason
-    with _pytest.raises(ConditionError, match="cannot be run"):
-        render_config_toml(c)
+@_pytest.mark.parametrize("hook", ["hook_large_output", "hook_output_dedup", "hook_read_outline"])
+def test_hooks_that_need_the_mcp_server_register_it(hook):
+    # plan item 10.6: without the MCP server these are clamped to shadow (or hint at a tool that does not exist)
+    c = parse_condition(f"alone:{hook}", "claude_code")
+    assert c.measurable and c.uses_mcp and c.hooks_on == (hook,)
+    assert not parse_condition("alone:hook_repeat_read", "claude_code").uses_mcp
+
+
+def test_output_trimmer_alone_registers_the_mcp_server_but_stays_out_of_all_safe():
+    c = parse_condition("alone:output_trimmer", "claude_code")
+    assert c.measurable and c.uses_mcp and c.on == ("output_trimmer",)
+    assert "output_trimmer" not in parse_condition("all_safe", "claude_code").on
+
+
+def test_all_safe_never_includes_behaviour_or_routing():
+    on = parse_condition("all_safe", "claude_code").on
+    assert "verbosity_steer" not in on and "model_router" not in on
+    states = parse_condition("all_safe", "claude_code").effective_states()
+    assert states["verbosity_steer"] == "off" and states["model_router"] == "off"   # pinned explicitly
+
+
+def test_passthrough_plugin_is_the_whole_plugin_behind_a_recording_gateway():
+    c = parse_condition("passthrough_plugin", "claude_code")
+    assert c.uses_gateway and c.recording_gateway and c.uses_hooks and c.uses_mcp and c.on == ()
+    assert set(c.effective_states().values()) == {"off"}       # the gateway itself changes nothing
+    assert {"hook_output_dedup", "hook_read_outline", "output_trimmer", "noise_normalizer"} <= set(c.hooks_on)
+
+
+def test_trove_full_turns_on_everything_and_names_the_route():
+    c = parse_condition("trove_full:claude-haiku-5-5", "claude_code")
+    assert c.name == "trove_full" and c.route_to == "claude-haiku-5-5" and c.uses_mcp and not c.recording_gateway
+    st = c.effective_states()
+    for o in ("noise_normalizer", "duplicate_result_collapser", "verbosity_steer", "model_router", "output_trimmer"):
+        assert st[o] == "on"
+    assert st["volatile_prefix_mover"] == "off" and st["cache_breakpoints"] == "off"   # custom agents only
+    cfg = tomllib.loads(render_config_toml(c))
+    assert cfg["optimize"] == {"route_to": "claude-haiku-5-5"}
+    for bad in ("trove_full", "trove_full:Not A Model", "alone:model_router"):
+        with _pytest.raises(ConditionError):
+            parse_condition(bad, "claude_code")
+    r = parse_condition("alone:model_router:claude-haiku-5-5", "claude_code")
+    assert r.name == "alone_model_router" and r.on == ("model_router",) and r.route_to == "claude-haiku-5-5"
+
+
+def test_recording_gateway_config_turns_every_gateway_optimizer_off():
+    from trovebench.conditions import recording_config_toml
+    cfg = tomllib.loads(recording_config_toml(parse_condition("passthrough_plugin", "claude_code")))
+    assert set(cfg["optimizers"].values()) == {"off"} and "optimize" not in cfg
 
 
 def test_every_hook_is_either_measurable_alone_or_explained():

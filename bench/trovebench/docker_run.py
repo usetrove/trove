@@ -17,7 +17,7 @@ from typing import Callable, Iterator
 from . import docker_env as de
 from .agent.base import Agent, AgentResult, combine_results
 from .collect import build_record, read_gateway_db
-from .conditions import Condition, render_config_toml
+from .conditions import Condition, recording_config_toml, render_config_toml
 from .hooks_env import HooksSetupError, capabilities_for, check_snapshot, install_command
 from .manifest import Task
 from .plan import RunSpec
@@ -28,6 +28,8 @@ from .redact import redact
 KEY_ENV = "ANTHROPIC_API_KEY"
 FAKE_KEY = "sk-ant-api03-benchfake-not-a-real-key-0000000000"
 TROVE_DATA = "/trove-data"
+# A recording-only gateway keeps its own data dir, so hook-side settings never reach it (Condition.recording_gateway).
+GW_DATA = "/trove-gw"
 GRADE_TIMEOUT_S = 900
 
 
@@ -176,17 +178,23 @@ class ContainerRunner:
             if not mock_addr:
                 raise RunEnvError("the mock upstream did not start")
 
+        if cond.uses_mcp and not self.fake:
+            # Before the gateway starts: it opens the recovery store only when the MCP server is registered.
+            self._setup_mcp(c, td, cond)
+
         gw_addr = ""
+        gw_dir = GW_DATA if cond.recording_gateway else TROVE_DATA
         if cond.uses_gateway:
-            (td / "config.toml").write_text(render_config_toml(cond), encoding="utf-8", newline="\n")
+            gw_cfg = recording_config_toml(cond) if cond.recording_gateway else render_config_toml(cond)
+            (td / "gateway.toml").write_text(gw_cfg, encoding="utf-8", newline="\n")
             c.put(self.trove_bin, "/usr/local/bin/trove")
-            c.exec(f"chmod +x /usr/local/bin/trove && mkdir -p {TROVE_DATA}", workdir="/")
-            c.put(td / "config.toml", f"{TROVE_DATA}/config.toml")
+            c.exec(f"chmod +x /usr/local/bin/trove && mkdir -p {gw_dir}", workdir="/")
+            c.put(td / "gateway.toml", f"{gw_dir}/config.toml")
             up = f"TROVE_UPSTREAMS_ANTHROPIC=http://{mock_addr} " if self.fake else ""
             r = c.exec(
-                f"(nohup env TROVE_DATA_DIR={TROVE_DATA} {up}trove gateway start --listen 127.0.0.1:0 "
-                f">/tmp/gateway.log 2>&1 &); for i in $(seq 1 150); do [ -s {TROVE_DATA}/gateway.json ] && break; sleep 0.1; done; "
-                f"cat {TROVE_DATA}/gateway.json", workdir="/")
+                f"(nohup env TROVE_DATA_DIR={gw_dir} {up}trove gateway start --listen 127.0.0.1:0 "
+                f">/tmp/gateway.log 2>&1 &); for i in $(seq 1 150); do [ -s {gw_dir}/gateway.json ] && break; sleep 0.1; done; "
+                f"cat {gw_dir}/gateway.json", workdir="/")
             try:
                 gw_addr = json.loads(r.out.strip())["addr"]
             except (json.JSONDecodeError, KeyError) as e:
@@ -195,7 +203,7 @@ class ContainerRunner:
             h = c.exec(f"curl -fsS http://{gw_addr}/trove/health", workdir="/")
             if h.rc != 0:
                 raise RunEnvError("the Trove gateway started but its health check failed")
-            self._assert_configured(c, cond)
+            self._assert_configured(c, cond, gw_dir)
             agent_env.update(self.agent.base_url_env(f"http://{gw_addr}/anthropic"))
         elif self.fake:
             agent_env.update(self.agent.base_url_env(f"http://{mock_addr}"))
@@ -224,7 +232,7 @@ class ContainerRunner:
                     self.log(f"      stopping before follow-up {i}: out of {why}")
                     break
                 res = c.exec(self.agent.command(model=self.model, max_budget_usd=round(left_usd, 4), prompt_path=path,
-                                                   effort=spec.effort, bare=not cond.uses_hooks, resume=session,
+                                                   effort=spec.effort, bare=not (cond.uses_hooks or cond.uses_mcp), resume=session,
                                                    persist=len(prompts) > 1),
                              timeout=max(1, int(left_s)), env=agent_env)
                 outs.append(res.out)
@@ -246,10 +254,12 @@ class ContainerRunner:
 
         stats = None
         if cond.uses_gateway:
-            c.exec(f"pid=$(sed -n 's/.*\"pid\":\\([0-9]*\\).*/\\1/p' {TROVE_DATA}/gateway.json); "
-                   f"kill -TERM $pid 2>/dev/null; for i in $(seq 1 150); do [ -e {TROVE_DATA}/gateway.json ] || break; sleep 0.1; done",
+            c.exec(f"pid=$(sed -n 's/.*\"pid\":\\([0-9]*\\).*/\\1/p' {gw_dir}/gateway.json); "
+                   f"kill -TERM $pid 2>/dev/null; for i in $(seq 1 150); do [ -e {gw_dir}/gateway.json ] || break; sleep 0.1; done",
                    workdir="/")
-            c.get(TROVE_DATA, run_dir / "trove-data")
+            c.get(gw_dir, run_dir / "trove-data")
+            if cond.recording_gateway and cond.uses_hooks:
+                c.get(TROVE_DATA, run_dir / "trove-hooks-data")
             (run_dir / "gateway.log").write_text(redact(c.exec("tail -c 4000 /tmp/gateway.log", workdir="/").out, secrets),
                                                  encoding="utf-8", newline="\n")
             stats = read_gateway_db(run_dir / "trove-data" / "trove.db")
@@ -276,7 +286,7 @@ class ContainerRunner:
         a snapshot of the optimizer states, and a live probe result for this exact agent
         version (otherwise they stay in shadow). Each is checked here.
         """
-        if not cond.uses_gateway:
+        if not cond.uses_gateway or cond.recording_gateway:
             (td / "config.toml").write_text(render_config_toml(cond), encoding="utf-8", newline="\n")
             c.put(self.trove_bin, "/usr/local/bin/trove")
             c.exec(f"chmod +x /usr/local/bin/trove && mkdir -p {TROVE_DATA}", workdir="/")
@@ -297,9 +307,21 @@ class ContainerRunner:
         except HooksSetupError as e:
             raise RunEnvError(str(e)) from e
 
-    def _assert_configured(self, c: de.Container, cond: Condition) -> None:
+    def _setup_mcp(self, c: de.Container, td: Path, cond: Condition) -> None:
+        """Register Trove's MCP server with the agent, as the plugin does. Whether it took effect is proven later:
+        an optimizer that needs it is clamped to shadow without it, which the hook snapshot check and the
+        gateway's pinned states both catch before the run is counted."""
+        (td / "config.toml").write_text(render_config_toml(cond), encoding="utf-8", newline="\n")
+        c.put(self.trove_bin, "/usr/local/bin/trove")
+        c.exec(f"chmod +x /usr/local/bin/trove && mkdir -p {TROVE_DATA}", workdir="/")
+        c.put(td / "config.toml", f"{TROVE_DATA}/config.toml")
+        r = c.exec(f"TROVE_DATA_DIR={TROVE_DATA} trove mcp install --yes --agent claude")
+        if r.rc != 0:
+            raise RunEnvError(f"`trove mcp install` failed in the container: {(r.out + r.err)[-300:]}")
+
+    def _assert_configured(self, c: de.Container, cond: Condition, data_dir: str = TROVE_DATA) -> None:
         """Before spending anything, confirm the gateway read the condition's config as intended."""
-        r = c.exec(f"TROVE_DATA_DIR={TROVE_DATA} trove optimize status --json", workdir="/")
+        r = c.exec(f"TROVE_DATA_DIR={data_dir} trove optimize status --json", workdir="/")
         try:
             got = {o["name"]: o["configured"] for o in json.loads(r.out)["optimizers"]}
         except (json.JSONDecodeError, KeyError, TypeError) as e:

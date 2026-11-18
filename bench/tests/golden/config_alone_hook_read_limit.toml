@@ -7,10 +7,14 @@ noise_normalizer = "off"
 output_trimmer = "off"
 duplicate_result_collapser = "off"
 cache_breakpoints = "off"
+verbosity_steer = "off"
+model_router = "off"
 hook_repeat_read = "off"
 hook_read_limit = "on"
 hook_quiet_commands = "off"
 hook_large_output = "off"
+hook_output_dedup = "off"
+hook_read_outline = "off"
 
 [measure]
 baseline_days = 0
