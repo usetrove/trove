@@ -1,0 +1,271 @@
+run_id,task_id,condition,seed,status,passed,timed_out,wall_s,turns,tool_calls,retries,cost_usd,cost_source,input_uncached_tokens,cache_write_tokens,cache_read_tokens,output_tokens,reasoning_tokens,note,effort,agent_cost_usd
+long-py-affine-cipher__passthrough__s0,long-py-affine-cipher,passthrough,0,ok,True,False,48.2,3,6,0,0.0799745,gateway,28,9226,56735,5118,0,,,0.0799745
+long-py-affine-cipher__passthrough__s1,long-py-affine-cipher,passthrough,1,ok,True,False,47.4,3,6,0,0.0796863,gateway,28,9319,55428,5079,0,,,0.0796863
+long-py-affine-cipher__passthrough__s2,long-py-affine-cipher,passthrough,2,ok,True,False,46.6,3,6,0,0.0724401,gateway,28,8348,51941,4632,0,,,0.0724401
+long-py-affine-cipher__passthrough_plugin__s0,long-py-affine-cipher,passthrough_plugin,0,ok,True,False,39.5,3,8,1,0.1070599,gateway,20,14838,214649,4846,0,,,0.1070599
+long-py-affine-cipher__passthrough_plugin__s1,long-py-affine-cipher,passthrough_plugin,1,ok,True,False,42.8,3,8,1,0.1108465,gateway,20,15232,214865,5124,0,,,0.1108465
+long-py-affine-cipher__passthrough_plugin__s2,long-py-affine-cipher,passthrough_plugin,2,ok,True,False,48.1,3,10,1,0.1199637,gateway,20,15135,216662,6042,0,,,0.1199637
+long-py-affine-cipher__trove_full__s0,long-py-affine-cipher,trove_full,0,ok,True,False,48.0,3,8,0,0.08191860000000001,gateway,24,37803,257173,6874,0,agent's own cost estimate differs from the gateway's by 131%,,0.1890128
+long-py-affine-cipher__trove_full__s1,long-py-affine-cipher,trove_full,1,ok,True,False,46.5,3,9,0,0.074005565,gateway,24,40220,259349,6634,0,agent's own cost estimate differs from the gateway's by 161%,,0.1928729
+long-py-affine-cipher__trove_full__s2,long-py-affine-cipher,trove_full,2,ok,True,False,43.7,4,11,1,0.07008046,gateway,28,43553,308802,7624,0,agent's own cost estimate differs from the gateway's by 208%,,0.2160587
+long-py-beer-song__passthrough__s0,long-py-beer-song,passthrough,0,ok,True,False,30.7,3,6,0,0.0753918,gateway,28,11339,81983,3879,0,,,0.0753918
+long-py-beer-song__passthrough__s1,long-py-beer-song,passthrough,1,ok,True,False,36.0,3,6,0,0.0832811,gateway,28,12342,83901,4398,0,,,0.0832811
+long-py-beer-song__passthrough__s2,long-py-beer-song,passthrough,2,ok,True,False,31.7,3,6,0,0.074868,gateway,28,10999,82145,3910,0,,,0.074868
+long-py-beer-song__passthrough_plugin__s0,long-py-beer-song,passthrough_plugin,0,ok,True,False,38.3,3,10,0,0.1210092,gateway,22,18692,271152,4712,0,,,0.1210092
+long-py-beer-song__passthrough_plugin__s1,long-py-beer-song,passthrough_plugin,1,ok,True,False,35.0,3,9,0,0.1138166,gateway,24,17254,291236,4151,0,,,0.1138166
+long-py-beer-song__passthrough_plugin__s2,long-py-beer-song,passthrough_plugin,2,ok,True,False,34.3,3,9,0,0.1123605,gateway,24,17060,290525,4061,0,,,0.1123605
+long-py-beer-song__trove_full__s0,long-py-beer-song,trove_full,0,ok,True,False,36.0,4,12,1,0.07219545000000001,gateway,26,49873,313037,6233,0,agent's own cost estimate differs from the gateway's by 202%,,0.2183682
+long-py-beer-song__trove_full__s1,long-py-beer-song,trove_full,1,ok,True,False,37.2,4,12,1,0.093880965,gateway,24,78990,316515,6499,0,agent's own cost estimate differs from the gateway's by 213%,,0.2941645
+long-py-beer-song__trove_full__s2,long-py-beer-song,trove_full,2,ok,True,False,30.8,3,11,1,0.074990125,gateway,24,51331,296894,5115,0,agent's own cost estimate differs from the gateway's by 179%,,0.2092149
+long-py-bottle-song__passthrough__s0,long-py-bottle-song,passthrough,0,ok,True,False,30.9,3,6,0,0.0605171,gateway,28,7334,45061,3762,0,,,0.0605171
+long-py-bottle-song__passthrough__s1,long-py-bottle-song,passthrough,1,ok,True,False,29.4,3,6,0,0.0610603,gateway,28,7692,47143,3706,0,,,0.0610603
+long-py-bottle-song__passthrough__s2,long-py-bottle-song,passthrough,2,ok,True,False,32.9,3,6,0,0.0629118,gateway,28,7746,47308,3876,0,,,0.0629118
+long-py-bottle-song__passthrough_plugin__s0,long-py-bottle-song,passthrough_plugin,0,ok,True,False,33.1,3,6,0,0.0901833,gateway,20,12450,200283,3899,0,,,0.0901833
+long-py-bottle-song__passthrough_plugin__s1,long-py-bottle-song,passthrough_plugin,1,ok,True,False,34.3,3,6,0,0.0943873,gateway,20,13252,202073,4101,0,,,0.0943873
+long-py-bottle-song__passthrough_plugin__s2,long-py-bottle-song,passthrough_plugin,2,ok,True,False,35.5,3,7,0,0.0947469,gateway,22,12826,222379,4040,0,,,0.0947469
+long-py-bottle-song__trove_full__s0,long-py-bottle-song,trove_full,0,ok,True,False,34.2,3,13,2,0.06132059,gateway,24,37776,245783,5203,0,agent's own cost estimate differs from the gateway's by 179%,,0.1710963
+long-py-bottle-song__trove_full__s1,long-py-bottle-song,trove_full,1,ok,True,False,39.0,3,9,1,0.053036685,gateway,24,35535,228552,5861,0,agent's own cost estimate differs from the gateway's by 221%,,0.1703507
+long-py-bottle-song__trove_full__s2,long-py-bottle-song,trove_full,2,ok,True,False,32.1,3,8,0,0.05229595,gateway,24,33328,229305,4499,0,agent's own cost estimate differs from the gateway's by 189%,,0.1512885
+long-py-bowling__passthrough__s0,long-py-bowling,passthrough,0,ok,True,False,41.8,3,6,0,0.0864372,gateway,28,10142,59762,5505,0,,,0.0864372
+long-py-bowling__passthrough__s1,long-py-bowling,passthrough,1,ok,True,False,45.5,3,6,0,0.09184300000000001,gateway,28,10092,57070,6085,0,,,0.091843
+long-py-bowling__passthrough__s2,long-py-bowling,passthrough,2,ok,True,False,42.9,3,6,0,0.087197,gateway,28,10142,60160,5577,0,,,0.087197
+long-py-bowling__passthrough_plugin__s0,long-py-bowling,passthrough_plugin,0,ok,True,False,58.3,3,11,0,0.1314632,gateway,20,16744,224432,6712,0,,,0.1314632
+long-py-bowling__passthrough_plugin__s1,long-py-bowling,passthrough_plugin,1,ok,True,False,60.5,4,13,1,0.1410849,gateway,22,18637,254784,6897,0,,,0.1410849
+long-py-bowling__passthrough_plugin__s2,long-py-bowling,passthrough_plugin,2,ok,True,False,61.6,3,12,1,0.1321799,gateway,22,16429,244734,6659,0,,,0.1321799
+long-py-bowling__trove_full__s0,long-py-bowling,trove_full,0,ok,True,False,89.8,4,16,0,0.11532814499999999,gateway,26,102851,310255,17844,0,agent's own cost estimate differs from the gateway's by 305%,,0.466645
+long-py-bowling__trove_full__s1,long-py-bowling,trove_full,1,ok,True,False,87.7,3,14,0,0.1386928,gateway,34,102408,432353,16948,0,agent's own cost estimate differs from the gateway's by 238%,,0.4688033
+long-py-bowling__trove_full__s2,long-py-bowling,trove_full,2,ok,True,False,87.4,15,24,0,0.11033701,gateway,32,91489,461180,16966,0,agent's own cost estimate differs from the gateway's by 303%,,0.4445645
+long-py-connect__passthrough__s0,long-py-connect,passthrough,0,ok,True,False,35.9,3,6,0,0.0726944,gateway,28,7869,44659,4850,0,,,0.0726944
+long-py-connect__passthrough__s1,long-py-connect,passthrough,1,ok,True,False,42.5,3,7,0,0.0820886,gateway,30,8853,52761,5462,0,,,0.0820886
+long-py-connect__passthrough__s2,long-py-connect,passthrough,2,ok,True,False,41.0,3,6,0,0.0727475,gateway,28,8001,44990,4819,0,,,0.0727475
+long-py-connect__passthrough_plugin__s0,long-py-connect,passthrough_plugin,0,ok,True,False,41.0,3,11,0,0.1084127,gateway,20,13931,205552,5299,0,,,0.1084127
+long-py-connect__passthrough_plugin__s1,long-py-connect,passthrough_plugin,1,ok,True,False,41.4,3,7,0,0.1050483,gateway,22,11774,222993,5327,0,,,0.1050483
+long-py-connect__passthrough_plugin__s2,long-py-connect,passthrough_plugin,2,ok,True,False,40.1,3,6,0,0.1025614,gateway,20,13170,201664,4943,0,,,0.1025614
+long-py-connect__trove_full__s0,long-py-connect,trove_full,0,ok,True,False,45.5,3,7,0,0.06779457,gateway,22,33956,211112,7384,0,agent's own cost estimate differs from the gateway's by 165%,,0.1798852
+long-py-connect__trove_full__s1,long-py-connect,trove_full,1,ok,True,False,41.6,3,7,0,0.06778411,gateway,22,44102,202271,6645,0,agent's own cost estimate differs from the gateway's by 191%,,0.1969761
+long-py-connect__trove_full__s2,long-py-connect,trove_full,2,ok,True,False,41.6,3,7,0,0.06743588,gateway,22,43827,202160,6660,0,agent's own cost estimate differs from the gateway's by 191%,,0.1964275
+long-py-dominoes__passthrough__s0,long-py-dominoes,passthrough,0,ok,True,False,43.8,3,6,0,0.0832489,gateway,28,9077,49104,5559,0,,,0.0832489
+long-py-dominoes__passthrough__s1,long-py-dominoes,passthrough,1,ok,True,False,45.0,3,6,0,0.0875865,gateway,28,9419,49230,5906,0,,,0.0875865
+long-py-dominoes__passthrough__s2,long-py-dominoes,passthrough,2,ok,True,False,47.2,3,6,0,0.0918837,gateway,28,9800,51177,6221,0,,,0.0918837
+long-py-dominoes__passthrough_plugin__s0,long-py-dominoes,passthrough_plugin,0,ok,True,False,47.6,3,8,0,0.1176594,gateway,22,15167,232779,5642,0,,,0.1176594
+long-py-dominoes__passthrough_plugin__s1,long-py-dominoes,passthrough_plugin,1,ok,True,False,45.0,3,8,0,0.1113466,gateway,22,12611,227751,5700,0,,,0.1113466
+long-py-dominoes__passthrough_plugin__s2,long-py-dominoes,passthrough_plugin,2,ok,True,False,48.9,3,8,0,0.1198945,gateway,22,14574,229955,6042,0,,,0.1198945
+long-py-dominoes__trove_full__s0,long-py-dominoes,trove_full,0,ok,True,False,52.1,4,12,1,0.08859961,gateway,24,45848,249587,8844,0,agent's own cost estimate differs from the gateway's by 157%,,0.2280667
+long-py-dominoes__trove_full__s1,long-py-dominoes,trove_full,1,ok,True,False,54.8,4,14,1,0.09347504000000001,gateway,26,47021,274256,9375,0,agent's own cost estimate differs from the gateway's by 155%,,0.2387801
+long-py-dominoes__trove_full__s2,long-py-dominoes,trove_full,2,ok,True,False,54.5,4,13,0,0.08374451000000001,gateway,24,45002,247895,9161,0,agent's own cost estimate differs from the gateway's by 173%,,0.2289525
+long-py-dot-dsl__passthrough__s0,long-py-dot-dsl,passthrough,0,ok,True,False,46.8,3,6,0,0.098644,gateway,28,11259,69005,6354,0,,,0.098644
+long-py-dot-dsl__passthrough__s1,long-py-dot-dsl,passthrough,1,ok,True,False,49.4,3,7,0,0.1031852,gateway,30,11523,79577,6636,0,,,0.1031852
+long-py-dot-dsl__passthrough__s2,long-py-dot-dsl,passthrough,2,ok,True,False,55.4,3,7,0,0.11799989999999999,gateway,30,13098,85849,7661,0,,,0.1179999
+long-py-dot-dsl__passthrough_plugin__s0,long-py-dot-dsl,passthrough_plugin,0,ok,True,False,47.4,3,6,0,0.1256975,gateway,20,15996,221275,6354,0,,,0.1256975
+long-py-dot-dsl__passthrough_plugin__s1,long-py-dot-dsl,passthrough_plugin,1,ok,True,False,47.6,3,7,0,0.1277847,gateway,22,16432,251607,6150,0,,,0.1277847
+long-py-dot-dsl__passthrough_plugin__s2,long-py-dot-dsl,passthrough_plugin,2,ok,True,False,50.0,3,6,0,0.1326423,gateway,20,17569,227698,6591,0,,,0.1326423
+long-py-dot-dsl__trove_full__s0,long-py-dot-dsl,trove_full,0,ok,True,False,53.6,3,6,0,0.08458799,gateway,20,61306,188054,9534,0,agent's own cost estimate differs from the gateway's by 216%,,0.2674504
+long-py-dot-dsl__trove_full__s1,long-py-dot-dsl,trove_full,1,ok,True,False,52.6,3,10,1,0.08617834,gateway,22,56064,237897,9420,0,agent's own cost estimate differs from the gateway's by 200%,,0.2581937
+long-py-dot-dsl__trove_full__s2,long-py-dot-dsl,trove_full,2,ok,True,False,53.1,4,11,1,0.088907955,gateway,22,54330,236703,8979,0,agent's own cost estimate differs from the gateway's by 180%,,0.2493293
+long-py-food-chain__passthrough__s0,long-py-food-chain,passthrough,0,ok,True,False,35.8,3,6,0,0.0754716,gateway,28,8789,50331,4841,0,,,0.0754716
+long-py-food-chain__passthrough__s1,long-py-food-chain,passthrough,1,ok,True,False,32.6,3,6,0,0.0705719,gateway,28,8329,49734,4472,0,,,0.0705719
+long-py-food-chain__passthrough__s2,long-py-food-chain,passthrough,2,ok,True,False,41.1,3,7,0,0.0820329,gateway,30,9298,59379,5279,0,,,0.0820329
+long-py-food-chain__passthrough_plugin__s0,long-py-food-chain,passthrough_plugin,0,ok,True,False,40.3,3,8,0,0.1081469,gateway,24,14278,252239,4718,0,,,0.1081469
+long-py-food-chain__passthrough_plugin__s1,long-py-food-chain,passthrough_plugin,1,ok,True,False,44.1,3,8,0,0.1219332,gateway,24,15385,255427,5788,0,,,0.1219332
+long-py-food-chain__passthrough_plugin__s2,long-py-food-chain,passthrough_plugin,2,ok,True,False,41.8,3,11,0,0.116218,gateway,26,15300,276660,5025,0,,,0.116218
+long-py-food-chain__trove_full__s0,long-py-food-chain,trove_full,0,ok,True,False,40.3,4,10,0,0.061345825,gateway,28,40514,286777,6678,0,agent's own cost estimate differs from the gateway's by 221%,,0.1967987
+long-py-food-chain__trove_full__s1,long-py-food-chain,trove_full,1,ok,True,False,39.8,3,11,0,0.057337155,gateway,30,37915,300782,5977,0,agent's own cost estimate differs from the gateway's by 222%,,0.1846957
+long-py-food-chain__trove_full__s2,long-py-food-chain,trove_full,2,ok,True,False,45.6,5,16,1,0.081933895,gateway,38,66992,389908,7271,0,agent's own cost estimate differs from the gateway's by 241%,,0.2792568
+long-py-forth__passthrough__s0,long-py-forth,passthrough,0,ok,True,False,67.5,3,7,0,0.13848270000000001,gateway,28,14875,83592,9288,0,,,0.1384827
+long-py-forth__passthrough__s1,long-py-forth,passthrough,1,ok,True,False,51.3,3,8,0,0.1072545,gateway,32,11890,79055,6956,0,,,0.1072545
+long-py-forth__passthrough__s2,long-py-forth,passthrough,2,ok,True,False,79.8,4,11,0,0.1659563,gateway,36,17291,124368,11022,0,,,0.1659563
+long-py-forth__passthrough_plugin__s0,long-py-forth,passthrough_plugin,0,ok,True,False,66.0,3,9,0,0.1621033,gateway,24,18327,283478,8789,0,,,0.1621033
+long-py-forth__passthrough_plugin__s1,long-py-forth,passthrough_plugin,1,ok,True,False,76.4,3,9,0,0.1829081,gateway,24,19378,286951,10572,0,,,0.1829081
+long-py-forth__passthrough_plugin__s2,long-py-forth,passthrough_plugin,2,ok,True,False,73.4,3,10,0,0.1814577,gateway,24,21195,294722,9895,0,,,0.1814577
+long-py-forth__trove_full__s0,long-py-forth,trove_full,0,ok,True,False,80.2,4,10,0,0.105047215,gateway,28,60838,349461,13777,0,agent's own cost estimate differs from the gateway's by 209%,,0.3248671
+long-py-forth__trove_full__s1,long-py-forth,trove_full,1,ok,True,False,111.1,3,17,0,0.1507229,gateway,32,110240,414753,21827,0,agent's own cost estimate differs from the gateway's by 255%,,0.5354093
+long-py-forth__trove_full__s2,long-py-forth,trove_full,2,ok,True,False,79.9,4,13,1,0.136122255,gateway,28,87370,364836,14182,0,agent's own cost estimate differs from the gateway's by 191%,,0.3967846
+long-py-go-counting__passthrough__s0,long-py-go-counting,passthrough,0,ok,True,False,41.5,3,6,0,0.0813916,gateway,28,7634,54406,5681,0,,,0.0813916
+long-py-go-counting__passthrough__s1,long-py-go-counting,passthrough,1,ok,True,False,61.9,3,6,0,0.095747,gateway,28,10597,58985,6330,0,,,0.095747
+long-py-go-counting__passthrough__s2,long-py-go-counting,passthrough,2,ok,True,False,46.1,3,6,0,0.0963277,gateway,28,11356,60017,6188,0,,,0.0963277
+long-py-go-counting__passthrough_plugin__s0,long-py-go-counting,passthrough_plugin,0,ok,True,False,74.1,3,6,0,0.1235845,gateway,20,16439,217170,6073,0,,,0.1235845
+long-py-go-counting__passthrough_plugin__s1,long-py-go-counting,passthrough_plugin,1,ok,True,False,76.0,4,10,0,0.1596617,gateway,28,18839,322182,8029,0,,,0.1596617
+long-py-go-counting__passthrough_plugin__s2,long-py-go-counting,passthrough_plugin,2,ok,True,False,61.1,3,6,0,0.1260757,gateway,20,16504,217457,6303,0,,,0.1260757
+long-py-go-counting__trove_full__s0,long-py-go-counting,trove_full,0,ok,True,False,56.1,3,8,0,0.07689306,gateway,24,51094,249300,8130,0,agent's own cost estimate differs from the gateway's by 204%,,0.234013
+long-py-go-counting__trove_full__s1,long-py-go-counting,trove_full,1,ok,True,False,57.6,7,18,2,0.08584301,gateway,34,62998,400616,10091,0,agent's own cost estimate differs from the gateway's by 248%,,0.2985346
+long-py-go-counting__trove_full__s2,long-py-go-counting,trove_full,2,ok,True,False,59.4,4,10,0,0.08360689,gateway,28,51997,307168,10277,0,agent's own cost estimate differs from the gateway's by 215%,,0.2635353
+long-py-grade-school__passthrough__s0,long-py-grade-school,passthrough,0,ok,True,False,39.6,3,7,1,0.0898346,gateway,30,11678,72096,5337,0,,,0.0898346
+long-py-grade-school__passthrough__s1,long-py-grade-school,passthrough,1,ok,True,False,41.9,4,7,0,0.0910363,gateway,30,11797,78138,5367,0,,,0.0910363
+long-py-grade-school__passthrough__s2,long-py-grade-school,passthrough,2,ok,True,False,38.8,3,6,0,0.0813463,gateway,28,9930,63853,5008,0,,,0.0813463
+long-py-grade-school__passthrough_plugin__s0,long-py-grade-school,passthrough_plugin,0,ok,True,False,38.7,3,7,0,0.1057004,gateway,22,14207,234389,4670,0,,,0.1057004
+long-py-grade-school__passthrough_plugin__s1,long-py-grade-school,passthrough_plugin,1,ok,True,False,42.1,3,13,1,0.1252465,gateway,22,17607,252150,5597,0,,,0.1252465
+long-py-grade-school__passthrough_plugin__s2,long-py-grade-school,passthrough_plugin,2,ok,True,False,41.3,3,11,1,0.1195239,gateway,20,16749,226814,5493,0,,,0.1195239
+long-py-grade-school__trove_full__s0,long-py-grade-school,trove_full,0,ok,True,False,38.7,3,8,0,0.075716355,gateway,22,37117,237622,5982,0,agent's own cost estimate differs from the gateway's by 133%,,0.1764187
+long-py-grade-school__trove_full__s1,long-py-grade-school,trove_full,1,ok,True,False,37.2,7,15,1,0.073423625,gateway,22,39429,228698,6397,0,agent's own cost estimate differs from the gateway's by 153%,,0.1854563
+long-py-grade-school__trove_full__s2,long-py-grade-school,trove_full,2,ok,True,False,35.0,3,8,0,0.07070701,gateway,22,33327,233574,5463,0,agent's own cost estimate differs from the gateway's by 128%,,0.1613489
+long-py-grep__passthrough__s0,long-py-grep,passthrough,0,ok,True,False,52.4,4,7,0,0.0930249,gateway,30,10158,63999,6117,0,,,0.0930249
+long-py-grep__passthrough__s1,long-py-grep,passthrough,1,ok,True,False,45.8,3,6,0,0.0793287,gateway,28,8532,50227,5292,0,,,0.0793287
+long-py-grep__passthrough__s2,long-py-grep,passthrough,2,ok,True,False,48.6,3,6,0,0.0767341,gateway,28,8490,49931,5046,0,,,0.0767341
+long-py-grep__passthrough_plugin__s0,long-py-grep,passthrough_plugin,0,ok,True,False,49.4,3,7,0,0.1311514,gateway,22,16103,237999,6705,0,,,0.1311514
+long-py-grep__passthrough_plugin__s1,long-py-grep,passthrough_plugin,1,ok,True,False,48.0,3,7,0,0.1278872,gateway,22,16067,237057,6397,0,,,0.1278872
+long-py-grep__passthrough_plugin__s2,long-py-grep,passthrough_plugin,2,ok,True,False,46.3,3,7,0,0.1237911,gateway,22,15503,235896,6140,0,,,0.1237911
+long-py-grep__trove_full__s0,long-py-grep,trove_full,0,ok,True,False,51.0,7,12,1,0.091103735,gateway,26,52875,307629,8393,0,agent's own cost estimate differs from the gateway's by 171%,,0.2469324
+long-py-grep__trove_full__s1,long-py-grep,trove_full,1,ok,True,False,54.0,4,12,0,0.100815045,gateway,24,48584,254839,9020,0,agent's own cost estimate differs from the gateway's by 135%,,0.2371919
+long-py-grep__trove_full__s2,long-py-grep,trove_full,2,ok,True,False,55.5,4,8,0,0.09580079500000001,gateway,24,50748,271861,8594,0,agent's own cost estimate differs from the gateway's by 151%,,0.2400441
+long-py-hangman__passthrough__s0,long-py-hangman,passthrough,0,ok,True,False,37.8,3,6,0,0.076594,gateway,28,8738,56830,4901,0,,,0.076594
+long-py-hangman__passthrough__s1,long-py-hangman,passthrough,1,ok,True,False,35.1,3,6,0,0.0732017,gateway,28,8529,56232,4620,0,,,0.0732017
+long-py-hangman__passthrough__s2,long-py-hangman,passthrough,2,ok,True,False,40.7,3,7,0,0.0825463,gateway,30,9399,65088,5248,0,,,0.0825463
+long-py-hangman__passthrough_plugin__s0,long-py-hangman,passthrough_plugin,0,ok,True,False,40.2,4,7,0,0.1108102,gateway,22,13936,232262,5270,0,,,0.1108102
+long-py-hangman__passthrough_plugin__s1,long-py-hangman,passthrough_plugin,1,ok,True,False,35.2,3,6,0,0.0985788,gateway,20,12676,204288,4642,0,,,0.0985788
+long-py-hangman__passthrough_plugin__s2,long-py-hangman,passthrough_plugin,2,ok,True,False,40.4,3,7,0,0.1069959,gateway,22,13315,228144,5085,0,,,0.1069959
+long-py-hangman__trove_full__s0,long-py-hangman,trove_full,0,ok,True,False,44.4,3,6,0,0.068360885,gateway,20,38371,194698,6895,0,agent's own cost estimate differs from the gateway's by 170%,,0.1843873
+long-py-hangman__trove_full__s1,long-py-hangman,trove_full,1,ok,True,False,44.4,3,7,0,0.07583403,gateway,22,51964,206887,6637,0,agent's own cost estimate differs from the gateway's by 186%,,0.2170127
+long-py-hangman__trove_full__s2,long-py-hangman,trove_full,2,ok,True,False,43.6,3,8,0,0.067009155,gateway,24,38895,239769,6698,0,agent's own cost estimate differs from the gateway's by 181%,,0.1882424
+long-py-paasio__passthrough__s0,long-py-paasio,passthrough,0,ok,True,False,60.8,3,6,0,0.1495584,gateway,28,20501,137999,8445,0,,,0.1495584
+long-py-paasio__passthrough__s1,long-py-paasio,passthrough,1,ok,True,False,67.0,3,6,0,0.1676325,gateway,28,21888,144065,9845,0,,,0.1676325
+long-py-paasio__passthrough__s2,long-py-paasio,passthrough,2,ok,True,False,68.6,3,6,0,0.1558557,gateway,28,21734,139747,8749,0,,,0.1558557
+long-py-paasio__passthrough_plugin__s0,long-py-paasio,passthrough_plugin,0,ok,True,False,64.9,3,9,0,0.1661246,gateway,26,20193,326801,8291,0,,,0.1661246
+long-py-paasio__passthrough_plugin__s1,long-py-paasio,passthrough_plugin,1,ok,True,False,60.2,3,8,0,0.1640885,gateway,24,21166,306155,8051,0,,,0.1640885
+long-py-paasio__passthrough_plugin__s2,long-py-paasio,passthrough_plugin,2,ok,True,False,63.7,3,9,0,0.1732216,gateway,26,20941,333071,8751,0,,,0.1732216
+long-py-paasio__trove_full__s0,long-py-paasio,trove_full,0,ok,True,False,96.0,3,12,0,0.18222451,gateway,32,120066,471139,15887,0,agent's own cost estimate differs from the gateway's by 178%,,0.5062129
+long-py-paasio__trove_full__s1,long-py-paasio,trove_full,1,ok,True,False,88.9,3,8,0,0.126165045,gateway,24,90768,320561,15196,0,agent's own cost estimate differs from the gateway's by 226%,,0.4109841
+long-py-paasio__trove_full__s2,long-py-paasio,trove_full,2,ok,True,False,99.3,4,10,0,0.13577887,gateway,28,93426,411230,16441,0,agent's own cost estimate differs from the gateway's by 223%,,0.439154
+long-py-phone-number__passthrough__s0,long-py-phone-number,passthrough,0,ok,True,False,49.3,3,7,0,0.0854609,gateway,30,9933,70284,5354,0,,,0.0854609
+long-py-phone-number__passthrough__s1,long-py-phone-number,passthrough,1,ok,True,False,51.5,3,7,0,0.0884314,gateway,30,10466,75564,5465,0,,,0.0884314
+long-py-phone-number__passthrough__s2,long-py-phone-number,passthrough,2,ok,True,False,57.1,3,8,0,0.0982919,gateway,32,11767,85204,6029,0,,,0.0982919
+long-py-phone-number__passthrough_plugin__s0,long-py-phone-number,passthrough_plugin,0,ok,True,False,49.7,3,11,0,0.119752,gateway,20,16027,223145,5733,0,,,0.119752
+long-py-phone-number__passthrough_plugin__s1,long-py-phone-number,passthrough_plugin,1,ok,True,False,55.5,3,11,1,0.1323183,gateway,24,17598,278253,6045,0,,,0.1323183
+long-py-phone-number__passthrough_plugin__s2,long-py-phone-number,passthrough_plugin,2,ok,True,False,48.6,3,7,0,0.1181533,gateway,20,15525,220708,5723,0,,,0.1181533
+long-py-phone-number__trove_full__s0,long-py-phone-number,trove_full,0,ok,True,False,47.7,5,12,1,0.079182995,gateway,26,62476,273803,8380,0,agent's own cost estimate differs from the gateway's by 238%,,0.2674223
+long-py-phone-number__trove_full__s1,long-py-phone-number,trove_full,1,ok,True,False,42.5,3,10,0,0.07846213,gateway,24,57680,245815,6992,0,agent's own cost estimate differs from the gateway's by 204%,,0.2387495
+long-py-phone-number__trove_full__s2,long-py-phone-number,trove_full,2,ok,True,False,43.4,4,9,0,0.072152225,gateway,26,43855,285634,7464,0,agent's own cost estimate differs from the gateway's by 195%,,0.2128929
+long-py-pig-latin__passthrough__s0,long-py-pig-latin,passthrough,0,ok,True,False,37.8,3,7,0,0.0673113,gateway,30,7852,51713,4245,0,,,0.0673113
+long-py-pig-latin__passthrough__s1,long-py-pig-latin,passthrough,1,ok,True,False,52.6,3,7,0,0.09586120000000001,gateway,30,10278,62562,6385,0,,,0.0958612
+long-py-pig-latin__passthrough__s2,long-py-pig-latin,passthrough,2,ok,True,False,48.5,3,11,0,0.0888482,gateway,36,9782,80312,5629,0,,,0.0888482
+long-py-pig-latin__passthrough_plugin__s0,long-py-pig-latin,passthrough_plugin,0,ok,True,False,42.0,3,12,1,0.1072467,gateway,22,14135,227152,4915,0,,,0.1072467
+long-py-pig-latin__passthrough_plugin__s1,long-py-pig-latin,passthrough_plugin,1,ok,True,False,40.9,3,8,0,0.1009751,gateway,22,13450,225461,4476,0,,,0.1009751
+long-py-pig-latin__passthrough_plugin__s2,long-py-pig-latin,passthrough_plugin,2,ok,True,False,42.1,4,11,1,0.1032877,gateway,20,13444,203177,4932,0,,,0.1032877
+long-py-pig-latin__trove_full__s0,long-py-pig-latin,trove_full,0,ok,True,False,64.3,4,11,1,0.0869939,gateway,28,52233,296720,9032,0,agent's own cost estimate differs from the gateway's by 188%,,0.2506305
+long-py-pig-latin__trove_full__s1,long-py-pig-latin,trove_full,1,ok,True,False,65.9,4,12,0,0.0770463,gateway,26,52184,268617,9146,0,agent's own cost estimate differs from the gateway's by 223%,,0.2488337
+long-py-pig-latin__trove_full__s2,long-py-pig-latin,trove_full,2,ok,True,False,56.2,5,15,0,0.07541666,gateway,24,53665,233818,8380,0,agent's own cost estimate differs from the gateway's by 220%,,0.2413923
+long-py-poker__passthrough__s0,long-py-poker,passthrough,0,ok,True,False,53.2,3,6,0,0.1100055,gateway,28,12615,70220,7139,0,,,0.1100055
+long-py-poker__passthrough__s1,long-py-poker,passthrough,1,ok,True,False,49.5,3,7,0,0.1025382,gateway,30,12178,77332,6430,0,,,0.1025382
+long-py-poker__passthrough__s2,long-py-poker,passthrough,2,ok,True,False,44.6,3,6,0,0.0851604,gateway,28,9967,55869,5460,0,,,0.0851604
+long-py-poker__passthrough_plugin__s0,long-py-poker,passthrough_plugin,0,ok,True,False,48.6,3,9,1,0.131861,gateway,20,17693,226685,6492,0,,,0.131861
+long-py-poker__passthrough_plugin__s1,long-py-poker,passthrough_plugin,1,ok,True,False,44.4,3,9,0,0.1126748,gateway,20,14407,207373,5588,0,,,0.1126748
+long-py-poker__passthrough_plugin__s2,long-py-poker,passthrough_plugin,2,ok,True,False,43.6,3,9,0,0.1235687,gateway,20,16399,222312,6030,0,,,0.1235687
+long-py-poker__trove_full__s0,long-py-poker,trove_full,0,ok,True,False,52.0,5,10,0,0.078828985,gateway,26,51740,289439,8397,0,agent's own cost estimate differs from the gateway's by 207%,,0.2423159
+long-py-poker__trove_full__s1,long-py-poker,trove_full,1,ok,True,False,54.4,6,14,1,0.07279316,gateway,26,51268,266868,9081,0,agent's own cost estimate differs from the gateway's by 238%,,0.2457188
+long-py-poker__trove_full__s2,long-py-poker,trove_full,2,ok,True,False,51.6,6,15,1,0.08787088,gateway,28,62778,336970,9769,0,agent's own cost estimate differs from the gateway's by 228%,,0.288388
+long-py-pov__passthrough__s0,long-py-pov,passthrough,0,ok,True,False,49.1,3,6,0,0.0923402,gateway,28,10605,62917,5948,0,,,0.0923402
+long-py-pov__passthrough__s1,long-py-pov,passthrough,1,ok,True,False,55.8,3,8,0,0.0954227,gateway,32,11845,76262,5812,0,,,0.0954227
+long-py-pov__passthrough__s2,long-py-pov,passthrough,2,ok,True,False,57.1,3,7,0,0.1063926,gateway,30,13499,73451,6524,0,,,0.1063926
+long-py-pov__passthrough_plugin__s0,long-py-pov,passthrough_plugin,0,ok,True,False,70.1,3,9,0,0.1468661,gateway,26,16469,296116,7603,0,,,0.1468661
+long-py-pov__passthrough_plugin__s1,long-py-pov,passthrough_plugin,1,ok,True,False,59.7,3,8,0,0.1484819,gateway,24,19076,275739,7317,0,,,0.1484819
+long-py-pov__passthrough_plugin__s2,long-py-pov,passthrough_plugin,2,ok,True,False,63.6,4,10,0,0.1441261,gateway,28,16946,313351,7037,0,,,0.1441261
+long-py-pov__trove_full__s0,long-py-pov,trove_full,0,ok,True,False,60.9,4,10,0,0.096965575,gateway,28,57762,322631,11017,0,agent's own cost estimate differs from the gateway's by 196%,,0.2868941
+long-py-pov__trove_full__s1,long-py-pov,trove_full,1,ok,True,False,54.2,4,9,0,0.08537022500000001,gateway,26,58618,294152,9664,0,agent's own cost estimate differs from the gateway's by 219%,,0.2726522
+long-py-pov__trove_full__s2,long-py-pov,trove_full,2,ok,True,False,58.6,6,12,0,0.09171021,gateway,32,54504,393434,10321,0,agent's own cost estimate differs from the gateway's by 204%,,0.2788774
+long-py-react__passthrough__s0,long-py-react,passthrough,0,ok,True,False,43.9,2,5,0,0.0883731,gateway,26,9276,45311,6060,0,,,0.0883731
+long-py-react__passthrough__s1,long-py-react,passthrough,1,ok,True,False,45.2,3,6,0,0.08959639999999999,gateway,28,10021,54679,5902,0,,,0.0895964
+long-py-react__passthrough__s2,long-py-react,passthrough,2,ok,True,False,48.7,4,8,0,0.0995725,gateway,32,11466,75935,6325,0,,,0.0995725
+long-py-react__passthrough_plugin__s0,long-py-react,passthrough_plugin,0,ok,True,False,46.4,3,6,0,0.1073787,gateway,20,12441,207562,5548,0,,,0.1073787
+long-py-react__passthrough_plugin__s1,long-py-react,passthrough_plugin,1,ok,True,False,55.5,3,8,0,0.1267939,gateway,24,15643,257384,6190,0,,,0.1267939
+long-py-react__passthrough_plugin__s2,long-py-react,passthrough_plugin,2,ok,True,False,64.1,3,8,0,0.1506915,gateway,20,19458,228865,7912,0,,,0.1506915
+long-py-react__trove_full__s0,long-py-react,trove_full,0,ok,True,False,69.4,5,11,0,0.11241899,gateway,30,89173,319011,12116,0,agent's own cost estimate differs from the gateway's by 235%,,0.3760536
+long-py-react__trove_full__s1,long-py-react,trove_full,1,ok,True,False,48.0,4,12,1,0.090586505,gateway,24,51846,265452,8941,0,agent's own cost estimate differs from the gateway's by 171%,,0.2456182
+long-py-react__trove_full__s2,long-py-react,trove_full,2,ok,True,False,56.6,4,10,0,0.10352245,gateway,24,63250,243998,9501,0,agent's own cost estimate differs from the gateway's by 168%,,0.2775828
+long-py-rest-api__passthrough__s0,long-py-rest-api,passthrough,0,ok,True,False,60.9,3,6,0,0.1336363,gateway,28,13234,72753,9322,0,,,0.1336363
+long-py-rest-api__passthrough__s1,long-py-rest-api,passthrough,1,ok,True,False,62.5,3,7,0,0.126933,gateway,30,12713,75505,8754,0,,,0.126933
+long-py-rest-api__passthrough__s2,long-py-rest-api,passthrough,2,ok,True,False,61.5,4,7,0,0.1269133,gateway,30,11425,81908,9010,0,,,0.1269133
+long-py-rest-api__passthrough_plugin__s0,long-py-rest-api,passthrough_plugin,0,ok,True,False,73.5,3,8,0,0.1861313,gateway,22,23299,267598,10108,0,,,0.1861313
+long-py-rest-api__passthrough_plugin__s1,long-py-rest-api,passthrough_plugin,1,ok,True,False,68.5,3,8,0,0.155829,gateway,24,16784,272110,8661,0,,,0.155829
+long-py-rest-api__passthrough_plugin__s2,long-py-rest-api,passthrough_plugin,2,ok,True,False,75.2,3,12,1,0.1798797,gateway,22,20697,261432,10195,0,,,0.1798797
+long-py-rest-api__trove_full__s0,long-py-rest-api,trove_full,0,ok,True,False,70.5,6,11,0,0.11917938,gateway,26,56332,305257,12933,0,agent's own cost estimate differs from the gateway's by 152%,,0.3007377
+long-py-rest-api__trove_full__s1,long-py-rest-api,trove_full,1,ok,True,False,73.1,3,8,0,0.117278565,gateway,24,62405,260884,13852,0,agent's own cost estimate differs from the gateway's by 173%,,0.3206689
+long-py-rest-api__trove_full__s2,long-py-rest-api,trove_full,2,ok,True,False,72.9,4,11,0,0.142619935,gateway,24,97933,249993,13350,0,agent's own cost estimate differs from the gateway's by 183%,,0.4033798
+long-py-robot-name__passthrough__s0,long-py-robot-name,passthrough,0,ok,True,False,49.9,3,6,0,0.077378,gateway,28,7935,45645,5292,0,,,0.077378
+long-py-robot-name__passthrough__s1,long-py-robot-name,passthrough,1,ok,True,False,56.2,3,8,0,0.0912901,gateway,32,9336,62761,6161,0,,,0.0912901
+long-py-robot-name__passthrough__s2,long-py-robot-name,passthrough,2,ok,True,False,40.1,3,6,0,0.0694272,gateway,28,7336,42812,4675,0,,,0.0694272
+long-py-robot-name__passthrough_plugin__s0,long-py-robot-name,passthrough_plugin,0,ok,True,False,47.7,3,11,1,0.1097506,gateway,20,13486,205756,5542,0,,,0.1097506
+long-py-robot-name__passthrough_plugin__s1,long-py-robot-name,passthrough_plugin,1,ok,True,False,47.0,3,11,1,0.1031609,gateway,20,12987,204134,5024,0,,,0.1031609
+long-py-robot-name__passthrough_plugin__s2,long-py-robot-name,passthrough_plugin,2,ok,True,False,48.7,3,11,1,0.1118638,gateway,20,13645,206813,5703,0,,,0.1118638
+long-py-robot-name__trove_full__s0,long-py-robot-name,trove_full,0,ok,True,False,59.2,4,14,0,0.06965242,gateway,24,45873,230247,10135,0,agent's own cost estimate differs from the gateway's by 243%,,0.2391052
+long-py-robot-name__trove_full__s1,long-py-robot-name,trove_full,1,ok,True,False,44.3,3,11,0,0.068274075,gateway,20,39511,185117,6910,0,agent's own cost estimate differs from the gateway's by 173%,,0.1864292
+long-py-robot-name__trove_full__s2,long-py-robot-name,trove_full,2,ok,True,False,67.0,8,19,1,0.083022875,gateway,26,51047,272068,10101,0,agent's own cost estimate differs from the gateway's by 208%,,0.2558863
+long-py-scale-generator__passthrough__s0,long-py-scale-generator,passthrough,0,ok,True,False,662.0,3,6,0,1.3724212,gateway,32,14494,57022,133042,0,,,1.3724212
+long-py-scale-generator__passthrough__s1,long-py-scale-generator,passthrough,1,ok,True,False,50.1,3,6,0,0.0880486,gateway,28,10453,58901,5597,0,,,0.0880486
+long-py-scale-generator__passthrough__s2,long-py-scale-generator,passthrough,2,ok,True,False,53.9,3,6,0,0.0964648,gateway,28,11053,59963,6278,0,,,0.0964648
+long-py-scale-generator__passthrough_plugin__s0,long-py-scale-generator,passthrough_plugin,0,ok,True,False,45.9,3,6,0,0.1518077,gateway,20,28370,201227,6072,0,,,0.1518077
+long-py-scale-generator__passthrough_plugin__s1,long-py-scale-generator,passthrough_plugin,1,ok,True,False,43.3,3,6,0,0.1144537,gateway,20,14834,214487,5588,0,,,0.1144537
+long-py-scale-generator__passthrough_plugin__s2,long-py-scale-generator,passthrough_plugin,2,ok,True,False,46.1,3,8,0,0.130122,gateway,22,18325,246855,5958,0,,,0.130122
+long-py-scale-generator__trove_full__s0,long-py-scale-generator,trove_full,0,ok,True,False,52.3,5,10,0,0.07679239,gateway,26,47830,283190,9220,0,agent's own cost estimate differs from the gateway's by 213%,,0.240146
+long-py-scale-generator__trove_full__s1,long-py-scale-generator,trove_full,1,ok,True,False,55.0,3,9,0,0.08796469,gateway,26,56969,277830,9445,0,agent's own cost estimate differs from the gateway's by 201%,,0.2647075
+long-py-scale-generator__trove_full__s2,long-py-scale-generator,trove_full,2,ok,True,False,55.0,3,9,0,0.094146655,gateway,26,71090,263363,9011,0,agent's own cost estimate differs from the gateway's by 213%,,0.2942233
+long-py-sgf-parsing__passthrough__s0,long-py-sgf-parsing,passthrough,0,ok,True,False,60.7,3,7,0,0.126842,gateway,30,14580,88020,8153,0,,,0.126842
+long-py-sgf-parsing__passthrough__s1,long-py-sgf-parsing,passthrough,1,ok,True,False,55.1,3,6,0,0.1195806,gateway,28,13627,77771,7768,0,,,0.1195806
+long-py-sgf-parsing__passthrough__s2,long-py-sgf-parsing,passthrough,2,ok,True,False,51.5,4,9,0,0.11484130000000001,gateway,34,13785,107008,6961,0,,,0.1148413
+long-py-sgf-parsing__passthrough_plugin__s0,long-py-sgf-parsing,passthrough_plugin,0,ok,True,False,57.8,3,6,0,0.1308031,gateway,20,15725,222506,6920,0,,,0.1308031
+long-py-sgf-parsing__passthrough_plugin__s1,long-py-sgf-parsing,passthrough_plugin,1,ok,True,False,67.0,3,7,0,0.1553708,gateway,20,19738,234858,8250,0,,,0.1553708
+long-py-sgf-parsing__passthrough_plugin__s2,long-py-sgf-parsing,passthrough_plugin,2,ok,True,False,74.4,3,7,0,0.1674088,gateway,22,20914,262498,8883,0,,,0.1674088
+long-py-sgf-parsing__trove_full__s0,long-py-sgf-parsing,trove_full,0,ok,True,False,87.5,4,10,0,0.11316019,gateway,28,61855,355521,16163,0,agent's own cost estimate differs from the gateway's by 211%,,0.3518756
+long-py-sgf-parsing__trove_full__s1,long-py-sgf-parsing,trove_full,1,ok,True,False,92.2,4,10,0,0.11576283,gateway,28,61718,353275,15475,0,agent's own cost estimate differs from the gateway's by 198%,,0.3444285
+long-py-sgf-parsing__trove_full__s2,long-py-sgf-parsing,trove_full,2,ok,True,False,78.4,4,9,0,0.09897133500000001,gateway,26,59954,315742,13988,0,agent's own cost estimate differs from the gateway's by 225%,,0.3213912
+long-py-transpose__passthrough__s0,long-py-transpose,passthrough,0,ok,True,False,34.4,3,6,0,0.057215300000000004,gateway,28,5956,38093,3846,0,,,0.0572153
+long-py-transpose__passthrough__s1,long-py-transpose,passthrough,1,ok,True,False,42.9,3,8,0,0.0730739,gateway,32,8519,52824,4643,0,,,0.0730739
+long-py-transpose__passthrough__s2,long-py-transpose,passthrough,2,ok,True,False,37.9,3,7,0,0.0646608,gateway,30,6619,46033,4345,0,,,0.0646608
+long-py-transpose__passthrough_plugin__s0,long-py-transpose,passthrough_plugin,0,ok,True,False,35.2,3,8,1,0.0886901,gateway,20,11468,196301,4035,0,,,0.0886901
+long-py-transpose__passthrough_plugin__s1,long-py-transpose,passthrough_plugin,1,ok,True,False,36.1,3,8,1,0.0851656,gateway,20,11243,195281,3749,0,,,0.0851656
+long-py-transpose__passthrough_plugin__s2,long-py-transpose,passthrough_plugin,2,ok,True,False,39.5,3,10,1,0.0982788,gateway,22,12800,219948,4424,0,,,0.0982788
+long-py-transpose__trove_full__s0,long-py-transpose,trove_full,0,ok,True,False,53.8,4,9,0,0.0609073,gateway,24,36321,235770,7479,0,agent's own cost estimate differs from the gateway's by 211%,,0.1892175
+long-py-transpose__trove_full__s1,long-py-transpose,trove_full,1,ok,True,False,50.7,5,13,1,0.062986,gateway,24,38092,236069,7812,0,agent's own cost estimate differs from the gateway's by 213%,,0.1970049
+long-py-transpose__trove_full__s2,long-py-transpose,trove_full,2,ok,True,False,57.1,3,14,0,0.068328275,gateway,26,44094,252965,7436,0,agent's own cost estimate differs from the gateway's by 207%,,0.2099435
+long-py-tree-building__passthrough__s0,long-py-tree-building,passthrough,0,ok,True,False,42.5,3,7,0,0.0770414,gateway,30,9067,59739,4834,0,,,0.0770414
+long-py-tree-building__passthrough__s1,long-py-tree-building,passthrough,1,ok,True,False,46.7,3,8,0,0.08142100000000001,gateway,32,9273,63145,5186,0,,,0.081421
+long-py-tree-building__passthrough__s2,long-py-tree-building,passthrough,2,ok,True,False,40.3,3,7,0,0.07015590000000001,gateway,30,8243,54684,4402,0,,,0.0701559
+long-py-tree-building__passthrough_plugin__s0,long-py-tree-building,passthrough_plugin,0,ok,True,False,49.1,3,6,0,0.1025273,gateway,20,13870,211423,4667,0,,,0.1025273
+long-py-tree-building__passthrough_plugin__s1,long-py-tree-building,passthrough_plugin,1,ok,True,False,47.5,3,7,0,0.1049497,gateway,22,14070,231507,4658,0,,,0.1049497
+long-py-tree-building__passthrough_plugin__s2,long-py-tree-building,passthrough_plugin,2,ok,True,False,47.9,3,7,0,0.1076681,gateway,22,14049,231116,4939,0,,,0.1076681
+long-py-tree-building__trove_full__s0,long-py-tree-building,trove_full,0,ok,True,False,49.7,3,8,0,0.077947455,gateway,24,73767,238052,8692,0,agent's own cost estimate differs from the gateway's by 279%,,0.2951907
+long-py-tree-building__trove_full__s1,long-py-tree-building,trove_full,1,ok,True,False,41.9,3,8,0,0.067862685,gateway,24,46860,248041,6589,0,agent's own cost estimate differs from the gateway's by 206%,,0.2078921
+long-py-tree-building__trove_full__s2,long-py-tree-building,trove_full,2,ok,True,False,46.4,4,9,0,0.06685045,gateway,26,45355,280438,7120,0,agent's own cost estimate differs from the gateway's by 218%,,0.2126833
+long-py-two-bucket__passthrough__s0,long-py-two-bucket,passthrough,0,ok,True,False,56.1,3,7,0,0.1088417,gateway,30,11688,73017,7226,0,,,0.1088417
+long-py-two-bucket__passthrough__s1,long-py-two-bucket,passthrough,1,ok,True,False,52.7,3,6,0,0.1021065,gateway,28,11259,63430,6756,0,,,0.1021065
+long-py-two-bucket__passthrough__s2,long-py-two-bucket,passthrough,2,ok,True,False,61.8,3,6,0,0.10785840000000001,gateway,28,11789,66299,7170,0,,,0.1078584
+long-py-two-bucket__passthrough_plugin__s0,long-py-two-bucket,passthrough_plugin,0,ok,True,False,60.0,4,12,0,0.1461554,gateway,20,17605,224129,7969,0,,,0.1461554
+long-py-two-bucket__passthrough_plugin__s1,long-py-two-bucket,passthrough_plugin,1,ok,True,False,58.6,3,7,0,0.13780499999999998,gateway,22,15272,242210,7536,0,,,0.137805
+long-py-two-bucket__passthrough_plugin__s2,long-py-two-bucket,passthrough_plugin,2,ok,True,False,80.6,3,13,0,0.1970209,gateway,24,23860,295929,10773,0,,,0.1970209
+long-py-two-bucket__trove_full__s0,long-py-two-bucket,trove_full,0,ok,True,False,72.8,5,14,0,0.10305051,gateway,24,49384,247269,12109,0,agent's own cost estimate differs from the gateway's by 161%,,0.2693249
+long-py-two-bucket__trove_full__s1,long-py-two-bucket,trove_full,1,ok,True,False,118.3,7,18,1,0.13120884,gateway,36,83654,468010,20989,0,agent's own cost estimate differs from the gateway's by 255%,,0.465898
+long-py-two-bucket__trove_full__s2,long-py-two-bucket,trove_full,2,ok,True,False,73.7,5,16,0,0.10562741,gateway,28,69589,298873,12273,0,agent's own cost estimate differs from the gateway's by 209%,,0.3266458
+long-py-variable-length-quantity__passthrough__s0,long-py-variable-length-quantity,passthrough,0,ok,True,False,35.4,3,6,0,0.0709195,gateway,28,7632,45635,4722,0,,,0.0709195
+long-py-variable-length-quantity__passthrough__s1,long-py-variable-length-quantity,passthrough,1,ok,True,False,33.4,3,6,0,0.06857150000000001,gateway,28,7570,44405,4515,0,,,0.0685715
+long-py-variable-length-quantity__passthrough__s2,long-py-variable-length-quantity,passthrough,2,ok,True,False,35.8,3,6,0,0.0699175,gateway,28,7666,44565,4624,0,,,0.0699175
+long-py-variable-length-quantity__passthrough_plugin__s0,long-py-variable-length-quantity,passthrough_plugin,0,ok,True,False,38.2,3,7,0,0.1054514,gateway,20,14361,207989,4871,0,,,0.1054514
+long-py-variable-length-quantity__passthrough_plugin__s1,long-py-variable-length-quantity,passthrough_plugin,1,ok,True,False,37.6,3,10,1,0.10950069999999999,gateway,20,14682,206857,5207,0,,,0.1095007
+long-py-variable-length-quantity__passthrough_plugin__s2,long-py-variable-length-quantity,passthrough_plugin,2,ok,True,False,36.3,3,7,0,0.1074538,gateway,20,14627,208863,4996,0,,,0.1074538
+long-py-variable-length-quantity__trove_full__s0,long-py-variable-length-quantity,trove_full,0,ok,True,False,41.2,4,8,0,0.06745862,gateway,24,38387,251897,6455,0,agent's own cost estimate differs from the gateway's by 175%,,0.1857552
+long-py-variable-length-quantity__trove_full__s1,long-py-variable-length-quantity,trove_full,1,ok,True,False,38.7,4,8,0,0.06818642,gateway,24,37289,251249,6190,0,agent's own cost estimate differs from the gateway's by 164%,,0.1802954
+long-py-variable-length-quantity__trove_full__s2,long-py-variable-length-quantity,trove_full,2,ok,True,False,35.7,4,8,0,0.064838425,gateway,24,33188,255835,5880,0,agent's own cost estimate differs from the gateway's by 158%,,0.1674015
+long-py-wordy__passthrough__s0,long-py-wordy,passthrough,0,ok,True,False,51.8,3,7,0,0.1093655,gateway,30,11817,75530,7221,0,,,0.1093655
+long-py-wordy__passthrough__s1,long-py-wordy,passthrough,1,ok,True,False,50.4,3,7,0,0.1047771,gateway,30,11692,71671,6832,0,,,0.1047771
+long-py-wordy__passthrough__s2,long-py-wordy,passthrough,2,ok,True,False,62.6,3,8,0,0.1081201,gateway,32,12108,80861,6970,0,,,0.1081201
+long-py-wordy__passthrough_plugin__s0,long-py-wordy,passthrough_plugin,0,ok,True,False,67.1,3,8,0,0.1416926,gateway,24,17033,267021,7236,0,,,0.1416926
+long-py-wordy__passthrough_plugin__s1,long-py-wordy,passthrough_plugin,1,ok,True,False,67.6,4,9,0,0.15285859999999998,gateway,26,18317,301641,7685,0,,,0.1528586
+long-py-wordy__passthrough_plugin__s2,long-py-wordy,passthrough_plugin,2,ok,True,False,67.7,3,7,0,0.1407523,gateway,22,17015,246108,7356,0,,,0.1407523
+long-py-wordy__trove_full__s0,long-py-wordy,trove_full,0,ok,True,False,51.7,3,8,0,0.084418365,gateway,24,46574,247818,9356,0,agent's own cost estimate differs from the gateway's by 178%,,0.2348248
+long-py-wordy__trove_full__s1,long-py-wordy,trove_full,1,ok,True,False,63.9,3,10,0,0.105200045,gateway,26,70870,260164,11283,0,agent's own cost estimate differs from the gateway's by 200%,,0.3160734
+long-py-wordy__trove_full__s2,long-py-wordy,trove_full,2,ok,True,False,78.6,3,10,0,0.092485805,gateway,28,85835,294391,15869,0,agent's own cost estimate differs from the gateway's by 335%,,0.4027726
+long-py-zebra-puzzle__passthrough__s0,long-py-zebra-puzzle,passthrough,0,ok,True,False,44.9,3,6,0,0.0710626,gateway,28,7993,42141,4681,0,,,0.0710626
+long-py-zebra-puzzle__passthrough__s1,long-py-zebra-puzzle,passthrough,1,ok,True,False,52.4,3,6,0,0.0856453,gateway,28,9621,45968,5694,0,,,0.0856453
+long-py-zebra-puzzle__passthrough__s2,long-py-zebra-puzzle,passthrough,2,ok,True,False,51.6,3,6,0,0.0871061,gateway,28,9303,46726,5912,0,,,0.0871061
+long-py-zebra-puzzle__passthrough_plugin__s0,long-py-zebra-puzzle,passthrough_plugin,0,ok,True,False,43.1,3,9,0,0.10785549999999999,gateway,20,14313,204530,5158,0,,,0.1078555
+long-py-zebra-puzzle__passthrough_plugin__s1,long-py-zebra-puzzle,passthrough_plugin,1,ok,True,False,45.7,3,9,0,0.1191228,gateway,22,15557,232263,5696,0,,,0.1191228
+long-py-zebra-puzzle__passthrough_plugin__s2,long-py-zebra-puzzle,passthrough_plugin,2,ok,True,False,43.5,3,9,0,0.1121254,gateway,20,14611,205879,5497,0,,,0.1121254
+long-py-zebra-puzzle__trove_full__s0,long-py-zebra-puzzle,trove_full,0,ok,True,False,48.4,4,15,2,0.06803171499999999,gateway,26,44965,255489,9457,0,agent's own cost estimate differs from the gateway's by 242%,,0.2325834
+long-py-zebra-puzzle__trove_full__s1,long-py-zebra-puzzle,trove_full,1,ok,True,False,46.1,3,10,0,0.061440680000000004,gateway,22,41800,206398,8778,0,agent's own cost estimate differs from the gateway's by 247%,,0.2129638
+long-py-zebra-puzzle__trove_full__s2,long-py-zebra-puzzle,trove_full,2,ok,True,False,65.3,9,20,1,0.079616915,gateway,38,60468,465157,13469,0,agent's own cost estimate differs from the gateway's by 318%,,0.3324517
+long-py-zipper__passthrough__s0,long-py-zipper,passthrough,0,ok,True,False,45.2,3,6,0,0.0904303,gateway,28,9578,53693,6106,0,,,0.0904303
+long-py-zipper__passthrough__s1,long-py-zipper,passthrough,1,ok,True,False,47.8,3,6,0,0.0924799,gateway,28,9705,54314,6273,0,,,0.0924799
+long-py-zipper__passthrough__s2,long-py-zipper,passthrough,2,ok,True,False,52.1,3,6,0,0.0886618,gateway,28,9430,53008,5973,0,,,0.0886618
+long-py-zipper__passthrough_plugin__s0,long-py-zipper,passthrough_plugin,0,ok,True,False,66.8,3,8,0,0.1209478,gateway,24,13310,254148,6221,0,,,0.1209478
+long-py-zipper__passthrough_plugin__s1,long-py-zipper,passthrough_plugin,1,ok,True,False,51.6,3,8,0,0.1351707,gateway,24,14996,257227,7191,0,,,0.1351707
+long-py-zipper__passthrough_plugin__s2,long-py-zipper,passthrough_plugin,2,ok,True,False,53.8,3,6,0,0.1294473,gateway,20,14296,216773,7199,0,,,0.1294473
+long-py-zipper__trove_full__s0,long-py-zipper,trove_full,0,ok,True,False,63.8,3,8,0,0.10857308,gateway,24,75904,237148,9813,0,agent's own cost estimate differs from the gateway's by 187%,,0.3116528
+long-py-zipper__trove_full__s1,long-py-zipper,trove_full,1,ok,True,False,52.8,3,8,0,0.093922285,gateway,24,48951,273370,8570,0,agent's own cost estimate differs from the gateway's by 151%,,0.2354625
+long-py-zipper__trove_full__s2,long-py-zipper,trove_full,2,ok,True,False,53.6,3,9,0,0.082613915,gateway,26,48123,278187,8331,0,agent's own cost estimate differs from the gateway's by 180%,,0.2314882

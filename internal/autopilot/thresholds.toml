@@ -2,6 +2,18 @@
 # Autopilot trial thresholds per technique tier, from pre-registered benchmark studies (plan item 10.7).
 # A tier that is missing has fewer than 30 benchmark pairs and keeps the placeholders in internal/autopilot.
 version = 1
-# T1: 0 pairs, fewer than 30; placeholders stay.
+
+[tiers.T1]
+probation_min_sessions_per_arm = 200
+test_fail_margin_pts = 5
+pairs = 90
+cost_change_sd = 0.217107
+source = "bench:launch-1@40d12e203919"
 # T2: 0 pairs, fewer than 30; placeholders stay.
-# T3: 0 pairs, fewer than 30; placeholders stay.
+
+[tiers.T3]
+probation_min_sessions_per_arm = 200
+test_fail_margin_pts = 5
+pairs = 90
+cost_change_sd = 0.188366
+source = "bench:launch-1@40d12e203919"
