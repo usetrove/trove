@@ -31,6 +31,13 @@ You are helping build Trove, "the efficiency layer for AI coding agents."
 - One optimizer engine, many adapters: gateway, Claude Code hooks, OpenCode plugin, settings writer. Adapters hold no optimization logic. Keep features identical across adapters wherever the harness allows.
 - Honest measurement is the product. Judge every optimization against the actual bill and task outcomes using session-level A/B comparisons, never against a hypothetical raw-output baseline.
 
+## Technique tiers (added 2026-11-18)
+- Every optimization has a tier, enforced by internal/technique/registry.go.
+- T1 Safe: lossless or recoverable, deterministic, visible diff, mechanical checker. Shadow first, then A/B. Autopilot may switch it on after shadow evidence and an A/B verdict.
+- T2 Behavioural (changes what the agent is told, such as brevity rules or verbosity steering): everything T1 requires, plus its per-request overhead is charged, the test-pass guardrail is on, a confounder tag is recorded, and the user explicitly opts in. Off by default; Autopilot only after a benchmark verdict.
+- T3 Routing (model, effort, subagent model, local offload): everything T2 requires, plus the cache-stickiness rule, a benchmark verdict per agent and model family, never on subscription or OAuth traffic, and the strictest rollback threshold.
+- Techniques once listed as out of scope (C6, C7, C8, C13, W3, W4) are allowed as T2 or T3 under these rules.
+
 ## Engineering standards
 - Go (current stable), pure-Go dependencies (no cgo), one static binary. macOS and Linux first; Windows later.
 - Code under internal/ in small packages with narrow interfaces. Table-driven tests, golden files for parsers and reports, recorded and redacted fixtures for API traffic. No live API calls in CI.
