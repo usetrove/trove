@@ -55,7 +55,12 @@ def build_parser() -> argparse.ArgumentParser:
         p = sub.add_parser(name, help=help_)
         _common(p)
         p.add_argument("--yes", action="store_true", help="confirm spending real API money")
+        p.add_argument("--through-repeat", type=int, default=None,
+                       help="staged studies: run only repeats 1..N of the plan (the next look); resumes like any run")
     r = sub.add_parser("report", help="rebuild the report and CSVs from a batch folder")
+    st = sub.add_parser("stage", help="staged study: say whether every registered comparison is decided (exit 0) "
+                                      "or the next repeat is needed (exit 3)")
+    st.add_argument("--batch", type=Path, required=True)
     r.add_argument("--batch", type=Path, required=True)
     r.add_argument("--json", action="store_true")
     s = sub.add_parser("smoke", help="3 tiny tasks x 2 conditions, end to end")
@@ -120,13 +125,15 @@ def _setup(args, *, smoke: bool = False) -> tuple[Config, list[Task], list, list
     tasks = load_tasks(tasks_dir)
     if not tasks:
         raise UserError(f"No task manifests (*.yaml) found under {tasks_dir}.")
-    conds = parse_conditions(list(cfg.conditions), "claude_code" if cfg.agent == "fake" else cfg.agent)
+    conds = parse_conditions(list(cfg.conditions), "claude_code" if cfg.agent == "fake" else cfg.agent,
+                             route_to=study.route_to if study else "")
     if study:
         base = next((c for c in conds if c.name == study.baseline_condition), None)
         if base is None or not base.measurable:
             raise UserError(f"The baseline condition '{study.baseline_condition}' cannot be measured with this agent, "
                             "so nothing can be compared with it.")
-    specs = build_plan(tasks, conds, cfg.repeats, cfg.order_seed, efforts=study.efforts if study else ())
+    specs = build_plan(tasks, conds, cfg.repeats, cfg.order_seed, efforts=study.efforts if study else (),
+                       staged=bool(study and study.staged))
     default_batch = BENCH / "results" / (date.today().isoformat() + ("-smoke" if smoke else ""))
     batch = args.batch or (default_batch / study.id if study else default_batch)
     return cfg, tasks, conds, specs, batch
@@ -185,7 +192,8 @@ def _cmd_run(args, *, smoke: bool = False, plan_only: bool = False) -> int:
         print("SIMULATION: synthetic runs from the effects file. This measures nothing about any agent.")
         versions = {"agent": "simulated", "model": cfg.model, "fake_agent": True, "simulated": True, "config_sha256": cfg.sha256}
         (batch / "versions.json").write_text(json.dumps(versions, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
-        result = execute(specs, ledger, make_run_one(load_effects(args.simulate)), batch_cap_usd=1e9, run_cap_usd=1.0)
+        result = execute(_through(specs, getattr(args, "through_repeat", None)), ledger,
+                         make_run_one(load_effects(args.simulate)), batch_cap_usd=1e9, run_cap_usd=1.0)
         _finish(batch, cfg, conds, versions, len(tasks), ledger, study_info)
         print(f"Simulated {result.ran} run(s), {result.skipped_done} already done. Report: {batch / 'report.md'}")
         return 0 if result.complete else 3
@@ -202,11 +210,42 @@ def _cmd_run(args, *, smoke: bool = False, plan_only: bool = False) -> int:
     versions["config_sha256"] = cfg.sha256
     (batch / "versions.json").write_text(json.dumps(versions, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
 
-    result = execute(specs, ledger, runner.run_one, batch_cap_usd=cfg.batch_cap_usd, run_cap_usd=cfg.run_cap_usd)
+    todo = _through(specs, getattr(args, "through_repeat", None))
+    result = execute(todo, ledger, runner.run_one, batch_cap_usd=cfg.batch_cap_usd, run_cap_usd=cfg.run_cap_usd)
     _finish(batch, cfg, conds, versions, len(tasks), ledger, study_info)
     print(f"Ran {result.ran}, skipped {result.skipped_done} already done, spent ${result.spent_usd:.4f}. Stop reason: {result.stop_reason}.")
     print(f"Report: {batch / 'report.md'}")
     return 0 if result.complete else 3
+
+
+def _through(specs: list[RunSpec], n: int | None) -> list[RunSpec]:
+    """The runs of repeats 1..n (seeds below n); all of them when n is None."""
+    if n is None:
+        return list(specs)
+    if n < 1:
+        raise UserError("--through-repeat must be at least 1.")
+    return [s for s in specs if s.seed < n]
+
+
+def _cmd_stage(args) -> int:
+    """Print whether each registered comparison is decided at this look. Exit 0: all decided (stop);
+    3: at least one needs more data (run the next repeat). Reads only the batch folder."""
+    from .studyreport import analyze_study
+
+    batch: Path = args.batch
+    if not (batch / "study.lock.json").exists():
+        raise UserError(f"{batch} is not a study batch (no study.lock.json).")
+    lock = json.loads((batch / "study.lock.json").read_text(encoding="utf-8"))
+    study = load_study(batch / "config.used.yaml")
+    if study.sha256 != lock.get("study_sha256"):
+        raise UserError(f"{batch / 'config.used.yaml'} no longer matches the hash locked at registration.")
+    an = analyze_study(study, Ledger(batch / "ledger.jsonl").final_records())
+    rows = [r for r in an.rows if r.stratum == "all"]
+    out = {"study": study.id, "look_alpha": study.look_alpha,
+           "comparisons": [{"condition": r.condition, "verdict": r.verdict} for r in rows]}
+    out["decided"] = bool(rows) and all(r.verdict in ("ship", "dont_ship") for r in rows)
+    print(json.dumps(out, indent=2))
+    return 0 if out["decided"] else 3
 
 
 def _config_text(path: Path | None) -> str:
@@ -344,6 +383,8 @@ def _cmd_defaults(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.cmd == "stage":
+            return _cmd_stage(args)
         if args.cmd == "defaults":
             return _cmd_defaults(args)
         if args.cmd == "prereg":

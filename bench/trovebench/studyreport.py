@@ -68,7 +68,7 @@ class StudyAnalysis:
 
 
 def ship_rule_for(study: Study) -> ShipRule:
-    d = {"confidence": 1 - study.analysis.alpha, "bootstrap_resamples": study.analysis.bootstrap_resamples,
+    d = {"confidence": 1 - study.look_alpha, "bootstrap_resamples": study.analysis.bootstrap_resamples,
          "bootstrap_seed": study.analysis.bootstrap_seed, **study.ship_rule, "reference": study.baseline_condition}
     return ShipRule.from_dict(d)
 
@@ -111,10 +111,10 @@ def analyze_study(study: Study, records: Sequence[RunRecord]) -> StudyAnalysis:
         for k, (treated, ref, pairs, i, ship, het) in enumerate(batch):
             p_adj = adj.get(k)
             verdict, reason = ship.verdict, ship.reason
-            if ship.verdict == SHIP and p_adj is not None and p_adj >= a.alpha:
+            if ship.verdict == SHIP and p_adj is not None and p_adj >= study.look_alpha:
                 verdict = NEED_MORE_DATA
                 reason = (f"The intervals clear the rule, but the primary-metric p-value is {p_adj:.3f} after "
-                          f"{'Holm' if a.multiple_comparison == 'holm' else 'no'} correction, above alpha {a.alpha:g}.")
+                          f"{'Holm' if a.multiple_comparison == 'holm' else 'no'} correction, above alpha {study.look_alpha:g}.")
             rows.append(CompRow(treated, ref, stratum, i, ship if i else None, _primary_p(study, i) if i else None,
                                 p_adj, verdict, reason, het))
 
@@ -242,7 +242,7 @@ def _markdown(study: Study, lock: dict, an: StudyAnalysis, recs, versions: dict,
     a("## Decisions\n")
     a(f"Rule: ship only if, over at least **{rule.min_pairs}** pairs against `{rule.reference}`, the {rule.confidence:.0%} interval of the cost change "
       f"is entirely at or below **-{rule.min_cost_reduction_pct:g}%**, success does not fall by more than **{rule.success_margin_pts:g} points** "
-      f"(interval lower bound), and the primary p-value is below **{study.analysis.alpha:g}** after "
+      f"(interval lower bound), and the primary p-value is below **{study.look_alpha:g}** after "
       f"{'Holm' if study.analysis.multiple_comparison == 'holm' else 'no'} correction.\n")
     a(_table(an.rows, ALL))
     for r in (x for x in an.rows if x.stratum == ALL and x.inference):

@@ -33,7 +33,7 @@ def unit_id(task_id: str, seed: int, effort: str = "") -> str:
 
 
 def build_plan(tasks: Sequence[Task], conditions: Sequence[Condition], repeats: int, order_seed: int,
-               efforts: Sequence[str] = ()) -> list[RunSpec]:
+               efforts: Sequence[str] = (), staged: bool = False) -> list[RunSpec]:
     """Paired, randomized design. Each unit is one (task, repeat, effort); every measurable
     condition runs once in every unit. Unit order is shuffled, and condition order is shuffled
     inside each unit, both from one fixed seed, so a condition never systematically runs first
@@ -45,7 +45,15 @@ def build_plan(tasks: Sequence[Task], conditions: Sequence[Condition], repeats: 
     measurable = [c for c in conditions if c.measurable]
     rng = random.Random(order_seed)
     units = [(t.id, s, e) for t in sorted(tasks, key=lambda t: t.id) for s in range(repeats) for e in (efforts or ("",))]
-    rng.shuffle(units)
+    if staged:
+        # Every unit of repeat 0 runs before any unit of repeat 1, and so on, so the study can be analysed after
+        # each repeat. Order is still shuffled within each repeat.
+        blocks = [[u for u in units if u[1] == s] for s in range(repeats)]
+        for b in blocks:
+            rng.shuffle(b)
+        units = [u for b in blocks for u in b]
+    else:
+        rng.shuffle(units)
     specs: list[RunSpec] = []
     for task_id, seed, effort in units:
         order = list(measurable)

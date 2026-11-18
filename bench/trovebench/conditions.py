@@ -112,7 +112,7 @@ class Condition:
         return {o: ("on" if o in self.hooks_on else "off") for o in names}
 
 
-def parse_condition(spec: str, agent: str) -> Condition:
+def parse_condition(spec: str, agent: str, route_to: str = "") -> Condition:
     supported = supported_optimizers(agent)
     if spec.startswith("alone_"):      # the name a condition carries in records and study files
         spec = "alone:" + spec[len("alone_"):]
@@ -140,6 +140,8 @@ def parse_condition(spec: str, agent: str) -> Condition:
             raise ConditionError(f"'{spec}': '{model}' is not a model ID. Write trove_full:<model>, e.g. trove_full:claude-haiku-5-5.")
         return Condition("trove_full", uses_gateway=True, on=supported + BEHAVIOR_OPTIMIZERS, uses_hooks=True,
                          hooks_on=PLUGIN_ON, uses_mcp=True, route_to=model)
+    if spec == "trove_full" and route_to:
+        return parse_condition(f"trove_full:{route_to}", agent)
     if spec == "trove_full":
         raise ConditionError("trove_full needs the cheaper model for model_router: write trove_full:<model>, e.g. trove_full:claude-haiku-5-5.")
     if spec.startswith("alone:model_router:") or spec.startswith("alone_model_router:"):
@@ -147,6 +149,8 @@ def parse_condition(spec: str, agent: str) -> Condition:
         if not MODEL_RE.match(model):
             raise ConditionError(f"'{spec}': '{model}' is not a model ID.")
         return Condition("alone_model_router", uses_gateway=True, on=("model_router",), route_to=model)
+    if spec in ("alone:model_router", "alone_model_router") and route_to:
+        return parse_condition(f"alone:model_router:{route_to}", agent)
     if spec in ("alone:model_router", "alone_model_router"):
         raise ConditionError("alone:model_router needs the cheaper model: write alone:model_router:<model>.")
     if spec in ("alone:verbosity_steer", "alone_verbosity_steer"):
@@ -178,8 +182,8 @@ def parse_condition(spec: str, agent: str) -> Condition:
     )
 
 
-def parse_conditions(specs: list[str], agent: str) -> list[Condition]:
-    out = [parse_condition(s, agent) for s in specs]
+def parse_conditions(specs: list[str], agent: str, route_to: str = "") -> list[Condition]:
+    out = [parse_condition(s, agent, route_to) for s in specs]
     names = [c.name for c in out]
     if len(set(names)) != len(names):
         raise ConditionError("a condition is listed twice; each condition may appear once.")

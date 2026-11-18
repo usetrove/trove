@@ -15,7 +15,8 @@ import yaml
 PRIMARY_METRICS = ("billed_cost_usd", "success_rate", "latency_s")
 EFFORTS = ("low", "medium", "high")
 _TOP = {"id", "title", "hypothesis", "primary_metric", "secondary_metrics", "baseline_condition", "conditions",
-        "efforts", "tasks", "repeats", "order_seed", "analysis", "ship_rule", "budget", "agent", "model", "cost_basis", "parity", "claims", "recommends"}
+        "efforts", "tasks", "repeats", "order_seed", "analysis", "ship_rule", "budget", "agent", "model", "cost_basis", "parity", "claims", "recommends",
+        "staged", "route_to"}
 _ANALYSIS = {"alpha", "bootstrap_resamples", "bootstrap_seed", "multiple_comparison"}
 _BUDGET = {"batch_cap_usd", "run_cap_usd"}
 _PARITY = {"none", "plugin", "gateway", "both"}
@@ -57,7 +58,17 @@ class Study:
     parity: dict = field(default_factory=dict)   # role -> condition name, for the parity headline
     claims: tuple[dict, ...] = ()            # third-party savings claims to test against the measurement
     recommends: dict = field(default_factory=dict)   # condition -> the recommender rule it would justify
+    # staged: the study is analysed after each repeat (a "look") and may stop early once every comparison is
+    # decided. Each look is tested at alpha / repeats (Bonferroni over looks), so stopping at any look keeps the
+    # overall false-positive rate at or below alpha. Every look, including the last, uses the same stricter level.
+    staged: bool = False
+    route_to: str = ""                       # model_router's cheaper model, for trove_full and alone_model_router
     sha256: str = ""
+
+    @property
+    def look_alpha(self) -> float:
+        """The significance level each analysis uses: alpha, or alpha / repeats for a staged study."""
+        return self.analysis.alpha / self.repeats if self.staged else self.analysis.alpha
 
     @property
     def comparisons(self) -> tuple[tuple[str, str], ...]:
@@ -93,7 +104,9 @@ def load_study(path: Path) -> Study:
             analysis=Analysis(**(d.get("analysis") or {})), ship_rule=dict(d.get("ship_rule") or {}),
             budget=dict(d.get("budget") or {}), cost_basis=str(d.get("cost_basis", "agent")),
             parity=dict(d.get("parity") or {}), claims=tuple(dict(c) for c in d.get("claims") or ()),
-            recommends={str(k): dict(v) for k, v in (d.get("recommends") or {}).items()}, sha256=hashlib.sha256(text.encode()).hexdigest(),
+            recommends={str(k): dict(v) for k, v in (d.get("recommends") or {}).items()},
+            staged=bool(d.get("staged", False)), route_to=str(d.get("route_to") or ""),
+            sha256=hashlib.sha256(text.encode()).hexdigest(),
         )
     except (TypeError, ValueError) as e:
         raise StudyError(f"{path}: {e}") from e
@@ -121,6 +134,11 @@ def _validate(s: Study, path: Path) -> None:
         raise StudyError(f"{path}: a comparison needs at least two conditions.")
     if s.repeats < 1:
         raise StudyError(f"{path}: repeats must be at least 1.")
+    if s.staged and s.repeats < 2:
+        raise StudyError(f"{path}: a staged study looks at the data after each repeat, so it needs repeats of at least 2.")
+    routed = [c for c in s.conditions if c in ("trove_full", "alone_model_router")]
+    if routed and not s.route_to:
+        raise StudyError(f"{path}: condition {routed[0]} turns on model_router, so the study must name its cheaper model in route_to.")
     bad = [e for e in s.efforts if e not in EFFORTS]
     if bad or len(set(s.efforts)) != len(s.efforts):
         raise StudyError(f"{path}: efforts must be unique values from {', '.join(EFFORTS)}; got {list(s.efforts)}.")
