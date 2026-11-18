@@ -3,6 +3,7 @@ package optimize
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -84,27 +85,60 @@ func BenchmarkEngineAllOn(b *testing.B) {
 // TestEngineStaysWithinTheGatewayBudget checks the acceptance criterion: with
 // every optimizer on, p50 overhead stays under the gateway's 5 ms budget for a
 // typical request. "Typical" is a ~200 KB history, a long agent session. Larger
-// bodies are reported by the benchmark. Skipped under -short because it is a
-// timing test.
+// bodies are reported by the benchmark. Skipped under -short and the race
+// detector because it is a timing test.
+//
+// It was flaky (plan item 10.8): run beside the rest of the suite, other
+// packages compete for the CPU and one round's p50 can double. So it measures
+// up to gatewayBudgetRounds rounds and passes on the first round within budget.
+// A real slowdown is slow in every round and still fails.
 func TestEngineStaysWithinTheGatewayBudget(t *testing.T) {
-	if testing.Short() {
+	if testing.Short() || raceEnabled {
 		t.Skip("timing test")
 	}
 	body := historyOfSize(200 << 10)
 	e := allOnEngine()
 	in := input(body)
 	e.Run(context.Background(), in) // warm up: first request pins the session
-	const runs = 101
-	d := make([]time.Duration, runs)
+	best := time.Duration(1<<63 - 1)
+	for round := 1; round <= gatewayBudgetRounds; round++ {
+		runtime.GC() // garbage from the previous round must not land in this one
+		p50, p90, maxD := engineTimings(e, in, 101)
+		t.Logf("round %d, %d KB body, all optimizers on: p50 %v, p90 %v, max %v", round, len(body)>>10, p50, p90, maxD)
+		best = min(best, p50)
+		if withinGatewayBudget(p50) {
+			return
+		}
+	}
+	t.Errorf("best p50 %v over %d rounds exceeds the 5 ms gateway budget", best, gatewayBudgetRounds)
+}
+
+// gatewayBudgetRounds is how many measurement rounds the budget test may take.
+const gatewayBudgetRounds = 3
+
+// withinGatewayBudget is the acceptance criterion: p50 overhead at most 5 ms.
+func withinGatewayBudget(p50 time.Duration) bool { return p50 <= 5*time.Millisecond }
+
+// engineTimings runs the engine n times on in and returns p50, p90 and max.
+func engineTimings(e *Engine, in Input, n int) (p50, p90, maxD time.Duration) {
+	d := make([]time.Duration, n)
 	for i := range d {
 		start := time.Now()
 		e.Run(context.Background(), in)
 		d[i] = time.Since(start)
 	}
 	slices.Sort(d)
-	t.Logf("%d KB body, all optimizers on: p50 %v, p90 %v, max %v", len(body)>>10, d[runs/2], d[runs*9/10], d[runs-1])
-	if p50 := d[runs/2]; p50 > 5*time.Millisecond {
-		t.Errorf("p50 %v exceeds the 5 ms gateway budget", p50)
+	return d[n/2], d[n*9/10], d[n-1]
+}
+
+func TestGatewayBudgetBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		p50  time.Duration
+		want bool
+	}{{4 * time.Millisecond, true}, {5 * time.Millisecond, true}, {5*time.Millisecond + 1, false}} {
+		if got := withinGatewayBudget(tc.p50); got != tc.want {
+			t.Errorf("withinGatewayBudget(%v) = %v, want %v", tc.p50, got, tc.want)
+		}
 	}
 }
 

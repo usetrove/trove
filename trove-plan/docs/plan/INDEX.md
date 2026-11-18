@@ -81,7 +81,7 @@ Status: todo | doing | done | blocked(<reason>). Update the Status column when y
 | 10.5 | Long-session task suite | cont. | M | agent | - | todo |
 | 10.6 | Benchmark output_trimmer, hook_large_output | cont. | - | agent+human | API key | todo |
 | 10.7 | Benchmark-derived Autopilot thresholds | 0.8 | S | agent | 10.3-10.6 | todo |
-| 10.8 | Commit SWE-bench results + fix flaky test | 0.9 | S | agent+human | - | todo |
+| 10.8 | Commit SWE-bench results + fix flaky test | 0.9 | S | agent+human | - | blocked(flaky test fixed; swebench-gateway-2 result files are on another machine) |
 | 11.1 | Docs around the three tiers | each | S | agent | 0.1 | todo |
 | 11.2 | CHANGELOG + PRIVACY.md updates | each | S | agent | - | todo |
 | 11.3 | Naming lint on new code | each | S | agent | - | todo |
