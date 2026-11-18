@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/usetrove/trove/internal/experiment"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -113,12 +114,20 @@ func TestModelChoiceAggregatesFindings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := find(ss, KindModelChoice)
+	// Every one of the model's requests was a small task, so the per-turn line rolls up into a
+	// default-model suggestion (plan item 7.5) and is not shown twice.
+	if find(ss, KindModelChoice) != nil {
+		t.Fatal("model_choice must be replaced by model_default when small tasks dominate")
+	}
+	m := find(ss, KindModelDefault)
 	if m == nil || m.Requests != 25 || m.EstSavingsUSD == nil || math.Abs(*m.EstSavingsUSD-1.25) > 1e-9 {
 		t.Fatalf("model suggestion wrong: %+v", m)
 	}
-	if m.Confidence != "low" || !strings.Contains(m.Title, "claude-haiku-5-5") || !strings.Contains(m.Detail, "cannot check") {
-		t.Errorf("must say it is a low-confidence suggestion: %+v", m)
+	if m.Confidence != "low" || m.EvidenceLabel != "estimated" || !strings.Contains(m.Title, "claude-haiku-5-5") || !strings.Contains(m.Detail, "cannot check") {
+		t.Errorf("must say it is a low-confidence, estimated suggestion: %+v", m)
+	}
+	if m.Tier != "T3" || !strings.Contains(m.Detail, "measured spend") {
+		t.Errorf("model_default is T3 and names its measured spend: %+v", m)
 	}
 }
 
@@ -199,7 +208,7 @@ func TestEverySuggestionCarriesATierAndAnEvidenceLabel(t *testing.T) {
 		t.Errorf("batch: tier %q evidence %q, want T1 and estimated", b.Tier, b.EvidenceLabel)
 	}
 	for _, s := range ss {
-		if s.Tier == "" || s.Class == "" || (s.EvidenceLabel != "estimated" && s.EvidenceLabel != "unmeasured") {
+		if s.Tier == "" || s.Class == "" || (s.EvidenceLabel != "estimated" && s.EvidenceLabel != "unmeasured" && s.EvidenceLabel != "benchmark") {
 			t.Errorf("%s: missing tier or evidence label: %+v", s.Kind, s)
 		}
 	}
@@ -209,5 +218,58 @@ func TestEverySuggestionCarriesATierAndAnEvidenceLabel(t *testing.T) {
 		if s.Tier != want || s.EvidenceLabel != "unmeasured" {
 			t.Errorf("%s: tier %q evidence %q, want %s and unmeasured when there is no saving figure", kind, s.Tier, s.EvidenceLabel, want)
 		}
+	}
+}
+
+func TestModelChoiceStaysWhenSmallTasksAreAMinority(t *testing.T) {
+	f := `[{"detector":"expensive_model_small_task","tokens":900,"usd":0.05,"confidence":"low","label":"estimated","detail":{"alternative":"claude-haiku-5-5"}}]`
+	db, tbl := seed(t, []row{
+		{model: "claude-opus-5-5", agent: "claude_code", cost: 0.4, findings: f},
+		{model: "claude-opus-5-5", agent: "claude_code", cost: 2},
+		{model: "claude-opus-5-5", agent: "claude_code", cost: 2},
+		{model: "claude-opus-5-5", agent: "claude_code", cost: 2},
+	}, 25) // 25 small of 100: a 25% share, under the 40% threshold
+	ss, err := Generate(context.Background(), db, tbl, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if find(ss, KindModelDefault) != nil || find(ss, KindModelChoice) == nil {
+		t.Fatalf("expected only the per-turn model_choice line: %+v", ss)
+	}
+}
+
+func TestModelDefaultUsesASupportingBenchmarkPrior(t *testing.T) {
+	old := priorsFn
+	t.Cleanup(func() { priorsFn = old })
+	priorsFn = func() experiment.Priors {
+		return experiment.Priors{Version: 1, Optimizers: map[string]experiment.Prior{PriorModelDefault: {
+			CostChange: -0.30, CostCILow: -0.40, CostCIHigh: -0.20, SuccessDiff: 0, SuccessCILow: -0.03, Pairs: 60,
+			Source: "bench:models-1@abcdef123456"}}}
+	}
+	f := `[{"detector":"expensive_model_small_task","tokens":900,"usd":0.05,"confidence":"low","label":"estimated","detail":{"alternative":"claude-haiku-5-5"}}]`
+	db, tbl := seed(t, []row{{model: "claude-opus-5-5", agent: "claude_code", cost: 0.4, findings: f}}, 25)
+	ss, err := Generate(context.Background(), db, tbl, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := find(ss, KindModelDefault)
+	if m == nil || m.EvidenceLabel != "benchmark" || m.Label != "estimated" || m.Confidence != "medium" {
+		t.Fatalf("expected a benchmark-backed suggestion: %+v", m)
+	}
+	if m.EstSavingsUSD == nil || math.Abs(*m.EstSavingsUSD-25*0.4*0.30) > 1e-9 {
+		t.Fatalf("saving must be measured spend x benchmark cost change: %+v", m)
+	}
+	if !strings.Contains(m.Detail, "bench:models-1@abcdef123456") {
+		t.Errorf("must cite its source: %s", m.Detail)
+	}
+
+	// A prior that does not clear the ship rule changes nothing.
+	priorsFn = func() experiment.Priors {
+		return experiment.Priors{Version: 1, Optimizers: map[string]experiment.Prior{PriorModelDefault: {
+			CostChange: -0.30, CostCILow: -0.40, CostCIHigh: -0.20, SuccessDiff: 0, SuccessCILow: -0.03, Pairs: 10, Source: "bench:x@1"}}}
+	}
+	ss, _ = Generate(context.Background(), db, tbl, from, to)
+	if m := find(ss, KindModelDefault); m == nil || m.EvidenceLabel != "estimated" {
+		t.Fatalf("an unsupported prior must not raise the evidence: %+v", m)
 	}
 }

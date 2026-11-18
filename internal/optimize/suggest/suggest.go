@@ -55,9 +55,12 @@ type Suggestion struct {
 	// Class and Tier say what kind of change this is and how much proof it needs (docs/plan/INDEX.md).
 	Class string `json:"class"`
 	Tier  string `json:"tier"`
-	// EvidenceLabel is "estimated" when EstSavingsUSD is a figure, else "unmeasured". Nothing here is
+	// EvidenceLabel is "estimated" when EstSavingsUSD is a figure, else "unmeasured", or "benchmark"
+	// when a pre-registered study's prior backs the figure (model_default). Nothing here is
 	// "measured": a suggestion has not been tried on the user's sessions.
 	EvidenceLabel string `json:"evidence_label"`
+	// from and alt are model_choice's models, kept for the model_default roll-up; never serialized.
+	from, alt string
 }
 
 // kindClass is the class of each suggestion kind. The Batch API suggestion is T1: same model, same
@@ -67,12 +70,16 @@ var kindClass = map[string]technique.Class{
 	KindBatchAPI:        technique.ClassConfig,
 	KindReasoningEffort: technique.ClassEffort,
 	KindCacheTTL:        technique.ClassCacheControl,
+	KindModelDefault:    technique.ClassModelRouting,
 }
 
 // label fills Class, Tier and Evidence, so no suggestion leaves Generate without them.
 func (s *Suggestion) label() {
 	c := kindClass[s.Kind]
 	s.Class, s.Tier = string(c), string(technique.TierOfClass(c))
+	if s.EvidenceLabel == "benchmark" && s.EstSavingsUSD != nil {
+		return // set from a pre-registered study's prior (model_default)
+	}
 	if s.EstSavingsUSD != nil {
 		s.EvidenceLabel = "estimated"
 	} else {
@@ -100,6 +107,11 @@ func Generate(ctx context.Context, db Querier, tbl *pricing.Table, from, to time
 	if err != nil {
 		return nil, err
 	}
+	d, m, err := modelDefaults(ctx, db, m, from.UnixMilli(), to.UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, d...)
 	out = append(out, m...)
 	if tbl != nil {
 		b, err := batchAPI(ctx, db, tbl, from, to)
@@ -196,6 +208,7 @@ func modelChoice(ctx context.Context, db Querier, from, to time.Time) ([]Suggest
 			Detail: fmt.Sprintf("%d turns had a small prompt and a small reply but ran on %s. Trove cannot check whether %s would have handled them as well, so try it on a few of these tasks first.",
 				g.n, k.model, k.alt),
 			EstSavingsUSD: &usd, Confidence: "low", Label: "estimated", Requests: g.n,
+			from: k.model, alt: k.alt,
 		})
 	}
 	return out, nil

@@ -234,6 +234,13 @@ exactly.
 - **Model choice**: small tasks on a frontier model, from the analyzer's
   `expensive_model_small_task` findings. Low confidence; Trove cannot check that
   the cheaper model would cope.
+- **Default model** (`model_default`, T3): when at least 20 of a frontier model's requests in the period were
+  small tasks and they are at least 40% of its requests, the model choice line becomes one suggestion to change the
+  default model (the same thresholds as the `model_default` fix, which applies it with a diff and an undo). It shows
+  the model's measured spend. The saving is always estimated, and its evidence label says where it comes from:
+  `benchmark` when a pre-registered study registered a `model_default` prior that clears the ship rule (the saving is
+  then your measured spend times that study's cost change, and the study is named), otherwise `estimated` (the
+  analyzer's per-turn figure for the small tasks only). Plan item 7.5.
 - **Batch API**: non-streaming traffic from scripts and custom agents. The
   Message Batches API is 50% off with most batches done within an hour (24-hour
   limit); cache hits in batches are best-effort.
