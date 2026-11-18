@@ -1,13 +1,16 @@
 import React from "react";
 import { Easing, interpolate, useCurrentFrame } from "remotion";
-import { colors, fonts } from "../theme";
+import { colors, fonts, MONO_ADVANCE } from "../theme";
 
-export type Kind = "cmd" | "out" | "muted" | "bold" | "add" | "del" | "hunk";
+export type Kind = "cmd" | "out" | "muted" | "bold" | "add" | "del" | "hunk" | "clear";
 
 export type Highlight = {
   from: number;
+  // Box colour: a status colour (green for on, muted for estimates).
   color: string;
   label?: string;
+  // Chip colour; the brand gold for things Trove does, else the box colour.
+  labelColor?: string;
 };
 
 export type TermLine = {
@@ -53,12 +56,13 @@ const wrap = (text: string, cols: number): string[] => {
 };
 
 const PROMPT_LEAD = 10;
+export const DEFAULT_CPS = 2.5;
 
 const visibleText = (
   line: TermLine,
   frame: number,
 ): { text: string; typing: boolean; shown: boolean } => {
-  const cps = line.cps ?? 2.5;
+  const cps = line.cps ?? DEFAULT_CPS;
   if (line.kind === "cmd") {
     if (frame < line.at - PROMPT_LEAD) {
       return { text: "", typing: false, shown: false };
@@ -98,30 +102,44 @@ const kindStyle = (kind: Kind): React.CSSProperties => {
   }
 };
 
+const ease = Easing.bezier(0.16, 1, 0.3, 1);
+
 export const Terminal: React.FC<{
   lines: TermLine[];
   width: number;
   height: number;
   fontSize: number;
   title?: string;
-}> = ({ lines, width, height, fontSize, title = "zsh" }) => {
+  // A slow push-in over the scene, so a long stretch of text never sits still.
+  zoom?: number;
+}> = ({ lines, width, height, fontSize, title = "zsh", zoom = 1 }) => {
   const frame = useCurrentFrame();
   const pad = 24;
   const chrome = 44;
   const lineHeight = Math.round(fontSize * 1.5);
   const innerW = width - pad * 2;
   const innerH = height - chrome - pad * 2;
-  const cols = Math.floor(innerW / (fontSize * 0.6));
+  const advance = fontSize * MONO_ADVANCE;
+  const cols = Math.floor(innerW / advance);
   const maxRows = Math.floor(innerH / lineHeight);
+
+  // A "clear" line wipes everything before it, like the clear command.
+  let start = 0;
+  lines.forEach((line, i) => {
+    if (line.kind === "clear" && frame >= line.at) {
+      start = i + 1;
+    }
+  });
+  const live = lines.slice(start).filter((l) => l.kind !== "clear");
 
   const rows: Row[] = [];
   let lastShown = -1;
-  lines.forEach((line, i) => {
+  live.forEach((line, i) => {
     if (visibleText(line, frame).shown) {
       lastShown = i;
     }
   });
-  lines.forEach((line, i) => {
+  live.forEach((line, i) => {
     const v = visibleText(line, frame);
     if (!v.shown) {
       return;
@@ -156,6 +174,8 @@ export const Terminal: React.FC<{
         fontFamily: fonts.mono,
         fontSize,
         lineHeight: `${lineHeight}px`,
+        scale: String(zoom),
+        transformOrigin: "center center",
       }}
     >
       <div
@@ -195,6 +215,15 @@ export const Terminal: React.FC<{
                   });
             const hl = row.first ? row.line.highlight : undefined;
             const hlOn = hl !== undefined && frame >= hl.from;
+            // Box and label are placed from the mono advance, in pixels, so the
+            // label never depends on its own font's idea of a character width.
+            const textW = row.text.length * advance;
+            const boxLeft = -10;
+            const boxW = textW + 20;
+            const labelFont = Math.round(fontSize * 0.78);
+            const labelW = hl?.label ? hl.label.length * labelFont * 0.58 + 30 : 0;
+            const labelGap = 14;
+            const labelFits = boxLeft + boxW + labelGap + labelW <= innerW;
             return (
               <div
                 key={i}
@@ -209,10 +238,10 @@ export const Terminal: React.FC<{
                   <div
                     style={{
                       position: "absolute",
-                      left: -10,
+                      left: boxLeft,
                       top: 0,
                       height: lineHeight,
-                      width: `calc(${row.text.length}ch + 20px)`,
+                      width: boxW,
                       borderRadius: 8,
                       border: `3px solid ${hl.color}`,
                       background: `${hl.color}1a`,
@@ -225,7 +254,7 @@ export const Terminal: React.FC<{
                         interpolate(frame, [hl.from, hl.from + 12], [0.94, 1], {
                           extrapolateLeft: "clamp",
                           extrapolateRight: "clamp",
-                          easing: Easing.bezier(0.16, 1, 0.3, 1),
+                          easing: ease,
                         }),
                       ),
                     }}
@@ -235,19 +264,26 @@ export const Terminal: React.FC<{
                   <div
                     style={{
                       position: "absolute",
-                      left: `calc(${row.text.length}ch + 28px)`,
-                      top: Math.round(lineHeight * 0.08),
+                      // Beside the box when there is room; otherwise sitting on
+                      // the box's top border at its right end. Never over the text.
+                      ...(labelFits
+                        ? { left: boxLeft + boxW + labelGap, top: Math.round(lineHeight * 0.08) }
+                        : {
+                            right: innerW - (boxLeft + boxW) + 4,
+                            top: -Math.round(lineHeight * 0.84) + 5,
+                          }),
                       height: Math.round(lineHeight * 0.84),
                       display: "flex",
                       alignItems: "center",
                       padding: "0 14px",
                       borderRadius: 999,
-                      background: hl.color,
+                      background: hl.labelColor ?? hl.color,
                       color: colors.bg,
                       fontFamily: fonts.body,
                       fontWeight: 700,
-                      fontSize: Math.round(fontSize * 0.8),
+                      fontSize: labelFont,
                       whiteSpace: "nowrap",
+                      boxShadow: "0 6px 18px rgba(0,0,0,0.35)",
                       opacity: interpolate(frame, [hl.from + 6, hl.from + 14], [0, 1], {
                         extrapolateLeft: "clamp",
                         extrapolateRight: "clamp",
@@ -255,7 +291,7 @@ export const Terminal: React.FC<{
                       translate: `${interpolate(frame, [hl.from + 6, hl.from + 16], [12, 0], {
                         extrapolateLeft: "clamp",
                         extrapolateRight: "clamp",
-                        easing: Easing.bezier(0.16, 1, 0.3, 1),
+                        easing: ease,
                       })}px 0px`,
                     }}
                   >

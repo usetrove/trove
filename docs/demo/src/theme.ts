@@ -18,6 +18,14 @@ export const colors = {
   stroke: "#dcd9d2",
   ink: "#2d2e2a",
   inkSoft: "#6b6c68",
+  // The brand accent: trove, as in treasure. Gold on dark, ochre on paper.
+  // Status colours (green, amber, red) are never used for branding.
+  gold: "#E0B04A",
+  goldStrong: "#D4A137",
+  inkGold: "#B8860B",
+  inkGoldText: "#9A6A00",
+  // Deprecated: the old accent; status green is `green`.
+  inkGreen: "#15895b",
 };
 
 export const fonts = {
@@ -30,5 +38,9 @@ export const fonts = {
   mono: loadMono("normal", { weights: ["400", "700"], subsets: ["latin"] })
     .fontFamily,
 };
+
+// JetBrains Mono advances 600/1000 em per glyph. The terminal uses this for
+// its column count and for placing highlight boxes and labels in pixels.
+export const MONO_ADVANCE = 0.6;
 
 export const FPS = 30;

@@ -4,7 +4,7 @@ import { Paper } from "../components/Paper";
 import { useStage } from "../stage";
 import { colors, fonts } from "../theme";
 
-export const TITLE_FRAMES = 63;
+export const TITLE_FRAMES = 120;
 
 const ease = Easing.bezier(0.16, 1, 0.3, 1);
 
@@ -32,6 +32,13 @@ export const TitleScene: React.FC = () => {
           alignItems: "center",
           gap: portrait ? 10 : 36,
           ...rise(frame, 0),
+          scale: String(
+            interpolate(frame, [0, 22], [0.8, 1], {
+              extrapolateLeft: "clamp",
+              extrapolateRight: "clamp",
+              easing: ease,
+            }),
+          ),
         }}
       >
         <Img
@@ -42,7 +49,7 @@ export const TitleScene: React.FC = () => {
           style={{
             fontFamily: fonts.display,
             fontWeight: 800,
-            fontSize: portrait ? 150 : 150,
+            fontSize: 150,
             letterSpacing: -4,
             color: colors.ink,
             lineHeight: 1,
@@ -53,7 +60,7 @@ export const TitleScene: React.FC = () => {
       </div>
       <div
         style={{
-          marginTop: portrait ? 60 : 44,
+          marginTop: portrait ? 60 : 40,
           textAlign: "center",
           fontFamily: fonts.body,
           fontWeight: 500,
@@ -61,18 +68,32 @@ export const TitleScene: React.FC = () => {
           color: colors.ink,
           lineHeight: 1.3,
           maxWidth: portrait ? 900 : 1500,
-          ...rise(frame, 8),
+          ...rise(frame, 10),
         }}
       >
         Runs locally. Sends nothing by default. Open source.
       </div>
       <div
         style={{
-          marginTop: 26,
+          marginTop: 34,
+          padding: "16px 34px",
+          borderRadius: 999,
+          background: colors.ink,
+          color: colors.paper1,
           fontFamily: fonts.mono,
-          fontSize: portrait ? 36 : 38,
+          fontSize: portrait ? 32 : 36,
+          ...rise(frame, 20),
+        }}
+      >
+        brew install usetrove/trove/trove
+      </div>
+      <div
+        style={{
+          marginTop: 22,
+          fontFamily: fonts.mono,
+          fontSize: portrait ? 34 : 34,
           color: colors.inkSoft,
-          ...rise(frame, 16),
+          ...rise(frame, 28),
         }}
       >
         github.com/usetrove/trove

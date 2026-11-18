@@ -3,13 +3,28 @@ import { Easing, interpolate, useCurrentFrame } from "remotion";
 import { colors, fonts } from "../theme";
 import type { Rect } from "../stage";
 
+// Text between asterisks is set in the accent colour: "Run *trove* now".
 export type CaptionItem = { text: string; from: number; to: number };
+
+const ease = Easing.bezier(0.16, 1, 0.3, 1);
+
+const spans = (text: string, accent: string): React.ReactNode[] =>
+  text.split("*").map((part, i) =>
+    i % 2 === 1 ? (
+      <span key={i} style={{ color: accent, fontWeight: 700 }}>
+        {part}
+      </span>
+    ) : (
+      <React.Fragment key={i}>{part}</React.Fragment>
+    ),
+  );
 
 export const Captions: React.FC<{
   items: CaptionItem[];
   rect: Rect & { font: number };
   color?: string;
-}> = ({ items, rect, color = colors.text }) => {
+  accent?: string;
+}> = ({ items, rect, color = colors.text, accent = colors.gold }) => {
   const frame = useCurrentFrame();
   return (
     <div
@@ -40,18 +55,18 @@ export const Captions: React.FC<{
               fontSize: rect.font,
               lineHeight: 1.25,
               color,
-              opacity: interpolate(frame, [c.from, c.from + 10, c.to - 8, c.to], [0, 1, 1, 0], {
+              opacity: interpolate(frame, [c.from, c.from + 8, c.to - 6, c.to], [0, 1, 1, 0], {
                 extrapolateLeft: "clamp",
                 extrapolateRight: "clamp",
               }),
-              translate: `0px ${interpolate(frame, [c.from, c.from + 14], [18, 0], {
+              translate: `0px ${interpolate(frame, [c.from, c.from + 14], [22, 0], {
                 extrapolateLeft: "clamp",
                 extrapolateRight: "clamp",
-                easing: Easing.bezier(0.16, 1, 0.3, 1),
+                easing: ease,
               })}px`,
             }}
           >
-            {c.text}
+            <span>{spans(c.text, accent)}</span>
           </div>
         );
       })}
