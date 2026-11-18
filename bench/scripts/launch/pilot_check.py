@@ -90,4 +90,4 @@ if looks < 1:
     print("STOP: the study does not fit the budget. Raise BUDGET_USD (up to the study's batch cap), or tell Claude the "
           "pilot cost so the study can be resized before it is registered.")
     sys.exit(1)
-print("Next: bash bench/scripts/launch/03_run.sh" + ("" if "launch-1" in study_path.name else f"   (with STUDY={study_path})"))
+print("Next: bash bench/scripts/launch/03_run.sh" + ("" if "launch-2" in study_path.name else f"   (with STUDY={study_path})"))

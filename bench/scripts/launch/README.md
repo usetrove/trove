@@ -1,14 +1,18 @@
 # Launch study runbook
 
-One pre-registered study, `bench/studies/launch-1.yaml`: long Claude Code sessions on Sonnet, comparing
-no optimization, the Trove plugin, and the plugin with the gateway and model routing. Every number it produces is
-labeled: pass/fail and token counts are measured; cost is estimated (list prices applied to the provider-reported usage
-the gateway records for each request).
+The final launch study is `bench/studies/launch-2.yaml`: long Claude Code working sessions on Sonnet (the workday
+suite: an exercise plus seven ordinary follow-ups), comparing no optimization, the Trove plugin, and the plugin with
+the gateway and model routing. Every arm launches Claude Code the same way, which launch-1 did not (see the correction
+at the end of `bench/published/launch-1/report.md`). Every number it produces is labeled: pass/fail and token counts
+are measured; cost is estimated (list prices applied to the provider-reported usage the gateway records for each
+request).
+
+The scripts default to launch-2. launch-1 is finished and published; do not rerun it.
 
 ## What you need
 
 - An Ubuntu 24.04 x86_64 VM with 4+ vCPUs, 16 GB RAM and 40 GB disk.
-- A clone of this repository on the VM, at the commit that holds the lock file `bench/studies/launch-1.lock.json`.
+- A clone of this repository on the VM, at the latest commit of the branch. `03_run.sh` locks the study (commits `bench/studies/launch-2.lock.json`) before its first run.
 - Your own pay-per-use Anthropic API key. Never a subscription login.
 
 ## Steps
@@ -17,7 +21,7 @@ the gateway records for each request).
 bash bench/scripts/launch/00_vm_setup.sh      # once; then log out and back in
 export ANTHROPIC_API_KEY=...                  # your key; it is passed to containers by name, never written to disk
 bash bench/scripts/launch/01_check.sh         # free: tests and fake end-to-end runs
-bash bench/scripts/launch/02_pilot.sh         # about $1-3: proves the conditions work, measures cost per run
+bash bench/scripts/launch/02_pilot.sh         # about $5-15 (cap $20): proves the conditions work, measures cost per run
 tmux new -s study                             # so the run survives a closed SSH session
 bash bench/scripts/launch/03_run.sh           # the study, overnight; detach with Ctrl-b d, reattach: tmux attach -t study
 bash bench/scripts/launch/04_report.sh        # free: report, publish folder, priors, commit
@@ -28,7 +32,8 @@ Each script stops with a plain message if something is wrong. Do not continue pa
 
 ## Money
 
-- `BUDGET_USD` (default 70) limits the study; the study file's `budget.batch_cap_usd` (70) is the hard ceiling.
+- `BUDGET_USD` (default 100) limits the study; the study file's `budget.batch_cap_usd` (100) is the hard ceiling.
+  To spend less, run `export BUDGET_USD=70` before the pilot; fewer looks fit, so the result is less likely to be decided.
 - The pilot measures cost per run and decides how many looks (repeats, at most 3) fit the budget.
 - The study stops early once both comparisons are decided. Each look is tested at alpha / 3, so stopping early
   does not make a result easier to reach.
@@ -41,7 +46,7 @@ Each script stops with a plain message if something is wrong. Do not continue pa
     level), task success is not more than 5 points lower, and there are at least 30 pairs. You can call it verified.
   - **not proven yet** (NEED MORE DATA): the evidence does not settle it either way. Show the numbers only as early.
   - **worse** (DON'T SHIP): it cost more or lowered task success. Make no savings claim for it.
-- The claim covers long, multi-prompt sessions on Sonnet with this Claude Code version. It says nothing about
+- The claim covers long working sessions (the workday suite) on Sonnet with this Claude Code version. It says nothing about
   one-shot tasks, other models or other agents.
 - Publish whatever comes back, including "not proven yet".
 
@@ -57,7 +62,8 @@ STUDY=bench/studies/models-1.yaml bash bench/scripts/launch/04_report.sh
 
 | Study | What it answers | Plan items | Cap |
 |---|---|---|---|
-| `launch-1` | no optimization vs the plugin vs plugin + gateway + routing, long Sonnet sessions | 10.3, launch claim | $70 |
+| `launch-2` | no optimization vs the plugin vs plugin + gateway + routing, workday Sonnet sessions | 10.3, launch claim | $100 |
+| `launch-1` | finished and published; its plugin comparison is confounded (see its correction) | - | - |
 | `models-1` | cascade, scout, model routing, a cheaper default, a settings profile; one-shot Sonnet tasks | 7.1, 7.2, 7.5 prior | $50 |
 | `components-1` | every optimizer and hook by itself, long Sonnet sessions | 10.4, 10.6, 7.4, 1.4 priors | $90 |
 

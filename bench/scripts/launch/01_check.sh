@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Free. Proves the harness works on this machine before any money is spent:
 #   1. the bench's own tests,
-#   2. the long-session tasks are generated,
+#   2. the study's tasks are generated,
 #   3. the hook probe covers the pinned Claude Code version,
 #   4. a fake end-to-end run in Docker (fake agent, mock upstream, the real Trove gateway and hooks in between).
 #     bash bench/scripts/launch/01_check.sh
@@ -13,7 +13,7 @@ command -v go >/dev/null || stop "go is not on PATH."
 say "1/4 bench tests"
 python -m pytest -q bench/tests
 
-say "2/4 long-session tasks"
+say "2/4 the study's tasks"
 need_tasks
 echo "$(ls "$TASKS" | wc -l) tasks in $TASKS"
 
@@ -41,4 +41,4 @@ if not rows or bad:
 print(f"ok: {len(rows)} long-session runs, all gradeable")
 EOF
 
-say "All checks passed. Next: bash bench/scripts/launch/02_pilot.sh  (real money: about \$1-3)"
+say "All checks passed. Next: bash bench/scripts/launch/02_pilot.sh  (real money: about \$5-15, hard cap \$20)"

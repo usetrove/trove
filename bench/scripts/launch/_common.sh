@@ -1,9 +1,9 @@
 # Shared settings and checks for the study scripts. Sourced, never run directly.
-# The study defaults to the launch study; pass another with STUDY=bench/studies/<id>.yaml.
+# The study defaults to the final launch study (launch-2); pass another with STUDY=bench/studies/<id>.yaml.
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
-STUDY="${STUDY:-bench/studies/launch-1.yaml}"
+STUDY="${STUDY:-bench/studies/launch-2.yaml}"
 [ -f "$STUDY" ] || { echo "STOP: no study file at $STUDY" >&2; exit 1; }
 study_field() { python -c 'import sys,yaml; v=yaml.safe_load(open(sys.argv[1])).get(sys.argv[2]); print(" ".join(map(str,v)) if isinstance(v,list) else ("" if v is None else v))' "$STUDY" "$1"; }
 STUDY_ID="$(study_field id)"
@@ -37,6 +37,9 @@ need_tasks() {
       bench/tasks/longsession30)
         say "Generating the long-session tasks (pinned dataset commit ${DATASET_COMMIT:0:10})"
         python -m trovebench fetch longsession -n 30 --seed 20261118 --commit "$DATASET_COMMIT" --out "$TASKS" ;;
+      bench/tasks/workday40)
+        say "Generating the workday tasks (pinned dataset commit ${DATASET_COMMIT:0:10})"
+        python -m trovebench fetch workday -n 40 --seed 20261119 --commit "$DATASET_COMMIT" --out "$TASKS" ;;
       bench/tasks/polyglot30)
         say "Generating the polyglot tasks (pinned dataset commit ${DATASET_COMMIT:0:10})"
         python -m trovebench fetch polyglot -n 30 --seed 20261108 --commit "$DATASET_COMMIT" --out "$TASKS" ;;

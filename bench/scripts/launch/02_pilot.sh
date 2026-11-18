@@ -16,9 +16,10 @@ mapfile -t CONDS < <(pilot_conditions)
 rm -rf "$PILOT_TASKS" && mkdir -p "$PILOT_TASKS"
 for t in $(ls "$TASKS" | sort | tail -2); do cp -r "$TASKS/$t" "$PILOT_TASKS/"; done
 CFG="bench/results/launch/${STUDY_ID}-pilot.yaml"
-python bench/scripts/launch/make_config.py "$CFG" "$MODEL" 10 1.5 "${ROUTE_TO:--}" "${CONDS[@]}" >/dev/null
+RUN_CAP="$(python -c 'import sys,yaml; print(yaml.safe_load(open(sys.argv[1]))["budget"]["run_cap_usd"])' "$STUDY")"
+python bench/scripts/launch/make_config.py "$CFG" "$MODEL" 20 "$RUN_CAP" "${ROUTE_TO:--}" "${CONDS[@]}" >/dev/null
 
-say "Pilot for $STUDY_ID: 2 tasks x ${#CONDS[@]} conditions on $MODEL (hard cap \$10)"
+say "Pilot for $STUDY_ID: 2 tasks x ${#CONDS[@]} conditions on $MODEL (hard cap \$20)"
 python -m trovebench run --config "$CFG" --tasks "$PILOT_TASKS" --batch "$PILOT_BATCH" --hook-capabilities "$CAPS" --yes || true
 
 say "Pilot summary"

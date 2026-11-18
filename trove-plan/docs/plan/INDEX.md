@@ -30,7 +30,7 @@ Status: todo | doing | done | blocked(<reason>). Update the Status column when y
 | 1.1 | Cost/turn + cost/uncached token metrics | 0.5 | M | agent | 0.1 | done |
 | 1.2 | CUPED/regression adjustment | 0.6 | M | agent | 1.1, pre-registered method | done |
 | 1.3 | Sequential always-valid CIs for rollback | 0.6 | M | agent | 1.1 | done |
-| 1.4 | Fill priors file | 0.6 | M | agent+human | bench results | blocked(wired: 04_report.sh regenerates priors from every published study; needs results) |
+| 1.4 | Fill priors file | 0.6 | M | agent+human | bench results | blocked(wired; launch-1 published but undecided, so no prior moved; launch-2 ready to run) |
 | 1.5 | Agent output caps in shadow estimates | 0.5 | S | agent | - | done |
 | 1.6 | Learned bytes/token per model family | 0.5 | S | agent | - | done |
 | 1.7 | Subscription usage numbers + status line | 0.6 | M | agent | 1.1 | done |
@@ -61,7 +61,7 @@ Status: todo | doing | done | blocked(<reason>). Update the Status column when y
 | 6.5 | Learned verbosity level | 0.7 | M | agent | 6.4 | done |
 | 6.6 | Autopilot trials for rule sets | 0.7 | M | agent | 1.1-1.3, 6.1 | done |
 | 7.1 | Cascade/scout/settings studies | 0.8 | L | agent+human | paid benchmark runs | blocked(conditions built and checked live; models-1 study ready to lock and run) |
-| 7.2 | Sticky model step-down at gateway | 0.8 | L | agent | 2.2, 2.4 | blocked(routing checked live; A/B is launch-1 trove_full and models-1 alone_model_router; needs runs) |
+| 7.2 | Sticky model step-down at gateway | 0.8 | L | agent | 2.2, 2.4 | blocked(launch-1 trove_full: -17.3% total cost (est.), not decided; launch-2 ready to run) |
 | 7.3 | Model-per-subagent fix | 0.8 | M | agent | 2.2 | blocked(override probed live and session A/B built; data comes from real sessions with the fix applied) |
 | 7.4 | Lower effort on tool turns | 0.8 | M | agent | cache-break check | blocked(check done: keeps on Sonnet/Haiku 5.5; optimizer built; A/B is bench condition alone:effort_tool_turns, needs a study run) |
 | 7.5 | model_default with measured estimate | 0.8 | S | agent | 1.4 | done |
@@ -76,12 +76,12 @@ Status: todo | doing | done | blocked(<reason>). Update the Status column when y
 | 9.4 | Claim vs verdict side by side | 0.9 | S | agent | - | done |
 | 10.1 | Real installs macOS/Linux/Windows | cont. | - | human | - | todo |
 | 10.2 | Codex real install | cont. | - | human | - | todo |
-| 10.3 | Live hook probe + hooks-vs-gateway bench | cont. | - | human | API key | blocked(probe done on 2.1.319; hooks-vs-gateway is launch-1, ready to run) |
+| 10.3 | Live hook probe + hooks-vs-gateway bench | cont. | - | human | API key | blocked(launch-1 ran but its plugin arm was confounded by --bare; fixed, launch-2 ready to run) |
 | 10.4 | Run per-hook studies | cont. | - | human | API key | blocked(components-1 study ready to lock and run) |
 | 10.5 | Long-session task suite | cont. | M | agent | - | done |
 | 10.6 | Benchmark output_trimmer, hook_large_output | cont. | - | agent+human | API key | blocked(conditions built with the MCP server registered; needs a study run) |
-| 10.7 | Benchmark-derived Autopilot thresholds | 0.8 | S | agent | 10.3-10.6 | blocked(wired: thresholds.toml generated per tier by 04_report.sh; needs results) |
+| 10.7 | Benchmark-derived Autopilot thresholds | 0.8 | S | agent | 10.3-10.6 | done |
 | 10.8 | Commit SWE-bench results + fix flaky test | 0.9 | S | agent+human | - | blocked(flaky test fixed; swebench-gateway-2 result files are on another machine) |
 | 11.1 | Docs around the three tiers | each | S | agent | 0.1 | blocked(README and techniques.md done; the CLAUDE.md project rules wait for your approval) |
-| 11.2 | CHANGELOG + PRIVACY.md updates | each | S | agent | - | todo |
-| 11.3 | Naming lint on new code | each | S | agent | - | todo |
+| 11.2 | CHANGELOG + PRIVACY.md updates | each | S | agent | - | done |
+| 11.3 | Naming lint on new code | each | S | agent | - | done |

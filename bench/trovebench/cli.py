@@ -84,7 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     th.add_argument("--results", type=Path, nargs="*", default=[], help="finished study folders")
     th.add_argument("--out", type=Path, default=BENCH.parent / "internal" / "autopilot" / "thresholds.toml")
     f = sub.add_parser("fetch", help="generate task manifests from polyglot, the long-session suite or SWE-bench Verified")
-    f.add_argument("source", choices=["polyglot", "longsession", "swebench"])
+    f.add_argument("source", choices=["polyglot", "longsession", "workday", "swebench"])
     f.add_argument("--out", type=Path, help="output folder (default bench/tasks/<source>)")
     f.add_argument("-n", type=int, default=10, help="how many tasks")
     f.add_argument("--seed", type=int, default=1, help="seed for the random subset")
@@ -308,11 +308,11 @@ def _cmd_report(args) -> int:
 def _cmd_fetch(args) -> int:
     import subprocess
 
-    from .sources import longsession, polyglot, swebench
+    from .sources import longsession, polyglot, swebench, workday
     from .sources.http import get as http_get
 
     out = args.out or (BENCH / "tasks" / args.source)
-    if args.source in ("polyglot", "longsession"):
+    if args.source in ("polyglot", "longsession", "workday"):
         cache = BENCH / "cache" / "polyglot-benchmark"
         if not cache.exists():
             cache.parent.mkdir(parents=True, exist_ok=True)
@@ -320,9 +320,10 @@ def _cmd_fetch(args) -> int:
         if args.commit:
             subprocess.run(["git", "-C", str(cache), "checkout", "-q", args.commit], check=True)
         commit = subprocess.run(["git", "-C", str(cache), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
-        gen = longsession.generate if args.source == "longsession" else polyglot.generate
+        gen = {"longsession": longsession.generate, "workday": workday.generate}.get(args.source, polyglot.generate)
         tasks = gen(cache, commit, out, n=args.n, seed=args.seed)
-        kind = "long-session (Python, with follow-up prompts)" if args.source == "longsession" else "polyglot (Python)"
+        kind = {"longsession": "long-session (Python, with follow-up prompts)",
+                "workday": "workday (Python, seven follow-up prompts)"}.get(args.source, "polyglot (Python)")
         print(f"Wrote {len(tasks)} {kind} task(s) to {out}, pinned to {commit[:10]}. "
               "Exercise text is copyright Exercism: keep these local.")
     else:
