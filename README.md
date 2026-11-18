@@ -178,6 +178,19 @@ All are off by default, run in shadow mode first, and fail open: any error forwa
 - **Cache safe.** Transformations are deterministic, so the same history always produces the same bytes and cached prefixes stay valid.
 - **Prove before acting.** See [measurement](docs/measurement.md).
 
+## How much proof each change needs
+
+Trove sorts every technique into three tiers by what it changes, and asks more proof of each tier:
+
+- **T1 Safe**: lossless or recoverable edits to tool output and config (duplicate collapsing, noise cleanup, trimming
+  with a recovery copy, cache control). Shadow first, then a session A/B.
+- **T2 Behavioural**: asking the model to act differently (shorter replies, rule sets). Its added tokens are charged,
+  test failures are watched, and you opt in explicitly.
+- **T3 Routing**: changing which model, effort or agent does the work (model routing, lower effort on tool turns, a
+  cheaper subagent model). A cache-stickiness rule, a benchmark verdict per model family and the strictest rollback.
+
+See [docs/techniques.md](docs/techniques.md) for every technique and its tier.
+
 ## Supported agents
 
 Trove works with **Claude Code** and **Codex CLI**, and ships an experimental **OpenCode** plugin. Claude Code is the best tested. The table says what exists and how well it has been checked; the full test record, with versions, is in [docs/supported-agents.md](docs/supported-agents.md).

@@ -13,7 +13,14 @@ need_clean_tree
 need_tasks
 need_probe_for_pinned_version
 
-[ -f "${STUDY%.yaml}.lock.json" ] || stop "$STUDY is not pre-registered (no lock file). It must be locked and committed before running."
+if [ ! -f "${STUDY%.yaml}.lock.json" ]; then
+  # Pre-registration: lock the study (its hash, the commit and the time) and commit the lock before any study run,
+  # so nothing about the design can change once results exist. The pilot's runs are never part of the study.
+  say "Registering $STUDY_ID before its first run"
+  python -m trovebench prereg "$STUDY"
+  git add "${STUDY%.yaml}.lock.json"
+  git commit -q -m "bench: register $STUDY_ID before its first run" -m "Locks the study file's hash, the commit and the time; no results exist yet."
+fi
 [ -f "$PILOT_BATCH/sizing.json" ] || stop "no pilot sizing found at $PILOT_BATCH/sizing.json. Run 02_pilot.sh first."
 ASSUME="$(python -c "import json;print(json.load(open('$PILOT_BATCH/sizing.json'))['assumed_run_usd'])")"
 LOOKS="$(python -c "import json;print(json.load(open('$PILOT_BATCH/sizing.json'))['looks_that_fit'])")"

@@ -1,9 +1,29 @@
 # Techniques: one list, one order, one way to combine them
 
-Status: **inventory and plan.** No code changes come with this document. It lists every token-saving technique Trove
+Status: **inventory and plan, organised by tier** (updated 2026-11-18). It lists every token-saving technique Trove
 has, could build, or could wrap; says where each one acts, how Trove would get it, and what it conflicts with; and sets
 the rules for making them work together. Every external fact is marked with a source key (see "What was verified"),
 and anything not verified is marked. Checked 2026-11-13.
+
+## Three tiers: how much proof a technique needs
+
+Every technique is in one of three tiers, by what it changes. The registry (`internal/technique/registry.go`) assigns the
+tier from the technique's class and refuses an optimizer whose declared tier disagrees.
+
+- **T1 Safe** (lossless or recoverable transforms, config overhead, cache control, guards): deterministic, with a
+  visible diff, lossless or recoverable, and checked mechanically. Shadow first, then a session A/B. Autopilot may
+  promote one after a shadow run and an A/B verdict.
+- **T2 Behavioural** (instructions that ask the model to act differently: rule sets, verbosity steering): T1's rules,
+  plus its per-request overhead is charged, the test-pass guardrail is on, a confounder tag is recorded, and the user
+  opts in explicitly. Autopilot only after a benchmark verdict, and off by default.
+- **T3 Routing** (which model, effort or agent does the work: model routing, effort, subagent routing, local offload):
+  T2's rules, plus the cache-stickiness rule, a benchmark verdict per agent and model family, and the strictest
+  rollback threshold. The gateway never sees subscription logins.
+
+All tiers: measured on the real bill, undoable, and each records which quality signals were checked. Techniques that
+change the model's behaviour or the model itself are not "out of scope"; they are T2 or T3, with the proof that tier
+needs. Autopilot's trial thresholds per tier come from the benchmark once a study is published
+(`internal/autopilot/thresholds.toml`, see [autopilot-eligibility.md](autopilot-eligibility.md)).
 
 ## Why this exists
 
@@ -83,14 +103,14 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 | C3 | In-flight dedup: identical simultaneous requests share one upstream call | request | native, proxy | no | no | **shadow mode built 2026-11-14** (counts duplicates, estimates the saving, changes nothing); sharing the call is not built. See [inflight-dedup.md](inflight-dedup.md) |
 | C4 | Exact response cache for identical requests | request | native, proxy | no | no | correctness risk with agents; opt-in only |
 | C5 | Hard spend cap checked against the ledger | request | native, proxy | no | no | **shadow mode built 2026-11-14** (marks requests made after spending reached the budget cap, estimates what a hard cap would have stopped, refuses nothing); refusing is not built, mainly because how Claude Code and Codex CLI treat a refusal is not verified. See [spend-cap.md](spend-cap.md) |
-| C6 | Effort level per task | config; request | config; proxy | a mid-session change **can invalidate the cache** (S1, summary) | config: yes | session start only (rule 5). S4, S6 |
-| C7 | Model per subagent | config, instructions | config | no | yes | `CLAUDE_CODE_SUBAGENT_MODEL`, frontmatter `model`. S5 |
-| C8 | Per-request model swap in the gateway | request | proxy | **yes** (a different model has a different cache) | no | not recommended; same-family only, if ever |
+| C6 | Effort level per task, and lower effort on tool turns (**T3**) | config; request | config; native, proxy | a change can invalidate cached blocks (S1); **measured 2026-11-18: changing effort kept the cache on claude-sonnet-5-5 and claude-haiku-5-5** ([effort-check.md](effort-check.md)) | config: yes; gateway: no | `effort_tool_turns` (built 2026-11-18, off by default) lowers an effort the agent set to `low` on tool turns, only on models measured to keep the cache; its A/B is the bench condition `alone_effort_tool_turns`. S4, S6 |
+| C7 | Model per subagent (**T3**) | config, instructions | config | no | yes | `trove tasks apply subagent-model`; session A/B built 2026-11-18 (the off arm sets the Agent call's per-invocation model back to the main model, checked live). `CLAUDE_CODE_SUBAGENT_MODEL`, frontmatter `model`. S5 |
+| C8 | Per-request model swap in the gateway (**T3**) | request | native, proxy | **yes** (a different model has a different cache), so a sticky-turn rule repays each switch | no | `model_router`, built: tool turns step down to `optimize.route_to` and stay at least k = (W-R_to)/(R_from-R_to) turns; API-key only. Checked live 2026-11-18 with Claude Code: the cheaper model accepted its requests. Its A/B is in the launch and models studies |
 | C9 | Output size limits: `BASH_MAX_OUTPUT_LENGTH` or `bashOutputMaxChars`, `MAX_MCP_OUTPUT_TOKENS`, `CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS` | config | config | no | yes | defaults 30,000 chars, 25,000 tokens, 25,000 tokens. S3, S8. **Catalog entries verbatim 2026-11-13** (`trove settings`, `internal/settings/catalog`); no profile sets a value yet, since lowering one changes behavior and there is no benchmark |
 | C10 | Compaction timing: `autoCompactWindow`, `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`, `idleCompaction`; guidance for `/compact` | config | config | compaction rewrites history by design | yes | S3, S4. **Catalog entries verbatim 2026-11-13**; no profile ships a number |
 | C11 | Tool search: `ENABLE_TOOL_SEARCH`, per-server `alwaysLoad` | config | config | no | yes | S3, S8; Headroom sets it too. **`ENABLE_TOOL_SEARCH` verbatim 2026-11-13**; `trove fix` flags a stray `=false` (see B13) |
 | C12 | `updatedToolOutput` for more tools than Bash | tool boundary | native | no | yes | S7 says it applies to any tool; Trove's hooks use it only for Bash, Grep, Glob |
-| C13 | Terse replies and minimal code (rules text or a skill) | instructions | wrap or native text | no | yes | costs tokens to carry (rule 15); effect measured, not assumed |
+| C13 | Terse replies and minimal code (rules text, a skill or gateway steering) (**T2**) | instructions; request | wrap, native text | no | rules: yes; steering: no | `verbosity_steer`, terse-rules, Ponytail and Caveman, one at a time; costs tokens to carry (rule 15); effect measured by rule-set trials, not assumed |
 | C14 | Keep an idle API-key session's 5-minute cache warm with pings | request | native | no | no | **built 2026-11-17, shadow and on** (API-key gateway traffic only, opt-in; approved with its limits in [decisions/keep-warm.md](decisions/keep-warm.md)). Each ping is a `max_tokens: 0` request recorded as its own billed row. Checked live 2026-11-17 on one model: after pings across a 10.5-minute gap the next request read the whole prefix. See [keep-warm.md](keep-warm.md) |
 
 ### Wrapped tools (already in `trove external`, or candidates)
@@ -99,8 +119,8 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 |---|---|---|---|---|---|
 | W1 | RTK | Rewrites shell commands so their output is smaller | Apache-2.0 for the Apache-only build; a BUSL-1.1 engine in the default build (L1) | wrap, Apache-only build, pinned tag | B3, B8: all three act on Bash output |
 | W2 | token-savior | MCP server for code navigation | MIT (L5) | wrap | B9: both offer read and search tools |
-| W3 | terse-rules | A short rules block | Trove's own | wrap | C13, and Caveman if installed |
-| W4 | Caveman | Skill and proxy that make replies terse | Apache-2.0 from v3.0.0; earlier parts were BUSL-1.1 (L3) | candidate: wrap the skill only | C13, W3. Do not wrap its proxy |
+| W3 | terse-rules (**T2**) | A short rules block | Trove's own | wrap, built | C13, and Caveman if installed |
+| W4 | Caveman (**T2**) | Skill and proxy that make replies terse | Apache-2.0 from v3.0.0; earlier parts were BUSL-1.1 (L3) | wrapped: the skill only, pinned v4.1.0 | C13, W3. Do not wrap its proxy |
 | W5 | Headroom | Compresses tool output, logs and files; library, proxy, CLI, MCP server | Apache-2.0 (L2) | ideas only; never wrapped | B1 to B3. Its proxy and `headroom wrap` claim `ANTHROPIC_BASE_URL`, so they are never chained with the gateway. Its Python library (`compress()`, in a custom agent's own code) and its MCP server do not conflict with the gateway; Trove does not install them. It has no CLI that shortens Bash output without the proxy, and its usage beacon is on by default (verified on github.com/headroomlabs-ai/headroom and docs.headroomlabs.ai, 2026-11-18) |
 | W6 | LLMLingua | Prompt compression with a model | MIT (L4) | idea only; Python and a model | prompt-level compression, not Autopilot-eligible |
 | W7 | SuperCompress | Query-aware context compression, hosted | MIT repo; the hosted API receives your text (L6, match not fully verified) | **excluded** | sends prompts off the machine (rule 1) |
