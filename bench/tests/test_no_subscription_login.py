@@ -44,7 +44,8 @@ def test_no_host_directory_is_mounted_and_only_lab_made_files_are_copied_in():
     # Everything copied INTO a container is a file the lab made: the prompt, the solution, its own binaries, the
     # generated Trove config and the capability snapshot. Never a path from the operator's agent folders.
     run = (SRC / "docker_run.py").read_text(encoding="utf-8")
-    allowed = re.compile(r"^(td / \"[\w.]+\"|sol|self\.(trove|fake)_bin)$")
+    # td / f"followup_{i}.txt" is a follow-up prompt the lab writes from the task manifest (long-session suite).
+    allowed = re.compile(r"^(td / \"[\w.]+\"|td / f\"followup_\{i\}\.txt\"|sol|self\.(trove|fake)_bin)$")
     sources = re.findall(r"c\.put\(([^,]+),", run)
     assert sources, "found no copies into a container; the check is broken"
     for src in sources:

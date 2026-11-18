@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 from . import docker_env as de
-from .agent.base import Agent
+from .agent.base import Agent, AgentResult, combine_results
 from .collect import build_record, read_gateway_db
 from .conditions import Condition, render_config_toml
 from .hooks_env import HooksSetupError, capabilities_for, check_snapshot, install_command
@@ -33,6 +33,14 @@ GRADE_TIMEOUT_S = 900
 
 class RunEnvError(RuntimeError):
     pass
+
+
+def _session_spend(results: list[AgentResult], agent: Agent) -> float:
+    """Estimated spend so far in a multi-prompt session, from the agent's own reports."""
+    if getattr(agent, "resume_reports_session_total", True):
+        last = next((r for r in reversed(results) if r.parsed and r.cost_usd_estimate is not None), None)
+        return last.cost_usd_estimate if last else 0.0
+    return sum(r.cost_usd_estimate or 0.0 for r in results if r.parsed)
 
 
 def _say(msg: str) -> None:
@@ -196,15 +204,39 @@ class ContainerRunner:
             self._setup_hooks(c, td, cond)
 
         timeout = min(task.timeout_s, self.run_timeout_s)
+        prompts = ["/bench/prompt.txt"]
+        for i, text in enumerate(task.followups, start=1):
+            (td / f"followup_{i}.txt").write_text(text, encoding="utf-8", newline="\n")
+            c.put(td / f"followup_{i}.txt", f"/bench/followup_{i}.txt")
+            prompts.append(f"/bench/followup_{i}.txt")
         t0 = time.monotonic()
-        self.log(f"      agent working (limit {timeout // 60} min, ${self.run_cap_usd:.2f}) ...")
+        self.log(f"      agent working ({len(prompts)} prompt(s), limit {timeout // 60} min, ${self.run_cap_usd:.2f}) ...")
+        results, outs, errs = [], [], []
+        res = None
+        session = ""
         with heartbeat("agent", self.log):
-            res = c.exec(self.agent.command(model=self.model, max_budget_usd=self.run_cap_usd, prompt_path="/bench/prompt.txt",
-                                               effort=spec.effort, bare=not cond.uses_hooks),
-                         timeout=timeout, env=agent_env)
+            for i, path in enumerate(prompts):
+                left_s = timeout - (time.monotonic() - t0)
+                spent = _session_spend(results, self.agent)
+                left_usd = self.run_cap_usd - spent
+                if i > 0 and (left_s < 30 or left_usd <= 0.01 or not session):
+                    why = "time" if left_s < 30 else ("budget" if left_usd <= 0.01 else "no session id to resume")
+                    self.log(f"      stopping before follow-up {i}: out of {why}")
+                    break
+                res = c.exec(self.agent.command(model=self.model, max_budget_usd=round(left_usd, 4), prompt_path=path,
+                                                   effort=spec.effort, bare=not cond.uses_hooks, resume=session,
+                                                   persist=len(prompts) > 1),
+                             timeout=max(1, int(left_s)), env=agent_env)
+                outs.append(res.out)
+                errs.append(res.err)
+                results.append(self.agent.parse(res.out))
+                session = results[-1].session_id or session
+                if res.timed_out or res.rc != 0 or results[-1].is_error:
+                    break      # a failed prompt ends the session; grading still runs on what was done
         wall = time.monotonic() - t0
-        (run_dir / "agent_stdout.txt").write_text(redact(res.out, secrets), encoding="utf-8", newline="\n")
-        (run_dir / "agent_stderr_tail.txt").write_text(redact(res.err[-4000:], secrets), encoding="utf-8", newline="\n")
+        sep = "\n----- next prompt -----\n"
+        (run_dir / "agent_stdout.txt").write_text(redact(sep.join(outs), secrets), encoding="utf-8", newline="\n")
+        (run_dir / "agent_stderr_tail.txt").write_text(redact(sep.join(errs)[-4000:], secrets), encoding="utf-8", newline="\n")
 
         self.log(f"      agent finished in {wall:.0f}s; grading ...")
         with heartbeat("grading", self.log):
@@ -227,7 +259,7 @@ class ContainerRunner:
             # hooks' counters and log next to the run for inspection.
             c.get(TROVE_DATA, run_dir / "trove-data")
 
-        parsed = self.agent.parse(res.out)
+        parsed = combine_results(results, session_totals=getattr(self.agent, "resume_reports_session_total", True))
         rec = build_record(
             run_id=spec.run_id, task_id=spec.task_id, condition=spec.condition, seed=spec.seed,
             passed=grade.rc == 0, timed_out=res.timed_out, wall_s=wall, agent=parsed, gateway=stats,

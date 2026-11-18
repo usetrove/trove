@@ -18,7 +18,11 @@ class FakeAgent:
     def version_command(self) -> str:
         return "echo benchfake"
 
-    def command(self, *, model: str, max_budget_usd: float, prompt_path: str, effort: str = "", bare: bool = True) -> str:
+    # Each fake call reports only its own usage, so the runner adds follow-up results together.
+    resume_reports_session_total = False
+
+    def command(self, *, model: str, max_budget_usd: float, prompt_path: str, effort: str = "", bare: bool = True,
+                resume: str = "", persist: bool = False) -> str:
         # /bench/solution.sh exists only for tasks that ship one; it stands in for "the agent fixed it".
         sol = '$([ -f /bench/solution.sh ] && echo "-solution /bench/solution.sh")'
         return f"{FAKE_BIN} agent -turns 3 -model {shlex.quote(model)} {sol}"

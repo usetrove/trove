@@ -40,11 +40,12 @@ class Task:
     tags: tuple[str, ...] = ()
     attribution: str = ""     # required credit line for upstream content
     repo_path: str = ""       # prebuilt image: the repo is already checked out at this path (e.g. /testbed), so skip clone and setup
+    followups: tuple[str, ...] = ()       # later prompts sent in the same session, in order (a long-session task)
     base_dir: str = ""        # directory of the manifest file; set by the loader, never read from YAML
 
 
 _REQUIRED = ("id", "source", "repo", "base_commit", "license", "prompt", "image", "success_cmd", "timeout_s")
-_LIST_FIELDS = ("setup", "grading_setup", "tags")
+_LIST_FIELDS = ("setup", "grading_setup", "tags", "followups")
 
 
 def parse_task(data: Any, origin: str = "<memory>") -> Task:
@@ -106,8 +107,8 @@ def dump_task(task: Task) -> str:
     """Stable YAML for a task (used by the sources and for hashing)."""
     out: dict[str, Any] = {}
     for f in fields(Task):
-        if f.name == "base_dir":
-            continue
+        if f.name == "base_dir" or (f.name == "followups" and not task.followups):
+            continue   # an empty followups list is left out so single-prompt manifests (and their hashes) are unchanged
         v = getattr(task, f.name)
         out[f.name] = list(v) if isinstance(v, tuple) else v
     return yaml.safe_dump(out, sort_keys=False, allow_unicode=True)

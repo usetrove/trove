@@ -72,8 +72,8 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--priors-out", type=Path, default=BENCH.parent / "internal" / "experiment" / "priors.toml")
     d.add_argument("--dry-run", action="store_true", help="show what each result supports; write nothing")
 
-    f = sub.add_parser("fetch", help="generate task manifests from polyglot or SWE-bench Verified")
-    f.add_argument("source", choices=["polyglot", "swebench"])
+    f = sub.add_parser("fetch", help="generate task manifests from polyglot, the long-session suite or SWE-bench Verified")
+    f.add_argument("source", choices=["polyglot", "longsession", "swebench"])
     f.add_argument("--out", type=Path, help="output folder (default bench/tasks/<source>)")
     f.add_argument("-n", type=int, default=10, help="how many tasks")
     f.add_argument("--seed", type=int, default=1, help="seed for the random subset")
@@ -259,11 +259,11 @@ def _cmd_report(args) -> int:
 def _cmd_fetch(args) -> int:
     import subprocess
 
-    from .sources import polyglot, swebench
+    from .sources import longsession, polyglot, swebench
     from .sources.http import get as http_get
 
     out = args.out or (BENCH / "tasks" / args.source)
-    if args.source == "polyglot":
+    if args.source in ("polyglot", "longsession"):
         cache = BENCH / "cache" / "polyglot-benchmark"
         if not cache.exists():
             cache.parent.mkdir(parents=True, exist_ok=True)
@@ -271,8 +271,10 @@ def _cmd_fetch(args) -> int:
         if args.commit:
             subprocess.run(["git", "-C", str(cache), "checkout", "-q", args.commit], check=True)
         commit = subprocess.run(["git", "-C", str(cache), "rev-parse", "HEAD"], check=True, capture_output=True, text=True).stdout.strip()
-        tasks = polyglot.generate(cache, commit, out, n=args.n, seed=args.seed)
-        print(f"Wrote {len(tasks)} polyglot (Python) task(s) to {out}, pinned to {commit[:10]}. "
+        gen = longsession.generate if args.source == "longsession" else polyglot.generate
+        tasks = gen(cache, commit, out, n=args.n, seed=args.seed)
+        kind = "long-session (Python, with follow-up prompts)" if args.source == "longsession" else "polyglot (Python)"
+        print(f"Wrote {len(tasks)} {kind} task(s) to {out}, pinned to {commit[:10]}. "
               "Exercise text is copyright Exercism: keep these local.")
     else:
         rows, rev = swebench.fetch_rows(lambda u: http_get(u))

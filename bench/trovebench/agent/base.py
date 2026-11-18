@@ -37,9 +37,11 @@ class Agent(Protocol):
 
     def version_command(self) -> str: ...
 
-    def command(self, *, model: str, max_budget_usd: float, prompt_path: str, effort: str = "", bare: bool = True) -> str:
+    def command(self, *, model: str, max_budget_usd: float, prompt_path: str, effort: str = "", bare: bool = True,
+                resume: str = "", persist: bool = False) -> str:
         """Shell command (run in the repo root inside the container) that runs the agent headless.
-        effort is a reasoning-effort level ("" = the model default); bare=False lets hooks and plugins load."""
+        effort is a reasoning-effort level ("" = the model default); bare=False lets hooks and plugins load.
+        resume continues the session with that id (a follow-up prompt); persist keeps a new session resumable."""
 
     def static_env(self) -> dict[str, str]:
         """Non-secret environment for the container (the API key is passed separately)."""
@@ -48,6 +50,41 @@ class Agent(Protocol):
         """Environment that points the agent at a custom endpoint URL."""
 
     def parse(self, stdout: str) -> AgentResult: ...
+
+
+def combine_results(results: list[AgentResult], *, session_totals: bool) -> AgentResult:
+    """One result for a session that took several calls (a prompt and its follow-ups).
+
+    session_totals=True: each resumed call already reports the whole session's spend (Claude Code since v2.1.277),
+    so the latest parsed result is the session total and summing would double-count. Otherwise each call reports
+    only its own usage and the calls are added up. A call that printed no result adds nothing; an error in any
+    call marks the session as errored.
+    """
+    if not results:
+        return AgentResult(parsed=False, detail="the agent was not run")
+    parsed = [r for r in results if r.parsed]
+    if not parsed:
+        return results[-1]
+    is_error = any(r.is_error for r in results) or not results[-1].parsed
+    api_status = next((r.api_error_status for r in reversed(results) if r.api_error_status is not None), None)
+    detail = "; ".join(r.detail for r in results if r.detail and r.detail != "success") or parsed[-1].detail
+    if session_totals:
+        last = parsed[-1]
+        return AgentResult(parsed=True, is_error=is_error, turns=last.turns, cost_usd_estimate=last.cost_usd_estimate,
+                           usage_by_model=dict(last.usage_by_model), session_id=last.session_id, detail=detail,
+                           api_error_status=api_status)
+    usage: dict[str, ModelUsage] = {}
+    for r in parsed:
+        for m, u in r.usage_by_model.items():
+            p = usage.get(m, ModelUsage())
+            usage[m] = ModelUsage(p.input_tokens + u.input_tokens, p.output_tokens + u.output_tokens,
+                                  p.cache_read_tokens + u.cache_read_tokens, p.cache_write_tokens + u.cache_write_tokens)
+    costs = [r.cost_usd_estimate for r in parsed]
+    turns = [r.turns for r in parsed]
+    return AgentResult(parsed=True, is_error=is_error,
+                       turns=sum(t for t in turns if t is not None) if any(t is not None for t in turns) else None,
+                       cost_usd_estimate=sum(c for c in costs if c is not None) if any(c is not None for c in costs) else None,
+                       usage_by_model=usage, session_id=parsed[-1].session_id, detail=detail, api_error_status=api_status)
 
 
 def last_json_object(text: str) -> dict | None:

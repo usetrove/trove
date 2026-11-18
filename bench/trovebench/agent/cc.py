@@ -17,6 +17,11 @@ ALLOWED_TOOLS = "Bash,Read,Edit,Write"
 
 class CcAgent:
     name = "claude_code"
+    # Since v2.1.277 a resumed `claude -p` run reports the whole session's total_cost_usd and modelUsage, earlier
+    # runs' spend included; summing results would double-count (code.claude.com/docs/en/headless and
+    # /agent-sdk/cost-tracking, verified 2026-11-18). The bench pins a later version.
+    resume_reports_session_total = True
+    min_version_for_session_totals = "2.1.277"
 
     def install_lines(self, version: str | None) -> list[str]:
         if not version:
@@ -38,17 +43,25 @@ class CcAgent:
     def version_command(self) -> str:
         return "claude --version"
 
-    def command(self, *, model: str, max_budget_usd: float, prompt_path: str, effort: str = "", bare: bool = True) -> str:
+    def command(self, *, model: str, max_budget_usd: float, prompt_path: str, effort: str = "", bare: bool = True,
+                resume: str = "", persist: bool = False) -> str:
         # --bare skips hooks, installed plugins and CLAUDE.md (docs: code.claude.com/docs/en/headless, verified
         # 2026-11-06), so a condition that depends on Trove's hooks must run without it. The container is fresh,
         # holds no OAuth or keychain login, and gets only an API key, so dropping --bare adds no credential path.
         # --effort is documented in code.claude.com/docs/en/cli-reference (low|medium|high|xhigh|max).
+        #
+        # Multi-turn tasks (long sessions): `claude -p "<next>" --resume <session_id>` continues a print-mode session,
+        # and --no-session-persistence would make it impossible to resume, so a session that will be continued is
+        # persisted (code.claude.com/docs/en/headless "Continue conversations" and /cli-reference, verified 2026-11-18).
+        # The container is thrown away after the run, so nothing outlives it.
         return (
             f'claude {"--bare " if bare else ""}-p "$(cat {shlex.quote(prompt_path)})" '
-            f"--model {shlex.quote(model)} --output-format json "
+            + (f"--resume {shlex.quote(resume)} " if resume else "")
+            + f"--model {shlex.quote(model)} --output-format json "
             + (f"--effort {shlex.quote(effort)} " if effort else "")
             + f"--max-budget-usd {max_budget_usd:g} --permission-mode acceptEdits "
-            f"--allowedTools {shlex.quote(ALLOWED_TOOLS)} --no-session-persistence"
+            f"--allowedTools {shlex.quote(ALLOWED_TOOLS)}"
+            + ("" if (persist or resume) else " --no-session-persistence")
         )
 
     def static_env(self) -> dict[str, str]:

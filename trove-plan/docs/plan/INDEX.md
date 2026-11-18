@@ -78,7 +78,7 @@ Status: todo | doing | done | blocked(<reason>). Update the Status column when y
 | 10.2 | Codex real install | cont. | - | human | - | todo |
 | 10.3 | Live hook probe + hooks-vs-gateway bench | cont. | - | human | API key | todo |
 | 10.4 | Run per-hook studies | cont. | - | human | API key | todo |
-| 10.5 | Long-session task suite | cont. | M | agent | - | todo |
+| 10.5 | Long-session task suite | cont. | M | agent | - | done |
 | 10.6 | Benchmark output_trimmer, hook_large_output | cont. | - | agent+human | API key | todo |
 | 10.7 | Benchmark-derived Autopilot thresholds | 0.8 | S | agent | 10.3-10.6 | todo |
 | 10.8 | Commit SWE-bench results + fix flaky test | 0.9 | S | agent+human | - | blocked(flaky test fixed; swebench-gateway-2 result files are on another machine) |
