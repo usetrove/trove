@@ -12,6 +12,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/usetrove/trove/internal/fixer"
+	"github.com/usetrove/trove/internal/hooks"
+	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/pricing"
 )
 
@@ -90,6 +92,10 @@ type fixListReport struct {
 	Fixes   []*fixer.Fix   `json:"fixes"`
 	Queued  []fixer.Queued `json:"queued,omitempty"`
 	Errors  []string       `json:"errors,omitempty"`
+	// TroveRun is the measured use of trove_run since retyped commands were added (nil when none were).
+	TroveRun *fixer.RunAdoption `json:"trove_run_adoption,omitempty"`
+	// Snippet is adoption before and after the MCP snippet, and its overhead (nil when it is not applied).
+	Snippet *fixer.SnippetUse `json:"mcp_snippet_use,omitempty"`
 }
 
 type fixApplyReport struct {
@@ -141,6 +147,16 @@ func runFix(a *App, fl fixFlags, args []string) error {
 		}
 		for _, err := range errs {
 			rep.Errors = append(rep.Errors, err.Error())
+		}
+		if ad, err := fixer.RetypedAdoption(ctx, e, hooks.AdoptionObservable(e.DataDir)); err != nil {
+			rep.Errors = append(rep.Errors, "trove_run use: "+err.Error())
+		} else {
+			rep.TroveRun = ad
+		}
+		if su, err := fixer.MCPSnippetUse(ctx, e); err != nil {
+			rep.Errors = append(rep.Errors, "MCP snippet use: "+err.Error())
+		} else {
+			rep.Snippet = su
 		}
 		return a.emit(rep, renderFixList(rep))
 	}
@@ -266,7 +282,7 @@ func renderFixList(r fixListReport) string {
 	} else {
 		fmt.Fprintf(&b, "Fixes for %s (all savings are estimated):\n\n", r.Project)
 		tw := tabwriter.NewWriter(&b, 0, 4, 2, ' ', 0)
-		_, _ = fmt.Fprintln(tw, "ID\tKIND\tFILE\tEST. TOKENS/SESSION\tEST. $/SESSION\tSTATUS")
+		_, _ = fmt.Fprintln(tw, "ID\tKIND\tTIER\tEVIDENCE\tFILE\tEST. TOKENS/SESSION\tEST. $/SESSION\tSTATUS")
 		for _, f := range r.Fixes {
 			usd := "-"
 			if f.USDPerSession != nil {
@@ -285,7 +301,7 @@ func renderFixList(r fixListReport) string {
 			case f.Suggestion:
 				status = "suggestion"
 			}
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", f.ID, f.Kind, relOrAbs(r.Project, f.Path), tok, usd, status)
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", f.ID, f.Kind, f.Tier, f.EvidenceLabel, relOrAbs(r.Project, f.Path), tok, usd, status)
 		}
 		_ = tw.Flush()
 		b.WriteString("\nSee one with `trove fix <id>`; apply it with `trove fix <id> --apply`. A dash means Trove has no honest estimate.\n")
@@ -296,6 +312,28 @@ func renderFixList(r fixListReport) string {
 	if len(r.Queued) > 0 {
 		fmt.Fprintf(&b, "\n%d fix(es) are queued. Run `trove fix --apply-queued` when your agent is idle.\n", len(r.Queued))
 	}
+	if ad := r.TroveRun; ad != nil {
+		if ad.Observable {
+			fmt.Fprintf(&b, "\ntrove_run used in %d of %d sessions since %d retyped command(s) were added (measured, all projects).\n", ad.AdoptedSessions, ad.HookSessions, ad.Commands)
+		} else {
+			fmt.Fprintf(&b, "\n%d retyped command(s) were added, but the installed hooks do not count use of trove_run, so Trove cannot tell whether the agent uses them. See docs/fixer.md.\n", ad.Commands)
+		}
+	}
+	if su := r.Snippet; su != nil {
+		pct := func(f *measure.Figure) string {
+			if f == nil {
+				return "no reads or searches"
+			}
+			return fmt.Sprintf("%.0f%% of %d (%s)", f.Value, f.N, f.Label)
+		}
+		fmt.Fprintf(&b, "\nMCP snippet (since %s): Trove tools used for file reads and searches before %s, after %s; all projects.\n",
+			su.AppliedAt.Format("2006-01-02"), pct(su.Before), pct(su.After))
+		fmt.Fprintf(&b, "Its overhead: %d tokens per request (%s)", su.OverheadTokensPerRequest, su.OverheadLabel)
+		if su.RequestsPerSession > 0 {
+			fmt.Fprintf(&b, ", about %d per session at %.1f requests per session (measured)", su.OverheadPerSession, su.RequestsPerSession)
+		}
+		b.WriteString(".\n")
+	}
 	for _, e := range r.Errors {
 		b.WriteString("\nCould not check one kind of fix: " + e + "\n")
 	}
@@ -304,12 +342,19 @@ func renderFixList(r fixListReport) string {
 
 func renderFixDetail(f *fixer.Fix, act fixer.Activity) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s  %s\n%s\n\nWhy: %s\n", f.ID, f.Kind, f.Title, f.Why)
+	fmt.Fprintf(&b, "%s  %s  [%s, %s]\n%s\n\nWhy: %s\n", f.ID, f.Kind, f.Tier, f.EvidenceLabel, f.Title, f.Why)
 	if len(f.Evidence) > 0 {
 		b.WriteString("\nEvidence:\n")
 		for _, e := range f.Evidence {
 			b.WriteString("  - " + e + "\n")
 		}
+	}
+	if f.ResentTokensPerRequest > 0 {
+		fmt.Fprintf(&b, "\nRe-sent on every request: %d tokens (%s)", f.ResentTokensPerRequest, f.ResentLabel)
+		if f.RequestsPerSession > 0 {
+			fmt.Fprintf(&b, ", %.1f requests per session (%s)", f.RequestsPerSession, f.RequestsLabel)
+		}
+		b.WriteString(".\n")
 	}
 	if f.TokensPerSession > 0 {
 		usd := "no dollar estimate"

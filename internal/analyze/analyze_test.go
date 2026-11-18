@@ -53,6 +53,28 @@ func TestEstimatesSumToReportedTotal(t *testing.T) {
 	}
 }
 
+func TestEstimatesSplitToolDefsByServer(t *testing.T) {
+	body := req{
+		system: []string{pad("system", 6000)},
+		tools:  []string{"Read", "mcp__github__create_issue", "mcp__github__list_prs", "mcp__my-db__query"},
+		msgs:   []message{user(text("go"))},
+	}.body()
+	a := newTestAnalyzer(t, nil)
+	var e Estimate
+	if err := json.Unmarshal(a.Analyze(turn{body: body, write: 1000}.input(t, "s")).Estimates, &e); err != nil {
+		t.Fatal(err)
+	}
+	if e.ToolServers["github"] == 0 || e.ToolServers["my-db"] == 0 || len(e.ToolServers) != 2 {
+		t.Fatalf("tool_servers = %v, want github and my-db only", e.ToolServers)
+	}
+	if e.ToolServers["github"] <= e.ToolServers["my-db"] {
+		t.Errorf("two github tools should weigh more than one my-db tool: %v", e.ToolServers)
+	}
+	if sum := e.ToolServers["github"] + e.ToolServers["my-db"]; sum >= e.Categories[CatToolSchemas] {
+		t.Errorf("MCP tools %d should be a part of all tool schemas %d (Read is built in)", sum, e.Categories[CatToolSchemas])
+	}
+}
+
 func TestEstimatesSumForOddTotals(t *testing.T) {
 	body := req{system: []string{pad("s", 997)}, tools: []string{"A", "B", "C"}, msgs: []message{user(text(pad("u", 1013)))}}.body()
 	a := newTestAnalyzer(t, nil)

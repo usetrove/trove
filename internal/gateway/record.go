@@ -57,6 +57,14 @@ func (s *Server) record(f *flight, captured []byte, over, cleanEnd, clientGone b
 		if f.capShadow {
 			s.addGatewayShadow(&row, config.OptimizerSpendCap)
 		}
+		if f.warm != nil && !f.warm.onPinged {
+			if usd, tokens, ok := s.warm.shadowUSD(f.warm, f.start); ok {
+				addShadowEntry(&row, config.OptimizerKeepWarm, analyze.ShadowEntry{Tokens: tokens, USD: &usd})
+			}
+		}
+		if f.warmSeen {
+			s.warm.landed(f, res, f.warmCred)
+		}
 		if f.provider == "anthropic" && f.usagePath == "/v1/messages" {
 			// Counts only: tool calls, errors, repeats. See internal/measure.
 			if sig, ok := measure.Extract(f.reqBody); ok {
@@ -339,6 +347,11 @@ func (s *Server) addGatewayShadow(row *store.Request, behavior string) {
 	if tokens <= 0 {
 		return
 	}
+	addShadowEntry(row, behavior, analyze.ShadowEntry{Tokens: tokens, USD: row.CostUSD})
+}
+
+// addShadowEntry merges one behavior's estimate into the row's shadow record.
+func addShadowEntry(row *store.Request, behavior string, e analyze.ShadowEntry) {
 	sh := analyze.Shadow{Label: "estimated", Optimizers: map[string]analyze.ShadowEntry{}}
 	if len(row.ShadowSavings) > 0 {
 		var prev analyze.Shadow
@@ -347,7 +360,7 @@ func (s *Server) addGatewayShadow(row *store.Request, behavior string) {
 		}
 	}
 	sh.Label = "estimated"
-	sh.Optimizers[behavior] = analyze.ShadowEntry{Tokens: tokens, USD: row.CostUSD}
+	sh.Optimizers[behavior] = e
 	if b, err := json.Marshal(sh); err == nil {
 		row.ShadowSavings = b
 	}

@@ -77,7 +77,8 @@ func (e *Env) allowedFiles() []string {
 			filepath.Join(p, "AGENTS.md"), filepath.Join(p, "AGENTS.override.md"),
 			filepath.Join(p, ".claude", "CLAUDE.md"),
 			filepath.Join(p, ".claude", "settings.json"), filepath.Join(p, ".claude", "settings.local.json"),
-			filepath.Join(p, ".mcp.json"), filepath.Join(p, ".codex", "config.toml"))
+			filepath.Join(p, ".mcp.json"), filepath.Join(p, ".codex", "config.toml"),
+			filepath.Join(p, filepath.FromSlash(commandsRel))) // trove_run's allowlist (retyped_command)
 	}
 	if e.ClaudeDir != "" {
 		fs = append(fs, filepath.Join(e.ClaudeDir, "CLAUDE.md"), filepath.Join(e.ClaudeDir, "settings.json"))
@@ -147,5 +148,5 @@ func (e *Env) Allowed(path string) error {
 		norm(resolve(filepath.Dir(path))) == norm(resolve(e.CodexDir)) {
 		return nil
 	}
-	return fmt.Errorf("%s is not one of the agent config files Trove edits (CLAUDE.md, AGENTS.md, .mcp.json, settings and config files in the project or your agent's own folder)", path)
+	return fmt.Errorf("%s is not one of the agent config files Trove edits (CLAUDE.md, AGENTS.md, .mcp.json, .trove/commands.toml, settings and config files in the project or your agent's own folder)", path)
 }

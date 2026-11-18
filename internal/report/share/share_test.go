@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/report"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -173,6 +174,18 @@ func TestCardHasNoIdentifyingData(t *testing.T) {
 	// And the whole set of strings on the card is the fixed vocabulary plus numbers.
 	for _, tx := range build(card, Dark).texts {
 		t.Logf("card text: %q", tx.s)
+	}
+}
+
+// The report lists fixed overhead first, but the card still names the biggest leak.
+func TestTopLeakIsBiggestNotFirstListed(t *testing.T) {
+	r := report.Report{Leaks: []report.Leak{
+		{Category: "unused_tool_schemas", FixedOverhead: true, USD: measure.Figure{Value: 1}},
+		{Category: "duplicate_tool_result", USD: measure.Figure{Value: 9}},
+		{Category: "oversized_tool_output", USD: measure.Figure{Value: 4}},
+	}}
+	if got := topLeak(r.Leaks); got != "Repeated tool results" {
+		t.Errorf("top leak = %q, want the largest by dollars", got)
 	}
 }
 

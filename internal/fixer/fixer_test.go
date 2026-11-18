@@ -222,15 +222,79 @@ func TestContextSlim(t *testing.T) {
 			t.Errorf("must keep %q", keep)
 		}
 	}
-	for _, gone := range []string{"## Overview", "## Deployments"} {
-		if strings.Contains(out, gone) {
-			t.Errorf("must remove %q", gone)
+	if strings.Contains(out, "## Deployments") {
+		t.Error("the section copied from the README must be removed")
+	}
+	if !strings.Contains(out, "## Overview") {
+		t.Error("a generic section is not a provable duplicate; the T1 fix must keep it")
+	}
+	if x.Tier != "T1" || x.Suggestion {
+		t.Errorf("duplicate removal is T1 and not a suggestion: tier %q suggestion %v", x.Tier, x.Suggestion)
+	}
+	// Every deleted line is shown next to the source text it duplicates.
+	ev := strings.Join(x.Evidence, "\n")
+	for _, want := range []string{
+		`README.md line 3: "The demo service reads events from the queue and writes summaries to the database nightly."`,
+		`README.md line 6: "Run the migrations before starting the service for the first time on a new machine or database."`,
+	} {
+		if !strings.Contains(ev, want) {
+			t.Errorf("evidence lacks %q:\n%s", want, ev)
 		}
 	}
 	if x.TokensPerSession <= 0 {
 		t.Fatalf("a removal has a token saving, got %d", x.TokensPerSession)
 	}
 	golden(t, "context_slim.diff.golden", x.Diff)
+
+	// The generic Overview section is offered separately as a T2 behavioural suggestion.
+	gs := f.detect(ContextSlimGeneric)
+	if len(gs) != 1 {
+		t.Fatalf("want one generic-section suggestion, got %d", len(gs))
+	}
+	g := gs[0]
+	if g.Tier != "T2" || g.Class != "behavior_instructions" || !g.Suggestion {
+		t.Errorf("generic removal must be a T2 behavioural suggestion: %+v", g)
+	}
+	gout := string(g.updated)
+	if strings.Contains(gout, "## Overview") || !strings.Contains(gout, "## Deployments") || !strings.Contains(gout, "## Rules") {
+		t.Errorf("the suggestion removes only the generic section:\n%s", gout)
+	}
+}
+
+func TestContextSlimKeepsPartialDuplicates(t *testing.T) {
+	f := newFx(t)
+	f.write("README.md", readme)
+	// Four of five lines are in the README, but the fifth is not: nothing proves it is a copy.
+	f.write("CLAUDE.md", "# Demo project\n\n## Deployments\n\n"+
+		"The demo service reads events from the queue and writes summaries to the database nightly.\n"+
+		"Configuration lives in config.yaml and every key has a default documented below in this file.\n"+
+		"Deployments are done through the release pipeline which tags the repository and publishes artifacts.\n"+
+		"Run the migrations before starting the service for the first time on a new machine or database.\n"+
+		"Ask the on-call engineer in the ops channel before a deploy on a Friday afternoon.\n\n"+
+		"## Rules\n\nNever edit generated files under gen/. Always run `make check` before committing.\n")
+	if got := f.detect(ContextSlim); len(got) != 0 {
+		t.Fatalf("a section with a line found nowhere else is not a provable duplicate: %+v", got[0].Evidence)
+	}
+}
+
+func TestContextSlimRepeatedSectionQuotesTheEarlierCopy(t *testing.T) {
+	f := newFx(t)
+	body := "Run the integration suite with the local database container started first.\n" +
+		"Seed data comes from the fixtures folder and is reset between every test run.\n" +
+		"The suite takes about four minutes on a laptop and longer on the shared runners.\n"
+	f.write("CLAUDE.md", "# Demo\n\n## Testing\n\n"+body+"\n## Rules\n\nNever skip the suite.\n\n## Testing again\n\n"+body)
+	fixes := f.detect(ContextSlim)
+	if len(fixes) != 1 {
+		t.Fatalf("want one fix, got %d", len(fixes))
+	}
+	out := string(fixes[0].updated)
+	if strings.Contains(out, "## Testing again") || !strings.Contains(out, "## Testing\n") {
+		t.Fatalf("the later copy goes, the first stays:\n%s", out)
+	}
+	ev := strings.Join(fixes[0].Evidence, "\n")
+	if !strings.Contains(ev, `CLAUDE.md line 5: "Run the integration suite with the local database container started first."`) {
+		t.Errorf("evidence must quote the earlier copy:\n%s", ev)
+	}
 }
 
 func TestContextSlimLeavesShortAndRuleFilesAlone(t *testing.T) {
@@ -586,5 +650,14 @@ func TestCacheBreakerDoesNotLeaveADoubleBlankLine(t *testing.T) {
 	fixes := f.detect(CacheBreaker)
 	if len(fixes) != 1 || string(fixes[0].updated) != "# Demo\n\nNever edit gen/.\n" {
 		t.Fatalf("got %+v", fixes)
+	}
+}
+
+func TestEveryFixKindHasATier(t *testing.T) {
+	want := map[string]string{MCPPrune: "T1", ContextSlim: "T1", ContextSlimGeneric: "T2", CacheBreaker: "T1", ModelDefault: "T3", SettingsCheck: "T1", SettingsProfile: "T1", TaskScout: "T3", TaskCascade: "T3", MCPSnippet: "T2"}
+	for kind, tier := range want {
+		if _, got := classOfKind(kind); got != tier {
+			t.Errorf("%s: tier %q, want %s", kind, got, tier)
+		}
 	}
 }

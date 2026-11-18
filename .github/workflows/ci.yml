@@ -67,6 +67,8 @@ jobs:
         run: go test -count=1 -run 'Contribute|TestData|Uninstall|Purge|TestSetup|TestNothingBut' ./internal/cli ./internal/contribute
       - name: No Claude, Anthropic, Codex or OpenAI in our own names (rule 13)
         run: go test -count=1 ./internal/naming
+      - name: Every optimizer alone keeps failure lines, keeps the cached prefix byte-identical and repeats byte for byte
+        run: go test -count=1 -v -run 'TestEveryOptimizerPassesItsChecker|TestCheckerCatchesBrokenTransforms' ./internal/stress
 
   # The OpenCode plugin: strict typecheck, then its tests against a real `trove engine serve`
   # built from this checkout. Serial: each test file builds or starts the program.

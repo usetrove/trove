@@ -85,7 +85,9 @@ string into a one-block list, which a marker needs.
 - A skipped check is never counted as a pass, and a skipped layer fails the run.
 - Every number is labeled *measured* or *estimated*, or is a pass or fail count.
 - Realism savings are at list price on pinned models. They exclude Trove's own tool definitions, which adapters add.
-  They are simulations, not a bill.
+  They are simulations, not a bill. Realism and the scripted workflows leave out behavioural optimizers
+  (`verbosity_steer`). Their replies are fixed, so such an optimizer could only show its added text there, never
+  its effect; it is judged by a live session A/B. The safety layers (invariants, faults, fuzz, load) still run it.
 - Nothing is written outside the scratch folder, and the report holds no content, key or path.
 
 ## Continuous integration
@@ -97,6 +99,24 @@ string into a one-block list, which a marker needs.
 - **nightly**: every night and on demand, on Ubuntu and Windows, `--mode full --strict --soak 60m`.
 
 Nothing is uploaded. Actions are pinned to the same commits as `ci.yml`.
+
+### Per-optimizer checker (merge gate)
+
+`ci.yml` also runs `TestEveryOptimizerPassesItsChecker` (`internal/stress/checker.go`) on every push and pull request.
+Every optimizer in `optimize.Pipeline` and `optimize.ToolPipeline` runs **alone**, switched on, over five scripted
+workflows with failure output (`fix-failing-test`, `debug-with-logs`, `dependency-upgrade`, `incident-log-forensics`,
+`json-log-triage`), as Claude Code and as a custom agent, at a fixed seed. It fails unless the optimizer:
+
+- keeps every failure line of the original output visible to the model (as-is or with colors removed), including
+  JSON log records with `"level":"error"`,
+- leaves no trim marker naming an output the recovery store does not hold byte for byte,
+- leaves each request a byte prefix of the next (cache markers aside),
+- gives byte-identical output on a repeat run of the same session,
+- breaks no other invariant (pairing, cost bound, recovery, fail-open).
+
+A new optimizer is covered as soon as it is registered. `TestCheckerCatchesBrokenTransforms` keeps the gate honest:
+transforms that drop failure lines, rewrite earlier history, differ between runs, or write a trim marker with nothing
+stored behind it must each fail it.
 
 ## Verification status
 

@@ -1,0 +1,20 @@
+{
+  "cwd": "{{CWD}}",
+  "duration_ms": 10719,
+  "effort": {
+    "level": "medium"
+  },
+  "error": "Exit code 1\n--- FAIL: TestAdd (0.00s)\n    add_test.go:9: add is broken\nFAIL\nFAIL\tprobeproj\t1.414s\nFAIL",
+  "hook_event_name": "PostToolUseFailure",
+  "is_interrupt": false,
+  "permission_mode": "default",
+  "prompt_id": "{{PROMPT}}",
+  "session_id": "{{SESSION}}",
+  "tool_input": {
+    "command": "go test ./...",
+    "description": "Run all Go tests"
+  },
+  "tool_name": "Bash",
+  "tool_use_id": "{{TOOL_USE}}",
+  "transcript_path": "{{PATH}}"
+}

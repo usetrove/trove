@@ -12,10 +12,10 @@
     },
     "overhead": {
       "tool_def_tokens": 0,
-      "injected_tokens": 104,
-      "per_request_tokens": 104,
+      "injected_tokens": 156,
+      "per_request_tokens": 156,
       "extra_turns_estimate": 0,
-      "source": "counted from the rules text",
+      "source": "counted from the rules block",
       "label": "estimated"
     },
     "prompt_tokens": {

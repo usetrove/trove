@@ -1,0 +1,16 @@
+{
+  "cwd": "{{PATH}}",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PreToolUse",
+  "permission_mode": "default",
+  "prompt_id": "{{PROMPT}}",
+  "session_id": "{{SESSION}}",
+  "tool_input": {
+    "file_path": "{{TMP}}\\project\\probe.txt"
+  },
+  "tool_name": "Read",
+  "tool_use_id": "{{TOOL_USE}}",
+  "transcript_path": "{{PATH}}"
+}

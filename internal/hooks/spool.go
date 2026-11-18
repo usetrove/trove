@@ -37,6 +37,9 @@ const (
 	// experiment_assignments, not hook_events.
 	KindArmOn  = "arm_on"
 	KindArmOff = "arm_off"
+	// KindTestRun is not a decision either: it is the exit code of an allowlisted test command (the test-pass
+	// signal). Hook holds the command's hash and Exit its exit code. It goes to test_runs, not hook_events.
+	KindTestRun = "test_run"
 )
 
 // event is one line of the spool. Counts, sizes and a hashed session key only.
@@ -47,6 +50,12 @@ type event struct {
 	Kind   string `json:"k"`
 	Bytes  int64  `json:"b"`
 	Tokens int64  `json:"n"` // estimated
+	// Ratio and Samples are the learned bytes per token the estimate used and the number of samples
+	// behind it. Both are zero when the default 3.5 was used. They stay in the spool; the database has no column for them.
+	Ratio   float64 `json:"r,omitempty"`
+	Samples int     `json:"ns,omitempty"`
+	// Exit is a test command's exit code, for KindTestRun only.
+	Exit int `json:"x,omitempty"`
 }
 
 const (
@@ -129,6 +138,11 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 		return 0, err
 	}
 	defer func() { _ = arm.Close() }()
+	test, err := tx.PrepareContext(ctx, `INSERT INTO test_runs (ts, session_key, cmd_hash, exit_code) VALUES (?,?,?,?)`)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = test.Close() }()
 	n := 0
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
@@ -139,6 +153,13 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 		if e.Kind == KindArmOn || e.Kind == KindArmOff {
 			// The first record for a session and optimizer wins, so an arm never changes.
 			if _, err := arm.ExecContext(ctx, e.Key, e.Hook, strings.TrimPrefix(e.Kind, "arm_"), e.T); err != nil {
+				return 0, err
+			}
+			n++
+			continue
+		}
+		if e.Kind == KindTestRun {
+			if _, err := test.ExecContext(ctx, e.T, e.Key, e.Hook, e.Exit); err != nil {
 				return 0, err
 			}
 			n++
@@ -157,7 +178,7 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 
 func validKind(k string) bool {
 	switch k {
-	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindArmOn, KindArmOff:
+	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindArmOn, KindArmOff, KindTestRun:
 		return true
 	}
 	return false

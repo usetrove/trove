@@ -43,6 +43,30 @@ func (f *fx) history(n int, w1h int64) {
 	f.env.DB = db.DB
 }
 
+// The tool-search fix points at the verified per-server alternative, so a user
+// who turned deferral off for one server keeps it upfront without loading every
+// other server's tools too.
+func TestToolSearchFixAdvisesPerServerAlwaysLoad(t *testing.T) {
+	f := newFx(t)
+	f.writeUser(`{"env":{"ENABLE_TOOL_SEARCH":"false"}}`)
+	fixes := f.detect(SettingsCheck)
+	if len(fixes) != 1 {
+		t.Fatalf("want 1 fix, got %d", len(fixes))
+	}
+	notes := strings.Join(fixes[0].Notes, "\n")
+	for _, want := range []string{`"alwaysLoad": true`, ".mcp.json", "code.claude.com/docs/en/mcp"} {
+		if !strings.Contains(notes, want) {
+			t.Errorf("notes lack %q:\n%s", want, notes)
+		}
+	}
+	f.writeUser(`{"env":{"DISABLE_PROMPT_CACHING":"1"}}`)
+	for _, x := range f.detect(SettingsCheck) {
+		if strings.Contains(strings.Join(x.Notes, "\n"), "alwaysLoad") {
+			t.Errorf("alwaysLoad advice on an unrelated fix: %s", x.ID)
+		}
+	}
+}
+
 func TestSettingsCheckFlagsSettingsThatTurnCachingOffAndRemovesOnlyThem(t *testing.T) {
 	f := newFx(t)
 	user := f.writeUser("{\n  \"theme\": \"dark\",\n  \"env\": {\n    \"KEEP\": \"1\",\n    \"DISABLE_PROMPT_CACHING\": \"1\"\n  }\n}\n")

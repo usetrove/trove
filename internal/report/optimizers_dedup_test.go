@@ -84,7 +84,57 @@ func TestReportLeavesOutInflightDedupWhenItIsOffAndHasNothing(t *testing.T) {
 	}
 }
 
-const shadowCap = `{"label":"estimated","optimizers":{"spend_cap":{"tokens":4020,"usd":0.50}}}`
+// Plan item 4.4: sharing a call is built only if shadow shows more than 1% of gateway spend. The row
+// states the share, labeled estimated, and which side of that bar it is on.
+func TestReportStatesInflightDedupShareAgainstTheOnePercentBar(t *testing.T) {
+	cases := []struct {
+		name      string
+		flagged   int
+		total     int
+		wantPct   float64
+		wantAbove bool
+	}{
+		{"well above", 25, 40, 31.25, true},  // $12.50 of $40
+		{"below", 1, 200, 0.25, false},       // $0.50 of $200
+		{"exactly 1% is not above", 2, 100, 1, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db := openDB(t)
+			installedDaysAgo(t, db, 30)
+			for i := 0; i < tc.total; i++ {
+				r := req{ts: now.Add(-time.Duration(i+1) * time.Minute * 10), session: fmt.Sprintf("s%03d", i), agent: "claude_code", model: "claude-a", cost: 1.0}
+				if i < tc.flagged {
+					r.shadow = shadowInflight
+				}
+				addReq(t, db, r)
+			}
+			cfg := config.Default()
+			cfg.Optimizers[config.OptimizerInflightDedup] = "shadow"
+			r, err := Build(context.Background(), db, Inputs{Config: cfg, Now: now}, mustPeriod(t, Month))
+			if err != nil {
+				t.Fatal(err)
+			}
+			row := dedupRow(r)
+			if row == nil || row.SpendShare == nil {
+				t.Fatalf("no share of spend on the row: %+v", row)
+			}
+			if row.SpendShare.Label != "estimated" {
+				t.Errorf("label %q, want estimated", row.SpendShare.Label)
+			}
+			if d := row.SpendShare.Value - tc.wantPct; d > 0.01 || d < -0.01 {
+				t.Errorf("share %.4f%%, want %.2f%%", row.SpendShare.Value, tc.wantPct)
+			}
+			above := strings.Contains(row.Note, "above the 1% bar")
+			below := strings.Contains(row.Note, "below the 1% bar")
+			if above != tc.wantAbove || below == tc.wantAbove {
+				t.Errorf("note %q; want above=%v", row.Note, tc.wantAbove)
+			}
+		})
+	}
+}
+
+const shadowCap =`{"label":"estimated","optimizers":{"spend_cap":{"tokens":4020,"usd":0.50}}}`
 
 func gatewayRow(r Report, name string) *OptimizerRow {
 	for i := range r.Optimizers.Rows {

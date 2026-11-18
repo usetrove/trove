@@ -122,7 +122,13 @@ but not restricted to Anthropic or OpenAI hosts, because custom enterprise endpo
 4. The key is forwarded to the configured upstream only, in the original request.
 5. Logs go through a redacting handler; the error text returned to the client is redacted before it is cut;
    panics are formatted through the same redaction.
-6. `TestNoCredentialOrPromptReachesLogsResponsesOrDisk` plants keys and prompt text and scans logs, responses
+6. Keep-warm exception (only with `keep_warm` on; CLAUDE.md rules 1(d), 2 and 7, docs/decisions/keep-warm.md): the
+   gateway keeps the credential headers and the last request body of one idle API-key session in process memory
+   after the request ends, for at most `keep_warm_max_pings` pings of about 4.5 minutes each (up to about 30
+   minutes), and sends them only to the same configured upstream with no redirects. The held slot formats and
+   logs as `[redacted keep-warm session]`, and every reference is dropped after the last ping, on a failed ping, at
+   the daily cap, on the guardrail, when the behavior is turned off and on shutdown.
+7. `TestNoCredentialOrPromptReachesLogsResponsesOrDisk` plants keys and prompt text and scans logs, responses
    and every byte of every file in the data dir after success, stream, upstream error, upstream down,
    rejection and oversize-body paths. It was checked to fail when a key is written to a column.
 
@@ -135,6 +141,11 @@ but not restricted to Anthropic or OpenAI hosts, because custom enterprise endpo
   health counters. Accepted for a single-user tool.
 - **R3. The npm wrapper does not verify the release signature.** `install.sh` does when cosign is present (finding F-15, partly closed); the npm wrapper checks the checksum only. Open.
 - **R4. A dormant `oauth2` dependency is linked in.** Open, low (finding F-16).
+- **R6. Keep-warm widens how long a key sits in memory.** With `keep_warm` on, a key stays in the gateway's memory
+  for up to about 30 minutes after its request instead of the request's length, and a crash dump or a process able
+  to read the gateway's memory (A1, which runs as the same user and can usually read the key where the agent keeps
+  it anyway) could find it. Go may leave copies until they are overwritten. Accepted with the feature's opt-in and
+  limits (docs/decisions/keep-warm.md, 2026-11-17).
 - **R5. A process with the user's privileges can do anything**, including editing `mcp_trust.json`. Out of scope;
   the TTY requirement on `trove mcp trust` only stops an agent from approving through its own shell
   *input*, not a process that edits the file directly.

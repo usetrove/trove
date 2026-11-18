@@ -48,7 +48,11 @@ type costlySetting struct {
 
 const (
 	noCacheWhy = "This turns prompt caching off. Cache reads cost 0.1x the normal input price (less on some newer models), so without it every request pays the full price for the same prompt again. You may have set it on purpose; if not, deleting it puts Claude Code back on its default."
-	ttl1hWhy   = "This asks Claude Code to write cache entries with a one-hour lifetime, which the API bills at 2x the base input price (a five-minute write is 1.25x). It only pays off if you come back to the same session between five minutes and an hour later. Deleting it puts Claude Code back on its default for your login."
+	// alwaysLoadNote: verified on code.claude.com/docs/en/mcp ("Exempt a server
+	// from deferral") on 2026-11-17. The field is accepted on every server type
+	// and makes startup wait for that server's tools (5-second connect cap).
+	alwaysLoadNote = "If you turned tool search off so one server's tools are always present, keep that server upfront instead: set `\"alwaysLoad\": true` in its entry in .mcp.json (or wherever the server is configured). Every other server stays deferred. Startup then waits up to 5 seconds for that server. Source: code.claude.com/docs/en/mcp, \"Exempt a server from deferral\"."
+	ttl1hWhy       = "This asks Claude Code to write cache entries with a one-hour lifetime, which the API bills at 2x the base input price (a five-minute write is 1.25x). It only pays off if you come back to the same session between five minutes and an hour later. Deleting it puts Claude Code back on its default for your login."
 )
 
 var costlySettings = []costlySetting{
@@ -109,6 +113,9 @@ func detectSettingsCheck(ctx context.Context, e *Env) ([]*Fix, error) {
 			if !has || val != c.badVal {
 				continue
 			}
+			if kind := ttlKindOfKey(c.name); kind != "" && !c.inEnv && e.ttlFixInPlace(ctx, kind) {
+				continue // a cache lifetime fix set it from the history's evidence
+			}
 			if c.needs1h {
 				if !haveHistory {
 					written1h, haveHistory = e.cacheWrites1h(ctx), true
@@ -117,7 +124,19 @@ func detectSettingsCheck(ctx context.Context, e *Env) ([]*Fix, error) {
 					continue // nothing shows a one-hour write was paid for
 				}
 			}
-			out = append(out, e.settingsCheckFix(c, p, raw, written1h))
+			f := e.settingsCheckFix(c, p, raw, written1h)
+			if c.key == "toolsearch" {
+				f.Notes = append(f.Notes, alwaysLoadNote)
+				// What deferral would stop re-sending; no saving is claimed, since a
+				// deferred tool is still loaded when it is needed.
+				if s := e.schemaTokens(ctx); s.mcpTotal >= 0.5 {
+					s.setResent(f, int64(s.mcpTotal+0.5), "measured", "MCP tool definitions")
+				} else {
+					s.setRequests(f)
+					f.Notes = append(f.Notes, fmt.Sprintf(noGatewayNote, "your MCP tool definitions"))
+				}
+			}
+			out = append(out, f)
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].ID < out[j].ID })
@@ -137,7 +156,8 @@ func (e *Env) settingsCheckFix(c costlySetting, path string, raw []byte, written
 			"Deleting the setting is the whole change; nothing else in the file is touched. Undo with `trove undo`.",
 			"A setting in a higher-priority file, your shell, or your organization's managed settings can still apply; Trove cannot see those.",
 		},
-		old: raw,
+		old:           raw,
+		fixedOverhead: c.key == "toolsearch",
 	}
 	if c.needs1h {
 		f.Evidence = append(f.Evidence, fmt.Sprintf("%d tokens were written to the cache at the one-hour rate in your Claude Code history over the last %d days", written1h, e.Cfg.LookbackDays))

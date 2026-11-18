@@ -105,6 +105,8 @@ var needs = map[string]string{
 	config.OptimizerHookQuietCommands: CannotRewriteInput,
 	config.OptimizerNoiseNormalizer:   CannotRewriteOutput,
 	config.OptimizerOutputTrimmer:     CannotRewriteOutput,
+	config.OptimizerHookOutputDedup:   CannotRewriteOutput,
+	config.OptimizerHookReadOutline:   CannotRewriteOutput,
 }
 
 func cannot(in Session, what string) bool {

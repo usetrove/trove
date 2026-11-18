@@ -19,6 +19,7 @@ Your prompts, code, file paths and tool output are not written to the database.
 | Your agent's API request (including your API key, as your agent sent it) | The upstream in your config: `https://api.anthropic.com` and `https://api.openai.com` by default | Only while the gateway runs and your agent is pointed at it |
 | The anonymous summary shown by `trove contribute` (including a random install id) | `https://contribute.troverelay.com/v1/contribute` (the `[contribute] endpoint` in your config; you can change it) | Only after you run `trove contribute enable` and answer yes; at most once every 7 days, when you run `trove report` |
 | One request asking that same endpoint to delete what it holds under your install id (`DELETE <endpoint>/<install id>`, no body, credentials or cookies) | The same endpoint | Only when you run `trove contribute delete` |
+| Keep-warm pings: your session's last request again, with your API key, `max_tokens: 0` and no streaming | The same upstream your agent's request went to | Only when you turned `keep_warm` on (`keep_warm = "on"` under `[optimizers]` in `config.toml`), for API-key gateway traffic, at most `gateway.keep_warm_max_pings` times per idle session and `gateway.keep_warm_daily_cap_usd` per day. See [docs/keep-warm.md](docs/keep-warm.md) |
 
 Nothing else. Specifically, Trove does not send crash reports, version checks, or pricing lookups, and sends no
 usage data unless you turned on the summary above.
@@ -41,6 +42,13 @@ commands it starts (`claude mcp add`, `claude mcp remove`) and any command you a
   session id, encoding, content type and API version. [`withoutCredentials`;
   `TestWithoutCredentialsKeepsOnlyWhatLaterCodeNeeds`; `TestNoCredentialOrPromptReachesLogsResponsesOrDisk`
   scans logs, client responses and every byte of every data file]
+- **What keep-warm holds in memory.** With `keep_warm` on, the gateway keeps one idle session's last request
+  body and its credential headers in process memory until the session's last ping, never on disk, in logs or in
+  the database; with it off or in shadow it keeps neither. Each ping is recorded as an ordinary usage row
+  (counts and cost only). Go cannot reliably wipe memory, so the promise is that the data is never persisted and
+  every reference is dropped, not that it is zeroed. [`internal/gateway/keepwarm.go`;
+  `TestWarmSlotNeverPrintsTheKeyOrPrompt`; `TestKeepWarmOnPingsWithTheSameKeyEndpointAndPrompt`;
+  approved in [docs/decisions/keep-warm.md](docs/decisions/keep-warm.md)]
 - **Subscription or OAuth credentials.** Such requests are refused with HTTP 401 and never forwarded.
   Trove never opens `~/.claude.json`, `.credentials.json` or `auth.json` (Codex's login file). The OpenAI route
   accepts only `sk-` API keys and refuses ChatGPT and Codex logins and any unrecognised credential type.
@@ -67,7 +75,7 @@ All numbers, hashes, names and timings. "Kept" is how long Trove keeps it on its
 |---|---|---|
 | `requests` | One row per gateway request: time, hashed session key, agent label and version (derived, not the raw User-Agent), provider, model name, route, streamed or not, HTTP status, latency, token counts, cost, findings and shadow-savings counts, optimizer names applied, error class, the provider's usage object (numbers) | `retention_days` (default 90) |
 | `sessions` | Per-session totals of the above, hashed key | `retention_days` after the session ends |
-| `session_pins` | Which optimizers were on for a session (names and states) | `retention_days` |
+| `session_pins` | Which optimizers were on for a session (names and states), plus fixed confounder tag names (for example `brevity_rules`) when a known brevity rule block, skills listing or third-party tool was present at session start, and the cache lifetime (`5m` or `1h`) set for each cache marker; never the text | `retention_days` |
 | `external_tools` | Third-party tools you approved: name, pinned version, license, on/off, timestamps, IDs of config changes to undo on removal | removed by `trove external remove` |
 | `experiment_assignments` | Which arm ("on" or "off") a session was given for an optimizer in the A/B comparison: hashed session key, optimizer name, a hashed stratum label, position, time | `retention_days` |
 | `experiment_results` | A/B result numbers per optimizer: metric name, relative change, 95% range, session counts, measured/estimated label, status, a hash of the inputs | `retention_days` |
@@ -79,6 +87,7 @@ All numbers, hashes, names and timings. "Kept" is how long Trove keeps it on its
 | `session_features` | One row per finished session: hashed key, the repo hash, and counts and ratios derived from the session (files read and edited, repeated reads, scout calls, compactions, retries, tool results, duplicate-line, error and stack-trace shares). Numbers only; nothing from the content itself | `retention_days` |
 | `repo_tuning` | Per-repo tuned values for an optimizer: the repo **hash**, optimizer and parameter **names**, a number, whether it is suggested, applied or reverted, and the fetch-back share it was judged against. Stays on your device unless you opt in to `trove contribute` | until `trove tune reset` or uninstall |
 | `hook_events` | Counts from hooks: time, hashed session key, hook name, byte and token counts | `retention_days` |
+| `test_runs` | The test-pass signal: time, hashed session key, a hash of the allowlisted test command, and its exit code. Only commands that exactly match a test command in the project's `.trove/commands.toml` are recorded; the command text, its output and the folder are never stored | `retention_days` |
 | `adapter_events` | What a plugin for another harness (OpenCode) did, written by `trove engine serve`: time, **hashed** session key, harness name, a login label (`api_key`, `copilot` or `subscription_or_unknown`, which the plugin works out from non-secret fields; Trove never sees a credential), provider and model names (checked against a strict pattern, so free text is dropped), optimizer name and state, byte and token counts, and, for usage rows, the token counts and cost the harness itself reported | `retention_days` |
 | `fixes` | Fixes applied: change id, kind, agent, **hash** of the file path, estimated tokens and dollars | `retention_days` after the fix is undone; while it is in place it is current state |
 | `settings_profiles` | Settings profiles applied by `trove settings`: change id, task type (for example `quick-fix`), agent, the **names** of the settings changed (never their values), the agent version | `retention_days` after its fix is undone; kept while in place |
@@ -115,6 +124,10 @@ at most once a day, from whichever Trove process runs first (the gateway, a hook
 Trove also **reads**, without changing them, your agents' local session logs (`~/.claude/projects`,
 `~/.codex/sessions`) to estimate waste before you route traffic through the gateway. It keeps only the numbers
 described in `history_requests` above. Pass `--no-history` or set `history.enabled = false` to stop that.
+`trove fix` also reads the Bash commands in the current project's Claude Code history, in memory only, to find
+commands the agent keeps retyping (`retyped_command`). The text is never written to the database; only an applied
+fix's row in `fixes` (id, kind, a hash of the path) is stored, and the command goes into `.trove/commands.toml` only
+when you apply that fix.
 If you agree to Autopilot trials (`trove autopilot trials on`) and have no gateway, the plugin also reads that history when a session
 ends, for at most a fraction of a second and only while a trial is running, so it can compare sessions with and without the change.
 The same limits and the same `history.enabled = false` apply.

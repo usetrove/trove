@@ -1,0 +1,1 @@
+{"session_id":"{{SESSION}}","prompt_id":"{{PROMPT}}","cwd":"/home/u/proj","permission_mode":"default","hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{{READ_INPUT}},"tool_response":{"file":{"content":"{{CONTENT}}","filePath":"{{FILE}}","numLines":{{LINES}},"startLine":1,"totalLines":{{LINES}}},"type":"text"},"tool_use_id":"toolu_01ABE"}

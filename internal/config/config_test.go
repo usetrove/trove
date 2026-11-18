@@ -141,6 +141,9 @@ func TestLoad(t *testing.T) {
 		{name: "bad optimizer state", file: "[optimizers]\ntrim = \"maybe\"\n", wantErr: []string{"optimizers.trim", "\"off\", \"shadow\" or \"on\""}},
 		{name: "claude code cannot be custom", file: "[optimize]\ncustom_agents = [\"claude_code\"]\n", wantErr: []string{"claude_code", "manage their own prompts"}},
 		{name: "bad optimize budget", file: "[optimize]\nbudget_ms = 0\n", wantErr: []string{"optimize.budget_ms is 0"}},
+		{name: "bad cache ttl value", file: "[optimize.cache_ttl]\ntools = \"2h\"\n", wantErr: []string{"optimize.cache_ttl.tools", "\"5m\" or \"1h\""}},
+		{name: "cache ttl shorter before longer", file: "[optimize.cache_ttl]\ntools = \"5m\"\nsystem = \"1h\"\n", wantErr: []string{"optimize.cache_ttl", "longer lifetime must come before a shorter one"}},
+		{name: "cache ttl messages longer than system", file: "[optimize.cache_ttl]\nmessages = \"1h\"\n", wantErr: []string{"optimize.cache_ttl", "longer lifetime must come before a shorter one"}},
 		{name: "bad optimizer name", file: "[optimizers]\n\"Bad Name\" = \"on\"\n", wantErr: []string{"not a valid optimizer name"}},
 		{name: "http upstream rejected", file: "[upstreams]\nanthropic = \"http://example.com\"\n", wantErr: []string{"upstreams.anthropic", "https://"}},
 		{name: "upstream with path rejected", file: "[upstreams]\nopenai = \"https://api.openai.com/v1\"\n", wantErr: []string{"origin only"}},
@@ -210,5 +213,31 @@ func TestContributeEndpoint(t *testing.T) {
 		if p := ValidateEndpoint(ok); p != "" {
 			t.Errorf("%q should be accepted: %s", ok, p)
 		}
+	}
+}
+
+func TestCacheTTLOrdering(t *testing.T) {
+	tests := []struct {
+		ttl CacheTTL
+		ok  bool
+	}{
+		{CacheTTL{}, true},
+		{CacheTTL{Tools: "1h"}, true},
+		{CacheTTL{Tools: "1h", System: "1h"}, true},
+		{CacheTTL{Tools: "1h", System: "1h", Messages: "1h"}, true},
+		{CacheTTL{Tools: "1h", System: "5m", Messages: "5m"}, true},
+		{CacheTTL{System: "1h"}, false},                // tools (5m) before a 1h system marker
+		{CacheTTL{Tools: "1h", Messages: "1h"}, false}, // system (5m) before 1h messages
+		{CacheTTL{Messages: "1h"}, false},
+		{CacheTTL{Tools: "30m"}, false},
+		{CacheTTL{Tools: "1H"}, false},
+	}
+	for _, tt := range tests {
+		if err := tt.ttl.Check(); (err == nil) != tt.ok {
+			t.Errorf("%+v: err=%v, want ok=%v", tt.ttl, err, tt.ok)
+		}
+	}
+	if !(CacheTTL{}).IsDefault() || (CacheTTL{Tools: "1h"}).IsDefault() || !(CacheTTL{Tools: "5m"}).IsDefault() {
+		t.Error("IsDefault should hold exactly when every marker is 5 minutes")
 	}
 }

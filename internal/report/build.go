@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/usetrove/trove/internal/analyze"
@@ -16,6 +17,7 @@ import (
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/recommend"
 	"github.com/usetrove/trove/internal/store"
+	"github.com/usetrove/trove/internal/technique"
 )
 
 // Inputs are what Build needs besides the database.
@@ -67,6 +69,7 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	if err != nil {
 		return r, err
 	}
+	gatewaySpend, _, _ := sumTotals(byAgent) // before history is merged: in-flight dedup only sees gateway traffic
 	byAgent, byModel = hist.mergeSpend(byAgent, byModel)
 	r.Spend = Spend{ByAgent: byAgent, ByModel: byModel}
 	if r.Spend.ByKind, err = kindSpend(ctx, db, w); err != nil {
@@ -147,6 +150,9 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	}
 	r.Headline.Savings = sumSavings(savings)
 	r.Headline.MeasuredNote = measuredNote(savings)
+	if sv := r.Headline.Savings; sv.Value > 0 {
+		r.Headline.SavingsShare = &measure.Figure{Value: round6(percent(sv.Value, base+sv.Value)), Label: measure.Estimated, N: sv.N}
+	}
 
 	cats, err := measure.WasteByCategory(ctx, db, w)
 	if err != nil {
@@ -164,6 +170,7 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	if r.Optimizers, err = buildOptimizers(ctx, db, in, w, savings, offers); err != nil {
 		return r, err
 	}
+	gateInflightDedup(&r.Optimizers, gatewaySpend.Value)
 	r.Leaks = buildLeaks(cats, in.Config, offers, r.Optimizers.Baseline != nil)
 
 	r.Budget = pace
@@ -296,6 +303,7 @@ func round6(v float64) float64 { return math.Round(v*1e6) / 1e6 }
 // leakInfo is how each detector reads to a user and what to do about it.
 type leakInfo struct {
 	title     string
+	fixed     bool   // fixed overhead: re-sent on every request, fixable without a proxy
 	optimizer string // the optimizer that removes it, if any
 	advice    string // used when there is no optimizer command
 	command   string // used when there is no optimizer
@@ -305,9 +313,9 @@ var leakInfos = map[string]leakInfo{
 	analyze.DetDuplicate: {title: "Repeated tool results", optimizer: analyze.OptDedupe},
 	analyze.DetNoisy:     {title: "Noisy tool output", optimizer: analyze.OptNoise},
 	analyze.DetOversized: {title: "Oversized tool output", optimizer: analyze.OptTruncate},
-	analyze.DetUnusedTools: {title: "Tool definitions never used", optimizer: analyze.OptPrune,
+	analyze.DetUnusedTools: {title: "Tool definitions never used", optimizer: analyze.OptPrune, fixed: true,
 		advice: "Remove tool servers you do not use from your agent's configuration."},
-	analyze.DetContextFiles: {title: "Heavy context files",
+	analyze.DetContextFiles: {title: "Heavy context files", fixed: true,
 		advice: "Shorten the context files your agent loads every turn (for example CLAUDE.md or AGENTS.md)."},
 	analyze.DetExpensive: {title: "Large model on small tasks", command: "trove optimize suggest",
 		advice: "Use a smaller model for small tasks."},
@@ -341,13 +349,17 @@ func buildLeaks(cats []measure.WasteRow, cfg config.Config, offers []measure.Off
 		if !ok {
 			info = leakInfo{title: c.Category, advice: "Run `trove optimize suggest` for ideas."}
 		}
-		l := Leak{Category: c.Category, Title: info.title, USD: c.USD, Tokens: c.Tokens, Command: info.command, Advice: info.advice}
+		l := Leak{Category: c.Category, Title: info.title, USD: c.USD, Tokens: c.Tokens, Command: info.command, Advice: info.advice, FixedOverhead: info.fixed}
 		if info.optimizer != "" {
 			l.Command, l.Advice = optimizerAction(info, cfg, offer, baseline)
 		}
 		out = append(out, l)
 	}
+	// Fixed overhead first: it needs no proxy and works on subscriptions.
 	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].FixedOverhead != out[j].FixedOverhead {
+			return out[i].FixedOverhead
+		}
 		if out[i].USD.Value != out[j].USD.Value {
 			return out[i].USD.Value > out[j].USD.Value
 		}
@@ -457,9 +469,32 @@ func buildOptimizers(ctx context.Context, db *store.DB, in Inputs, w measure.Win
 			Reason: e.Reason, Cleared: e.ClearedAt != nil})
 	}
 	if len(out.Guardrails) == 0 && st.Phase == measure.PhaseActive {
-		out.Quality = "No regression detected locally. Trove checks retries, tool errors and re-fetches; it does not prove output quality."
+		checks, err := measure.Check(ctx, db, in.Config.Measure)
+		if err != nil {
+			return out, err
+		}
+		out.Quality = qualityLine(checks)
 	}
 	return out, nil
+}
+
+// qualityLine names the guardrail signals that had enough sessions to compare.
+// With none, it claims nothing.
+func qualityLine(checks []measure.OptimizerCheck) string {
+	var names []string
+	seen := map[string]bool{}
+	for _, c := range checks {
+		for _, s := range c.Checked() {
+			if !seen[s] {
+				seen[s] = true
+				names = append(names, s)
+			}
+		}
+	}
+	if len(names) == 0 {
+		return "No regression check yet: not enough finished sessions with an optimizer on to compare."
+	}
+	return "No regression detected locally in: " + strings.Join(names, ", ") + ". It does not prove output quality."
 }
 
 func measuredFrom(name string, c *measure.Corroboration) *Measured {
@@ -523,7 +558,33 @@ func FromRecommendation(rc recommend.Recommendation, defaultsRelease string) Rec
 	if rc.Evidence != recommend.EvidenceLocal {
 		r.DefaultsRelease = defaultsRelease
 	}
+	r.Class, r.Tier = recommendationClass(rc)
+	switch {
+	case rc.Label == "measured":
+		r.EvidenceLabel = "measured"
+	case rc.Label == "estimated" && rc.Evidence != recommend.EvidenceNone:
+		r.EvidenceLabel = "estimated"
+	default:
+		r.EvidenceLabel = "unmeasured"
+	}
 	return r
+}
+
+// recommendationClass says what kind of change a recommendation is and how much proof it needs. A tuning
+// value is named optimizer.param, and takes the class of its optimizer. A name the registry does not know
+// is read as a config change, T1, the safest honest reading.
+func recommendationClass(rc recommend.Recommendation) (class, tier string) {
+	name := rc.Name
+	switch rc.Kind {
+	case recommend.KindProfile:
+		name = "settings"
+	case recommend.KindTuning:
+		name, _, _ = strings.Cut(name, ".")
+	}
+	if c, t, ok := technique.ClassOf(name); ok {
+		return string(c), string(t)
+	}
+	return string(technique.ClassConfig), string(technique.T1)
 }
 
 func recommendationTitle(rc recommend.Recommendation) string {
@@ -545,6 +606,28 @@ func recommendationTitle(rc recommend.Recommendation) string {
 	return rc.Name
 }
 
+// InflightDedupBar is the share of gateway spend, in percent, that the in-flight dedup shadow estimate
+// must exceed before sharing a call is worth building (plan item 4.4, docs/decisions/inflight-dedup.md).
+const InflightDedupBar = 1.0
+
+// gateInflightDedup puts the in-flight dedup estimate against the build bar: its share of gateway spend,
+// and which side of the bar that falls. Without spend or an estimate there is no share to state.
+func gateInflightDedup(o *Optimizers, gatewaySpend float64) {
+	for i := range o.Rows {
+		row := &o.Rows[i]
+		if row.Name != config.OptimizerInflightDedup || row.WouldSave == nil || gatewaySpend <= 0 {
+			continue
+		}
+		pct := round6(percent(row.WouldSave.Value, gatewaySpend))
+		row.SpendShare = &measure.Figure{Value: pct, Label: measure.Estimated, N: row.WouldSave.N}
+		if pct > InflightDedupBar {
+			row.Note += fmt.Sprintf(". About %.2f%% of gateway spend, above the 1%% bar for building it; see docs/decisions/inflight-dedup.md", pct)
+		} else {
+			row.Note += fmt.Sprintf(". About %.2f%% of gateway spend, at or below the 1%% bar for building it, so it stays shadow only", pct)
+		}
+	}
+}
+
 // gatewayNote says, for a gateway behavior's row, what its figure is and that it changes nothing.
 func gatewayNote(name string) string {
 	switch name {
@@ -552,6 +635,8 @@ func gatewayNote(name string) string {
 		return "estimate only: counts identical requests that arrived while one was still waiting for the provider. Sharing the call is not built, so nothing is changed"
 	case config.OptimizerSpendCap:
 		return "estimate only: spending past your budget cap that a hard cap would have stopped. Pausing at the cap is not built, so no request was refused"
+	case config.OptimizerKeepWarm:
+		return "estimated: what keeping idle sessions' cache warm would have saved, net of the pings; negative when the pings would have been wasted"
 	}
 	return ""
 }

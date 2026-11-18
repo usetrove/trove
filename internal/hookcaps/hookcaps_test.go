@@ -48,9 +48,13 @@ func TestSupportsNeedsAProbeThatSawItWork(t *testing.T) {
 		{Agent: "claude", Tool: "Grep", OutputRewrite: Yes, Method: "docs"},      // docs alone never counts for Claude Code
 		{Agent: "claude", Tool: "Glob", OutputRewrite: No, Method: "live"},       // seen NOT to work
 		{Agent: "claude", Tool: "Edit", OutputRewrite: Untested, Method: "live"}, // not tested
-		{Agent: "codex", Tool: "Bash", InputRewrite: Yes, Method: "docs"},        // docs count for Codex input only
-		{Agent: "codex", Tool: "Read", InputRewrite: Yes, Method: "docs"},        // ...and this is input, so it counts too
-		{Agent: "codex", Tool: "Grep", OutputRewrite: Yes, Method: "docs"},       // but not for output
+		{Agent: "codex", Tool: "Bash", InputRewrite: Yes, Method: "docs"},        // docs alone no longer count for Codex either
+		{Agent: "codex", Tool: "Grep", OutputRewrite: Yes, Method: "docs"},       // nor for output
+		{Agent: "codex", Tool: "Read", InputRewrite: Yes, Method: "session"},     // a verified session does
+		{Agent: "cursor", Tool: "Bash", InputRewrite: Yes, Method: "docs"},       // docs never count for Cursor
+		{Agent: "cursor", Tool: "Read", InputRewrite: Yes, Method: "live"},       // a live probe does
+		{Agent: "gemini", Tool: "Bash", OutputRewrite: Yes, Method: "docs"},      // docs never count for Gemini CLI
+		{Agent: "gemini", Tool: "Grep", OutputRewrite: Yes, Method: "session"},   // a verified session does
 	}}
 	cases := []struct {
 		agent, tool, kind string
@@ -60,7 +64,9 @@ func TestSupportsNeedsAProbeThatSawItWork(t *testing.T) {
 		{"claude", "Read", RewriteInput, true}, {"claude", "Read", RewriteOutput, false},
 		{"claude", "Grep", RewriteOutput, false}, {"claude", "Glob", RewriteOutput, false},
 		{"claude", "Edit", RewriteOutput, false}, {"claude", "NotAProbedTool", RewriteInput, false},
-		{"codex", "Bash", RewriteInput, true}, {"codex", "Grep", RewriteOutput, false},
+		{"codex", "Bash", RewriteInput, false}, {"codex", "Grep", RewriteOutput, false}, {"codex", "Read", RewriteInput, true},
+		{"cursor", "Bash", RewriteInput, false}, {"cursor", "Read", RewriteInput, true},
+		{"gemini", "Bash", RewriteOutput, false}, {"gemini", "Grep", RewriteOutput, true},
 		{"someone-else", "Bash", RewriteInput, false}, {"claude", "Bash", "sideways", false},
 	}
 	for _, x := range cases {
@@ -73,10 +79,10 @@ func TestSupportsNeedsAProbeThatSawItWork(t *testing.T) {
 func TestSupportsAnyAsksWhetherAnyProbedAgentCanDoIt(t *testing.T) {
 	c := Capabilities{V: Version, Entries: []Capability{
 		{Agent: "claude", Tool: "Bash", OutputRewrite: No, Method: "live"},
-		{Agent: "codex", Tool: "Bash", InputRewrite: Yes, Method: "docs"},
+		{Agent: "codex", Tool: "Bash", InputRewrite: Yes, Method: "live"},
 	}}
 	if !c.SupportsAny("Bash", RewriteInput) {
-		t.Error("codex can rewrite Bash input, so some agent can")
+		t.Error("codex was probed rewriting Bash input, so some agent can")
 	}
 	if c.SupportsAny("Bash", RewriteOutput) {
 		t.Error("no agent can rewrite Bash output")

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/store"
+	"github.com/usetrove/trove/internal/tasks"
 	"github.com/usetrove/trove/internal/tuning"
 )
 
@@ -47,14 +49,59 @@ func (h *handler) preTool(in Input, key string) ([]byte, error) {
 
 // postRead is post_tool_read_record. PostToolUse only fires for a Read that
 // succeeded, so a denied or failed read is never taken for one that happened.
-func (h *handler) postRead(in Input, key string) error {
+// When hook_read_outline is on and shortened the file, it replaces what the
+// model sees with updatedToolOutput, changing only tool_response.file.content.
+// Every other optimizer's result on a Read is recorded, never sent.
+func (h *handler) postRead(in Input, key string) ([]byte, error) {
 	if in.ToolName != "Read" {
-		return nil
+		return nil, nil
 	}
 	h.featRead(in, key)
 	st := h.session(key, in)
-	_, reps := h.engine().TransformToolOutput(context.Background(), toolCall(in), ToolOutputOf(in), h.sess(key, st, in.ToolName))
-	return failure(reps)
+	ol := st.Pins[config.OptimizerHookReadOutline]
+	h.recover = h.snap.TroveRun && ol != "" && ol != stateOff
+	sess := h.sess(key, st, in.ToolName)
+	res, reps := h.engine().TransformToolOutput(context.Background(), toolCall(in), ToolOutputOf(in), sess)
+	if err := failure(reps); err != nil {
+		return nil, err
+	}
+	applied := false
+	for _, r := range reps {
+		if r.Name != config.OptimizerHookReadOutline {
+			continue
+		}
+		if r.Decision != nil {
+			if err := h.emit(key, r.Name, r.Decision.Kind, 0, 0); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if !r.Changed {
+			continue
+		}
+		kind := optimize.KindWouldRewrite
+		if r.State == stateOn {
+			kind, applied = optimize.KindRewritten, true
+		}
+		if err := h.emit(key, r.Name, kind, int64(r.BytesRemoved), r.TokensRemoved); err != nil {
+			return nil, err
+		}
+	}
+	if !applied || len(res.Parts) != 1 {
+		return nil, nil
+	}
+	ids := optimize.OutlineIDs(res.Parts[0].Text)
+	updated, ok := withReadContent(in.ToolResponse, res.Parts[0].Text)
+	if !ok || len(ids) != 1 {
+		return nil, nil
+	}
+	// Remember the outline only once it is sent, so a later full read or fetch is
+	// counted against an outline the agent actually saw.
+	optimize.MarkOutlined(sess.Ledger, in.ToolInput.FilePath, ids[0], sess.Ledger.Prompts(), h.now().Unix())
+	if err := sess.Ledger.Save(); err != nil {
+		return nil, err
+	}
+	return updatedOutputJSON(updated), nil
 }
 
 // reset is session_reset, registered for SessionStart and PreCompact. A session's
@@ -62,7 +109,10 @@ func (h *handler) postRead(in Input, key string) error {
 // from the next session on. After a compaction or a resume the earlier reads are
 // no longer in the agent's context, so the ledger is cleared: a block then would
 // leave the agent without the file.
-func (h *handler) reset(in Input, key string) error {
+//
+// In the "on" arm of a rule-set trial it returns the rule set's text as SessionStart additionalContext, at
+// startup and again after a resume, /clear or compaction, so the rules stay in the session's context.
+func (h *handler) reset(in Input, key string) ([]byte, error) {
 	if in.Event == "PreCompact" || in.Event == "PostCompact" {
 		h.feat(key, "X")
 	}
@@ -70,6 +120,9 @@ func (h *handler) reset(in Input, key string) error {
 	if len(st.Pins) == 0 {
 		for _, n := range OptimizerNames {
 			st.do(op{T: "pin", N: n, V: h.snap.Pin(n)})
+		}
+		if v := h.snap.pinRatio(in.Model); v != "" {
+			st.do(op{T: "pin", N: ratioPin, V: v})
 		}
 		// An optimizer on trial is on for about half of sessions. The arm is a hash of the session key, so
 		// it needs no database at the start of a session, and it is recorded in the spool so the comparison
@@ -80,6 +133,29 @@ func (h *handler) reset(in Input, key string) error {
 				st.do(op{T: "pin", N: n, V: h.snap.lowered(n, stateOn)})
 				_ = h.emit(key, n, KindArmOn, 0, 0)
 			} else {
+				_ = h.emit(key, n, KindArmOff, 0, 0)
+			}
+		}
+		// A rule-set trial the user started is split the same way, for Claude Code only: the other agents'
+		// SessionStart replies are not translated to carry context.
+		if h.ruleTrialAgent() {
+			for _, n := range h.snap.RuleTrial {
+				if measure.Arm(key, n) == config.StateOn {
+					st.do(op{T: "pin", N: n, V: stateOn})
+					_ = h.emit(key, n, KindArmOn, 0, 0)
+				} else {
+					st.do(op{T: "pin", N: n, V: stateOff})
+					_ = h.emit(key, n, KindArmOff, 0, 0)
+				}
+			}
+		}
+		// An installed scout or cascade is split the same way, so it is judged by a session-level A/B.
+		for _, n := range h.snap.TaskTrial {
+			if measure.Arm(key, n) == config.StateOn {
+				st.do(op{T: "pin", N: n, V: stateOn})
+				_ = h.emit(key, n, KindArmOn, 0, 0)
+			} else {
+				st.do(op{T: "pin", N: n, V: stateOff})
 				_ = h.emit(key, n, KindArmOff, 0, 0)
 			}
 		}
@@ -95,7 +171,59 @@ func (h *handler) reset(in Input, key string) error {
 	if in.Event == "PreCompact" || in.Event == "PostCompact" || (in.Event == "SessionStart" && in.Source != "" && in.Source != "startup") {
 		st.do(op{T: "clear"})
 	}
-	return st.save(h.dir, key)
+	if err := st.save(h.dir, key); err != nil {
+		return nil, err
+	}
+	if in.Event != "SessionStart" || !h.ruleTrialAgent() {
+		return nil, nil
+	}
+	return ruleTrialContext(st.Pins), nil
+}
+
+func (h *handler) ruleTrialAgent() bool { return h.agent == "" || h.agent == AgentClaude }
+
+// ruleTrialContext is the SessionStart reply that adds the rules of every rule-set trial this session is in the
+// "on" arm of, or nil. The pin decides, so a session keeps its arm when the trial ends mid-way (rule 5). A tool
+// Trove does not ship, or any error, adds nothing (rule 4).
+func ruleTrialContext(pins map[string]string) []byte {
+	var names []string
+	for n, v := range pins {
+		if config.IsRuleTrial(n) && v == stateOn {
+			names = append(names, n)
+		}
+	}
+	sort.Strings(names)
+	var texts []string
+	for _, n := range names {
+		if m, ok := external.BuiltinRules(strings.TrimPrefix(n, external.Prefix)); ok {
+			texts = append(texts, m)
+		}
+	}
+	if len(texts) == 0 {
+		return nil
+	}
+	return sessionContextJSON(strings.Join(texts, "\n\n"))
+}
+
+// subagent is pre_tool_subagent. In the "off" arm of a scout trial it declines a call to the scout subagent, so
+// the session is a true control. Everything else, an unpinned session, a rolled-back scout and any error go
+// through (rule 4). Cascade is started by the user from a slash command, so its off arm is only recorded.
+func (h *handler) subagent(in Input, key string) ([]byte, error) {
+	if in.ToolName != "Agent" && in.ToolName != "Task" {
+		return nil, nil
+	}
+	if in.ToolInput.SubagentType != tasks.ScoutName {
+		return nil, nil
+	}
+	if loadSession(h.dir, key).Pins[tasks.FeatureScout] != stateOff {
+		return nil, nil
+	}
+	for _, n := range h.snap.RolledBack {
+		if n == tasks.FeatureScout {
+			return nil, nil
+		}
+	}
+	return denyJSON("Trove is comparing sessions with and without the scout helper, and this session is one of the ones without it. Please do this work directly instead."), nil
 }
 
 // largeOutput is pre_tool_large_output: for a known-noisy shell command the
@@ -127,7 +255,8 @@ func (h *handler) postOutput(in Input, key string) ([]byte, error) {
 	// The trimmer needs the recovery store, and the store is only useful when the
 	// agent can fetch the text back, so ask for it only then.
 	pinned := st.Pins[config.OptimizerOutputTrimmer]
-	h.recover = in.ToolName == "Bash" && h.snap.TroveRun && pinned != "" && pinned != stateOff
+	dedup := st.Pins[config.OptimizerHookOutputDedup]
+	h.recover = h.snap.TroveRun && ((in.ToolName == "Bash" && pinned != "" && pinned != stateOff) || (dedup != "" && dedup != stateOff))
 	res, reps := h.engine().TransformToolOutput(context.Background(), toolCall(in), outputForEngine(texts), h.sess(key, st, in.ToolName))
 	if err := failure(reps); err != nil {
 		return nil, err
@@ -156,12 +285,16 @@ func (h *handler) postOutput(in Input, key string) ([]byte, error) {
 	if !ok {
 		return nil, nil
 	}
-	// Remember which outputs were trimmed, so a later fetch-back is attributed to
-	// the trimmer and not to trove_run, whose output is fetched the same way.
+	// Remember which outputs were trimmed or collapsed, so a later fetch-back is
+	// attributed to the optimizer that shortened them and not to trove_run, whose
+	// output is fetched the same way.
 	sess := h.sess(key, st, in.ToolName)
 	for _, t := range out {
 		for _, id := range optimize.TrimmedIDs(t) {
 			sess.Ledger.Put(optimize.TrimmedKey(id), optimize.ReadEntry{Prompt: sess.Ledger.Prompts(), At: h.now().Unix()})
+		}
+		for _, id := range optimize.DedupIDs(t) {
+			sess.Ledger.Put(optimize.DedupKey(id), optimize.ReadEntry{Prompt: sess.Ledger.Prompts(), At: h.now().Unix()})
 		}
 	}
 	if err := sess.Ledger.Save(); err != nil {
@@ -189,16 +322,40 @@ func (h *handler) postFetch(in Input, key string) error {
 	}
 	st := h.session(key, in)
 	sess := h.sess(key, st, in.ToolName)
-	ent, ok := sess.Ledger.Get(optimize.TrimmedKey(a.ID))
-	if !ok || ent.BlockedSum != "" {
-		return nil // not ours, or already counted
+	// The same output can be both trimmed once and collapsed later; each optimizer
+	// that shortened it is charged one fetch-back.
+	owners := []struct{ key, optimizer string }{
+		{optimize.TrimmedKey(a.ID), config.OptimizerOutputTrimmer},
+		{optimize.DedupKey(a.ID), config.OptimizerHookOutputDedup},
 	}
-	ent.BlockedSum = "counted"
-	sess.Ledger.Put(optimize.TrimmedKey(a.ID), ent)
+	var charged []string
+	for _, o := range owners {
+		ent, ok := sess.Ledger.Get(o.key)
+		if !ok || ent.BlockedSum != "" {
+			continue // not this optimizer's, or already counted
+		}
+		ent.BlockedSum = "counted"
+		sess.Ledger.Put(o.key, ent)
+		charged = append(charged, o.optimizer)
+	}
+	// Fetching an outlined file whole is an extra read for hook_read_outline,
+	// counted once with any full re-read of the same file.
+	outlineFetched := optimize.CountOutlineFetch(sess.Ledger, a.ID)
+	if len(charged) == 0 && !outlineFetched {
+		return nil
+	}
 	if err := sess.Ledger.Save(); err != nil {
 		return err
 	}
-	return h.emit(key, config.OptimizerOutputTrimmer, KindFetchedBack, 0, 0)
+	for _, name := range charged {
+		if err := h.emit(key, name, KindFetchedBack, 0, 0); err != nil {
+			return err
+		}
+	}
+	if outlineFetched {
+		return h.emit(key, config.OptimizerHookReadOutline, KindExtraRead, 0, 0)
+	}
+	return nil
 }
 
 // runTool is trove_run as the agent names it (server "trove").
@@ -295,6 +452,19 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	// the rest of the bookkeeping.
 	_, _ = tuning.Review(ctx, db, cfg.Measure, now)
 	snap := BuildSnapshot(cfg, rolled, install.Registered(dir), now)
+	// Learn bytes per token from the agent's own history. Best effort: without it estimates keep the default.
+	if ratios, err := measure.LearnBytesPerToken(ctx, db, now); err == nil && len(ratios) > 0 {
+		snap.BytesPerToken = ratios
+	}
+	if cfg.Experiment.Enabled {
+		if feats, _, err := installedTasks(ctx, db); err == nil {
+			snap.TaskTrial = feats
+		}
+		// A damaged autopilot.json starts no trial (rule 4).
+		if f, err := config.LoadAutopilot(dir); err == nil {
+			snap.RuleTrial = f.RuleTrials()
+		}
+	}
 	if applied, err := tuning.Applied(ctx, db); err == nil && len(applied) > 0 {
 		if salt, err := db.Features().Salt(ctx); err == nil {
 			snap.RepoSalt, snap.Tuning = salt, applied

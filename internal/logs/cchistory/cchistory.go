@@ -186,6 +186,22 @@ type block struct {
 	ToolUseID string          `json:"tool_use_id"`
 	IsError   bool            `json:"is_error"`
 	Content   json.RawMessage `json:"content"`
+	Input     json.RawMessage `json:"input"`
+}
+
+// bashCommand returns a Bash tool_use's command, or "" when there is none or it
+// is longer than logs.MaxCommandBytes.
+func bashCommand(b block) string {
+	if b.Name != "Bash" || len(b.Input) == 0 {
+		return ""
+	}
+	var in struct {
+		Command string `json:"command"`
+	}
+	if json.Unmarshal(b.Input, &in) != nil || len(in.Command) > logs.MaxCommandBytes {
+		return ""
+	}
+	return in.Command
 }
 
 // pending is an event being assembled, with where it started in the file so a
@@ -397,7 +413,7 @@ func (s *Source) assistant(ps *pass, l *line, start, lineNo int64, st *logs.Stat
 				ps.byTool[b.ID] = &toolRef{p: p, idx: len(p.ev.Tools)}
 				p.open++
 			}
-			p.ev.Tools = append(p.ev.Tools, logs.ToolCall{Name: b.Name})
+			p.ev.Tools = append(p.ev.Tools, logs.ToolCall{Name: b.Name, Command: bashCommand(b)})
 		}
 	}
 }

@@ -45,7 +45,8 @@ Fixed, because order changes bytes:
 | 2 | `noise_normalizer` | lossless | tool results |
 | 3 | `output_trimmer` | recoverable | tool results (**shadow until `trove mcp install`**) |
 | 4 | `duplicate_result_collapser` | lossless | tool results |
-| 5 | `cache_breakpoints` | lossless | custom agents only |
+| 5 | `verbosity_steer` | behavior (T2) | every Anthropic Messages request |
+| 6 | `cache_breakpoints` | lossless | custom agents only |
 
 The system prompt is rearranged first, tool output is cleaned before duplicates
 are compared (so two results that differ only in ANSI codes still match), and the
@@ -98,10 +99,60 @@ such as `noise_normalizer` has cleaned the text the model sees, the stored copy 
 marker's hash still name the raw output. If the output cannot be saved, the request is
 forwarded unchanged.
 
+Application logs are trimmed too: plain-text logs with a level word (`INFO`, `WARN`,
+`ERROR`, ...), logfmt `level=` lines, HTTP access lines and JSON-lines logs (one object
+per line with a `level`, `severity` or `lvl` field), when such records make up at least
+half of the unindented lines. In a log the trimmer keeps every line that reports a problem
+(any line mentioning an error, warning, failure, exception, panic or fatal, case-insensitive,
+including JSON records such as `"level":"error"`) with its context and stack trace, every
+outlier (a line whose template, with numbers, hex ids and colors masked out, occurs at most
+twice in the output), every line over 4,000 bytes, and the first and last lines. The routine,
+repeated records are what goes. A large pretty-printed JSON document is not a log and is left
+alone. The per-optimizer checker (`internal/stress/checker.go`) plays an incident log and a
+JSON-lines log and fails unless every error line stays visible and every trim marker names
+an output the recovery store holds byte for byte.
+
 The trimmer can be `on` only when the MCP server is registered with an agent
 (`trove mcp install`; see `docs/mcp.md`). Until then `on` runs as `shadow`, which
 only estimates. Like every optimizer it is pinned per session, so registering the
 server or changing the setting applies from the next session.
+
+**`verbosity_steer`** (T2, off by default) appends one short, fixed note asking for
+shorter replies at the very end of the system prompt: a new last block of an array system
+prompt, two newlines and the note at the end of a string one, or a `system` field when there
+is none. Every byte the agent sent stays where it was, the agent's own cache markers keep
+covering the same text, and because the note is constant for the session, each request is
+the previous one's prefix plus new messages (Anthropic builds the cache prefix from tools,
+then system, then messages; checked 2026-11-17 on
+platform.claude.com/docs/en/build-with-claude/prompt-caching). `optimize.verbosity` picks the
+note, `concise` (default) or `terse`, and is pinned per session. Each request is charged the
+note's estimated tokens (at most about 85). Nothing is removed, so shadow mode reports only
+that cost: whether it saves anything is decided by the session A/B on output tokens, cost per
+turn, test failures and turns. It holds the same brevity slot as `terse-rules`, `ponytail`
+and `caveman`: enabling one of those is refused while it is on, and a session that starts
+with one of them on gets no note. OpenAI requests are not changed, because OpenAI's docs do
+not say where top-level `instructions` sits in the cached prefix.
+
+**Learning the level.** `trove optimize verbosity` learns `optimize.verbosity` from the last
+30 days (`--days`) of recorded gateway sessions. It reads metadata only: no prompt or reply
+text is used. A *long reply* is one with 200 or more output tokens, or one the client cut off.
+A long reply counts as *cut short* in either of two cases:
+
+- **Interrupted:** a streamed request recorded as `client_disconnected` with output.
+- **Fast follow-up:** the next request on the same model in that session starts within 15 s
+  of the reply ending (start plus latency) and adds history but no tool-result tokens. A user
+  message adds history only, while the agent's own tool loop adds tool results, so this
+  separates the two. It is a heuristic, so the count is labeled estimated.
+
+If at least 15% of long replies were cut short, the level is `terse`. Otherwise it is
+`concise`. With fewer than 10 sessions or 50 long replies, no level is chosen and nothing
+changes.
+
+The command is a dry run by default. It prints the current and learned level, the counts,
+the rate and the thresholds (`--json` gives the same). `--apply` writes the learned level as
+`verbosity = "<level>" # learned by trove optimize verbosity`. It takes effect for new
+sessions; running sessions keep their pinned level. A non-default level without that mark
+counts as set by hand, and `--apply` refuses to replace it unless you add `--force`.
 
 ### Marking a custom agent
 
@@ -112,6 +163,38 @@ budget_ms = 25
 ```
 
 Labels come from `gateway/agent`. `claude_code` and `codex` cannot be listed.
+
+### Cache lifetime per marker (custom agents)
+
+`cache_breakpoints` adds up to three markers, in prompt order: the last tool
+definition, the last stable system block, and a top-level marker that covers the
+messages. Each can live 5 minutes (the default) or 1 hour:
+
+```toml
+[optimize.cache_ttl]
+tools = "1h"      # "5m" or "1h"
+system = "1h"
+messages = "5m"
+```
+
+A longer lifetime must come before a shorter one, so the values may only shorten
+from tools to system to messages. Trove refuses any other order: config
+validation reports it as an error that names the key to change, and a session pinned with an invalid order forwards the
+request untouched. A 1-hour write costs 2x the base input price, against 1.25x
+for 5 minutes, so it only pays off when the same prefix is reused between 5 and
+60 minutes later. The 5-minute marker keeps the exact bytes Trove sent before
+this setting existed. Like every setting, the lifetimes are pinned when a session
+starts, so a change applies from the next session and the cached prefix stays
+byte-identical. Requests that already carry any `cache_control` are still never
+touched.
+
+Verified 2026-11-17 on
+https://platform.claude.com/docs/en/build-with-claude/prompt-caching: the
+`{"type":"ephemeral","ttl":"1h"}` form, the top-level marker accepting `ttl`,
+the rule that "cache entries with longer TTL must appear before shorter TTLs",
+and the tools, system, messages prefix order. The page does not say what the API
+does with a wrong order beyond billing it as a cache miss, so Trove refuses it
+itself.
 
 ## Safety and the kill switch
 

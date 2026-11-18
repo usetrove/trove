@@ -5,7 +5,7 @@ Headline
                (measured)
   Waste found  at least ~$5.85, 8% of spend (estimated; overlapping findings
                counted once)
-  Savings      ~$0.50 so far (estimated)
+  Savings      ~$0.50 so far (estimated), about <1% of your usage (estimated)
   Measured     not enough data yet to compare sessions with and without an
                optimizer. The dollar savings above are estimates.
 
@@ -41,6 +41,7 @@ Optimizers
     Would have saved ~$3.60 (estimated, shadow mode).
     To turn on, add under [optimizers] in config.toml:
     duplicate_result_collapser = "on"
+  verbosity_steer: off
   cache_breakpoints: off
   Guardrail 2026-10-29: Trove set noise_normalizer back to shadow because
     repeated tool calls rose 45% against the comparison sessions. Review it with

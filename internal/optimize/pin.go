@@ -3,6 +3,7 @@ package optimize
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,11 +18,20 @@ const DefaultBytesPerToken = 3.5
 // after a session starts only affect later sessions (CLAUDE.md rule 5), and a
 // gateway restart reloads the pin so output does not change mid-session.
 type Pin struct {
-	SessionKey    string            `json:"session_key"`
-	States        map[string]string `json:"states"`
-	CustomAgents  []string          `json:"custom_agents"`
-	BytesPerToken float64           `json:"bytes_per_token"`
-	PinnedAt      time.Time         `json:"pinned_at"`
+	SessionKey   string            `json:"session_key"`
+	States       map[string]string `json:"states"`
+	CustomAgents []string          `json:"custom_agents"`
+	// CacheTTL is the per-marker cache lifetime for cache_breakpoints. A pin
+	// saved before it existed loads as all 5 minutes, which is what it ran with.
+	CacheTTL config.CacheTTL `json:"cache_ttl,omitzero"`
+	// Verbosity is the level verbosity_steer uses. A pin saved before it existed
+	// loads empty, which means concise, the only level there was.
+	Verbosity     string    `json:"verbosity,omitempty"`
+	BytesPerToken float64   `json:"bytes_per_token"`
+	PinnedAt      time.Time `json:"pinned_at"`
+	// Confounders are the tag names (never text) of things present at session
+	// start that can change cost by themselves. See DetectConfounders.
+	Confounders []string `json:"confounders,omitempty"`
 }
 
 // PinStore persists pins across gateway restarts. Implementations must be safe
@@ -54,6 +64,12 @@ func newPinBook(store PinStore) *pinBook {
 // get returns the session's pin, creating it from cfg on the session's first
 // request. A store failure never blocks a request: the in-memory pin is used.
 func (b *pinBook) get(ctx context.Context, key string, cfg config.Config, bpt float64, now time.Time, gate StateGate) (Pin, error) {
+	return b.getFor(ctx, key, cfg, bpt, now, gate, nil)
+}
+
+// getFor is get with the session's first request body, which is searched once,
+// when the pin is created, for confounder tags (see DetectConfounders).
+func (b *pinBook) getFor(ctx context.Context, key string, cfg config.Config, bpt float64, now time.Time, gate StateGate, body []byte) (Pin, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if p, ok := b.pins[key]; ok {
@@ -70,8 +86,10 @@ func (b *pinBook) get(ctx context.Context, key string, cfg config.Config, bpt fl
 		}
 	}
 	var extraNames []string
+	var extraStates map[string]string
 	if b.extras != nil {
 		if ex := b.extras(); len(ex) > 0 {
+			extraStates = ex
 			merged := make(map[string]string, len(cfg.Optimizers)+len(ex))
 			for k, v := range cfg.Optimizers {
 				merged[k] = v
@@ -85,6 +103,7 @@ func (b *pinBook) get(ctx context.Context, key string, cfg config.Config, bpt fl
 		}
 	}
 	p := newPinFor(key, cfg, bpt, now, gate, b.recoverable, extraNames...)
+	p.Confounders = DetectConfounders(body, extraStates)
 	b.put(p)
 	if b.store != nil && storeErr == nil {
 		storeErr = b.store.Save(ctx, p)
@@ -137,10 +156,19 @@ func newPinFor(key string, cfg config.Config, bpt float64, now time.Time, gate S
 		}
 		states[n] = s
 	}
+	// One output-style rule set at a time: a third-party brevity rule set that is really on
+	// in the agent's config wins, because Trove cannot switch it off for one session.
+	for _, n := range extra {
+		if states[n] == config.StateOn && claimsBehaviorRules(strings.TrimPrefix(n, "ext_")) {
+			states[OptimizerVerbositySteer] = config.StateOff
+		}
+	}
 	return Pin{
 		SessionKey:    key,
 		States:        states,
 		CustomAgents:  append([]string{}, cfg.Optimize.CustomAgents...),
+		CacheTTL:      cfg.Optimize.CacheTTL,
+		Verbosity:     cfg.Optimize.Verbosity,
 		BytesPerToken: bpt,
 		PinnedAt:      now.UTC(),
 	}
@@ -183,10 +211,10 @@ func effectiveState(name, state string) string { return effectiveStateFor(name, 
 // can fetch the full output back (trove_fetch_full); otherwise it stays in
 // shadow, which only estimates.
 func effectiveStateFor(name, state string, recoverable bool) string {
-	if config.IsGatewayBehavior(name) && state == config.StateOn {
-		return config.StateShadow // no gateway behavior has an active mode yet; on would only estimate
+	if config.IsGatewayBehavior(name) && !config.GatewayActive(name) && state == config.StateOn {
+		return config.StateShadow // this gateway behavior has no active mode yet; on would only estimate
 	}
-	if name == config.OptimizerOutputTrimmer && state == config.StateOn && !recoverable {
+	if (name == config.OptimizerOutputTrimmer || name == config.OptimizerHookOutputDedup || name == config.OptimizerHookReadOutline) && state == config.StateOn && !recoverable {
 		return config.StateShadow
 	}
 	switch state {

@@ -183,3 +183,31 @@ func TestGenerateWithoutPricesStillWorks(t *testing.T) {
 		t.Errorf("%v %v", ss, err)
 	}
 }
+
+func TestEverySuggestionCarriesATierAndAnEvidenceLabel(t *testing.T) {
+	db, tbl := seed(t, []row{{model: "claude-sonnet-5-5", agent: "sdk", cost: 0.02}}, 30)
+	ss, err := Generate(context.Background(), db, tbl, from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := find(ss, KindBatchAPI)
+	if b == nil {
+		t.Fatal("no batch suggestion")
+	}
+	// The Batch API suggestion is T1: same model, same output, only the turnaround changes.
+	if b.Tier != "T1" || b.EvidenceLabel != "estimated" {
+		t.Errorf("batch: tier %q evidence %q, want T1 and estimated", b.Tier, b.EvidenceLabel)
+	}
+	for _, s := range ss {
+		if s.Tier == "" || s.Class == "" || (s.EvidenceLabel != "estimated" && s.EvidenceLabel != "unmeasured") {
+			t.Errorf("%s: missing tier or evidence label: %+v", s.Kind, s)
+		}
+	}
+	for kind, want := range map[string]string{KindModelChoice: "T3", KindReasoningEffort: "T3", KindCacheTTL: "T1", KindBatchAPI: "T1"} {
+		s := Suggestion{Kind: kind}
+		s.label()
+		if s.Tier != want || s.EvidenceLabel != "unmeasured" {
+			t.Errorf("%s: tier %q evidence %q, want %s and unmeasured when there is no saving figure", kind, s.Tier, s.EvidenceLabel, want)
+		}
+	}
+}

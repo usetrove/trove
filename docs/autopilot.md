@@ -113,6 +113,27 @@ off ends trials as well, and switching it on again is a v1 agreement. The design
 verified are in [autopilot-probation.md](autopilot-probation.md). A trial runs only when A/B comparison is on, never
 beside a setting the user made, and for a user with no gateway only when reading local history is allowed.
 
+## Rule-set trials (one yes per rule set)
+
+`trove autopilot trial <rule set>` (`terse-rules`, `ponytail` or `caveman`) runs a per-user A/B of one output-style
+rule set (T2, plan 6.6). The user agrees to each trial on its own; `--yes` agrees without a prompt and `--json` needs
+it. The rule set must be installed with `trove external install` (which shows its license) and left off, and no other
+rule set and no `verbosity_steer` may be on. At the start of each new Claude Code session the plugin's SessionStart hook
+picks an arm from a hash of the session key, records it, and in the "on" arm adds the rule set's text to the session's
+context (`hookSpecificOutput.additionalContext`, verified on code.claude.com/docs/en/hooks on 2026-11-17). It adds the
+text again after a resume, `/clear` or compaction. The arm is pinned, so a running session keeps it when the trial
+ends. Other agents are not split, because their SessionStart replies cannot carry context.
+
+At each session boundary Autopilot reads the comparison from the gateway's record of a session or, failing that, the
+agent's local history. The verdict reports four figures, each labeled measured or saying why there is none yet:
+output tokens per turn, cost per turn (from sessions whose every request was priced), the share of sessions ending
+with failing tests per arm, and turns. The test_fail_rate guardrail and a worse result stop the trial
+(`rolled_back`). Switching the rule set on everywhere, or turning on another rule set, also stops it (`off`). A clean
+result after enough sessions on each side ends the trial with the verdict in `trove autopilot`. Autopilot never turns a
+rule set on, because T2 needs a benchmark verdict before Autopilot may; the user decides. One trial of any kind runs at
+a time. `trove autopilot trial <rule set> --stop` ends it at once. The numbers (sessions per arm, days) are the trial
+policy's placeholders.
+
 ## What stays manual
 
 - Optimizers that can change answers keep a stricter rule or an explicit choice. Output trimming is a trial candidate in v3 (with a guardrail half as tolerant as the rest); `cache_breakpoints` and `volatile_prefix_mover` (custom agents only, never Claude Code), `inflight_dedup` and `spend_cap` (shadow only) are never promoted by Autopilot, and the spend cap should never be automatic.

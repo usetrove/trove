@@ -33,6 +33,11 @@
       "label": "estimated",
       "n": 10
     },
+    "savings_share_percent": {
+      "value": 0.675676,
+      "label": "estimated",
+      "n": 10
+    },
     "measured_note": "not enough data yet to compare sessions with and without an optimizer. The dollar savings above are estimates."
   },
   "budget": {
@@ -212,13 +217,18 @@
         "enable": "duplicate_result_collapser = \"on\""
       },
       {
+        "name": "verbosity_steer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
         "name": "cache_breakpoints",
         "configured": "off",
         "effective": "off"
       }
     ],
     "guardrail_events": [],
-    "quality": "No regression detected locally. Trove checks retries, tool errors and re-fetches; it does not prove output quality."
+    "quality": "No regression check yet: not enough finished sessions with an optimizer on to compare."
   },
   "recommendations": []
 }

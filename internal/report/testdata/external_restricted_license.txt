@@ -5,7 +5,7 @@ Headline
                (measured)
   Waste found  at least ~$5.85, 8% of spend (estimated; overlapping findings
                counted once)
-  Savings      ~$0.50 so far (estimated)
+  Savings      ~$0.50 so far (estimated), about <1% of your usage (estimated)
   Measured     not enough data yet to compare sessions with and without an
                optimizer. The dollar savings above are estimates.
 
@@ -41,10 +41,11 @@ Optimizers
     Would have saved ~$3.60 (estimated, shadow mode).
     To turn on, add under [optimizers] in config.toml:
     duplicate_result_collapser = "on"
+  verbosity_steer: off
   cache_breakpoints: off
   Guardrail events: none.
-  No regression detected locally. Trove checks retries, tool errors and
-  re-fetches; it does not prove output quality.
+  No regression check yet: not enough finished sessions with an optimizer on to
+  compare.
 
 Third-party tools (each tool's own claim next to what Trove measured)
   squeeze v2.0.0: on (license Elastic-2.0, restricted)

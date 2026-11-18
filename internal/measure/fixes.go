@@ -40,9 +40,32 @@ type FixEffect struct {
 	Reduced bool    `json:"reduced"`
 	Percent float64 `json:"percent_reduction,omitempty"`
 	// OtherFixes counts other fixes in place; their effects are mixed in.
-	OtherFixes int    `json:"other_fixes_in_place,omitempty"`
-	Text       string `json:"text"`
+	OtherFixes int `json:"other_fixes_in_place,omitempty"`
+	// TTL is set for cache lifetime fixes, which are judged on where the cache
+	// writes went rather than on prompt size.
+	TTL  *TTLShift `json:"cache_lifetime,omitempty"`
+	Text string    `json:"text"`
 }
+
+// TTLShift is the share of Claude Code's lifetime-split cache writes made at
+// one hour, in sessions that started before and after a cache lifetime fix.
+// Token counts from history only.
+type TTLShift struct {
+	Subagents     bool    `json:"subagents"`
+	Before1hShare float64 `json:"before_1h_share"`
+	After1hShare  float64 `json:"after_1h_share"`
+	// Target is the lifetime the fix set, inferred from the side it moved away
+	// from: the fix is only proposed when most writes were at the other one.
+	Target string `json:"target"`
+	// Moved is true when, with enough sessions after, at least ttlMovedShare of
+	// the writes are at Target.
+	Moved bool `json:"moved_as_predicted"`
+}
+
+// ttlMovedShare is the share of writes at the new lifetime that counts as the
+// change having taken effect. Not 1: older Claude Code builds or requests the
+// setting does not cover may still write at the old lifetime.
+const ttlMovedShare = 0.8
 
 type fixRow struct {
 	id, kind string
@@ -82,6 +105,13 @@ func FixEffects(ctx context.Context, db *store.DB, m config.Measure) ([]FixEffec
 	for _, f := range fixes {
 		e := FixEffect{FixID: f.id, Kind: f.kind, AppliedAt: time.UnixMilli(f.applied).UTC(), EstTokens: f.tokens, EstUSD: f.usd,
 			Label: Estimated, OtherFixes: len(fixes) - 1}
+		if f.kind == "cache_ttl_main" || f.kind == "cache_ttl_subagents" {
+			if err := ttlEffect(ctx, db, &e, f, m); err != nil {
+				return nil, err
+			}
+			out = append(out, e)
+			continue
+		}
 		var before, after []float64
 		for _, s := range sess {
 			switch {
@@ -164,4 +194,71 @@ func sessionPoints(ctx context.Context, db *store.DB) ([]sessionPoint, error) {
 		}
 	}
 	return pts, rows.Err()
+}
+
+// ttlEffect fills e for a cache lifetime fix: the one-hour share of cache
+// writes in the fixed bucket, before and after, grouped by session start so a
+// session running when the fix was applied counts as before.
+func ttlEffect(ctx context.Context, db *store.DB, e *FixEffect, f fixRow, m config.Measure) error {
+	side := 0
+	if f.kind == "cache_ttl_subagents" {
+		side = 1
+	}
+	rows, err := db.QueryContext(ctx, `SELECT s.start >= ?, COUNT(DISTINCT h.session_key), SUM(h.cache_write_5m), SUM(h.cache_write_1h)
+		FROM history_requests h JOIN (SELECT session_key, MIN(ts) AS start FROM history_requests
+			WHERE source = 'claude_code' GROUP BY session_key) s ON s.session_key = h.session_key
+		WHERE h.source = 'claude_code' AND h.sidechain = ? GROUP BY s.start >= ?`, f.applied, side, f.applied)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	t := &TTLShift{Subagents: side == 1}
+	e.TTL = t
+	var w5b, w1b, w5a, w1a int64
+	for rows.Next() {
+		var after bool
+		var n int
+		var w5, w1 int64
+		if err := rows.Scan(&after, &n, &w5, &w1); err != nil {
+			return err
+		}
+		if after {
+			e.NAfter, w5a, w1a = n, w5, w1
+		} else {
+			e.NBefore, w5b, w1b = n, w5, w1
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	share := func(w5, w1 int64) float64 {
+		if w5+w1 == 0 {
+			return 0
+		}
+		return float64(w1) / float64(w5+w1)
+	}
+	t.Before1hShare, t.After1hShare = share(w5b, w1b), share(w5a, w1a)
+	t.Target = "1h"
+	if t.Before1hShare >= 0.5 {
+		t.Target = "5m"
+	}
+	if e.NBefore < m.MinSessions || e.NAfter < m.MinSessions || w5a+w1a == 0 || w5b+w1b == 0 {
+		e.Text = fmt.Sprintf("%s: %d session(s) with cache writes before and %d after; at least %d are needed on each side. The savings shown are estimates.", TextNotEnough, e.NBefore, e.NAfter, m.MinSessions)
+		return nil
+	}
+	e.Enough, e.Label = true, Measured
+	atTarget := t.After1hShare
+	if t.Target == "5m" {
+		atTarget = 1 - t.After1hShare
+	}
+	t.Moved = atTarget >= ttlMovedShare
+	if t.Moved {
+		e.Text = fmt.Sprintf("cache writes moved as predicted: %.0f%% were at one hour before the fix and %.0f%% after", 100*t.Before1hShare, 100*t.After1hShare)
+	} else {
+		e.Text = fmt.Sprintf("cache writes did not move as predicted (%.0f%% at one hour before, %.0f%% after); check that Claude Code is 2.1.242 or later and that nothing else sets the lifetime", 100*t.Before1hShare, 100*t.After1hShare)
+	}
+	if e.OtherFixes > 0 {
+		e.Text += "; other fixes are in place too"
+	}
+	return nil
 }

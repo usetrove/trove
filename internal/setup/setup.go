@@ -557,8 +557,10 @@ func undoChange(c Change, res UndoResult) (UndoResult, bool, error) {
 		next, err = stripBetween(cur, mcpMarkerOpen, mcpMarkerClose)
 	case ProjectMCP:
 		next, err = stripMCPJSON(cur)
-	case ClaudeHooks, CodexHooks:
+	case ClaudeHooks, CodexHooks, GeminiHooks:
 		next, err = stripHookGroups(cur, c.Value)
+	case CursorHooks:
+		next, err = stripCursorHooks(cur, c.Value)
 	default:
 		if IsExternal(c.Agent) {
 			var ok bool

@@ -14,6 +14,7 @@ import (
 	"github.com/usetrove/trove/internal/logs"
 	"github.com/usetrove/trove/internal/logs/cchistory"
 	"github.com/usetrove/trove/internal/logs/cxhistory"
+	"github.com/usetrove/trove/internal/logs/gmhistory"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/store"
@@ -50,8 +51,12 @@ type ScanResult struct {
 func scanHistory(ctx context.Context, a *App, dir string, cfg config.Config, all, announce bool) (ScanResult, error) {
 	res := ScanResult{Plan: detectPlan(a, cfg), Codex: logs.DetectCodexPlan(a.Getenv, cfg.History.Plan)}
 	src, cdx := claudeSource(a), codexSource(a)
+	gem := &gmhistory.Source{Getenv: a.Getenv, Home: a.HomeDir}
 	files, err := src.Discover(ctx, nil)
 	if more, cerr := cdx.Discover(ctx, nil); cerr == nil {
+		files = append(files, more...)
+	}
+	if more, gerr := gem.Discover(ctx, nil); gerr == nil {
 		files = append(files, more...)
 	}
 	if err != nil {
@@ -83,6 +88,7 @@ func scanHistory(ctx context.Context, a *App, dir string, cfg config.Config, all
 		tbl = nil
 	}
 	in := histscan.New(db, tbl, src, cdx, res.Plan.Plan, res.Codex.Plan)
+	histscan.AddGemini(in, gem)
 	var since time.Time
 	if !all {
 		since = time.Now().AddDate(0, 0, -historyDays)

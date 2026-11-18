@@ -55,6 +55,7 @@ type seed struct {
 	collapsed int
 	refetches int
 	noTools   bool
+	turns     int // 0 means the default of 10
 }
 
 // insertFinished stores a session row with its roll-up, as RollupSessions would.
@@ -64,6 +65,9 @@ func insertFinished(t *testing.T, db *store.DB, s seed) {
 		Turns: 10, Tokens: 1000, DurationS: 600, HasTools: !s.noTools, ToolCalls: 10 + s.repeats,
 		Repeats: s.repeats, ToolErrors: s.toolErrs, Collapsed: s.collapsed, Refetches: s.refetches,
 		On: s.on, Acted: s.on, PinnedAt: s.pinnedAt.UnixMilli(),
+	}
+	if s.turns > 0 {
+		sig.Turns = s.turns
 	}
 	if sig.On == nil {
 		sig.On, sig.Acted = []string{}, []string{}

@@ -74,6 +74,9 @@ func TestPluginParityWithHooksOnToolInput(t *testing.T) {
 		if !row.Reaches(optimize.AdapterHooks) || !row.Reaches(optimize.AdapterPlugin) || row.Reaches(optimize.AdapterGateway) {
 			continue
 		}
+		if !hasPoint(row, optimize.PointToolInput) {
+			continue // output-only: TestPluginParityWithHooksOnToolOutput
+		}
 		row := row
 		t.Run(row.Optimizer, func(t *testing.T) {
 			fx, ok := fixtures[row.Optimizer]
@@ -148,4 +151,75 @@ func decisionOf(reps []optimize.Report, name string) *optimize.Decision {
 		return &optimize.Decision{Kind: "none", Bytes: int64(r.BytesRemoved), Tokens: r.TokensRemoved}
 	}
 	return nil
+}
+
+func hasPoint(row optimize.Row, p optimize.Point) bool {
+	for _, q := range row.Points {
+		if q == p {
+			return true
+		}
+	}
+	return false
+}
+
+// toolOutputFixtures are outputs that make each output-only optimizer act when seen twice in a session.
+var toolOutputFixtures = map[string]struct{ tool, input, text string }{
+	config.OptimizerHookOutputDedup: {"Grep", `{}`, strings.Repeat("main.go:12: a search hit\n", 30)},
+	config.OptimizerHookReadOutline: {"Read", `{"file_path":"/p/big.go"}`, "package big\n\n" +
+		strings.Repeat("func F() int {\n"+strings.Repeat("\tx := 1 // a line of ordinary code that takes up some room\n", 20)+"\treturn 0\n}\n\n", 40)},
+}
+
+// Parity for the optimizers that act only on a tool's output and the gateway cannot reach: the plugin's
+// tool_output must give the same text and the same estimate as the engine does for the hooks adapter.
+func TestPluginParityWithHooksOnToolOutput(t *testing.T) {
+	ran := 0
+	for _, row := range optimize.Matrix() {
+		if !row.Reaches(optimize.AdapterHooks) || !row.Reaches(optimize.AdapterPlugin) || row.Reaches(optimize.AdapterGateway) ||
+			hasPoint(row, optimize.PointToolInput) {
+			continue
+		}
+		row := row
+		t.Run(row.Optimizer, func(t *testing.T) {
+			fx, ok := toolOutputFixtures[row.Optimizer]
+			if !ok {
+				t.Fatalf("%s runs on the hooks and plugin adapters but has no tool-output fixture; add one to toolOutputFixtures", row.Optimizer)
+			}
+			call := optimize.ToolCall{Name: fx.tool, Input: json.RawMessage(fx.input)}
+			out := optimize.ToolOutput{Parts: []optimize.Part{{Text: fx.text}}}
+
+			led := &ledger{reads: map[string]optimize.ReadEntry{}}
+			eng := parityEngine(t, row.Optimizer)
+			now := time.Now()
+			hookSess := optimize.Session{Key: "hook", Agent: "claude_code", TroveRun: true, Ledger: led, Now: now,
+				State: func(n string) string {
+					if n == row.Optimizer {
+						return config.StateOn
+					}
+					return config.StateOff
+				}}
+			eng.TransformToolOutput(context.Background(), call, out, hookSess)
+			want, wantReps := eng.TransformToolOutput(context.Background(), call, out, hookSess)
+
+			srv := plugin.New(parityEngine(t, row.Optimizer))
+			sess := plugin.Session{Key: "parity", Harness: "opencode", Login: plugin.LoginAPIKey, TroveRun: true, Prompts: 1,
+				States: map[string]string{row.Optimizer: config.StateOn}}
+			pluginReply(t, srv, plugin.Message{Method: "tool_output", Session: sess, Call: &call, Output: &out})
+			rep := pluginReply(t, srv, plugin.Message{Method: "tool_output", Session: sess, Call: &call, Output: &out})
+
+			w := decisionOf(wantReps, row.Optimizer)
+			if w == nil || w.Bytes == 0 {
+				t.Fatalf("the fixture did not make %s act (hooks reports: %+v)", row.Optimizer, wantReps)
+			}
+			if g := decisionOf(rep.Reports, row.Optimizer); g == nil || *g != *w {
+				t.Errorf("estimates differ:\nplugin: %+v\nhooks:  %+v", g, w)
+			}
+			if rep.Output == nil || len(rep.Output.Parts) != 1 || rep.Output.Parts[0].Text != want.Parts[0].Text {
+				t.Errorf("outputs differ:\nplugin: %+v\nhooks:  %+v", rep.Output, want)
+			}
+		})
+		ran++
+	}
+	if ran == 0 {
+		t.Fatal("no output-only optimizer is reached by both the hooks and plugin adapters; the parity test is vacuous")
+	}
 }

@@ -78,10 +78,12 @@ func (c Capabilities) Supports(agent, tool, kind string) bool {
 		if e.Agent != agent || e.Tool != tool {
 			continue
 		}
-		// Codex is not available to probe, and its documentation states Bash input rewriting
-		// (learn.chatgpt.com/docs/hooks, read 2026-11-04), so a docs result counts there for
-		// input only. Everything else needs a live probe.
-		if e.Method != "live" && e.Method != "session" && (e.Method != "docs" || agent != "codex" || kind != RewriteInput) {
+		// Documentation alone never counts, for any agent. Codex's used to count for Bash
+		// input, but its page (learn.chatgpt.com/docs/hooks, re-read 2026-11-17) accepts
+		// updatedInput only together with permissionDecision "allow", which Trove's hooks never
+		// send (a hook must not approve what the user would be asked about); so the documented
+		// shape and Trove's output differ, and only a live probe can say what really happens.
+		if e.Method != "live" && e.Method != "session" {
 			continue
 		}
 		switch kind {

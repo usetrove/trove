@@ -23,8 +23,8 @@ const (
 // Tier says what kind of change an optimizer makes, from the technique registry (the one place that says, and a
 // test keeps it equal to the code). An optimizer the registry does not know is treated as lossless, as before.
 func Tier(name string) string {
-	if t, ok := technique.Get(name); ok && t.Tier != "" {
-		return t.Tier
+	if t, ok := technique.Get(name); ok && t.Effect != "" {
+		return t.Effect
 	}
 	return "lossless"
 }

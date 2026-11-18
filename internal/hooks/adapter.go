@@ -84,7 +84,7 @@ func rewriteKind(name string) string {
 	switch name {
 	case config.OptimizerHookReadLimit, config.OptimizerHookQuietCommands:
 		return RewriteInput
-	case config.OptimizerNoiseNormalizer, config.OptimizerOutputTrimmer:
+	case config.OptimizerNoiseNormalizer, config.OptimizerOutputTrimmer, config.OptimizerHookOutputDedup, config.OptimizerHookReadOutline:
 		return RewriteOutput
 	}
 	return ""
@@ -103,7 +103,7 @@ func (h *handler) stateFor(name, pinned, tool string) string {
 	if st != stateOn {
 		return st
 	}
-	if kind := rewriteKind(name); kind != "" && !h.capabilities().Supports(h.agent, tool, kind) {
+	if kind := rewriteKind(name); kind != "" && (!expressible(h.agent, tool, kind) || !h.capabilities().Supports(h.agent, tool, kind)) {
 		return stateShadow
 	}
 	return st
@@ -111,11 +111,15 @@ func (h *handler) stateFor(name, pinned, tool string) string {
 
 // sess describes the hook's session to the engine.
 func (h *handler) sess(key string, st *sessionState, tool string) optimize.Session {
+	// The ratio the session pinned at its start turns this hook's byte counts into token estimates. It is
+	// kept on the handler so the events recorded for this call carry it.
+	h.bpt, h.bptN = pinnedRatio(st.Pins)
 	return optimize.Session{
 		Key: key, Agent: h.agent, Now: h.now(), TroveRun: h.snap.TroveRun,
-		Ledger: &ledgerView{st: st, dir: h.dir, key: key},
-		State:  func(name string) string { return h.stateFor(name, st.Pins[name], tool) },
-		Tuning: pinnedTuning(st.Pins),
+		Ledger:        &ledgerView{st: st, dir: h.dir, key: key},
+		State:         func(name string) string { return h.stateFor(name, st.Pins[name], tool) },
+		Tuning:        pinnedTuning(st.Pins),
+		BytesPerToken: h.bpt, BytesPerTokenN: h.bptN,
 	}
 }
 
@@ -230,6 +234,9 @@ func (h *handler) render(key string, cur optimize.ToolCall, reps []optimize.Repo
 		}
 		if denied && (d.Kind == optimize.KindRewritten || d.Kind == optimize.KindWouldRewrite) {
 			continue // the call is not running, so nothing was rewritten
+		}
+		if d.Kind == optimize.KindAdvised && !canAdvise(h.agent) {
+			continue // the agent has no field that shows the note, so it is neither sent nor counted
 		}
 		if err := h.emit(key, r.Name, d.Kind, d.Bytes, d.Tokens); err != nil {
 			return nil, err

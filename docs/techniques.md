@@ -62,8 +62,13 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 | B7 | `hook_read_limit`: add `limit: 400` to a large read | tool boundary | native | no | yes | needs `updatedInput` (S7); it replaces the whole input; trial candidate (policy v3), guardrail `hook_extra_read` |
 | B8 | `hook_large_output`: hint to use `trove_run` for known-noisy commands | tool boundary | native | no | yes | needs the MCP server; trial candidate (policy v3), guardrail `hook_unused_advice` |
 | B15 | `hook_quiet_commands`: add one output-quieting flag to an allowlisted command | tool boundary | native | no | yes | rewrites the Bash command like RTK does but is not refused beside it today; whether it should be is open; trial candidate (policy v2 and v3) |
+| B17 | `hook_output_dedup`: replace a Bash, Grep or Glob output identical to one earlier in the session with a pointer | tool boundary | native | no | yes | recoverable: the repeat is kept locally and fetchable; needs the MCP server and recovery store (charged its 351 tokens of tool definitions per session); no time-based expiry, forgotten on compaction; guardrail `hook_fetch_back`; Read waits for its probe; not Autopilot-eligible; added 2026-11-17 (plan 5.1) |
+| B18 | `hook_read_outline`: replace a very large full Read of a source file with its outline | tool boundary | native | no | yes | recoverable: the full text is kept locally and fetchable, and a second full Read goes through; needs the MCP server and recovery store (charged its 351 tokens of tool definitions per session); shadow until a live probe sees Read honour `updatedToolOutput`; guardrail `hook_extra_read`; not Autopilot-eligible; added 2026-11-17 (plan 5.2) |
 | B9 | MCP tools `trove_read`, `trove_search`, `trove_run`, `trove_fetch_full` | tool boundary | native | no | yes | tool definitions are added to every request: an overhead (rule 15) |
-| B10 | `trove fix`: `mcp_prune`, `context_slim`, `cache_breaker_fix`, `model_default` | config | config | no | yes | diff and undo |
+| B10 | `trove fix`: `mcp_prune`, `context_slim`, `cache_breaker_fix`, `model_default`, `retyped_command` | config | config | no | yes | diff and undo |
+| B16 | `trove fix` `context_slim_generic`: remove generic overview or boilerplate sections of a context file that duplicate nothing (T2, behavioural) | config | config | no | yes | split from `context_slim` on 2026-11-17, which now removes only provable duplicates; suggestion only, never in `--all` |
+| B19 | `trove fix` `mcp_snippet`: add the MCP tool-preference snippet (`trove mcp snippet`) to the project's CLAUDE.md (T2, behavioural) | instructions | config | no | yes | about 70 tokens (estimated) on every request, charged; offered only when the MCP server is registered; applied by id with consent, never in `--all`; `trove fix` shows adoption before and after and the per-session overhead; added 2026-11-17 (plan 5.5) |
+| B20 | `verbosity_steer`: ask for shorter replies with a fixed note appended after the last byte of the system prompt (T2, behavioural) | request | native | no, appended after every existing byte | no (gateway) | at most about 85 tokens (estimated) on every request, charged; levels `concise` and `terse` (`optimize.verbosity`), pinned per session; Anthropic Messages only; shares the brevity-rules slot with W3, W4 and W9; added 2026-11-17 (plan 6.4) |
 | B13 | `trove fix` `settings_check`: flag and remove a cost-raising setting you already have (caching off, tool search off, a one-hour cache lifetime with one-hour writes in your history) | config | config | no | yes | suggestion only, never in `--all`, no saving figure; added 2026-11-13 |
 | B14 | `trove settings`: catalog of the agent's documented token controls with version checks, profiles and measurement | config | config | no | yes | existed before this document; an earlier draft left it out. Catalog extended 2026-11-13 |
 | B11 | Scout subagent and test-gated cascade (`trove tasks`) | instructions | native + config | no | yes | cheaper model for easy work |
@@ -86,6 +91,7 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 | C11 | Tool search: `ENABLE_TOOL_SEARCH`, per-server `alwaysLoad` | config | config | no | yes | S3, S8; Headroom sets it too. **`ENABLE_TOOL_SEARCH` verbatim 2026-11-13**; `trove fix` flags a stray `=false` (see B13) |
 | C12 | `updatedToolOutput` for more tools than Bash | tool boundary | native | no | yes | S7 says it applies to any tool; Trove's hooks use it only for Bash, Grep, Glob |
 | C13 | Terse replies and minimal code (rules text or a skill) | instructions | wrap or native text | no | yes | costs tokens to carry (rule 15); effect measured, not assumed |
+| C14 | Keep an idle API-key session's 5-minute cache warm with pings | request | native | no | no | **built 2026-11-17, shadow and on** (API-key gateway traffic only, opt-in; approved with its limits in [decisions/keep-warm.md](decisions/keep-warm.md)). Each ping is a `max_tokens: 0` request recorded as its own billed row. Checked live 2026-11-17 on one model: after pings across a 10.5-minute gap the next request read the whole prefix. See [keep-warm.md](keep-warm.md) |
 
 ### Wrapped tools (already in `trove external`, or candidates)
 
@@ -99,6 +105,7 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 | W6 | LLMLingua | Prompt compression with a model | MIT (L4) | idea only; Python and a model | prompt-level compression, not Autopilot-eligible |
 | W7 | SuperCompress | Query-aware context compression, hosted | MIT repo; the hosted API receives your text (L6, match not fully verified) | **excluded** | sends prompts off the machine (rule 1) |
 | W8 | ccusage | Usage analysis from local logs | MIT (L7) | reference only | `trove analyze` and `trove logs` already do this |
+| W9 | Ponytail | Rules that make the agent write less code (its AGENTS.md text) | MIT (L8) | wrap the rules text only, pinned tag v5.3.3 | C13, W3, W4: at most one rule set at a time |
 
 ## Findings that change the plan
 
@@ -150,7 +157,7 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 |---|---|---|
 | B3, B8, W1 | All shorten shell output; each can rewrite the same Bash call, and `updatedInput` replaces the whole input | One owner per tool call. `trove external` already flags RTK against Trove's Bash hooks |
 | B9, W2 | Two read and search tool sets with different output shapes | Choose one; measure first |
-| C13, W3, W4 | Stacked brevity rules add overhead and can fight each other | At most one |
+| B20, C13, W3, W4, W9 | Stacked brevity rules add overhead and can fight each other | At most one |
 | W5 proxy, the gateway | Both want `ANTHROPIC_BASE_URL` | Never chain; pick one |
 | B4, B5, C1 | All change cache layout | Only through the fixed pipeline order, together, at session start |
 | C6, C8 against any cached prefix | A change of effort or model breaks cache hits | Session start only |
@@ -220,6 +227,7 @@ Licences, from each repository's LICENSE file:
 | L5 | https://github.com/Mibayy/token-savior | MIT |
 | L6 | https://github.com/Supercompress/Supercompress | MIT repo. **Name match not confirmed**: two other repositories with similar names were not read. Whether the hosted service falls under the MIT licence is not verified |
 | L7 | https://github.com/ccusage/ccusage | MIT (`apps/ccusage/LICENSE`) |
+| L8 | https://github.com/DietrichGebert/ponytail | MIT, `LICENSE` and `AGENTS.md` read raw at tag v5.3.3 on 2026-11-17 |
 
 Not verified: latest release tags and primary languages of the repositories above; the 3-second hold and any
 percentage in Probe0's own materials; how the Claude Code TTL settings behave on a real login; the middle section of S1

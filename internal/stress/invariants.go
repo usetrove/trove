@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"sync"
 	"time"
@@ -75,6 +76,28 @@ func allNames() []string {
 		out = append(out, b.Name())
 	}
 	return out
+}
+
+// savingNames is allNames without the behavioural optimizers (verbosity_steer). Scripted sessions replay fixed
+// model replies, so a change in what the model is asked to do could only show its added text here, never its
+// effect; it is judged by a live session A/B instead. The safety layers still run it, through allNames.
+func savingNames() []string {
+	var out []string
+	for _, n := range allNames() {
+		if !isBehavior(n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func isBehavior(name string) bool {
+	for _, o := range optimize.Pipeline() {
+		if o.Name() == name {
+			return o.Tier() == optimize.TierBehavior
+		}
+	}
+	return false
 }
 
 // memStore is an in-memory recovery store. It keeps every blob the engine stores, so the byte-identical
@@ -223,6 +246,30 @@ func CheckRecovery(orig []byte, stored [][]byte) []Violation {
 		}
 	}
 	return nil
+}
+
+// trimMarkerID finds the output id in every trim marker of a request body.
+var trimMarkerID = regexp.MustCompile(`\[Trove: \d+ lines trimmed; full output sha256:([0-9a-f]{16})\]`)
+
+// CheckTrimStored verifies the other half of recovery: every trim marker the model sees names an output the engine
+// stored, byte for byte (its sha256 starts with the marker's id). Together with CheckRecovery, which proves every stored
+// blob is a tool output, a fetch through any marker returns exactly what the tool printed. One violation per id.
+func CheckTrimStored(out []byte, stored [][]byte) []Violation {
+	have := map[string]bool{}
+	for _, b := range stored {
+		have[sha(string(b))[:16]] = true
+	}
+	var vs []Violation
+	seen := map[string]bool{}
+	for _, m := range trimMarkerID.FindAllSubmatch(out, -1) {
+		id := string(m[1])
+		if seen[id] || have[id] {
+			continue
+		}
+		seen[id] = true
+		vs = append(vs, Violation{InvRecovery, "a trim marker names output that was never stored"})
+	}
+	return vs
 }
 
 // uniqueByInvariant keeps the first violation of each invariant. A session can break the same rule on every

@@ -89,6 +89,34 @@ All procedures are deterministic given the seed stored in the study.
 The implementation is `bench/trovebench/inference.py`; its tests compare against brute-force
 enumeration and SciPy.
 
+### 4a. Covariate adjustment in the in-product A/B (pre-registered 2026-11-17)
+
+This applies to the A/B Trove runs on a user's own sessions (`internal/experiment`, see
+`docs/measurement.md` section 4a), not to the lab studies above. The method was written down here
+before it was implemented, and any later change is a new dated entry.
+
+- **Method.** CUPED (controlled-experiment using pre-experiment data). For each cost metric *Y*
+  (cost per session, cost per turn, cost per uncached input token) and covariate *X*, a session's
+  adjusted value is `Y - θ_s (X - mean_s(X))`, where `θ_s = cov(X, Y) / var(X)` and `mean_s(X)` are
+  fitted on **both arms together** within stratum *s*. The effect is the stratified difference of the
+  adjusted arm means, divided by the **unadjusted** stratified off-arm mean for a relative change.
+- **Covariate.** Prior cost: the mean of the same metric over the last 5 *off*-arm sessions in the
+  same stratum (repo and task type) from **earlier randomisation blocks**. Every session in a block
+  gets the same covariate, so it cannot depend on the session's own arm. Only off-arm sessions are
+  used, so the covariate is never moved by the optimizer. Project (repo) is already the stratum key.
+- **Not a covariate.** Session length (turns) and anything else measured during the session: the
+  optimizer can change them, and adjusting for them would bias the effect.
+- **Missing covariate.** A session with no earlier off-arm session in its stratum gets `mean_s(X)`, so
+  it is not adjusted and not dropped.
+- **When it is used.** Only when, in the strata used, at least 80% of sessions have a covariate and
+  the pooled within-stratum correlation of *X* and *Y* is at least 0.3 in absolute value (below that
+  the variance gain is under 9% and not worth the extra fitting). Otherwise the unadjusted figure is
+  reported. The check looks only at *X* and *Y*, never at the arm difference.
+- **Range.** 95% percentile bootstrap, seeded, resampling (*Y*, *X*) pairs per arm within stratum, with
+  θ re-fitted in every resample so the range includes the uncertainty in θ.
+- **Reporting.** Both ranges are shown: the adjusted one (used for the verdict and rollback) and the
+  unadjusted one. Outcome metrics (turns, tool errors, abandoned) are not adjusted.
+
 ## 5. The ship rule
 
 A condition is recommended only if **all** hold, against the registered baseline:

@@ -1,0 +1,10 @@
+{"sessionId":"abcd1234-0000-4000-8000-000000000001","projectHash":"9f0e","startTime":"2026-11-17T10:00:00.000Z","lastUpdated":"2026-11-17T10:00:00.000Z","kind":"main"}
+{"id":"m1","timestamp":"2026-11-17T10:00:01.000Z","type":"user","content":[{"text":"redacted prompt"}]}
+{"id":"m2","timestamp":"2026-11-17T10:00:05.000Z","type":"gemini","content":[{"text":"redacted reply"}],"model":"gemini-3.1-pro-preview","tokens":{"input":12000,"output":300,"cached":8000,"thoughts":120,"tool":0,"total":12420},"toolCalls":[{"id":"t1","name":"read_file","args":{"file_path":"/w/a.go"},"result":[{"functionResponse":{"response":{"output":"package a\n"}}}],"status":"success","timestamp":"2026-11-17T10:00:04.000Z"},{"id":"t2","name":"run_shell_command","args":{"command":"go test"},"result":[{"text":"FAIL"}],"status":"error","timestamp":"2026-11-17T10:00:04.500Z"}]}
+{"id":"m3","timestamp":"2026-11-17T10:00:06.000Z","type":"info","content":"redacted"}
+{"$set":{"summary":"redacted summary"}}
+{"id":"m4","timestamp":"2026-11-17T10:00:09.000Z","type":"gemini","content":[{"text":"pending"}],"model":"gemini-3.1-pro-preview","tokens":null}
+{"$patch":{"id":"m4","content":[{"text":"patched"}]}}
+{"id":"m4","timestamp":"2026-11-17T10:00:09.000Z","type":"gemini","content":[{"text":"done"}],"model":"gemini-3.1-pro-preview","tokens":{"input":13000,"output":40,"cached":12000,"thoughts":0,"tool":50,"total":13090}}
+not json at all
+{"$rewindTo":"m2"}

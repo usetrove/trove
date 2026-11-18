@@ -62,6 +62,7 @@ func newOptimize(a *App) *cobra.Command {
 		&cobra.Command{Use: "resume", Short: "Undo `trove optimize off`", Args: cobra.NoArgs,
 			RunE: func(*cobra.Command, []string) error { return optimizeResume(a) }},
 		newOptimizeSuggest(a),
+		newOptimizeVerbosity(a),
 	)
 	return cmd
 }
@@ -116,6 +117,8 @@ func optimizeStatusCmd(a *App) error {
 			if cfg.Budget.CapUSD <= 0 {
 				info.Note += ". It needs a budget cap: `trove budget set <amount>`"
 			}
+		case config.OptimizerKeepWarm:
+			info.Note = "API-key gateway traffic only: shadow estimates what pings would save; on re-reads an idle session's 5-minute cache before it expires (each ping is billed and recorded). See docs/keep-warm.md"
 		}
 		st.Gateway = append(st.Gateway, info)
 	}
@@ -261,7 +264,7 @@ func renderSuggestions(o suggestOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Suggestions for %s to %s (all estimated; Trove changes nothing on its own)\n", o.From, o.To)
 	for i, s := range o.Suggestions {
-		fmt.Fprintf(&b, "\n%d. %s\n   %s\n", i+1, s.Title, s.Detail)
+		fmt.Fprintf(&b, "\n%d. %s [%s, %s]\n   %s\n", i+1, s.Title, s.Tier, s.EvidenceLabel, s.Detail)
 		switch {
 		case s.EstSavingsUSD != nil:
 			fmt.Fprintf(&b, "   Estimated saving: $%.2f over %d requests (confidence: %s)\n", *s.EstSavingsUSD, s.Requests, s.Confidence)

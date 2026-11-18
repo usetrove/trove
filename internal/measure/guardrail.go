@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
@@ -16,7 +17,64 @@ const (
 	RuleRetries    = "retries"
 	RuleToolErrors = "tool_errors"
 	RuleRefetch    = "refetch"
+	// RuleTurns is turn inflation: thinner context can make the agent take more
+	// turns, and every extra turn resends the history, so a lever that adds turns
+	// can cost more than it removes.
+	RuleTurns = "turn_inflation"
 )
+
+// signalTurns is the plain-English name of the turn-inflation signal.
+const signalTurns = "turns per session"
+
+// ExtraTurns is how many more turns the optimizer's sessions took than the
+// reference, and what those turns cost. It is part of every verdict, so a lever
+// that adds turns is charged for them even when no rule trips.
+type ExtraTurns struct {
+	// Enough is false when either side has too few sessions; then the numbers are zero.
+	Enough   bool `json:"enough_data"`
+	NTreated int  `json:"n_treated"`
+	NRef     int  `json:"n_reference"`
+	// PerSession is the mean turns per session with the optimizer on minus the
+	// reference mean (measured; negative means fewer turns). N is NTreated.
+	PerSession Figure `json:"per_session"`
+	// Percent is PerSession relative to the reference mean; 0 when that mean is 0.
+	Percent float64 `json:"percent"`
+	// Tokens is PerSession times the on sessions' tokens per turn: the tokens the
+	// extra turns cost per session (estimated, because a turn's size varies).
+	Tokens Figure `json:"tokens_per_session"`
+	Text   string `json:"text"`
+}
+
+func extraTurns(treated, ref []finishedSession, c Comparison) ExtraTurns {
+	x := ExtraTurns{NTreated: c.NTreated, NRef: c.NRef}
+	if c.Verdict == NotEnoughData {
+		x.Text = "extra turns: " + TextNotEnough
+		return x
+	}
+	x.Enough = true
+	diff := c.Treated - c.Ref
+	x.PerSession = Figure{Value: diff, Label: Measured, N: c.NTreated}
+	var tok, turns int64
+	for _, s := range treated {
+		tok += s.Tokens
+		turns += int64(s.Turns)
+	}
+	var perTurn float64
+	if turns > 0 {
+		perTurn = float64(tok) / float64(turns)
+	}
+	x.Tokens = Figure{Value: diff * perTurn, Label: Estimated, N: c.NTreated}
+	x.Text = fmt.Sprintf("extra turns: %+.1f per session", diff)
+	if c.Ref != 0 {
+		x.Percent = diff / c.Ref
+		x.Text += fmt.Sprintf(" (%+.0f%%)", x.Percent*100)
+	}
+	x.Text += " measured"
+	if diff > 0 && perTurn > 0 {
+		x.Text += fmt.Sprintf(", costing about %.0f tokens (estimated) per session", x.Tokens.Value)
+	}
+	return x
+}
 
 // Reference kinds: what the optimizer's sessions were compared with.
 const (
@@ -30,6 +88,20 @@ type RuleResult struct {
 	Rule       string     `json:"rule"`
 	Comparison Comparison `json:"comparison"`
 	Text       string     `json:"text"` // plain English, safe to print
+	// Signal names what the rule compares, for example "tool errors per session".
+	Signal string `json:"signal"`
+}
+
+// Checked lists, in rule order, the signals that had enough sessions to be
+// compared. A rule without enough data checked nothing and is left out.
+func (c OptimizerCheck) Checked() []string {
+	out := []string{}
+	for _, r := range c.Rules {
+		if r.Comparison.Verdict != NotEnoughData {
+			out = append(out, r.Signal)
+		}
+	}
+	return out
 }
 
 // OptimizerCheck is the guardrail state of one optimizer.
@@ -41,6 +113,8 @@ type OptimizerCheck struct {
 	// lacked data, otherwise NoRegression.
 	Verdict    Verdict `json:"verdict"`
 	RolledBack bool    `json:"rolled_back"`
+	// ExtraTurns is always filled, whatever the verdict.
+	ExtraTurns ExtraTurns `json:"extra_turns"`
 	// Summary is the sentence for the report. It never claims quality is unchanged.
 	Summary string `json:"summary"`
 }
@@ -174,6 +248,22 @@ func checkOne(name string, all []finishedSession, m config.Measure, clearedAtMS 
 		{RuleToolErrors, compareMeans(vals(treated, func(s SessionSignals) float64 { return float64(s.ToolErrors) }),
 			vals(ref, func(s SessionSignals) float64 { return float64(s.ToolErrors) }), minN, relRetry), "tool errors per session"},
 	}
+	// Turns count for every session, with or without readable tool signals.
+	turnsOf := func(ss []finishedSession) []float64 {
+		v := make([]float64, 0, len(ss))
+		for _, s := range ss {
+			v = append(v, float64(s.Turns))
+		}
+		return v
+	}
+	turnsCmp := compareMeans(turnsOf(treated), turnsOf(ref), minN, relRetry)
+	rules = append(rules, struct {
+		name string
+		c    Comparison
+		what string
+	}{RuleTurns, turnsCmp, signalTurns})
+	chk.ExtraTurns = extraTurns(treated, ref, turnsCmp)
+
 	var k, n int
 	for _, s := range treated {
 		if s.HasTools && s.Collapsed > 0 {
@@ -191,7 +281,7 @@ func checkOne(name string, all []finishedSession, m config.Measure, clearedAtMS 
 
 	chk.Verdict = NotEnoughData
 	for _, r := range rules {
-		rr := RuleResult{Rule: r.name, Comparison: r.c, Text: describe(r.name, r.what, r.c, kind, m)}
+		rr := RuleResult{Rule: r.name, Comparison: r.c, Text: describe(r.name, r.what, r.c, kind, m), Signal: r.what}
 		chk.Rules = append(chk.Rules, rr)
 		switch r.c.Verdict {
 		case Regression:
@@ -206,10 +296,12 @@ func checkOne(name string, all []finishedSession, m config.Measure, clearedAtMS 
 	case NotEnoughData:
 		chk.Summary = fmt.Sprintf("%s: %s (%d sessions with the optimizer on; at least %d needed on each side)", name, TextNotEnough, len(treated), m.MinSessions)
 	case NoRegression:
-		chk.Summary = fmt.Sprintf("%s: %s (%d sessions on, %d %s sessions)", name, TextNoRegression, len(treated), len(ref), kind)
+		chk.Summary = fmt.Sprintf("%s: %s (checked: %s; %d sessions on, %d %s sessions)", name, TextNoRegression,
+			strings.Join(chk.Checked(), ", "), len(treated), len(ref), kind)
 	default:
 		chk.Summary = fmt.Sprintf("%s: regression detected; set back to shadow for new sessions", name)
 	}
+	chk.Summary += "; " + chk.ExtraTurns.Text
 	return chk
 }
 

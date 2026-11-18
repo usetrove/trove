@@ -49,6 +49,16 @@ const approxBytesPerToken = 4
 
 const ephemeral = `{"type":"ephemeral"}`
 
+// marker returns the cache_control value for a lifetime. "1h" adds the ttl
+// field; the 5-minute default keeps the exact bytes earlier versions sent, so
+// switching this feature in changes nothing for sessions that do not use it.
+func marker(ttl string) string {
+	if ttl == "1h" {
+		return `{"type":"ephemeral","ttl":"1h"}`
+	}
+	return ephemeral
+}
+
 // CacheBreakpoints is the cache_breakpoints optimizer. For custom agents whose
 // requests carry no caching markers at all, on a model that caches only when
 // asked, it adds:
@@ -59,8 +69,11 @@ const ephemeral = `{"type":"ephemeral"}`
 //   - a stable marker on the last tool definition;
 //   - a stable marker on the last system block that holds no volatile line.
 //
-// That is at most 3 of the provider's 4 allowed breakpoints. Markers use the
-// default 5-minute lifetime. A request that already has any cache_control is
+// That is at most 3 of the provider's 4 allowed breakpoints. Each marker's
+// lifetime comes from the session's pinned config.CacheTTL (default 5 minutes).
+// The provider requires a longer lifetime to come before a shorter one, so an
+// ordering where a later marker outlives an earlier one is refused and the
+// request is forwarded untouched. A request that already has any cache_control is
 // never touched: the agent manages its own caching, and the mix of automatic
 // and explicit markers has provider rules (such as a limit of 4 and TTL
 // ordering) that Trove must not disturb.
@@ -84,21 +97,32 @@ func (CacheBreakpoints) Applies(r *Request, s Session) bool {
 	return ok && len(r.Raw)/approxBytesPerToken >= floor && !r.HasCacheControl()
 }
 
-// Transform implements Optimizer.
-func (CacheBreakpoints) Transform(_ context.Context, r *Request) (*Request, Report) {
+// Transform implements Optimizer with 5-minute markers. The engine calls
+// TransformSession instead, so the session's pinned lifetimes apply.
+func (c CacheBreakpoints) Transform(ctx context.Context, r *Request) (*Request, Report) {
+	return c.TransformSession(ctx, r, Session{})
+}
+
+// TransformSession implements SessionTransformer. It is a pure function of the
+// request and the session's pinned CacheTTL.
+func (CacheBreakpoints) TransformSession(_ context.Context, r *Request, s Session) (*Request, Report) {
+	ttl := s.CacheTTL
+	if err := ttl.Check(); err != nil {
+		return r, Report{Err: "refused cache lifetimes: " + err.Error()}
+	}
 	if err := r.Ensure(); err != nil {
 		return r, Report{Err: err.Error()}
 	}
 	// Top-level automatic caching goes first in the object so "messages" stays
 	// last and a growing history only ever appends to the end of the body.
-	edits := []Edit{{Span: Span{r.Root.S + 1, r.Root.S + 1}, New: []byte(`"cache_control":` + ephemeral + `,`)}}
+	edits := []Edit{{Span: Span{r.Root.S + 1, r.Root.S + 1}, New: []byte(`"cache_control":` + marker(ttl.Messages) + `,`)}}
 
 	if n := len(r.ToolSpans); n > 0 {
-		if e, ok := markObject(r, r.ToolSpans[n-1]); ok {
+		if e, ok := markObject(r, r.ToolSpans[n-1], marker(ttl.Tools)); ok {
 			edits = append(edits, e)
 		}
 	}
-	if e, ok := markSystem(r); ok {
+	if e, ok := markSystem(r, marker(ttl.System)); ok {
 		edits = append(edits, e)
 	}
 	out, err := r.Apply(edits)
@@ -110,7 +134,7 @@ func (CacheBreakpoints) Transform(_ context.Context, r *Request) (*Request, Repo
 
 // markObject inserts a cache_control field before the closing brace of the
 // object at sp.
-func markObject(r *Request, sp Span) (Edit, bool) {
+func markObject(r *Request, sp Span, mark string) (Edit, bool) {
 	if r.Raw[sp.S] != '{' {
 		return Edit{}, false
 	}
@@ -123,12 +147,12 @@ func markObject(r *Request, sp Span) (Edit, bool) {
 	if i == sp.S { // "{}"
 		comma = ""
 	}
-	return Edit{Span: Span{end, end}, New: []byte(comma + `"cache_control":` + ephemeral)}, true
+	return Edit{Span: Span{end, end}, New: []byte(comma + `"cache_control":` + mark)}, true
 }
 
 // markSystem marks the last stable system text. A string system prompt is
 // converted to a one-block array so the block can carry the marker.
-func markSystem(r *Request) (Edit, bool) {
+func markSystem(r *Request, mark string) (Edit, bool) {
 	if r.System.E == 0 {
 		return Edit{}, false
 	}
@@ -137,7 +161,7 @@ func markSystem(r *Request) (Edit, bool) {
 		if !ok || strings.TrimSpace(text) == "" || hasVolatileLine(text) {
 			return Edit{}, false
 		}
-		blk := `[{"type":"text","text":` + string(EncodeString(text)) + `,"cache_control":` + ephemeral + `}]`
+		blk := `[{"type":"text","text":` + string(EncodeString(text)) + `,"cache_control":` + mark + `}]`
 		return Edit{Span: r.System, New: []byte(blk)}, true
 	}
 	for i := len(r.SystemBlocks) - 1; i >= 0; i-- {
@@ -152,7 +176,7 @@ func markSystem(r *Request) (Edit, bool) {
 		if hasVolatileLine(text) {
 			continue // the stable prefix ends before this block
 		}
-		return markObject(r, b.Span)
+		return markObject(r, b.Span, mark)
 	}
 	return Edit{}, false
 }

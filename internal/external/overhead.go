@@ -19,20 +19,21 @@ type Charge struct {
 	InjectedTokens int     `json:"injected_tokens"`
 	PerRequest     int     `json:"per_request_tokens"`
 	ExtraTurns     float64 `json:"extra_turns_estimate"`
-	Source         string  `json:"source"` // "declared" or "counted from the rules text"
+	Source         string  `json:"source"` // "declared" or "counted from the rules block"
 	Label          string  `json:"label"`  // always "estimated"
 }
 
 // ChargeFor returns the per-request charge. For a rules file the injected size
-// is counted from the rules text itself, never trusted from the manifest, so a
-// manifest cannot understate what it adds. Otherwise the declared figures are
-// used and labelled as declared.
+// is counted from the whole block written to the rules file (fences and managed
+// marker included), never trusted from the manifest, so a manifest cannot
+// understate what it adds. Otherwise the declared figures are used and labelled
+// as declared.
 func ChargeFor(m Manifest) Charge {
 	c := Charge{ToolDefTokens: m.Overhead.ToolDefTokens, InjectedTokens: m.Overhead.InjectedTokens,
 		ExtraTurns: m.Overhead.ExtraTurnsEstimate, Source: "declared", Label: "estimated"}
 	if m.ActsAs == ActsRulesFile {
-		c.InjectedTokens = EstimateTokens(m.Rules)
-		c.Source = "counted from the rules text"
+		c.InjectedTokens = EstimateTokens(RulesBlock(m))
+		c.Source = "counted from the rules block"
 	}
 	c.PerRequest = c.ToolDefTokens + c.InjectedTokens
 	return c

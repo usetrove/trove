@@ -25,15 +25,20 @@ const trialScanBudget = 700 * time.Millisecond
 // writes are priced and annotated exactly as that command would have. Best effort: an error or a timeout
 // leaves nothing worse than a comparison that has less data.
 func scanTrialHistory(ctx context.Context, db *store.DB, dir string, cfg config.Config, getenv func(string) string) {
-	f, err := config.LoadAutopilot(dir)
-	if err != nil || !f.Active() || !cfg.Experiment.Enabled || !cfg.History.Enabled {
+	if !cfg.Experiment.Enabled || !cfg.History.Enabled {
 		return
 	}
 	since := int64(0)
-	for _, n := range hookTrials(cfg.WithAutopilot(f)) {
-		if at := f.Entries[n].SinceMS; since == 0 || at < since {
-			since = at
+	if f, err := config.LoadAutopilot(dir); err == nil && f.Active() {
+		for _, n := range hookTrials(cfg.WithAutopilot(f)) {
+			if at := f.Entries[n].SinceMS; since == 0 || at < since {
+				since = at
+			}
 		}
+	}
+	// An installed scout or cascade is trialled too, from the day it was installed.
+	if _, at, err := installedTasks(ctx, db); err == nil && at > 0 && (since == 0 || at < since) {
+		since = at
 	}
 	if since == 0 {
 		return // nothing in the hooks is on trial

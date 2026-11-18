@@ -21,11 +21,12 @@ func (d *DB) Pins() *Pins { return &Pins{db: d} }
 // Load returns the pin saved for sessionKey, if any.
 func (p *Pins) Load(ctx context.Context, sessionKey string) (optimize.Pin, bool, error) {
 	var states, agents string
+	var conf, ttl sql.NullString
 	var bpt float64
 	var at int64
 	err := p.db.QueryRowContext(ctx,
-		`SELECT states, custom_agents, bytes_per_token, pinned_at FROM session_pins WHERE session_key = ?`, sessionKey).
-		Scan(&states, &agents, &bpt, &at)
+		`SELECT states, custom_agents, bytes_per_token, pinned_at, confounders, cache_ttl FROM session_pins WHERE session_key = ?`, sessionKey).
+		Scan(&states, &agents, &bpt, &at, &conf, &ttl)
 	if errors.Is(err, sql.ErrNoRows) {
 		return optimize.Pin{}, false, nil
 	}
@@ -38,6 +39,21 @@ func (p *Pins) Load(ctx context.Context, sessionKey string) (optimize.Pin, bool,
 	}
 	if err := json.Unmarshal([]byte(agents), &pin.CustomAgents); err != nil {
 		return optimize.Pin{}, false, err
+	}
+	if conf.Valid {
+		if err := json.Unmarshal([]byte(conf.String), &pin.Confounders); err != nil {
+			return optimize.Pin{}, false, err
+		}
+		if len(pin.Confounders) == 0 {
+			pin.Confounders = nil
+		}
+	}
+	if ttl.Valid {
+		// An invalid value is not repaired here: the optimizer refuses it and
+		// forwards the request untouched.
+		if err := json.Unmarshal([]byte(ttl.String), &pin.CacheTTL); err != nil {
+			return optimize.Pin{}, false, err
+		}
 	}
 	return pin, true, nil
 }
@@ -53,8 +69,24 @@ func (p *Pins) Save(ctx context.Context, pin optimize.Pin) error {
 	if err != nil {
 		return err
 	}
+	conf := pin.Confounders
+	if conf == nil {
+		conf = []string{}
+	}
+	confJSON, err := json.Marshal(conf)
+	if err != nil {
+		return err
+	}
+	var ttl any // NULL for the all-default zero value
+	if pin.CacheTTL != (optimize.Pin{}).CacheTTL {
+		b, err := json.Marshal(pin.CacheTTL)
+		if err != nil {
+			return err
+		}
+		ttl = string(b)
+	}
 	_, err = p.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO session_pins (session_key, states, custom_agents, bytes_per_token, pinned_at) VALUES (?,?,?,?,?)`,
-		pin.SessionKey, string(states), string(agents), pin.BytesPerToken, pin.PinnedAt.UnixMilli())
+		`INSERT OR IGNORE INTO session_pins (session_key, states, custom_agents, bytes_per_token, pinned_at, confounders, cache_ttl) VALUES (?,?,?,?,?,?,?)`,
+		pin.SessionKey, string(states), string(agents), pin.BytesPerToken, pin.PinnedAt.UnixMilli(), string(confJSON), ttl)
 	return err
 }

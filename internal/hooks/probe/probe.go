@@ -136,7 +136,7 @@ func Run(ctx context.Context, o Options) (Report, error) {
 		return rep, fmt.Errorf("cannot run %q to read its version: %v. Install the agent or pass its path with --claude", o.Claude, err)
 	}
 	now := o.Now().UTC().Format(time.RFC3339)
-	rep.Capabilities.Entries = append(rep.Capabilities.Entries, CodexDocs(ctx, o, now))
+	rep.Capabilities.Entries = append(rep.Capabilities.Entries, CodexDocs(ctx, o, now), CursorDocs(now), GeminiDocs(ctx, o, now))
 	if !o.Live {
 		for _, t := range o.Tools {
 			rep.Capabilities.Entries = append(rep.Capabilities.Entries, hooks.Capability{

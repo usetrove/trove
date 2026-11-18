@@ -103,6 +103,65 @@ const (
 	CapCustomAgent   = "custom_agent"   // an agent whose prompt layout Trove may change (CLAUDE.md of its own)
 )
 
+// Class says what kind of change a technique makes. The class decides its Tier.
+type Class string
+
+// The classes.
+const (
+	ClassLossless        Class = "transform_lossless"
+	ClassRecoverable     Class = "transform_recoverable"
+	ClassConfig          Class = "config_overhead"
+	ClassCacheControl    Class = "cache_control"
+	ClassGuard           Class = "guard"
+	ClassBehavior        Class = "behavior_instructions"
+	ClassModelRouting    Class = "model_routing"
+	ClassEffort          Class = "effort"
+	ClassSubagentRouting Class = "subagent_routing"
+	ClassLocalOffload    Class = "local_offload"
+)
+
+// Tier is how much proof a technique needs before it is promoted (docs/plan/INDEX.md).
+type Tier string
+
+// The tiers.
+const (
+	T1 Tier = "T1" // safe: lossless or recoverable, mechanically checked
+	T2 Tier = "T2" // behavioural: changes what the model is asked to do
+	T3 Tier = "T3" // routing: changes which model, effort or agent does the work
+)
+
+// TierOfClass returns the tier a class belongs to, or "" for an unknown class.
+func TierOfClass(c Class) Tier {
+	switch c {
+	case ClassLossless, ClassRecoverable, ClassConfig, ClassCacheControl, ClassGuard:
+		return T1
+	case ClassBehavior:
+		return T2
+	case ClassModelRouting, ClassEffort, ClassSubagentRouting, ClassLocalOffload:
+		return T3
+	}
+	return ""
+}
+
+// nameClass overrides an entry's class for a name that belongs to a different class than the
+// rest of its entry (B10 carries model_default, which is routing, not a config overhead fix).
+var nameClass = map[string]Class{
+	"model_default": ClassModelRouting,
+}
+
+// ClassOf returns the class and tier of the technique called name (an ID, optimizer name, fix kind or
+// tool name). ok is false when the name is unknown.
+func ClassOf(name string) (Class, Tier, bool) {
+	if c, ok := nameClass[name]; ok {
+		return c, TierOfClass(c), true
+	}
+	t, ok := Get(name)
+	if !ok {
+		return "", "", false
+	}
+	return t.Class, t.Tier, true
+}
+
 // Technique is one entry.
 type Technique struct {
 	// ID is stable and matches docs/techniques.md (B for built, C for candidate,
@@ -115,8 +174,15 @@ type Technique struct {
 	Layers []Layer  `json:"layers"`
 	Route  Route    `json:"route"`
 	Status Status   `json:"status"`
-	// Tier is lossless, recoverable or behavior (changes what the model sees or does).
-	Tier string `json:"tier,omitempty"`
+	// Effect is lossless, recoverable or behavior (changes what the model sees or does).
+	Effect string `json:"effect,omitempty"`
+	// Class is the kind of change it makes, and Tier the proof it needs, derived from Class
+	// when the package loads so the two cannot disagree.
+	Class Class `json:"class"`
+	Tier  Tier  `json:"tier"`
+	// BenchVerdict names the committed benchmark verdict that clears a T2 or T3 technique for
+	// Autopilot. Empty means none exists.
+	BenchVerdict string `json:"bench_verdict,omitempty"`
 	// Prefix is true when the technique can change bytes already in the cached prompt.
 	Prefix bool `json:"touches_cached_prompt"`
 	// Subscription is true when it works for a Claude.ai login with no gateway.
@@ -456,7 +522,13 @@ func ValidHookNeed(n string) bool {
 // only what is built, lossless and leaves the cached prompt alone. Text it adds is allowed only when the
 // cost is declared as numbers (per session and per use), so the promotion decision can charge for it.
 func autoProblem(x Technique) string {
-	if x.Status != StatusBuilt || x.Tier != tierLossless || x.Prefix {
+	if x.Tier == "" {
+		return "it has no tier"
+	}
+	if x.Tier != T1 && x.BenchVerdict == "" {
+		return "it is " + string(x.Tier) + " and has no benchmark verdict, which Autopilot needs for anything beyond T1"
+	}
+	if x.Status != StatusBuilt || x.Effect != tierLossless || x.Prefix {
 		return "it is not a built, lossless, prefix-safe technique"
 	}
 	if x.AddsText && (x.Overhead == nil || x.UseOverhead == nil) {

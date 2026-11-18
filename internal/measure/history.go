@@ -62,6 +62,18 @@ func HistoryTotals(ctx context.Context, db *store.DB, w Window) ([]HistoryRow, e
 	return out, rows.Err()
 }
 
+// HistorySessionCost is one session's usage from the agent's own logs: the
+// session key and its "~N" idle-gap successors. Estimated; calls that could not
+// be priced count as zero, so it is a lower bound. It is not filtered against
+// the gateway, so callers use it only for a session the gateway did not see.
+func HistorySessionCost(ctx context.Context, db *store.DB, key string) (Figure, error) {
+	var cost float64
+	var n, unpriced int
+	err := db.QueryRowContext(ctx, `SELECT COALESCE(SUM(cost_usd), 0), COUNT(*), COALESCE(SUM(CASE WHEN cost_usd IS NULL THEN 1 ELSE 0 END), 0)
+		FROM history_requests WHERE session_key = ? OR session_key LIKE ?`, key, key+"~%").Scan(&cost, &n, &unpriced)
+	return Figure{Value: roundUSD(cost), Label: Estimated, N: n, Unpriced: unpriced}, err
+}
+
 // HistoryOverlap counts sessions with history in w that were left out because
 // the gateway also recorded them.
 func HistoryOverlap(ctx context.Context, db *store.DB, w Window) (int, error) {

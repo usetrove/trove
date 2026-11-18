@@ -66,11 +66,12 @@ func newHooksInstall(a *App) *cobra.Command {
 			"Installing the hooks does not turn any optimization on. They stay inert until you set hook_repeat_read to \"shadow\" (estimate only) or\n" +
 			"\"on\" under [optimizers] in config.toml; a session keeps the setting it started with.\n" +
 			"Claude Code: ~/.claude/settings.json (--scope user) or .claude/settings.local.json in a project (--scope project).\n" +
-			"Codex CLI: ~/.codex/hooks.json. Codex asks you to review new hooks with /hooks before they run.",
+			"Codex CLI: ~/.codex/hooks.json. Codex asks you to review new hooks with /hooks before they run.\n" +
+			"Cursor: ~/.cursor/hooks.json. Gemini CLI: ~/.gemini/settings.json. Both at user level only; their rewrites stay in shadow until a live probe (docs/hooks-verification.md).",
 		Args: cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error { return runHooksInstall(a, fl) },
 	}
-	c.Flags().StringVar(&fl.agent, "agent", "all", "which agent: claude, codex or all")
+	c.Flags().StringVar(&fl.agent, "agent", "all", "which agent: claude, codex, cursor, gemini or all")
 	c.Flags().StringVar(&fl.scope, "scope", "user", "Claude Code only: user (all projects) or project (.claude/settings.local.json)")
 	c.Flags().StringVar(&fl.projectDir, "project", "", "project folder for --scope project (default: the current folder)")
 	c.Flags().BoolVar(&fl.largeOutput, "large-output", false, "also add the optional hint that suggests trove_run for noisy commands (test suites, verbose builds)")
@@ -106,6 +107,13 @@ func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.H
 		{Event: "SessionStart", Command: build(hooks.EventReset), Timeout: 5},
 		{Event: "PreCompact", Command: build(hooks.EventReset), Timeout: 5},
 		{Event: "SessionEnd", Command: build(hooks.EventSessionEnd), Timeout: 3},
+		// Declines the scout subagent in the off arm of its A/B trial; a no-op otherwise. Agent was called Task
+		// before Claude Code v2.1.63 (code.claude.com/docs/en/sub-agents, read 2026-11-17).
+		{Event: "PreToolUse", Matcher: "Agent|Task", Command: build(hooks.EventSubagent), Timeout: 5},
+		// The test-pass signal. PostToolUse fires only when a tool call succeeds and PostToolUseFailure when it
+		// fails, with "Exit code N" in its error (code.claude.com/docs/en/hooks, read 2026-11-17), so both are needed.
+		{Event: "PostToolUse", Matcher: "Bash", Command: build(hooks.EventTestResult), Timeout: 5},
+		{Event: "PostToolUseFailure", Matcher: "Bash", Command: build(hooks.EventTestResult), Timeout: 5},
 	}
 	if largeOutput || rewrite {
 		s = append(s, setup.HookSpec{Event: "PreToolUse", Matcher: "Bash", Command: build(hooks.EventLargeOutput), Timeout: 5})
@@ -140,19 +148,72 @@ func codexSpecs(build func(string) string, largeOutput, rewrite bool) []setup.Ho
 	return s
 }
 
+// hookOnlyAgents are agents Trove adds hooks to but does not otherwise set up, so they are kept out of
+// supportedAgents (setup, mcp install and fix walk that list). Detection only, as there: a config folder
+// or the executable on PATH. Folders verified 2026-11-17: ~/.cursor/hooks.json (cursor.com/docs/agent/hooks)
+// and ~/.gemini/settings.json (geminicli.com/docs/hooks/).
+var hookOnlyAgents = []agentSpec{
+	{"Cursor", "cursor", func(_ *App, home string) string { return filepath.Join(home, ".cursor") }},
+	{"Gemini CLI", "gemini", func(_ *App, home string) string { return filepath.Join(home, ".gemini") }},
+}
+
+// cursorSpecs follows cursor.com/docs/agent/hooks (read 2026-11-17). Matchers name Cursor's tool types
+// (Shell, Read, Write); timeouts are seconds. preToolUse has no field that shows the model a note, so the
+// large-output hint is not offered; --rewrite adds only the Shell pre-hook, whose quiet-flag rewrite
+// (updated_input) stays in shadow until a live probe sees Cursor honour it. Output cannot be replaced
+// outside MCP tools, so there is no output hook.
+func cursorSpecs(build func(string) string, rewrite bool) []setup.HookSpec {
+	s := []setup.HookSpec{
+		{Event: "preToolUse", Matcher: "Read", Command: build(hooks.EventPreRead), Timeout: 5},
+		{Event: "postToolUse", Matcher: "Read", Command: build(hooks.EventPostRead), Timeout: 5},
+		{Event: "postToolUse", Matcher: "Write", Command: build(hooks.EventPostEdit), Timeout: 5},
+		{Event: "sessionStart", Command: build(hooks.EventReset), Timeout: 5},
+		{Event: "preCompact", Command: build(hooks.EventReset), Timeout: 5},
+		{Event: "sessionEnd", Command: build(hooks.EventSessionEnd), Timeout: 3},
+	}
+	if rewrite {
+		s = append(s, setup.HookSpec{Event: "preToolUse", Matcher: "Shell", Command: build(hooks.EventLargeOutput), Timeout: 5})
+	}
+	return s
+}
+
+// geminiSpecs follows geminicli.com/docs/hooks/ and /docs/reference/tools/ (read 2026-11-17). Matchers are
+// regular expressions over Gemini CLI's tool names; timeouts are MILLISECONDS. Like Cursor, BeforeTool has no
+// note field, so no large-output hint. --rewrite adds the shell pre-hook (tool_input merge) and the output
+// hook (AfterTool decision "deny", whose reason replaces the result), both in shadow until a live probe.
+func geminiSpecs(build func(string) string, rewrite bool) []setup.HookSpec {
+	s := []setup.HookSpec{
+		{Event: "BeforeTool", Matcher: "read_file", Command: build(hooks.EventPreRead), Timeout: 5000},
+		{Event: "AfterTool", Matcher: "read_file", Command: build(hooks.EventPostRead), Timeout: 5000},
+		{Event: "AfterTool", Matcher: "replace|write_file", Command: build(hooks.EventPostEdit), Timeout: 5000},
+		{Event: "SessionStart", Command: build(hooks.EventReset), Timeout: 5000},
+		{Event: "PreCompress", Command: build(hooks.EventReset), Timeout: 5000},
+		{Event: "SessionEnd", Command: build(hooks.EventSessionEnd), Timeout: 3000},
+	}
+	if rewrite {
+		s = append(s,
+			setup.HookSpec{Event: "BeforeTool", Matcher: "run_shell_command", Command: build(hooks.EventLargeOutput), Timeout: 5000},
+			setup.HookSpec{Event: "AfterTool", Matcher: "run_shell_command|grep_search|search_file_content|glob", Command: build(hooks.EventPostOutput), Timeout: 5000},
+			// Counts fetch-backs of trimmed output; MCP tools are named mcp_<server>_<tool>.
+			setup.HookSpec{Event: "AfterTool", Matcher: "mcp_trove_trove_fetch_full", Command: build(hooks.EventPostFetch), Timeout: 5000},
+		)
+	}
+	return s
+}
+
 func planHooksInstall(a *App, dir, home string, fl hooksInstallFlags) ([]hooksPlan, error) {
 	if fl.scope != "user" && fl.scope != "project" {
 		return nil, fmt.Errorf("--scope %q is not valid; use user or project", fl.scope)
 	}
 	switch fl.agent {
-	case "all", "claude", "codex":
+	case "all", "claude", "codex", "cursor", "gemini":
 	default:
-		return nil, fmt.Errorf("--agent %q is not valid; use claude, codex or all", fl.agent)
+		return nil, fmt.Errorf("--agent %q is not valid; use claude, codex, cursor, gemini or all", fl.agent)
 	}
 	var plans []hooksPlan
-	for _, spec := range supportedAgents {
-		isCodex := spec.binary == "codex"
-		if (fl.agent == "claude" && isCodex) || (fl.agent == "codex" && !isCodex) {
+	for _, spec := range append(append([]agentSpec{}, supportedAgents...), hookOnlyAgents...) {
+		which := spec.binary // the --agent value: claude, codex, cursor or gemini
+		if fl.agent != "all" && fl.agent != which {
 			continue
 		}
 		cfgDir := spec.configDir(a, home)
@@ -164,9 +225,11 @@ func planHooksInstall(a *App, dir, home string, fl hooksInstallFlags) ([]hooksPl
 		var e *setup.Edit
 		var err error
 		switch {
-		case isCodex && fl.scope == "project":
+		case which == "codex" && fl.scope == "project":
 			p.Problem = "Codex CLI only reads project hooks for trusted projects, so Trove does not edit them. Run `trove hooks install --agent codex` to install at user level."
-		case isCodex:
+		case (which == "cursor" || which == "gemini") && fl.scope == "project":
+			p.Problem = spec.name + " project hooks are meant to be committed, and Trove's hook command holds a path on this machine, so Trove installs them at user level only. Run `trove hooks install --agent " + which + "`."
+		case which == "codex":
 			base, build, cerr := hookCommands(a, dir, "codex")
 			if cerr != nil {
 				p.Problem = cerr.Error()
@@ -175,6 +238,24 @@ func planHooksInstall(a *App, dir, home string, fl hooksInstallFlags) ([]hooksPl
 			specs := codexSpecs(build, fl.largeOutput, fl.rewrite)
 			p.Hooks = hookNames(specs)
 			e, err = setup.PlanCodexHooks(cfgDir, specs, base)
+		case which == "cursor":
+			base, build, cerr := hookCommands(a, dir, "cursor")
+			if cerr != nil {
+				p.Problem = cerr.Error()
+				break
+			}
+			specs := cursorSpecs(build, fl.rewrite)
+			p.Hooks = hookNames(specs)
+			e, err = setup.PlanCursorHooks(filepath.Join(cfgDir, "hooks.json"), specs, base)
+		case which == "gemini":
+			base, build, cerr := hookCommands(a, dir, "gemini")
+			if cerr != nil {
+				p.Problem = cerr.Error()
+				break
+			}
+			specs := geminiSpecs(build, fl.rewrite)
+			p.Hooks = hookNames(specs)
+			e, err = setup.PlanGeminiHooks(filepath.Join(cfgDir, "settings.json"), specs, base)
 		default:
 			if pluginHooksActive(cfgDir, fl) {
 				p.Problem = "the Trove plugin is enabled and already registers these hooks, so adding them to settings as well would run each one twice. Use the plugin's hooks, or disable the plugin first."
@@ -235,7 +316,7 @@ func runHooksInstall(a *App, fl hooksInstallFlags) error {
 	}
 	rep := hooksInstallReport{Plans: plans}
 	if len(plans) == 0 {
-		return a.emit(rep, "No supported agents found (looked for Claude Code and Codex CLI). Install one, then run this again.")
+		return a.emit(rep, "No supported agents found (looked for Claude Code, Codex CLI, Cursor and Gemini CLI). Install one, then run this again.")
 	}
 	pending := 0
 	var text strings.Builder

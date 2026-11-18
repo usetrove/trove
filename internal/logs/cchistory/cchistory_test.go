@@ -84,6 +84,27 @@ func TestParseNeverCarriesText(t *testing.T) {
 	}
 }
 
+// A Bash call's command is kept in memory for `trove fix`, never in what the event marshals to.
+func TestBashCommandInMemoryOnly(t *testing.T) {
+	line := strings.Replace(asst("r1", "t1"), `"input":{}`, `"input":{"command":"python3 scripts/SECRET_gen.py --all"}`, 1)
+	read := strings.Replace(asst("r2", "t2"), `"name":"Bash","input":{}`, `"name":"Read","input":{"command":"not bash"}`, 1)
+	huge := strings.Replace(asst("r3", "t3"), `"input":{}`, `"input":{"command":"`+strings.Repeat("x", logs.MaxCommandBytes+1)+`"}`, 1)
+	p := write(t, "x.jsonl", line+"\n"+read+"\n"+huge+"\n")
+	evs, _, _ := parseFile(t, p, logs.Checkpoint{}, old)
+	if len(evs) != 3 {
+		t.Fatalf("got %d events", len(evs))
+	}
+	if got := evs[0].Tools[0].Command; got != "python3 scripts/SECRET_gen.py --all" {
+		t.Errorf("Bash command = %q", got)
+	}
+	if evs[1].Tools[0].Command != "" || evs[2].Tools[0].Command != "" {
+		t.Errorf("non-Bash or oversized command kept: %q / %d bytes", evs[1].Tools[0].Command, len(evs[2].Tools[0].Command))
+	}
+	if b, _ := json.Marshal(evs); strings.Contains(string(b), "SECRET") {
+		t.Errorf("command text marshalled: %s", b)
+	}
+}
+
 func write(t *testing.T, name, content string) string {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), name)

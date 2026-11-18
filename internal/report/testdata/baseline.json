@@ -33,6 +33,11 @@
       "label": "estimated",
       "n": 10
     },
+    "savings_share_percent": {
+      "value": 0.675676,
+      "label": "estimated",
+      "n": 10
+    },
     "measured_note": "not enough data yet to compare sessions with and without an optimizer. The dollar savings above are estimates."
   },
   "spend": {
@@ -194,6 +199,11 @@
           "label": "estimated",
           "n": 12
         }
+      },
+      {
+        "name": "verbosity_steer",
+        "configured": "off",
+        "effective": "off"
       },
       {
         "name": "cache_breakpoints",

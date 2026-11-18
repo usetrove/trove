@@ -35,6 +35,9 @@ const (
 	TierRecoverable Tier = "recoverable"
 	// TierLossy means information is removed for good.
 	TierLossy Tier = "lossy"
+	// TierBehavior means nothing is removed but the model is asked to act differently
+	// (technique tier T2): judged only by session A/B, never by bytes removed.
+	TierBehavior Tier = "behavior"
 )
 
 // Session is what an optimizer may know about the session a request is in.
@@ -45,6 +48,12 @@ type Session struct {
 	// Custom is true only if the user explicitly marked this agent label as a
 	// custom agent in config. Optimizers that change prompt layout require it.
 	Custom bool
+	// CacheTTL is the per-marker cache lifetime cache_breakpoints uses, pinned
+	// when the session starts. The zero value means 5 minutes everywhere.
+	CacheTTL config.CacheTTL
+	// Verbosity is the level verbosity_steer uses, pinned when the session starts.
+	// Empty means concise.
+	Verbosity string
 	// State resolves an optimizer's state (off, shadow, on) for the tool-level
 	// entry points. The adapter supplies it because pins, guardrail rollbacks
 	// and the kill switch are resolved differently per adapter. Nil means off.
@@ -70,6 +79,20 @@ type Session struct {
 	// changed (for example by removing ANSI codes). Nil means the optimizer's own
 	// input is the original.
 	Raw func(i int) string
+	// BytesPerToken is the ratio, learned from the user's own session logs for the session's model
+	// family, that turns bytes into estimated tokens (see measure.LearnBytesPerToken). Zero means the
+	// default, DefaultBytesPerToken. BytesPerTokenN is the number of samples behind it. The ratio only
+	// scales estimates; it never changes what an optimizer does.
+	BytesPerToken  float64
+	BytesPerTokenN int
+}
+
+// bytesPerToken is the ratio this session's estimates use.
+func (s Session) bytesPerToken() float64 {
+	if s.BytesPerToken > 0 {
+		return s.BytesPerToken
+	}
+	return DefaultBytesPerToken
 }
 
 // SessionTransformer is implemented by optimizers whose request-level transform
@@ -168,7 +191,8 @@ func AppliedJSON(reports []Report, failures []Failure) []byte {
 //  2. noise_normalizer           clean tool output first...
 //  3. output_trimmer             ...then trim what is left...
 //  4. duplicate_result_collapser ...then compare cleaned results for exact repeats
-//  5. cache_breakpoints          last, so the size check sees the final prompt
+//  5. verbosity_steer            a fixed note at the very end of the system prompt
+//  6. cache_breakpoints          last, so the size check sees the final prompt
 //
 // The order is part of the cache-safety contract: changing it changes bytes.
 func Pipeline() []Optimizer {
@@ -177,6 +201,7 @@ func Pipeline() []Optimizer {
 		NoiseNormalizer{memo: newSpanMemo()},
 		newOutputTrimmer(),
 		DuplicateCollapser{},
+		VerbositySteer{},
 		CacheBreakpoints{},
 	}
 }
@@ -192,5 +217,6 @@ var PipelineNames = []string{
 	"noise_normalizer",
 	config.OptimizerOutputTrimmer,
 	"duplicate_result_collapser",
+	OptimizerVerbositySteer,
 	"cache_breakpoints",
 }

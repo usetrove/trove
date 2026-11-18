@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -50,11 +51,43 @@ func LoadPriors(b []byte) (Priors, error) {
 		}
 	}
 	for n, v := range p.Optimizers {
-		if v.Pairs < 1 || v.CostCIHigh < v.CostCILow {
-			return Priors{}, fmt.Errorf("benchmark prior for %q needs pairs of at least 1 and cost_ci_high not below cost_ci_low", n)
+		if err := v.validate(n); err != nil {
+			return Priors{}, err
 		}
 	}
 	return p, nil
+}
+
+// sourcePrefixes are the evidence kinds a prior may come from, in the order the
+// plan uses them: benchmark studies first, then opt-in contributed data, then
+// team pools.
+var sourcePrefixes = []string{"bench:", "contribute:", "team:"}
+
+// validate rejects a prior that does not name where it came from or whose
+// numbers contradict each other. A prior nobody can trace, or one whose
+// estimate sits outside its own range, is dropped with an error rather than
+// trusted.
+func (p Prior) validate(name string) error {
+	if p.Pairs < 1 || p.CostCIHigh < p.CostCILow {
+		return fmt.Errorf("benchmark prior for %q needs pairs of at least 1 and cost_ci_high not below cost_ci_low", name)
+	}
+	named := false
+	src := strings.TrimSpace(p.Source)
+	for _, pre := range sourcePrefixes {
+		if strings.HasPrefix(src, pre) && len(src) > len(pre) {
+			named = true
+		}
+	}
+	if !named {
+		return fmt.Errorf("benchmark prior for %q must name its source (a source starting with bench:, contribute: or team:); regenerate the file with `python -m trovebench defaults`", name)
+	}
+	if p.CostChange < p.CostCILow || p.CostChange > p.CostCIHigh {
+		return fmt.Errorf("benchmark prior for %q has a cost_change that is not inside its own cost range", name)
+	}
+	if p.SuccessDiff < p.SuccessCILow {
+		return fmt.Errorf("benchmark prior for %q has a success_diff below its own success_ci_low, so its success range is wrong", name)
+	}
+	return nil
 }
 
 // DefaultPriors returns the priors shipped in the binary.
@@ -98,7 +131,14 @@ type Combined struct {
 // combine is a normal-normal update. The data's standard error comes from its
 // bootstrap interval. The prior pulls a noisy estimate toward the lab result;
 // a precise estimate from many sessions barely moves.
+//
+// A prior never hides a loss: if the user's own range is wholly above zero (their
+// sessions measurably cost more), it is shown unchanged, however good the
+// benchmark looked.
 func combine(est, lo, hi float64, p Prior) Combined {
+	if lo > 0 {
+		return Combined{Value: est, Low: lo, High: hi}
+	}
 	se := (hi - lo) / (2 * 1.96)
 	if se < 1e-6 {
 		se = 1e-6

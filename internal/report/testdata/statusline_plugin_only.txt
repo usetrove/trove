@@ -1,0 +1,2 @@
+session=""      ~$3.00 API-equivalent this month · A/B: output_trimmer -12% cost per session (measured)
+session="sess-h" ~$3.00 API-equivalent this month · session ~$1.50 (50% of usage) · A/B: output_trimmer -12% cost per session (measured)

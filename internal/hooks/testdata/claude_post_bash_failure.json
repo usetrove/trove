@@ -1,0 +1,1 @@
+{"session_id":"{{SESSION}}","transcript_path":"/home/u/.claude/projects/x/s.jsonl","cwd":"{{CWD}}","permission_mode":"default","hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_input":{"command":"{{CMD}}","description":"Run test suite"},"tool_use_id":"toolu_01FAIL","error":"{{ERROR}}","is_interrupt":{{INTERRUPT}},"duration_ms":4187}

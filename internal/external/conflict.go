@@ -18,6 +18,8 @@ var exclusive = map[Category]bool{
 // Enabling both double-trims the same output, so it is refused as well.
 var builtinOverlap = map[Category][]string{
 	CategoryShellCompressor: {"noise_normalizer", "output_trimmer", "hook_large_output"},
+	// verbosity_steer asks for shorter replies at the gateway: a second output-style rule set (plan 6.3).
+	CategoryBehaviorRules: {"verbosity_steer"},
 }
 
 // Conflict explains why a tool cannot be enabled.

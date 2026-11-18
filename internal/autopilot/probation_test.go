@@ -9,6 +9,7 @@ import (
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/store"
+	"github.com/usetrove/trove/internal/technique"
 )
 
 var probNow = time.Date(2026, 11, 20, 12, 0, 0, 0, time.UTC)
@@ -96,6 +97,78 @@ func TestATechniqueWithNoEstimateNeedsSessionsButNotTokens(t *testing.T) {
 	}
 	if p.CannotJudge("hook_quiet_commands") != "" || DefaultPolicy().CannotJudge("hook_quiet_commands") == "" {
 		t.Error("only a policy that has a trial for it may judge a technique with no estimate")
+	}
+}
+
+// The test_fail_rate guardrail: a trial whose sessions end with failing tests more often than the reference
+// arm is rolled back, and a routing (T3) technique is held to a stricter margin than the others.
+func TestDecideProbationRollsBackOnTestFailRate(t *testing.T) {
+	p := PolicyV2()
+	trial := config.AutopilotEntry{State: config.AutopilotProbation, SinceMS: probNow.Add(-5 * 24 * time.Hour).UnixMilli(), Attempts: 1}
+	arm := func(n, f int) measure.TestFailArm { return measure.TestFailArm{Sessions: n, Failed: f} }
+	cases := []struct {
+		name    string
+		tier    technique.Tier
+		on, off measure.TestFailArm
+		status  string
+		want    string
+	}{
+		{"T1 fails more often than the reference", technique.T1, arm(20, 8), arm(20, 2), "saves", config.AutopilotRolledBack},
+		{"T1 small gap is within its margin", technique.T1, arm(20, 4), arm(20, 2), "saves", config.AutopilotOn},
+		{"T3 is rolled back on the same small gap", technique.T3, arm(20, 4), arm(20, 2), "saves", config.AutopilotRolledBack},
+		{"too few test sessions decide nothing", technique.T3, arm(5, 5), arm(5, 0), "saves", config.AutopilotOn},
+		{"no worse with it on", technique.T2, arm(20, 2), arm(20, 4), "not_enough_data", config.AutopilotProbation},
+	}
+	for _, c := range cases {
+		ev := readyEvidence()
+		ev.Probation = ProbationEvidence{c.status, 25, 25}
+		ev.Tests = TestEvidence{Tier: c.tier, On: c.on, Off: c.off}
+		d := p.Decide(trial, ev, probNow)
+		if d.Entry.State != c.want {
+			t.Errorf("%s: state %q (%s); want %q", c.name, d.Entry.State, d.Entry.Reason, c.want)
+		}
+		if c.want == config.AutopilotRolledBack && !strings.Contains(d.Entry.Reason, "failing tests") {
+			t.Errorf("%s: reason %q does not name the test signal", c.name, d.Entry.Reason)
+		}
+	}
+	if p.testFailMargin(technique.T3) >= p.testFailMargin(technique.T2) {
+		t.Error("T3 must use a stricter test_fail_rate margin than T2")
+	}
+}
+
+func TestAdvanceRollsBackATrialWhoseSessionsFailTestsMoreOften(t *testing.T) {
+	db, dir := open(t)
+	seedTrialEvidence(t, db, dir)
+	f := advanceV2(t, db, dir, config.Default(), 4)
+	if f.Entries["hook_repeat_read"].State != config.AutopilotProbation {
+		t.Fatalf("setup: no trial started: %+v", f.Entries["hook_repeat_read"])
+	}
+	ctx := context.Background()
+	at := hookNow.Add(24 * time.Hour)
+	for i := 0; i < 24; i++ {
+		arm, exit := "off", 0
+		if i%2 == 0 {
+			arm = "on"
+			if i%4 == 0 {
+				exit = 1 // half of the "on" sessions end failing, none of the "off" ones
+			}
+		}
+		key := "trial-" + string(rune('a'+i))
+		if _, err := db.ExecContext(ctx, `INSERT INTO experiment_assignments(session_key, optimizer, arm, stratum, seq, assigned_at) VALUES(?,?,?,'',0,?)`,
+			key, "hook_repeat_read", arm, at.UnixMilli()); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.ExecContext(ctx, `INSERT INTO test_runs(ts, session_key, cmd_hash, exit_code) VALUES(?,?,?,?)`,
+			at.Add(time.Minute).UnixMilli(), key, "0123456789abcdef", exit); err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, err := Advance(ctx, db, dir, config.Default(), PolicyV2(), hookNow.Add(3*24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := res.File.Entries["hook_repeat_read"]; e.State != config.AutopilotRolledBack || !strings.Contains(e.Reason, "failing tests") {
+		t.Errorf("trial not rolled back on test_fail_rate: %+v", e)
 	}
 }
 

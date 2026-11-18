@@ -94,14 +94,16 @@ func TestHooksInstallAndUninstallKeepUserHooks(t *testing.T) {
 	}
 
 	pre := hookCommandsIn(t, hookClaudeSettings(home), "PreToolUse")
-	if len(pre) != 2 || pre[0] != "Bash|/home/me/no-rm.sh" || !strings.HasPrefix(pre[1], "Read|") || !strings.Contains(pre[1], "hook pre_tool_repeat_read") {
+	if len(pre) != 3 || pre[0] != "Bash|/home/me/no-rm.sh" || !strings.HasPrefix(pre[1], "Read|") || !strings.Contains(pre[1], "hook pre_tool_repeat_read") ||
+		!strings.HasPrefix(pre[2], "Agent|Task|") || !strings.Contains(pre[2], "hook pre_tool_subagent") {
 		t.Fatalf("PreToolUse = %v", pre)
 	}
 	end := hookCommandsIn(t, hookClaudeSettings(home), "SessionEnd")
 	if len(end) != 2 || end[0] != "|/home/me/bye.sh" || !strings.Contains(end[1], "hook session_end_receipt") {
 		t.Fatalf("SessionEnd = %v", end)
 	}
-	for ev, n := range map[string]int{"PostToolUse": 2, "SessionStart": 1, "PreCompact": 1} { // PostToolUse: read and edit records
+	// PostToolUse: read and edit records and the test-pass signal, which also needs PostToolUseFailure.
+	for ev, n := range map[string]int{"PostToolUse": 3, "PostToolUseFailure": 1, "SessionStart": 1, "PreCompact": 1} {
 		if got := hookCommandsIn(t, hookClaudeSettings(home), ev); len(got) != n {
 			t.Errorf("%s = %v", ev, got)
 		}
@@ -177,7 +179,7 @@ func TestHooksLargeOutputIsOptIn(t *testing.T) {
 	if code := h.run("hooks", "install", "--yes", "--large-output"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
-	if got := hookCommandsIn(t, hookClaudeSettings(home), "PreToolUse"); len(got) != 2 || !strings.HasPrefix(got[1], "Bash|") {
+	if got := hookCommandsIn(t, hookClaudeSettings(home), "PreToolUse"); len(got) != 3 || !strings.HasPrefix(got[2], "Bash|") {
 		t.Fatalf("Claude PreToolUse = %v", got)
 	}
 	if got := hookCommandsIn(t, codexHooksFile(home), "PreToolUse"); len(got) != 1 || !strings.Contains(got[0], "pre_tool_large_output") {

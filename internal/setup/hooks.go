@@ -233,7 +233,8 @@ func HooksInstalled(dataDir string) ([]Change, error) {
 	}
 	var out []Change
 	for _, c := range cs {
-		if c.Agent == ClaudeHooks || c.Agent == CodexHooks {
+		switch c.Agent {
+		case ClaudeHooks, CodexHooks, CursorHooks, GeminiHooks:
 			out = append(out, c)
 		}
 	}

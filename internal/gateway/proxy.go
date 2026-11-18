@@ -66,6 +66,13 @@ type flight struct {
 	// when this one arrived: the call that sharing would have saved.
 	dedup       *inflightEntry
 	dedupShadow bool
+	// query is the client's raw query string. warm is what keep_warm has to say about this request
+	// (nil: nothing), and warmCred holds the credential headers a ping needs, only when keep_warm is
+	// on and the request could be pinged; it lives as long as the request already holds them.
+	query    string
+	warmSeen bool // keep_warm was not off and the request is one it could ping
+	warm     *warmEstimate
+	warmCred http.Header
 	// capShadow is true when spending in the budget period had already reached the cap when this
 	// request arrived: a request a hard cap would have refused.
 	capShadow bool
@@ -139,6 +146,7 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, rt *route) {
 		defer s.inflight.leave(e) // forward returns only when the response has been written
 	}
 	f.capShadow = s.capEnter(r)
+	s.warmEnter(r, f)
 	basePath := strings.TrimSuffix(upstream.Path, "/")
 	rawBase := strings.TrimSuffix(upstream.EscapedPath(), "/")
 
@@ -356,6 +364,37 @@ func (s *Server) dedupEnter(r *http.Request, f *flight, body []byte) (e *infligh
 		meta.WriteString("|" + strings.Join(r.Header.Values(h), ","))
 	}
 	return s.inflight.enter(meta.String(), s.fingerprint.Of(r.Header), body)
+}
+
+// warmEnter tells keep_warm a real request arrived (which cancels the session's pending ping) and,
+// when keep_warm is on, keeps the credential headers a ping would need with the request. It can never
+// fail a request.
+func (s *Server) warmEnter(r *http.Request, f *flight) {
+	defer func() {
+		if recover() != nil {
+			f.warm, f.warmCred = nil, nil
+		}
+	}()
+	if s.warm == nil || !eligibleRoute(r, f) {
+		return
+	}
+	st := s.warm.state()
+	if st == config.StateOff {
+		return
+	}
+	f.query, f.warmSeen = r.URL.RawQuery, true
+	if !f.keyed {
+		f.sessionKey, f.keyed = s.sessions.Key(session.DeriveKey(r.Header, f.reqBody), f.start), true
+	}
+	f.warm = s.warm.arrive(f.sessionKey, f.start)
+	if st == config.StateOn {
+		f.warmCred = make(http.Header, len(credHeaders))
+		for _, h := range credHeaders {
+			if v := r.Header.Values(h); len(v) > 0 {
+				f.warmCred[h] = append([]string(nil), v...)
+			}
+		}
+	}
 }
 
 // capEnter says whether a hard spend cap would have refused this request: the cap is in shadow

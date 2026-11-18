@@ -68,9 +68,9 @@ Sharing is not a small addition. Each of these is a real decision, and none has 
 
 ## Exit criteria: build sharing only when all of these hold
 
-- Shadow data from at least one real API-key install shows duplicates often enough to matter: a meaningful share of
-  requests flagged across several sessions, worth at least a few dollars a month at list prices. If real traffic shows
-  almost none, the answer is to not build it.
+- Shadow data from at least one real API-key install shows the estimate above **1% of gateway spend** across several
+  sessions (decided 2026-11-17, docs/decisions/inflight-dedup.md). `trove report` states the share and which side of
+  the bar it is on. At or below 1%, the answer is to not build it.
 - It is known what produces the duplicates (a retry, sibling subagents, something else), by agent, from the shadow
   data. This decides whether point 1 is a real risk for those users.
 - The wording and the per-agent opt-in for point 1 are decided.
@@ -80,5 +80,5 @@ Sharing is not a small addition. Each of these is a real decision, and none has 
 ## What to do now
 
 Run the gateway with `inflight_dedup = "shadow"` for a week of real work, then read `trove report`. The row says what
-it would have saved and how many requests were flagged. That number is what decides whether any of the above is worth
+it would have saved, its share of gateway spend (`spend_share_pct` in `--json`), and whether that is above the 1% bar. That number is what decides whether any of the above is worth
 building.

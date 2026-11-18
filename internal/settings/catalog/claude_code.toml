@@ -298,3 +298,39 @@ notes = "Older way to set what bashOutputMaxChars now sets. Claude Code ignores 
 [[gap]]
 key = "custom compaction instructions"
 reason = "No official setting or CLAUDE.md section was found in the docs. Only '/compact <focus text>' is documented, and that is per-session. Not offered."
+
+# ---- Output caps: what the agent cuts before the model sees it ---------------------
+# Shadow estimates stop counting output past these limits (internal/optimize/outputcaps.go).
+# The limits are the defaults stated in the settings entries above (read as raw text
+# 2026-11-13); docs_version is the newest Claude Code version the docs described.
+# Trove does not read the user's own override, so a raised limit only makes estimates lower.
+
+[[output_cap]]
+tool = "Bash"
+unit = "chars"
+limit = 30000
+setting_key = "bashOutputMaxChars"
+docs_version = "2.1.314"
+doc_url = "https://code.claude.com/docs/en/settings-reference.md"
+verified_on = "2026-11-13"
+notes = "Successful Bash or PowerShell output Claude receives inline; the rest is saved to a file."
+
+[[output_cap]]
+tool = "mcp"
+unit = "tokens"
+limit = 25000
+setting_key = "MAX_MCP_OUTPUT_TOKENS"
+docs_version = "2.1.314"
+doc_url = "https://code.claude.com/docs/en/env-vars.md"
+verified_on = "2026-11-13"
+notes = "A tool that declares anthropic/maxResultSizeChars uses that limit for text instead, so this is the default case only."
+
+[[output_cap]]
+tool = "Read"
+unit = "tokens"
+limit = 25000
+setting_key = "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS"
+docs_version = "2.1.314"
+doc_url = "https://code.claude.com/docs/en/env-vars.md"
+verified_on = "2026-11-13"
+notes = "A read made with the allow_large parameter can go past it when the context window has room."

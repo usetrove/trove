@@ -67,7 +67,16 @@ func AnalyzeHookTrial(ctx context.Context, db *store.DB, optimizer string, x con
 		s.arm = a.arm
 		kept = append(kept, s)
 	}
-	return analyzeAll(ctx, db, optimizer, x, Priors{}, kept, excluded, 0, MetricTokens)
+	res, err := analyzeAll(ctx, db, optimizer, x, Priors{}, kept, excluded, 0, MetricTokens)
+	if err != nil {
+		return res, err
+	}
+	on, off, err := measure.TestFailByArm(ctx, db, optimizer, notBeforeMS, cutoff)
+	if err != nil {
+		return res, err
+	}
+	res.TestFail = &TestFailResult{OnRate: on.Rate(), OffRate: off.Rate(), OnSessions: on.Sessions, OffSessions: off.Sessions, Label: measure.Measured}
+	return res, nil
 }
 
 // hookSession reads one assigned session's figures. ok is false when it has no data yet or is still running.
@@ -78,11 +87,14 @@ func hookSession(ctx context.Context, db *store.DB, key string, cutoffMS int64) 
 	// The gateway's record first: it has the session's own roll-up of tool errors.
 	var gn int
 	var last sql.NullInt64
-	var tokens, turns int64
+	var tokens, turns, output, unpriced int64
+	var usd float64
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*), MAX(COALESCE(ended_at, started_at)),
 		COALESCE(SUM(total_input_uncached_tokens + total_cache_write_tokens + total_cache_read_tokens + total_output_tokens), 0),
-		COALESCE(SUM(request_count), 0) FROM sessions WHERE session_key = ? OR session_key LIKE ?`, key, like).
-		Scan(&gn, &last, &tokens, &turns); err != nil {
+		COALESCE(SUM(request_count), 0), COALESCE(SUM(total_output_tokens), 0), COALESCE(SUM(total_cost_usd), 0),
+		(SELECT COUNT(*) FROM requests r WHERE (r.session_key = ? OR r.session_key LIKE ?) AND r.cost_usd IS NULL)
+		FROM sessions WHERE session_key = ? OR session_key LIKE ?`, key, like, key, like).
+		Scan(&gn, &last, &tokens, &turns, &output, &usd, &unpriced); err != nil {
 		return s, false, err
 	}
 	if gn > 0 {
@@ -112,22 +124,27 @@ func hookSession(ctx context.Context, db *store.DB, key string, cutoffMS int64) 
 		if err := sig.Err(); err != nil {
 			return s, false, err
 		}
-		s.cost, s.turns, s.errs = float64(tokens), float64(turns), errs
+		s.cost, s.turns, s.errs, s.output = float64(tokens), float64(turns), errs, float64(output)
+		s.usd, s.hasUSD = usd, unpriced == 0
 		return s, true, nil
 	}
 
 	var hn int
 	var hlast sql.NullInt64
-	var herrs int64
+	var herrs, priced int64
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*), MAX(ts),
 		COALESCE(SUM(input_tokens + cache_write_5m + cache_write_1h + cache_write_other + cache_read + output_tokens), 0),
-		COALESCE(SUM(errors), 0) FROM history_requests WHERE session_key = ? OR session_key LIKE ?`, key, like).
-		Scan(&hn, &hlast, &tokens, &herrs); err != nil {
+		COALESCE(SUM(errors), 0), COALESCE(SUM(output_tokens), 0), COALESCE(SUM(cost_usd), 0), COUNT(cost_usd)
+		FROM history_requests WHERE session_key = ? OR session_key LIKE ?`, key, like).
+		Scan(&hn, &hlast, &tokens, &herrs, &output, &usd, &priced); err != nil {
 		return s, false, err
 	}
 	if hn == 0 || !hlast.Valid || hlast.Int64 >= cutoffMS {
 		return s, false, nil
 	}
-	s.cost, s.turns, s.errs = float64(tokens), float64(hn), float64(herrs)
+	s.cost, s.turns, s.errs, s.output = float64(tokens), float64(hn), float64(herrs), float64(output)
+	// Dollars from the agent's history are the provider-reported tokens at Trove's price table. A session with
+	// any unpriced request has none, so it is left out of cost per turn rather than counted cheap.
+	s.usd, s.hasUSD = usd, priced == int64(hn)
 	return s, true, nil
 }

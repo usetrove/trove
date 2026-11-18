@@ -29,12 +29,12 @@ func TestBuiltinManifestFacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ms) != 3 {
-		t.Fatalf("want rtk, terse-rules and token-savior, got %d manifests", len(ms))
+	if len(ms) != 5 {
+		t.Fatalf("want caveman, ponytail, rtk, terse-rules and token-savior, got %d manifests", len(ms))
 	}
 	for _, m := range ms {
 		if m.SupportsShadow {
-			t.Errorf("%s: none of the first three tools can run in shadow mode", m.Name)
+			t.Errorf("%s: none of the built-in tools can run in shadow mode", m.Name)
 		}
 		if m.ShadowNote == "" || m.Claimed.Text == "" {
 			t.Errorf("%s: needs a shadow note and a recorded claim", m.Name)
@@ -169,7 +169,7 @@ func TestChargeForBuiltins(t *testing.T) {
 	}
 	rules := builtinByName(t, "terse-rules")
 	c := ChargeFor(rules)
-	if c.PerRequest != EstimateTokens(rules.Rules) || c.PerRequest == 0 || !reflect.DeepEqual(c.Label, "estimated") {
+	if c.PerRequest != EstimateTokens(RulesBlock(rules)) || c.PerRequest == 0 || !reflect.DeepEqual(c.Label, "estimated") {
 		t.Errorf("rules charge = %+v", c)
 	}
 }

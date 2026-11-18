@@ -25,41 +25,41 @@ Status: todo | doing | done | blocked(<reason>). Update the Status column when y
 |---|---|---|---|---|---|---|
 | 0.1 | Class+Tier fields, registry enforcement | 0.5 | S | agent | - | done |
 | 0.2 | Scout/cascade as T3 + session A/B | 0.5 | M | agent | 0.1 | done |
-| 0.3 | Confounder tag at session start | 0.5 | S | agent | 0.1 | todo |
+| 0.3 | Confounder tag at session start | 0.5 | S | agent | 0.1 | done |
 | 0.4 | Tier+evidence labels on suggestions | 0.5 | S | agent | 0.1 | done |
-| 1.1 | Cost/turn + cost/uncached token metrics | 0.5 | M | agent | 0.1 | todo |
-| 1.2 | CUPED/regression adjustment | 0.6 | M | agent | 1.1, pre-registered method | todo |
-| 1.3 | Sequential always-valid CIs for rollback | 0.6 | M | agent | 1.1 | todo |
-| 1.4 | Fill priors file | 0.6 | M | agent+human | bench results | todo |
-| 1.5 | Agent output caps in shadow estimates | 0.5 | S | agent | - | todo |
-| 1.6 | Learned bytes/token per model family | 0.5 | S | agent | - | todo |
-| 1.7 | Subscription usage numbers + status line | 0.6 | M | agent | 1.1 | todo |
-| 2.1 | Test-pass signal (PostToolUse Bash exit code) | 0.6 | M | agent+human | live probe of Bash PostToolUse | todo |
-| 2.2 | test_fail_rate guardrail | 0.6 | M | agent | 2.1 | todo |
-| 2.3 | Per-session outcomes rollup | 0.6 | S | agent | 2.1 | todo |
-| 2.4 | Turn-inflation guardrail | 0.6 | S | agent | 1.1 | todo |
-| 2.5 | CI checker per optimizer | 0.6 | S | agent | - | todo |
-| 3.1 | Fixed-overhead findings first | 0.5 | S | agent | - | todo |
-| 3.2 | Measured overhead per fix | 0.6 | M | agent | - | todo |
-| 3.3 | alwaysLoad advice | 0.6 | S | agent | - | todo |
-| 3.4 | context_slim: provable duplicates only | 0.5 | S | agent | 0.1 | todo |
-| 4.1 | cache_ttl as a trove fix | 0.6 | S | agent | - | todo |
-| 4.2 | Per-marker cache TTL at gateway | 0.7 | M | agent | - | todo |
-| 4.3 | Keep-warm pings (API key, opt-in) | 0.7 | M | agent+human | privacy sign-off | blocked(privacy sign-off) |
-| 4.4 | In-flight dedup decision from shadow | 0.7 | S | agent | - | todo |
-| 5.1 | Hook output-hash dedup | 0.7 | M | agent | - | todo |
-| 5.2 | Outline-first large Read | 0.7 | M | agent+human | live probe of Read output | todo |
-| 5.3 | JSON/log output trimmer | 0.7 | M | agent | 2.5 | todo |
-| 5.4 | Retyped scripts -> trove_run | 0.7 | M | agent | - | todo |
-| 5.5 | MCP snippet with consent (T2) | 0.7 | S | agent | 0.1, 2.2 | todo |
-| 5.6 | Cursor + Gemini CLI adapters | 0.8 | L | agent+human | per-agent probe | todo |
-| 5.7 | Finish Codex output rewriting | 0.8 | M | agent+human | Codex live probe | todo |
-| 6.1 | Ponytail prompt as T2 | 0.7 | S | agent | 0.1, 0.3, 2.2 | todo |
-| 6.2 | Caveman skill as T2 | 0.7 | S | agent | 6.1 | todo |
-| 6.3 | terse-rules as T2 + conflict check | 0.7 | S | agent | 6.1 | todo |
-| 6.4 | Gateway verbosity steering | 0.7 | M | agent | 2.5 | todo |
-| 6.5 | Learned verbosity level | 0.7 | M | agent | 6.4 | todo |
-| 6.6 | Autopilot trials for rule sets | 0.7 | M | agent | 1.1-1.3, 6.1 | todo |
+| 1.1 | Cost/turn + cost/uncached token metrics | 0.5 | M | agent | 0.1 | done |
+| 1.2 | CUPED/regression adjustment | 0.6 | M | agent | 1.1, pre-registered method | done |
+| 1.3 | Sequential always-valid CIs for rollback | 0.6 | M | agent | 1.1 | done |
+| 1.4 | Fill priors file | 0.6 | M | agent+human | bench results | blocked(bench results) |
+| 1.5 | Agent output caps in shadow estimates | 0.5 | S | agent | - | done |
+| 1.6 | Learned bytes/token per model family | 0.5 | S | agent | - | done |
+| 1.7 | Subscription usage numbers + status line | 0.6 | M | agent | 1.1 | done |
+| 2.1 | Test-pass signal (PostToolUse Bash exit code) | 0.6 | M | agent+human | live probe of Bash PostToolUse | done |
+| 2.2 | test_fail_rate guardrail | 0.6 | M | agent | 2.1 | done |
+| 2.3 | Per-session outcomes rollup | 0.6 | S | agent | 2.1 | done |
+| 2.4 | Turn-inflation guardrail | 0.6 | S | agent | 1.1 | done |
+| 2.5 | CI checker per optimizer | 0.6 | S | agent | - | done |
+| 3.1 | Fixed-overhead findings first | 0.5 | S | agent | - | done |
+| 3.2 | Measured overhead per fix | 0.6 | M | agent | - | done |
+| 3.3 | alwaysLoad advice | 0.6 | S | agent | - | done |
+| 3.4 | context_slim: provable duplicates only | 0.5 | S | agent | 0.1 | done |
+| 4.1 | cache_ttl as a trove fix | 0.6 | S | agent | - | done |
+| 4.2 | Per-marker cache TTL at gateway | 0.7 | M | agent | - | done |
+| 4.3 | Keep-warm pings (API key, opt-in) | 0.7 | M | agent+human | - | done |
+| 4.4 | In-flight dedup decision from shadow | 0.7 | S | agent | - | done |
+| 5.1 | Hook output-hash dedup | 0.7 | M | agent | - | done |
+| 5.2 | Outline-first large Read | 0.7 | M | agent+human | live probe of Read output | done |
+| 5.3 | JSON/log output trimmer | 0.7 | M | agent | 2.5 | done |
+| 5.4 | Retyped scripts -> trove_run | 0.7 | M | agent | - | done |
+| 5.5 | MCP snippet with consent (T2) | 0.7 | S | agent | 0.1, 2.2 | done |
+| 5.6 | Cursor + Gemini CLI adapters | 0.8 | L | agent+human | per-agent probe | blocked(per-agent live probe, docs/hooks-verification.md) |
+| 5.7 | Finish Codex output rewriting | 0.8 | M | agent+human | Codex live probe | blocked(Codex live probe; no documented output-replacement field) |
+| 6.1 | Ponytail prompt as T2 | 0.7 | S | agent | 0.1, 0.3, 2.2 | done |
+| 6.2 | Caveman skill as T2 | 0.7 | S | agent | 6.1 | done |
+| 6.3 | terse-rules as T2 + conflict check | 0.7 | S | agent | 6.1 | done |
+| 6.4 | Gateway verbosity steering | 0.7 | M | agent | 2.5 | done |
+| 6.5 | Learned verbosity level | 0.7 | M | agent | 6.4 | done |
+| 6.6 | Autopilot trials for rule sets | 0.7 | M | agent | 1.1-1.3, 6.1 | done |
 | 7.1 | Cascade/scout/settings studies | 0.8 | L | agent+human | paid benchmark runs | todo |
 | 7.2 | Sticky model step-down at gateway | 0.8 | L | agent | 2.2, 2.4 | todo |
 | 7.3 | Model-per-subagent fix | 0.8 | M | agent | 2.2 | todo |

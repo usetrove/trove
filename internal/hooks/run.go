@@ -16,8 +16,6 @@
 package hooks
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/usetrove/trove/internal/optimize"
@@ -27,7 +25,6 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
-	"github.com/usetrove/trove/internal/gateway/session"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/redact"
 )
@@ -50,10 +47,15 @@ const (
 	// EventPostRun runs after the trove_run MCP tool and counts that the agent used it, which is how the
 	// guardrail for hook_large_output sees whether its hint was followed.
 	EventPostRun = "post_tool_run"
+	// EventSubagent runs before an Agent (formerly Task) call and declines the scout in the off arm of its trial.
+	EventSubagent = "pre_tool_subagent"
+	// EventTestResult runs after Bash (PostToolUse and PostToolUseFailure) and records the exit code of an
+	// allowlisted test command, the test-pass signal. It never changes anything.
+	EventTestResult = "post_tool_test_result"
 )
 
 // Events lists every event name.
-var Events = []string{EventPreRead, EventPostRead, EventPostEdit, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch, EventPostRun}
+var Events = []string{EventPreRead, EventPostRead, EventPostEdit, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch, EventPostRun, EventSubagent, EventTestResult}
 
 const (
 	// maxHashBytes is the largest file the repeat-read hook will hash. Bigger
@@ -114,8 +116,8 @@ func Main(e Env) (code int) {
 	switch event {
 	case EventSessionEnd:
 		deadline = endDeadline
-	case EventPostOutput:
-		deadline = postDeadline
+	case EventPostOutput, EventPostRead:
+		deadline = postDeadline // both may store the full output before replacing it
 	}
 	done := make(chan []byte, 1)
 	go func() {
@@ -138,7 +140,7 @@ func Main(e Env) (code int) {
 	return 0
 }
 
-// parseArgs reads `<event> [--data-dir DIR] [--agent claude|codex]`.
+// parseArgs reads `<event> [--data-dir DIR] [--agent claude|codex|cursor|gemini]`.
 func parseArgs(args []string) (event, dataDir, agent string) {
 	agent = "claude"
 	for i := 0; i < len(args); i++ {
@@ -177,6 +179,10 @@ type handler struct {
 	budget  time.Duration
 	recover bool
 	caps    *Capabilities
+	// bpt and bptN are the learned bytes-per-token ratio of the session being handled and its sample
+	// size (zero: the default ratio). They are set by sess and recorded with each estimate.
+	bpt  float64
+	bptN int
 }
 
 func run(dir, event, agent string, e Env) []byte {
@@ -188,14 +194,14 @@ func run(dir, event, agent string, e Env) []byte {
 		logf(dir, event, "unknown hook event %q; known: %s", event, strings.Join(Events, ", "))
 		return nil
 	}
-	in, err := ParseInput(e.Stdin)
+	in, err := parseFor(agent, e.Stdin)
 	if err != nil || in.SessionID == "" {
 		logf(dir, event, "could not read the hook input: %v", orEmpty(err))
 		return nil
 	}
 	snap, _ := LoadSnapshot(dir)
 	h := &handler{dir: dir, agent: agent, getenv: e.Getenv, now: e.Now, notify: e.Notify, notifyText: e.NotifyText, snap: snap, budget: callDeadline}
-	if event == EventPostOutput {
+	if event == EventPostOutput || event == EventPostRead {
 		h.budget = postDeadline
 	}
 	key := h.sessionKey(in.SessionID)
@@ -204,11 +210,11 @@ func run(dir, event, agent string, e Env) []byte {
 	case EventPreRead:
 		out, err = h.preRead(in, key)
 	case EventPostRead:
-		err = h.postRead(in, key)
+		out, err = h.postRead(in, key)
 	case EventPostEdit:
 		err = h.postEdit(in, key)
 	case EventReset:
-		err = h.reset(in, key)
+		out, err = h.reset(in, key)
 	case EventLargeOutput:
 		out, err = h.largeOutput(in, key)
 	case EventPostOutput:
@@ -217,6 +223,10 @@ func run(dir, event, agent string, e Env) []byte {
 		err = h.postFetch(in, key)
 	case EventPostRun:
 		err = h.postRun(in, key)
+	case EventSubagent:
+		out, err = h.subagent(in, key)
+	case EventTestResult:
+		err = h.testResult(in, key)
 	case EventSessionEnd:
 		err = h.sessionEnd(in, key)
 	}
@@ -224,7 +234,7 @@ func run(dir, event, agent string, e Env) []byte {
 		logf(dir, event, "%v", err)
 		return nil
 	}
-	return out
+	return reply(agent, out)
 }
 
 func orEmpty(err error) error {
@@ -236,25 +246,32 @@ func orEmpty(err error) error {
 
 // sessionKey is the hashed key rows are stored under. For Claude Code it is the
 // same key the gateway and history parsers use, so hook counts join their data.
-func (h *handler) sessionKey(id string) string {
-	if h.agent == "codex" {
-		sum := sha256.Sum256([]byte("codex\x00" + id))
-		return "x-" + hex.EncodeToString(sum[:])[:24]
-	}
-	return session.ClaudeCodeKey(id)
-}
+func (h *handler) sessionKey(id string) string { return agentSessionKey(h.agent, id) }
 
 // estTokens is ceil(bytes / 3.5), Trove's usual bytes-per-token prior. It is an
 // estimate and is always labelled so.
 func estTokens(b int64) int64 { return (b*2 + 6) / 7 }
 
 func (h *handler) emit(key, hook, kind string, bytes, tokens int64) error {
-	return record(h.dir, event{T: h.now().UnixMilli(), Key: key, Hook: hook, Kind: kind, Bytes: bytes, Tokens: tokens})
+	e := event{T: h.now().UnixMilli(), Key: key, Hook: hook, Kind: kind, Bytes: bytes, Tokens: tokens}
+	if tokens > 0 && h.bptN > 0 {
+		e.Ratio, e.Samples = h.bpt, h.bptN // the estimate used a learned ratio: say which and how well founded
+	}
+	return record(h.dir, e)
 }
 
 func denyJSON(reason string) []byte {
 	b, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]any{
 		"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason}})
+	return b
+}
+
+// sessionContextJSON adds text to the session's context at SessionStart (hookSpecificOutput.additionalContext,
+// code.claude.com/docs/en/hooks, checked 2026-11-17; strings over 10,000 characters are replaced by a file path
+// and a preview, so every rule set Trove ships stays under that, see TestRuleSetsFitTheContextLimit).
+func sessionContextJSON(text string) []byte {
+	b, _ := json.Marshal(map[string]any{"hookSpecificOutput": map[string]any{
+		"hookEventName": "SessionStart", "additionalContext": text}})
 	return b
 }
 

@@ -45,13 +45,21 @@ func FromReport(r report.Report) (Card, bool) {
 		SavedUSD:     r.Headline.Savings.Value,
 		Label:        measure.Estimated,
 	}
-	for _, l := range r.Leaks { // biggest first; skip anything not on the fixed list
-		if title, ok := report.LeakTitle(l.Category); ok {
-			c.TopLeak = title
-			break
+	c.TopLeak = topLeak(r.Leaks)
+	return c, true
+}
+
+// topLeak is the title of the largest leak by dollars, skipping anything not on
+// the fixed list. The report lists fixed overhead first, so order is not size.
+func topLeak(leaks []report.Leak) string {
+	var title string
+	best := -1.0
+	for _, l := range leaks {
+		if t, ok := report.LeakTitle(l.Category); ok && l.USD.Value > best {
+			title, best = t, l.USD.Value
 		}
 	}
-	return c, true
+	return title
 }
 
 func periodLabel(p report.PeriodInfo) string {

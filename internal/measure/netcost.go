@@ -89,7 +89,10 @@ func NetCostFor(ctx context.Context, db *store.DB, optimizer string, m config.Me
 	c.Enough = true
 	c.OnMeanUSD, c.OffMeanUSD = mean(on), mean(off)
 	se := math.Sqrt(sampleVar(on)/float64(len(on)) + sampleVar(off)/float64(len(off)))
-	c.Costlier = c.OnMeanUSD-c.OffMeanUSD > z95*se && c.OnMeanUSD > c.OffMeanUSD
+	// Costlier switches a tool off and is re-checked every few minutes, so it
+	// uses the sequential boundary (tuned to a 10% cost change); Cheaper only
+	// labels a report line and keeps the fixed-sample test.
+	c.Costlier = seqMeanExceeds(c.OnMeanUSD-c.OffMeanUSD, se, 0.1*c.OffMeanUSD) && c.OnMeanUSD > c.OffMeanUSD
 	c.Cheaper = c.OffMeanUSD-c.OnMeanUSD > z95*se && c.OffMeanUSD > c.OnMeanUSD
 	switch {
 	case c.Costlier:

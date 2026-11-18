@@ -27,8 +27,9 @@ import (
 //   - Trove does not know whether tests passed. Cost per session and the
 //     history error counts are the only outcome proxies.
 //   - Sessions are not split by project or task.
-//   - Session-level A/B (arms chosen at session start) is not built for these
-//     features yet; the figures here support but do not prove an effect.
+//   - The session-level A/B (arms chosen at session start by the hooks, see
+//     experiment.AnalyzeHookTrial) is the evidence. These before/after figures are secondary:
+//     they support but do not prove an effect.
 type TasksEffect struct {
 	Feature   string    `json:"feature"`
 	AppliedAt time.Time `json:"applied_at"`

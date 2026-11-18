@@ -160,6 +160,7 @@ func hookRewritesCheck(a *App, dir string, optimizerState func(string) string) c
 	needs := []need{
 		{"hook_read_limit", "Read", hooks.RewriteInput},
 		{"hook_quiet_commands", "Bash", hooks.RewriteInput},
+		{"hook_read_outline", "Read", hooks.RewriteOutput},
 	}
 	if rewriteHooksInstalled(a) {
 		needs = append(needs, need{"noise_normalizer", "Bash", hooks.RewriteOutput}, need{"output_trimmer", "Bash", hooks.RewriteOutput})

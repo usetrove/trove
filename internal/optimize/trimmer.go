@@ -12,14 +12,21 @@ import (
 )
 
 // Fixed parameters of the output trimmer. The trimmer only acts on text that is
-// recognizably test or build output, never on a file the agent read. The values a
-// repo may tune are in TrimThresholds below.
+// recognizably test or build output, or an application log (plain text or one
+// JSON object per line). The values a repo may tune are in TrimThresholds below.
 const (
-	minSignature     = 10 // lines that look like test/build output
+	minSignature     = 10 // lines that look like test/build output, or like log records
 	contextBefore    = 2
 	contextAfter     = 2
 	maxStackLines    = 40
 	maxTrimLineBytes = 400
+	// maxLogLineBytes bounds the log-mode regexes per line. A longer line in a log
+	// (a large JSON record) is always kept, so no error can hide in one.
+	maxLogLineBytes = 4000
+	// rareTemplateMax is how often a line's template (the line with numbers, hex
+	// ids and colors masked out) may occur in a log and still count as an outlier,
+	// which is always kept.
+	rareTemplateMax = 2
 )
 
 // TrimThresholds are the output trimmer's tunable parameters. Output smaller
@@ -104,6 +111,19 @@ var (
 	frameRe = regexp.MustCompile(`^\s+at .+:\d+|\.go:\d+|File ".+", line \d+|^\s+\S+\.(?:rs|java|kt|py|js|ts):\d+`)
 	// trimMarker is the line the trimmer writes; it is always kept.
 	trimMarker = regexp.MustCompile(`^\[Trove: \d+ lines trimmed; full output sha256:[0-9a-f]{16}\]\r?$`)
+
+	// ansiRe matches terminal color and cursor sequences, which log mode ignores.
+	ansiRe = regexp.MustCompile("\x1b\\[[0-9;?]*[A-Za-z]")
+	// logLineRe marks a log record: a level word among the first few fields
+	// (after a timestamp, logger name or pid), a logfmt level, a JSON object with
+	// a level field, or an HTTP access line.
+	logLineRe = regexp.MustCompile(`^\s*(?:\S+\s+){0,3}?\[?(?:TRACE|DEBUG|INFO|NOTICE|WARN|WARNING|ERROR|FATAL|CRITICAL|PANIC)\]?:?(?:\s|$)|\blevel=\w+|^\s*\{.*"(?:level|severity|lvl)"\s*:|^(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS) /\S* \d{3}\b`)
+	// logAlertRe marks a log line that reports a problem. It is deliberately broad:
+	// a routine line that merely mentions an error is kept too.
+	logAlertRe = regexp.MustCompile(`(?i)\b(?:errors?|err|fatal|panic(?:ked)?|\w*exception|fail(?:ed|ure|ing|s)?|traceback|warn(?:ing)?|crit(?:ical)?|severe|alert|emerg(?:ency)?)\b`)
+	// variableRe is a run of digits and hex letters holding at least one digit:
+	// timestamps, ids, counts and durations, masked out of a line's template.
+	variableRe = regexp.MustCompile(`[0-9a-fA-F]*[0-9][0-9a-fA-F]*`)
 )
 
 // OutputTrimmer is the output_trimmer optimizer. In large test and build output
@@ -381,11 +401,65 @@ func trimWithSource(text string, source func() string, th TrimThresholds) (strin
 			signature++
 		}
 	}
-	if signature < minSignature {
-		return text, false
+	if signature >= minSignature {
+		return collapseRunsFrom(text, source, lines, keepLines(lines, th), th.MinTrimmedLines)
 	}
+	if isLog(lines) {
+		return collapseRunsFrom(text, source, lines, keepLogLines(lines, th), th.MinTrimmedLines)
+	}
+	return text, false
+}
 
-	return collapseRunsFrom(text, source, lines, keepLines(lines, th), th.MinTrimmedLines)
+// isLog reports whether lines are an application log: at least minSignature log
+// records, making up at least half of the lines that start at column 0 (stack
+// frames and continuation lines are indented and do not count either way).
+//
+// Trimming only removes lines, so trimmed text never has more test-output lines
+// than its source: a log stays out of test mode when it is trimmed again.
+func isLog(lines []string) bool {
+	records, considered := 0, 0
+	for _, l := range lines {
+		if l == "" || l[0] == ' ' || l[0] == '\t' || len(l) > maxLogLineBytes {
+			continue
+		}
+		considered++
+		if logLineRe.MatchString(ansiRe.ReplaceAllString(l, "")) {
+			records++
+		}
+	}
+	return records >= minSignature && 2*records >= considered
+}
+
+// keepLogLines is keepLines for a log. On top of the head, tail, failures and
+// stack traces it keeps every line that reports a problem (with its context and
+// trace), every outlier (a line whose template is rare in this output) and every
+// line too long to check. What goes is the routine, repeated records.
+//
+// Every rule depends only on the line, its neighbors and how often its template
+// occurs. Trimming removes lines, so a template's count can only fall and an
+// outlier stays one: trimming the trimmed log removes nothing.
+func keepLogLines(lines []string, th TrimThresholds) []bool {
+	keep := keepLines(lines, th)
+	templates := make([]string, len(lines))
+	count := map[string]int{}
+	for i, l := range lines {
+		if len(l) > maxLogLineBytes {
+			keep[i] = true
+			continue
+		}
+		plain := ansiRe.ReplaceAllString(l, "")
+		if logAlertRe.MatchString(plain) {
+			keepAround(keep, lines, i)
+		}
+		templates[i] = variableRe.ReplaceAllString(plain, "#")
+		count[templates[i]]++
+	}
+	for i := range lines {
+		if len(lines[i]) <= maxLogLineBytes && count[templates[i]] <= rareTemplateMax {
+			keep[i] = true
+		}
+	}
+	return keep
 }
 
 // keepLines marks the lines worth keeping: the head and tail, every failure or
@@ -409,20 +483,25 @@ func keepLines(lines []string, th TrimThresholds) []bool {
 		if !failureRe.MatchString(l) && !frameRe.MatchString(l) {
 			continue
 		}
-		for j := max(0, i-contextBefore); j <= min(len(lines)-1, i+contextAfter); j++ {
-			keep[j] = true
-		}
-		// A trace continues through indented lines and frames.
-		for j, n := i+1, 0; j < len(lines) && n < maxStackLines; j, n = j+1, n+1 {
-			c := lines[j]
-			if !strings.HasPrefix(c, " ") && !strings.HasPrefix(c, "\t") && !frameRe.MatchString(c) {
-				break
-			}
-			keep[j] = true
-		}
+		keepAround(keep, lines, i)
 	}
 
 	return keep
+}
+
+// keepAround keeps line i with its context, and the stack trace that follows it.
+func keepAround(keep []bool, lines []string, i int) {
+	for j := max(0, i-contextBefore); j <= min(len(lines)-1, i+contextAfter); j++ {
+		keep[j] = true
+	}
+	// A trace continues through indented lines and frames.
+	for j, n := i+1, 0; j < len(lines) && n < maxStackLines; j, n = j+1, n+1 {
+		c := lines[j]
+		if !strings.HasPrefix(c, " ") && !strings.HasPrefix(c, "\t") && !frameRe.MatchString(c) {
+			break
+		}
+		keep[j] = true
+	}
 }
 
 // collapseRuns replaces each run of unkept lines with one marker line. It reports

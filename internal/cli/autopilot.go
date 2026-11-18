@@ -90,16 +90,25 @@ type autopilotStatusJSON struct {
 }
 
 func newAutopilot(a *App) *cobra.Command {
-	var yes bool
+	var yes, stop bool
 	c := &cobra.Command{
-		Use:       "autopilot [on|off|pause|resume|trials [on|off]]",
+		Use:       "autopilot [on|off|pause|resume|trials [on|off]|trial <rule set>]",
 		Short:     "Let Trove turn on proven savings by itself (with no argument: show what it is doing)",
 		Args:      cobra.MaximumNArgs(2),
-		ValidArgs: []string{"on", "off", "pause", "resume", "trials"},
+		ValidArgs: []string{"on", "off", "pause", "resume", "trials", "trial"},
 		RunE: func(_ *cobra.Command, args []string) error {
 			verb := ""
 			if len(args) >= 1 {
 				verb = args[0]
+			}
+			if verb == "trial" {
+				if len(args) != 2 {
+					return fmt.Errorf("name the rule set to trial: `trove autopilot trial <%s>`", strings.Join(autopilot.RuleSets(), "|"))
+				}
+				return runRuleTrial(a, args[1], stop, yes)
+			}
+			if stop {
+				return fmt.Errorf("--stop only goes with `trove autopilot trial <rule set>`")
 			}
 			if verb == "trials" {
 				sub := "on"
@@ -116,7 +125,8 @@ func newAutopilot(a *App) *cobra.Command {
 			return runAutopilot(a, verb, yes)
 		},
 	}
-	c.Flags().BoolVar(&yes, "yes", false, "agree to Autopilot without asking (for `on`)")
+	c.Flags().BoolVar(&yes, "yes", false, "agree without asking (for `on`, `trials on` and `trial`)")
+	c.Flags().BoolVar(&stop, "stop", false, "stop a rule-set trial (with `trial <rule set>`)")
 	return c
 }
 
@@ -215,7 +225,11 @@ func runAutopilot(a *App, verb string, yes bool) error {
 	default:
 		return fmt.Errorf("unknown action %q. Use on, off, pause, resume or trials, or no argument to see the status.", verb)
 	}
+	return runAutopilotStatus(a, dir, changed)
+}
 
+// runAutopilotStatus prints Autopilot's state, with changed as the line saying what this command did.
+func runAutopilotStatus(a *App, dir, changed string) error {
 	f, err := config.LoadAutopilot(dir)
 	if err != nil {
 		return err

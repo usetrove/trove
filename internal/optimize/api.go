@@ -160,7 +160,7 @@ type ToolOutputOptimizer interface {
 // ToolPipeline returns the tool-level optimizers in run order. The request-level
 // Pipeline is separate because its order is a byte-level cache contract.
 func ToolPipeline() []Base {
-	return []Base{NoiseNormalizer{}, newOutputTrimmer(), RepeatRead{}, ReadLimit{}, QuietCommands{}, LargeOutputAdvice{}}
+	return []Base{OutputDedup{}, NoiseNormalizer{}, newOutputTrimmer(), RepeatRead{}, ReadLimit{}, QuietCommands{}, LargeOutputAdvice{}, ReadOutline{}}
 }
 
 // TransformToolInput runs the tool-input optimizers on one call. It never
@@ -214,6 +214,11 @@ func (e *Engine) TransformToolOutput(ctx context.Context, call ToolCall, out Too
 		return parts[i].Text
 	}
 	var reps []Report
+	// The session's learned ratio when it has one, else the engine's.
+	bpt := e.bpt
+	if s.BytesPerToken > 0 {
+		bpt = s.BytesPerToken
+	}
 	ctx, cancel := context.WithTimeout(ctx, e.budget)
 	defer cancel()
 	for _, b := range e.tools {
@@ -240,9 +245,12 @@ func (e *Engine) TransformToolOutput(ctx context.Context, call ToolCall, out Too
 		rep.Changed = before != after || !sameOutput(cur, res)
 		if !rep.Changed {
 			rep.BytesRemoved, rep.TokensRemoved = 0, 0
-		} else if n := before - after; n > 0 {
+		} else if n := cappedSaving(call.Name, before, after, bpt); n > 0 {
 			rep.BytesRemoved = n
-			rep.TokensRemoved = int64(float64(n)/e.bpt + 0.5)
+			rep.TokensRemoved = int64(float64(n)/bpt + 0.5)
+		} else if before > after {
+			// Everything removed was past the agent's own cap: nothing saved.
+			rep.BytesRemoved, rep.TokensRemoved = 0, 0
 		}
 		if state == config.StateOn && rep.Changed && len(rep.Originals) > 0 {
 			// Same rule as the request level: store every original before the

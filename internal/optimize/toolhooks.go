@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -131,6 +132,14 @@ func fileSum(path string, size, maxBytes int64) (string, bool) {
 // estimate and is always labelled so.
 func EstTokens(b int64) int64 { return (b*2 + 6) / 7 }
 
+// EstTokensAt is ceil(bytes / bpt). A ratio of zero or less, or the default, gives EstTokens, exactly.
+func EstTokensAt(b int64, bpt float64) int64 {
+	if bpt <= 0 || bpt == DefaultBytesPerToken {
+		return EstTokens(b)
+	}
+	return int64(math.Ceil(float64(b) / bpt))
+}
+
 type readArgs struct {
 	FilePath string     `json:"file_path"`
 	Offset   LenientInt `json:"offset"`
@@ -189,6 +198,9 @@ func (RepeatRead) TransformInput(_ context.Context, call ToolCall, s Session) (T
 	if !found {
 		return call, Report{}
 	}
+	if a.Offset == 0 && a.Limit == 0 && outlinedUncounted(s.Ledger, a.FilePath) {
+		return call, Report{} // the agent saw only an outline of this file, so its full read must go through
+	}
 	fs, ok := StatFile(a.FilePath, int(a.Limit), true)
 	if !ok || fs.MTime != ent.MTime || fs.Size != ent.Size || fs.Sum != ent.Sum {
 		s.Ledger.Delete(rk) // changed (or gone): the next successful read re-records it
@@ -197,7 +209,11 @@ func (RepeatRead) TransformInput(_ context.Context, call ToolCall, s Session) (T
 		}
 		return call, Report{}
 	}
-	tokens := EstTokens(fs.Partial)
+	// A read past the agent's cap would have been cut anyway, so only what it would have returned counts.
+	if c, ok := outputCapBytes(call.Name, s.bytesPerToken()); ok {
+		fs.Partial = min(fs.Partial, c)
+	}
+	tokens := EstTokensAt(fs.Partial, s.bytesPerToken())
 	rep := Report{Name: name, BytesRemoved: int(fs.Partial), TokensRemoved: tokens}
 	if s.Mode == config.StateShadow {
 		rep.Decision = &Decision{Kind: KindWouldBlock, Bytes: fs.Partial, Tokens: tokens}

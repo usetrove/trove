@@ -6,8 +6,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/optimize"
 )
+
+func TestPinWithoutCacheTTLLoadsAsDefault(t *testing.T) {
+	db := openTemp(t)
+	ctx := context.Background()
+	// A pin saved before the column existed has NULL there.
+	if _, err := db.ExecContext(ctx, `INSERT INTO session_pins(session_key, states, custom_agents, bytes_per_token, pinned_at) VALUES('old','{}','[]',3.5,1)`); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := db.Pins().Load(ctx, "old")
+	if err != nil || !ok || got.CacheTTL != (config.CacheTTL{}) {
+		t.Fatalf("got %+v ok=%v err=%v; want the 5-minute default", got.CacheTTL, ok, err)
+	}
+	if err := db.Pins().Save(ctx, optimize.Pin{SessionKey: "dflt", States: map[string]string{}, PinnedAt: time.UnixMilli(1)}); err != nil {
+		t.Fatal(err)
+	}
+	var raw *string
+	if err := db.QueryRowContext(ctx, `SELECT cache_ttl FROM session_pins WHERE session_key='dflt'`).Scan(&raw); err != nil || raw != nil {
+		t.Errorf("a default pin should store NULL, got %v (%v)", raw, err)
+	}
+}
 
 func TestPinsRoundTripAndFirstWins(t *testing.T) {
 	db := openTemp(t)
@@ -20,6 +41,8 @@ func TestPinsRoundTripAndFirstWins(t *testing.T) {
 	first := optimize.Pin{
 		SessionKey: "s1", States: map[string]string{"noise_normalizer": "on", "cache_breakpoints": "off"},
 		CustomAgents: []string{"sdk"}, BytesPerToken: 3.5, PinnedAt: time.UnixMilli(1_700_000_000_000).UTC(),
+		Confounders: []string{"brevity_rules", "skill"},
+		CacheTTL:    config.CacheTTL{Tools: "1h", System: "1h"},
 	}
 	if err := pins.Save(ctx, first); err != nil {
 		t.Fatal(err)

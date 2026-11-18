@@ -156,6 +156,17 @@ func wireHook(e Env, m Manifest) ([]*setup.Edit, error) {
 	return []*setup.Edit{ed}, nil
 }
 
+// ManagedMarker is the line inside every rules block Trove adds, so Trove (and a
+// reader) can tell its blocks from the user's own text.
+const ManagedMarker = "<!-- trove:managed -->"
+
+// RulesBlock is the exact text a rules_file tool adds to the agent's rules file,
+// fences included. Its size is what the tool is charged per request.
+func RulesBlock(m Manifest) string {
+	open, closeMark := setup.ExternalMarkers(m.Name)
+	return open + "\n" + ManagedMarker + "\n" + strings.TrimRight(m.Rules, "\n") + "\n" + closeMark + "\n"
+}
+
 func wireRules(e Env, m Manifest) ([]*setup.Edit, error) {
 	if e.ClaudeDir == "" {
 		return nil, errors.New("Trove could not find your agent's config folder, so it cannot add the rules. Set it up with the agent first")
@@ -168,8 +179,8 @@ func wireRules(e Env, m Manifest) ([]*setup.Edit, error) {
 	if errors.Is(err, os.ErrNotExist) {
 		old = nil
 	}
-	open, closeMark := setup.ExternalMarkers(m.Name)
-	block := open + "\n" + strings.TrimRight(m.Rules, "\n") + "\n" + closeMark + "\n"
+	open, _ := setup.ExternalMarkers(m.Name)
+	block := RulesBlock(m)
 	if strings.Contains(string(old), open) {
 		return []*setup.Edit{setup.NewExternalEdit(m.Name, path, block, "already present", open, old, old)}, nil
 	}

@@ -5,7 +5,7 @@ Headline
                (measured)
   Waste found  at least ~$5.85, 8% of spend (estimated; overlapping findings
                counted once)
-  Savings      ~$0.50 so far (estimated)
+  Savings      ~$0.50 so far (estimated), about <1% of your usage (estimated)
   Measured     not enough data yet to compare sessions with and without an
                optimizer. The dollar savings above are estimates.
 
@@ -41,6 +41,7 @@ Optimizers
   output_trimmer: off
   duplicate_result_collapser: off
     Would have saved ~$3.60 (estimated, shadow mode).
+  verbosity_steer: off
   cache_breakpoints: off
   Guardrail events: none.
 

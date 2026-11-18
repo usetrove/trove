@@ -123,6 +123,8 @@ The optimizer settings fixed for a session when it started (so nothing changes m
 | `custom_agents` | JSON: agent labels treated as custom agents |
 | `bytes_per_token` | The bytes-per-token ratio used to estimate tokens |
 | `pinned_at` | When the settings were fixed |
+| `confounders` | JSON: fixed tag names (`brevity_rules`, `skill`, `external_tool`) for things present at session start that can change cost by themselves; never text. Empty or null if none |
+| `cache_ttl` | JSON: the cache lifetime (`"5m"` or `"1h"`) for each marker `cache_breakpoints` adds (`tools`, `system`, `messages`). Null when every marker used the 5-minute default |
 
 **Retention:** deleted after `retention_days`.
 
@@ -385,6 +387,20 @@ One row per decision made by Trove's agent hooks.
 | `kind` | What happened: blocked, would_block, advised, would_advise, reread_anyway, rewritten, would_rewrite, reissued, fetched_back, extra_read or adopted |
 | `bytes` | Size of the file or output involved |
 | `tokens` | Estimated tokens kept out of the context, 0 when unknown |
+
+**Retention:** deleted after `retention_days`.
+
+### `test_runs`
+
+The test-pass signal: one row each time the agent ran, through Bash, a command that exactly matches a test command in the project's `.trove/commands.toml` (an entry named `test`, or starting or ending with `test-`, `test_`, `-test` or `_test`). Written by the `post_tool_test_result` hook. The command's text, output and folder are never stored.
+
+| Column | Meaning |
+|---|---|
+| `id` | Row number |
+| `ts` | When |
+| `session_key` | Hash of the session id |
+| `cmd_hash` | 16-character hash of the allowlisted argument list, so runs of the same command can be grouped |
+| `exit_code` | The command's exit code (0 is a pass) |
 
 **Retention:** deleted after `retention_days`.
 

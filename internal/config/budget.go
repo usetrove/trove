@@ -22,16 +22,32 @@ func SetBudget(dataDir, period string, capUSD float64) error {
 	if capUSD < 0 {
 		return fmt.Errorf("budget amount is %g; use a positive amount, or 0 for no cap.", capUSD)
 	}
+	return editConfigFile(dataDir, func(src string) string { return setBudgetLines(src, period, capUSD) })
+}
+
+// readConfigText returns config.toml's text, or DefaultTOML when there is none.
+func readConfigText(dataDir string) (string, error) {
 	path := filepath.Join(dataDir, FileName)
 	b, err := os.ReadFile(path) //nolint:gosec // path is inside the user's own data directory
 	switch {
 	case err == nil:
+		return string(b), nil
 	case os.IsNotExist(err):
-		b = []byte(DefaultTOML)
+		return DefaultTOML, nil
 	default:
-		return fmt.Errorf("cannot read %s: %v. Check its permissions.", path, err)
+		return "", fmt.Errorf("cannot read %s: %v. Check its permissions.", path, err)
 	}
-	out := setBudgetLines(string(b), period, capUSD)
+}
+
+// editConfigFile rewrites config.toml through edit, atomically and with mode 0600. A
+// missing file is created from DefaultTOML first.
+func editConfigFile(dataDir string, edit func(string) string) error {
+	path := filepath.Join(dataDir, FileName)
+	src, err := readConfigText(dataDir)
+	if err != nil {
+		return err
+	}
+	out := edit(src)
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return fmt.Errorf("cannot create %s: %v. Check its permissions.", dataDir, err)
 	}
@@ -58,59 +74,85 @@ func SetBudget(dataDir, period string, capUSD float64) error {
 
 // setBudgetLines replaces or adds the period and cap_usd lines inside [budget].
 func setBudgetLines(src, period string, capUSD float64) string {
-	nl := "\n"
-	if strings.Contains(src, "\r\n") {
-		nl = "\r\n"
-	}
-	lines := strings.Split(strings.ReplaceAll(src, "\r\n", "\n"), "\n")
 	capLine := "cap_usd = " + strconv.FormatFloat(capUSD, 'f', -1, 64)
 	if !strings.Contains(capLine, ".") {
 		capLine += ".0"
 	}
-	periodLine := fmt.Sprintf("period = %q", period)
+	return setSectionLines(src, "budget", [][2]string{{"period", fmt.Sprintf("period = %q", period)}, {"cap_usd", capLine}})
+}
 
-	start := -1
+// sectionBounds returns the line index of [section]'s header and the index just past
+// its last line, or start -1 when it is missing.
+func sectionBounds(lines []string, section string) (start, end int) {
+	start = -1
 	for i, l := range lines {
-		if strings.TrimSpace(l) == "[budget]" {
+		if strings.TrimSpace(l) == "["+section+"]" {
 			start = i
 			break
 		}
 	}
 	if start < 0 {
-		for len(lines) > 0 && lines[len(lines)-1] == "" {
-			lines = lines[:len(lines)-1]
-		}
-		lines = append(lines, "", "[budget]", periodLine, capLine, "")
-		return strings.Join(lines, nl)
+		return -1, -1
 	}
-	end := len(lines)
+	end = len(lines)
 	for i := start + 1; i < len(lines); i++ {
 		if t := strings.TrimSpace(lines[i]); strings.HasPrefix(t, "[") {
 			end = i
 			break
 		}
 	}
-	setKey := func(key, line string) {
-		for i := start + 1; i < end; i++ {
-			t := strings.TrimSpace(lines[i])
-			if strings.HasPrefix(t, key) && strings.HasPrefix(strings.TrimSpace(strings.TrimPrefix(t, key)), "=") {
-				lines[i] = line
-				return
-			}
+	return start, end
+}
+
+// keyLine returns the index of key's line in lines[start+1:end], or -1.
+func keyLine(lines []string, start, end int, key string) int {
+	for i := start + 1; i < end; i++ {
+		t := strings.TrimSpace(lines[i])
+		if strings.HasPrefix(t, key) && strings.HasPrefix(strings.TrimSpace(strings.TrimPrefix(t, key)), "=") {
+			return i
 		}
-		lines = append(lines[:start+1], append([]string{line}, lines[start+1:]...)...)
+	}
+	return -1
+}
+
+// setSectionLines replaces or adds each {key, full line} inside [section], keeping every
+// other line, comment and the file's line endings as they are.
+func setSectionLines(src, section string, kv [][2]string) string {
+	nl := "\n"
+	if strings.Contains(src, "\r\n") {
+		nl = "\r\n"
+	}
+	lines := strings.Split(strings.ReplaceAll(src, "\r\n", "\n"), "\n")
+	start, end := sectionBounds(lines, section)
+	if start < 0 {
+		for len(lines) > 0 && lines[len(lines)-1] == "" {
+			lines = lines[:len(lines)-1]
+		}
+		lines = append(lines, "", "["+section+"]")
+		for _, p := range kv {
+			lines = append(lines, p[1])
+		}
+		return strings.Join(append(lines, ""), nl)
+	}
+	for _, p := range kv {
+		if i := keyLine(lines, start, end, p[0]); i >= 0 {
+			lines[i] = p[1]
+			continue
+		}
+		lines = append(lines[:start+1], append([]string{p[1]}, lines[start+1:]...)...)
 		end++
 	}
-	setKey("period", periodLine)
-	setKey("cap_usd", capLine)
 	return strings.Join(lines, nl)
 }
 
 // GatewayBehaviors lists the behaviors of the gateway itself that carry an optimizer
 // state ("off", "shadow" or "on") like the pipeline's optimizers do, but act on which
-// requests reach the provider and not on the bytes of one. Neither has an active mode
-// yet, so "on" runs as shadow for both.
-var GatewayBehaviors = []string{OptimizerInflightDedup, OptimizerSpendCap}
+// requests reach the provider and not on the bytes of one. Only keep_warm has an active
+// mode; for the others "on" runs as shadow (see GatewayActive).
+var GatewayBehaviors = []string{OptimizerInflightDedup, OptimizerSpendCap, OptimizerKeepWarm}
+
+// GatewayActive reports whether a gateway behavior has a built active mode, so "on" means on.
+func GatewayActive(name string) bool { return name == OptimizerKeepWarm }
 
 // IsGatewayBehavior reports whether name is one of GatewayBehaviors.
 func IsGatewayBehavior(name string) bool {

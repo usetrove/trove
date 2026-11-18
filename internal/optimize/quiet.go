@@ -93,11 +93,16 @@ func (ReadLimit) TransformInput(_ context.Context, call ToolCall, s Session) (To
 	}
 	kept := int64(ReadLimitLines * bytesPerLine)
 	note := readLimitNote(fs.Size)
-	saved := fs.Size - kept - int64(len(note))
+	// The agent would have cut a file past its read cap anyway, so only what it would have passed on counts.
+	wouldSend := fs.Size
+	if c, ok := outputCapBytes(call.Name, s.bytesPerToken()); ok {
+		wouldSend = min(wouldSend, c)
+	}
+	saved := wouldSend - kept - int64(len(note))
 	if saved <= 0 {
 		return call, Report{}
 	}
-	rep := Report{Name: config.OptimizerHookReadLimit, BytesRemoved: int(saved), TokensRemoved: EstTokens(saved)}
+	rep := Report{Name: config.OptimizerHookReadLimit, BytesRemoved: int(saved), TokensRemoved: EstTokensAt(saved, s.bytesPerToken())}
 	if s.Mode == config.StateShadow {
 		rep.Decision = &Decision{Kind: KindWouldRewrite, Bytes: saved, Tokens: rep.TokensRemoved}
 		return call, rep
@@ -159,6 +164,54 @@ type QuietRule struct {
 	Source     string // documentation read
 	VerifiedAt string // date it was read
 	Note       string
+	// ErrorFixture names a recorded pair of outputs from a failing run, in
+	// testdata/quiet/<name>.default.txt and <name>.quiet.txt; a test checks that the
+	// quiet one keeps every failure line of the default one. ErrorCheckedAt says
+	// when and with which tool version it was recorded. This is the mechanical
+	// error-visibility check a rule needs before it can be promoted from shadow.
+	ErrorFixture   string
+	ErrorCheckedAt string
+}
+
+// FailureLines returns the lines of command output that carry a failure, as
+// IsFailureLine sees them, without trailing spaces.
+func FailureLines(out string) []string {
+	var ls []string
+	for _, l := range strings.Split(out, "\n") {
+		l = strings.TrimRight(l, " \r")
+		if IsFailureLine(l) {
+			ls = append(ls, l)
+		}
+	}
+	return ls
+}
+
+// MissingFailureLines returns the failure lines of full that do not appear as a
+// line of quiet. Run summaries ("2 failed, 1 passed in 0.4s") differ in timing and
+// decoration between the two, so a line is also kept when quiet has it with the
+// decoration and timing removed.
+func MissingFailureLines(full, quiet string) []string {
+	have := map[string]bool{}
+	for _, l := range strings.Split(quiet, "\n") {
+		have[normFailure(l)] = true
+	}
+	var miss []string
+	for _, l := range FailureLines(full) {
+		if !have[normFailure(l)] {
+			miss = append(miss, l)
+		}
+	}
+	return miss
+}
+
+// normFailure strips the decoration and timing that differ between a tool's
+// default and quiet summaries: surrounding "=" rules and a trailing "in 0.48s".
+func normFailure(l string) string {
+	l = strings.Trim(strings.TrimRight(l, " \r"), "= ")
+	if i := strings.LastIndex(l, " in "); i > 0 && strings.HasSuffix(l, "s") {
+		l = l[:i]
+	}
+	return l
 }
 
 // QuietRules is the allowlist, in match order. Add an entry only with a source
@@ -186,7 +239,8 @@ var QuietRules = []QuietRule{
 		Note: "docs: do not print cargo log messages; they do not say compiler errors remain"},
 	{Prefix: []string{"pytest"}, Add: []string{"-q"}, Skip: []string{"-q", "--quiet", "-v", "--verbose", "-s"},
 		Source: "https://docs.pytest.org/en/stable/", VerifiedAt: "2026-11-04",
-		Note: "the page that documents -q was not read"},
+		Note:         "the page that documents -q was not read; a recorded failing run keeps every failure line under -q (ErrorFixture), so it is promotable once a live probe shows the agent honours the rewrite",
+		ErrorFixture: "pytest", ErrorCheckedAt: "2026-11-17 pytest 9.1.1"},
 }
 
 // plainWord reports whether w is made only of characters that mean the same

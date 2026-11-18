@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -94,11 +95,12 @@ func detectMCPPrune(ctx context.Context, e *Env) ([]*Fix, error) {
 		} else {
 			f.updated = upd
 		}
-		if t, usd, note := schema.cost(e, name); note == "" {
-			f.TokensPerSession, f.USDPerSession = t, usd
-			f.Evidence = append(f.Evidence, fmt.Sprintf("~%d tokens of tool definitions per session (estimated from your gateway traffic; may be lower if Claude Code defers tool definitions with tool search)", t))
+		if per, ok := schema.server(name); ok {
+			schema.setResent(f, per, "measured", "tool definitions")
+			f.TokensPerSession, f.USDPerSession = schema.priceTokens(e, per)
 		} else {
-			f.Notes = append(f.Notes, note)
+			schema.setRequests(f)
+			f.Notes = append(f.Notes, fmt.Sprintf(noGatewayNote, "this server's tool definitions"))
 		}
 		out = append(out, f)
 	}
@@ -107,99 +109,118 @@ func detectMCPPrune(ctx context.Context, e *Env) ([]*Fix, error) {
 
 // ---- schema weight --------------------------------------------------------
 
-// schemaStats is Trove's estimate of the prompt tokens each MCP server's tool
-// definitions take, taken from the gateway's own unused_tool_schemas findings.
-// Without gateway data there is no honest figure, so there is none.
+// schemaStats is what Trove measured about fixed overhead: the tokens each MCP
+// server's tool definitions add to a request, which the analyzer apportions from
+// the provider-reported prompt total of each gateway request (calibrated
+// estimates only), and the average number of requests per session. Without
+// gateway data there is no honest per-server figure, so there is none.
 type schemaStats struct {
-	perRequest   map[string]float64 // normalized server -> mean tokens per request
-	reqsPerSess  float64
-	provider     string
-	model        string
-	haveGateway  bool
-	gatewayError string
+	perRequest  map[string]float64 // normalized server -> mean tokens per request
+	mcpTotal    float64            // mean tokens of all MCP tool definitions per request
+	gatewayReqs int                // calibrated gateway requests the figures come from
+	reqsPerSess float64
+	reqsSource  string
+	provider    string
+	model       string
 }
 
 func (e *Env) schemaTokens(ctx context.Context) *schemaStats {
 	s := &schemaStats{perRequest: map[string]float64{}}
+	if r := e.projectUsage(ctx).requestsPerSession(); r > 0 {
+		s.reqsPerSess, s.reqsSource = r, "this project's Claude Code history"
+	}
 	if e.DB == nil {
 		return s
 	}
 	since := e.now().Add(-time.Duration(e.Cfg.LookbackDays) * 24 * time.Hour).UnixMilli()
-	rows, err := e.DB.QueryContext(ctx, `SELECT provider, model, findings FROM requests
-		WHERE ts >= ? AND findings LIKE '%unused_tool_schemas%' ORDER BY ts DESC LIMIT 500`, since)
-	if err != nil {
-		s.gatewayError = err.Error()
-		return s
-	}
-	defer func() { _ = rows.Close() }()
-	sum := map[string]float64{}
-	n := map[string]int{}
-	for rows.Next() {
-		var provider, model, raw string
-		if rows.Scan(&provider, &model, &raw) != nil {
-			continue
-		}
-		var fs []struct {
-			Detector string         `json:"detector"`
-			Tokens   int64          `json:"tokens"`
-			Detail   map[string]any `json:"detail"`
-		}
-		if json.Unmarshal([]byte(raw), &fs) != nil {
-			continue
-		}
-		for _, f := range fs {
-			if f.Detector != "unused_tool_schemas" {
+	rows, err := e.DB.QueryContext(ctx, `SELECT provider, model, segment_token_estimates FROM requests
+		WHERE ts >= ? AND segment_token_estimates LIKE '%"tool_servers"%' ORDER BY ts DESC LIMIT 500`, since)
+	if err == nil {
+		sum := map[string]float64{}
+		var total float64
+		for rows.Next() {
+			var provider, model, raw string
+			if rows.Scan(&provider, &model, &raw) != nil {
 				continue
 			}
-			names, _ := f.Detail["tool_names"].([]any)
-			if len(names) == 0 || f.Tokens <= 0 {
-				continue
+			var est struct {
+				Calibrated  bool             `json:"calibrated"`
+				ToolServers map[string]int64 `json:"tool_servers"`
 			}
-			byServer := map[string]int{}
-			for _, nm := range names {
-				if sv, ok := serverOfTool(fmt.Sprint(nm)); ok {
-					byServer[sv]++
-				}
+			if json.Unmarshal([]byte(raw), &est) != nil || !est.Calibrated || len(est.ToolServers) == 0 {
+				continue // uncalibrated figures are not backed by a provider total
 			}
-			for sv, c := range byServer {
-				sum[sv] += float64(f.Tokens) * float64(c) / float64(len(names))
-				n[sv]++
+			s.gatewayReqs++
+			for sv, t := range est.ToolServers {
+				sum[normalizeServer(sv)] += float64(t)
+				total += float64(t)
 			}
 			if s.model == "" {
 				s.provider, s.model = provider, model
 			}
-			s.haveGateway = true
 		}
-	}
-	for sv, t := range sum {
-		s.perRequest[sv] = t / float64(n[sv])
+		_ = rows.Close()
+		if s.gatewayReqs > 0 {
+			for sv, t := range sum {
+				s.perRequest[sv] = t / float64(s.gatewayReqs)
+			}
+			s.mcpTotal = total / float64(s.gatewayReqs)
+		}
 	}
 	if s.model == "" {
 		_ = e.DB.QueryRowContext(ctx, `SELECT provider, model FROM requests WHERE ts >= ? AND model != '' ORDER BY ts DESC LIMIT 1`, since).Scan(&s.provider, &s.model)
 	}
-	var avg float64
-	if e.DB.QueryRowContext(ctx, `SELECT COALESCE(AVG(request_count), 0) FROM sessions WHERE started_at >= ? AND request_count > 1`, since).Scan(&avg) == nil {
-		s.reqsPerSess = avg
+	if s.reqsPerSess == 0 {
+		var avg float64
+		if e.DB.QueryRowContext(ctx, `SELECT COALESCE(AVG(request_count), 0) FROM sessions WHERE started_at >= ? AND request_count > 1`, since).Scan(&avg) == nil && avg > 0 {
+			s.reqsPerSess, s.reqsSource = avg, "your gateway sessions"
+		}
 	}
 	return s
 }
 
-// cost returns the estimated tokens and dollars per session for a server's tool
-// definitions, or a note saying why there is no figure.
-func (s *schemaStats) cost(e *Env, server string) (int64, *float64, string) {
-	per, ok := s.perRequest[normalizeServer(server)]
-	if !ok || s.reqsPerSess < 2 {
-		return 0, nil, "Trove has no gateway data on this server's tool definitions yet, so it cannot say how many tokens turning it off would save. Run your agent through `trove gateway` for a few sessions to get an estimate."
+const noGatewayNote = "Trove has no gateway data on %s yet, so it cannot say how many tokens it re-sends on every request. Run your agent through `trove gateway` for a few sessions to measure it."
+
+// server returns the measured tokens a server's tool definitions add to every
+// request, or false when the gateway has not seen them.
+func (s *schemaStats) server(name string) (int64, bool) {
+	per, ok := s.perRequest[normalizeServer(name)]
+	if !ok || per < 0.5 {
+		return 0, false
 	}
-	tokens, usd := s.priceTokens(e, int64(per+0.5))
-	return tokens, usd, ""
+	return int64(per + 0.5), true
+}
+
+// setResent records on f the tokens it stops re-sending with every request, with
+// their label, and the measured requests per session, and states both as
+// evidence. It sets no saving: callers decide whether a saving is honest.
+func (s *schemaStats) setResent(f *Fix, perRequest int64, label, what string) {
+	f.ResentTokensPerRequest, f.ResentLabel = perRequest, label
+	src := "estimated at about 4 bytes per token"
+	if label == "measured" {
+		src = fmt.Sprintf("measured: apportioned from the provider-reported prompt totals of %d gateway request(s)", s.gatewayReqs)
+	}
+	line := fmt.Sprintf("%d tokens of %s re-sent on every request (%s)", perRequest, what, src)
+	if s.setRequests(f) {
+		line += fmt.Sprintf(", times %.1f requests per session (measured from %s)", f.RequestsPerSession, s.reqsSource)
+	}
+	f.Evidence = append(f.Evidence, line)
+}
+
+// setRequests records the measured requests per session on f, if there is a figure.
+func (s *schemaStats) setRequests(f *Fix) bool {
+	if s.reqsPerSess <= 0 {
+		return false
+	}
+	f.RequestsPerSession, f.RequestsLabel = math.Round(s.reqsPerSess*10)/10, "measured"
+	return true
 }
 
 // priceTokens turns tokens removed from every request into tokens and dollars
-// per session. It uses the average requests per session the gateway recorded
-// (counting one request if there is no such data) and prices the first request
-// as a cache write and the rest as cache reads. Dollars are nil unless the model
-// is known and priced.
+// per session. It uses the measured average requests per session (counting one
+// request if there is no such data) and prices the first request as a cache
+// write and the rest as cache reads. Dollars are nil unless the model is known
+// and priced and there are at least two requests per session.
 func (s *schemaStats) priceTokens(e *Env, perRequest int64) (int64, *float64) {
 	reqs := int64(s.reqsPerSess + 0.5)
 	if reqs < 1 {

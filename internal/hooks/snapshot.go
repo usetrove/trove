@@ -4,11 +4,41 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/optimize"
 )
+
+// ratioPin is the session pin that holds the bytes-per-token ratio the session started with, as
+// "<ratio>|<samples>". Estimates only; no optimizer's behaviour depends on it.
+const ratioPin = "r:bytes_per_token"
+
+// pinRatio is the pin value for a family's learned ratio, or "" when the snapshot has no usable one.
+func (s Snapshot) pinRatio(model string) string {
+	r, ok := s.BytesPerToken[measure.ModelFamily(model)]
+	if !ok || r.Samples <= 0 || r.BytesPerToken < 1 || r.BytesPerToken > 12 {
+		return ""
+	}
+	return strconv.FormatFloat(r.BytesPerToken, 'g', -1, 64) + "|" + strconv.Itoa(r.Samples)
+}
+
+// pinnedRatio reads the ratio a session pinned; zeros mean the default applies.
+func pinnedRatio(pins map[string]string) (float64, int) {
+	ratio, samples, ok := strings.Cut(pins[ratioPin], "|")
+	if !ok {
+		return 0, 0
+	}
+	r, e1 := strconv.ParseFloat(ratio, 64)
+	n, e2 := strconv.Atoi(samples)
+	if e1 != nil || e2 != nil || r < 1 || r > 12 || n <= 0 {
+		return 0, 0
+	}
+	return r, n
+}
 
 // Optimizer states, the same words config.toml uses.
 const (
@@ -43,6 +73,18 @@ type Snapshot struct {
 	// by a hash of its key (see trialArm): on for about half, shadow for the rest, and the choice is recorded.
 	Trial  []string                   `json:"trial,omitempty"`
 	Tuning map[string]optimize.Tuning `json:"tuning,omitempty"`
+	// TaskTrial lists the installed scout and cascade features (internal/tasks). Like Trial, each new session is
+	// assigned an arm by a hash of its key and the arm is recorded; unlike Trial it needs no Autopilot, because
+	// the user installed the feature themselves and the comparison only measures it.
+	TaskTrial []string `json:"task_trial,omitempty"`
+	// RuleTrial lists the rule-set trials the user started (autopilot.json entries named ext_<tool>, see
+	// autopilot.StartRuleTrial). Each new Claude Code session is assigned an arm by a hash of its key; in the
+	// "on" arm the hooks add the rule set's text to the session's context at every SessionStart.
+	RuleTrial []string `json:"rule_trial,omitempty"`
+	// BytesPerToken is the ratio learned from the user's own session logs for each model family (see
+	// measure.LearnBytesPerToken), with its sample size. A session pins the one for its model when it
+	// starts. A family that is missing keeps the default 3.5.
+	BytesPerToken map[string]measure.BytesRatio `json:"bytes_per_token,omitempty"`
 }
 
 const snapshotVersion = 1
@@ -92,6 +134,7 @@ var OptimizerNames = []string{
 	config.OptimizerHookRepeatRead, config.OptimizerHookLargeOutput,
 	config.OptimizerHookReadLimit, config.OptimizerHookQuietCommands,
 	config.OptimizerNoiseNormalizer, config.OptimizerOutputTrimmer,
+	config.OptimizerHookOutputDedup, config.OptimizerHookReadOutline,
 }
 
 // State is the state a hook acts in right now for the named optimizer. pinned

@@ -20,6 +20,7 @@ func TestHookGuardrailsForRewritingOptimizers(t *testing.T) {
 	}{
 		{"quieted commands run again", config.OptimizerHookQuietCommands, RuleHookRerun, "rewritten", "reissued"},
 		{"trimmed output fetched back", config.OptimizerOutputTrimmer, RuleHookFetchBack, "rewritten", "fetched_back"},
+		{"collapsed repeat fetched back", config.OptimizerHookOutputDedup, RuleHookFetchBack, "rewritten", "fetched_back"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -33,14 +34,14 @@ func TestHookGuardrailsForRewritingOptimizers(t *testing.T) {
 			for i := 0; i < 19; i++ {
 				hookEvent(t, ex, now, "c-s1", c.optimizer, c.acted, 100, 30)
 			}
-			for i := 0; i < 10; i++ {
+			for i := 0; i < 12; i++ {
 				hookEvent(t, ex, now, "c-s1", c.optimizer, c.bad, 0, 0)
 			}
 			if ev, err := EvaluateHooks(ctx, db, m, now); err != nil || len(ev) != 0 {
 				t.Fatalf("19 actions is too few to judge: %+v %v", ev, err)
 			}
 
-			// The 20th action reaches the sample: 10/20 is over the 25% limit.
+			// The 20th action reaches the sample: 12/20 is beyond chance over the 25% limit.
 			hookEvent(t, ex, now, "c-s2", c.optimizer, c.acted, 100, 30)
 			ev, err := EvaluateHooks(ctx, db, m, now)
 			if err != nil || len(ev) != 1 || ev[0].Rule != c.rule || ev[0].Optimizer != c.optimizer || ev[0].SampleOn != 20 {

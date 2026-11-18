@@ -40,6 +40,16 @@ type SettingsMetric struct {
 	NBefore int     `json:"n_before"`
 	NAfter  int     `json:"n_after"`
 	Label   Label   `json:"label"`
+	// LowerIsWorse marks outcomes where a drop is the bad direction (commits per session).
+	LowerIsWorse bool `json:"lower_is_worse,omitempty"`
+}
+
+// worse reports a clear change in the bad direction.
+func (m SettingsMetric) worse() bool {
+	if m.LowerIsWorse {
+		return m.Clear && m.After < m.Before
+	}
+	return m.Clear && m.After > m.Before
 }
 
 // SettingsEffect is what the data shows about one applied settings profile.
@@ -62,9 +72,9 @@ type SettingsEffect struct {
 	Usage *SettingsMetric `json:"usage,omitempty"`
 	// Prompt is prompt tokens per request, which compaction settings change.
 	Prompt *SettingsMetric `json:"prompt,omitempty"`
-	// Outcomes are tool errors, turns and abandoned sessions. Whether tests
-	// passed is not something Trove records.
-	Outcomes       []SettingsMetric `json:"outcomes,omitempty"`
+	// Outcomes are tool errors, turns, abandoned sessions and, where recorded,
+	// the last allowlisted test status and git commits per session.
+	Outcomes      []SettingsMetric `json:"outcomes,omitempty"`
 	OutcomeVerdict string           `json:"outcome_verdict"`
 	Label          Label            `json:"label"`
 	OtherFixes     int              `json:"other_fixes_in_place,omitempty"`
@@ -89,6 +99,10 @@ type sessionStats struct {
 	hasErrors  bool
 	abandoned  float64
 	hasAband   bool
+	testFailed float64 // 1 when the session's last allowlisted test run failed
+	hasTests   bool
+	commits    float64
+	hasCommits bool
 }
 
 // SettingsEffects reports on every settings profile still in place, newest first.
@@ -186,6 +200,8 @@ func settingsEffect(p settingsRow, sess []sessionStats, m config.Measure, others
 		metric("tool_errors_per_session", func(s sessionStats) (float64, bool) { return s.toolErrors, s.hasErrors }),
 		metric("turns_per_session", func(s sessionStats) (float64, bool) { return s.turns, true }),
 		metric("abandoned_sessions_rate", func(s sessionStats) (float64, bool) { return s.abandoned, s.hasAband }),
+		metric("last_test_failed_rate", func(s sessionStats) (float64, bool) { return s.testFailed, s.hasTests }),
+		lowerIsWorse(metric("commits_per_session", func(s sessionStats) (float64, bool) { return s.commits, s.hasCommits })),
 	} {
 		if o != nil {
 			e.Outcomes = append(e.Outcomes, *o)
@@ -201,7 +217,7 @@ func settingsEffect(p settingsRow, sess []sessionStats, m config.Measure, others
 	if len(e.Outcomes) > 0 {
 		e.OutcomeVerdict = OutcomeNoClearChange
 		for _, o := range e.Outcomes {
-			if o.Clear && o.After > o.Before {
+			if o.worse() {
 				e.OutcomeVerdict = OutcomeWorse
 			}
 		}
@@ -211,6 +227,13 @@ func settingsEffect(p settingsRow, sess []sessionStats, m config.Measure, others
 	}
 	e.Text = settingsText(name, e)
 	return e
+}
+
+func lowerIsWorse(m *SettingsMetric) *SettingsMetric {
+	if m != nil {
+		m.LowerIsWorse = true
+	}
+	return m
 }
 
 func compareMetric(name string, b, a []float64) *SettingsMetric {
@@ -240,13 +263,26 @@ func settingsText(name string, e SettingsEffect) string {
 	fmt.Fprintf(&b, " (measured, n=%d before / %d after sessions)", e.NBefore, e.NAfter)
 	switch e.OutcomeVerdict {
 	case OutcomeWorse:
-		b.WriteString("; outcomes got worse: " + worseList(e.Outcomes))
+		b.WriteString("; outcomes got worse: " + outcomeList(e.Outcomes, true))
 	case OutcomeNoClearChange:
-		b.WriteString("; no clear change in tool errors, turns or abandoned sessions")
+		b.WriteString("; no clear change in " + outcomeList(e.Outcomes, false))
 	default:
 		b.WriteString("; no outcome figures yet")
 	}
-	b.WriteString(". Trove does not see whether tests pass. All sessions of the harness are compared, not just this project or task, so this supports but does not prove an effect")
+	var tests, commits bool
+	for _, o := range e.Outcomes {
+		tests = tests || o.Metric == "last_test_failed_rate"
+		commits = commits || o.Metric == "commits_per_session"
+	}
+	switch {
+	case !tests && !commits:
+		b.WriteString(". Too few sessions with allowlisted test runs or git commits were recorded to compare them")
+	case !tests:
+		b.WriteString(". Too few sessions with allowlisted test runs were recorded to compare them")
+	case !commits:
+		b.WriteString(". Too few sessions with git commits were recorded to compare them")
+	}
+	b.WriteString(". All sessions of the harness are compared, not just this project or task, so this supports but does not prove an effect")
 	if e.OtherFixes > 0 {
 		b.WriteString("; other fixes are in place too, so their effects are mixed together")
 	}
@@ -254,10 +290,11 @@ func settingsText(name string, e SettingsEffect) string {
 	return b.String()
 }
 
-func worseList(ms []SettingsMetric) string {
+// outcomeList names the outcomes compared, or only those that got worse.
+func outcomeList(ms []SettingsMetric, onlyWorse bool) string {
 	var w []string
 	for _, m := range ms {
-		if m.Clear && m.After > m.Before {
+		if !onlyWorse || m.worse() {
 			w = append(w, strings.ReplaceAll(m.Metric, "_", " "))
 		}
 	}
@@ -301,6 +338,12 @@ func sessionStatsAll(ctx context.Context, db *store.DB) ([]sessionStats, error) 
 			var ss SessionSignals
 			if json.Unmarshal([]byte(*sig), &ss) == nil {
 				s.hasAband, s.abandoned = true, b2f(ss.Abandoned)
+				if ss.Tests.Last == TestPass || ss.Tests.Last == TestFail {
+					s.hasTests, s.testFailed = true, b2f(ss.Tests.Last == TestFail)
+				}
+				if ss.Commits != nil {
+					s.hasCommits, s.commits = true, float64(*ss.Commits)
+				}
 				if ss.HasTools {
 					s.hasErrors, s.toolErrors = true, float64(ss.ToolErrors)
 				}

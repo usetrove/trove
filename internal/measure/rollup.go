@@ -39,6 +39,8 @@ type SessionSignals struct {
 	Refetches  int  `json:"refetches"`
 	Abandoned  bool `json:"abandoned_after_action"`
 	Commits    *int `json:"commits,omitempty"`
+	// Tests is the test-pass signal: allowlisted test commands the session ran (test_runs).
+	Tests TestSignal `json:"tests"`
 	// On lists the optimizers pinned "on" for the session; Acted those that
 	// actually changed at least one of its requests.
 	On       []string `json:"on"`
@@ -89,6 +91,9 @@ func rollupSessions(ctx context.Context, db *store.DB, m config.Measure, now tim
 			return done, err
 		}
 		sig.Turns, sig.Tokens, sig.DurationS = s.turns, s.tokens, (s.end-s.start)/1000
+		if sig.Tests, err = testSignal(ctx, db, s.key); err != nil {
+			return done, err
+		}
 		if m.GitSignals && m.GitRepo != "" {
 			// A git failure loses this one optional signal, never the roll-up.
 			if n, err := CommitCount(ctx, m.GitRepo, time.UnixMilli(s.start), time.UnixMilli(s.end).Add(commitGrace)); err == nil {
@@ -105,6 +110,43 @@ func rollupSessions(ctx context.Context, db *store.DB, m config.Measure, now tim
 		done++
 	}
 	return done, nil
+}
+
+// Last test status of a session.
+const (
+	TestPass = "pass"
+	TestFail = "fail"
+	TestNone = "none" // the session ran no allowlisted test command
+)
+
+// TestSignal summarises a session's allowlisted test runs. Measured: exit codes the hooks saw.
+type TestSignal struct {
+	Last   string `json:"last"`
+	Runs   int    `json:"runs"`
+	Failed int    `json:"failed"`
+}
+
+// testSignal reads one session's test runs. The last run decides the status.
+func testSignal(ctx context.Context, db *store.DB, key string) (TestSignal, error) {
+	t := TestSignal{Last: TestNone}
+	rows, err := db.QueryContext(ctx, `SELECT exit_code FROM test_runs WHERE session_key = ? ORDER BY ts, id`, key)
+	if err != nil {
+		return t, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var code int
+		if err := rows.Scan(&code); err != nil {
+			return t, err
+		}
+		t.Runs++
+		t.Last = TestPass
+		if code != 0 {
+			t.Failed++
+			t.Last = TestFail
+		}
+	}
+	return t, rows.Err()
 }
 
 type appliedJSON struct {

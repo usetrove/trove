@@ -240,12 +240,69 @@ func TestPriorShrinksNoisyEstimateAndGatesPromotion(t *testing.T) {
 			t.Fatalf("%+v should not support promotion", bad)
 		}
 	}
-	pr, err := LoadPriors([]byte("version = 1\n[optimizers.x]\ncost_change=-0.1\ncost_ci_low=-0.14\ncost_ci_high=-0.06\npairs=40\n"))
+	pr, err := LoadPriors([]byte("version = 1\n[optimizers.x]\ncost_change=-0.1\ncost_ci_low=-0.14\ncost_ci_high=-0.06\npairs=40\nsource=\"bench:s@abc\"\n"))
 	if err != nil || pr.Optimizers["x"].Pairs != 40 {
 		t.Fatalf("%+v %v", pr, err)
 	}
-	if len(DefaultPriors().Optimizers) != 0 {
-		t.Fatal("the shipped priors file must stay empty until real benchmark results exist")
+}
+
+func TestShippedPriorsAreSourcedAndHonest(t *testing.T) {
+	// The file is empty until a real study runs; whatever is in it must pass the
+	// same checks as any loaded file. DefaultPriors hides an invalid file, so
+	// parse the embedded bytes directly.
+	pr, err := LoadPriors(embeddedPriors)
+	if err != nil {
+		t.Fatalf("the shipped priors file is invalid: %v", err)
+	}
+	for n, p := range pr.Optimizers {
+		if !strings.HasPrefix(p.Source, "bench:") {
+			t.Errorf("shipped prior %q must come from a benchmark study (source %q)", n, p.Source)
+		}
+		if ok, why := p.Supports(); !ok {
+			t.Errorf("shipped prior %q does not clear the ship rule: %s", n, why)
+		}
+	}
+}
+
+func TestLoadPriorsRejectsUnsourcedOrDishonest(t *testing.T) {
+	const ok = "cost_change=-0.1\ncost_ci_low=-0.14\ncost_ci_high=-0.06\nsuccess_diff=0\nsuccess_ci_low=-0.02\npairs=40\n"
+	good := func(extra string) []byte {
+		return []byte("version = 1\n[optimizers.x]\n" + ok + extra)
+	}
+	if _, err := LoadPriors(good("source=\"bench:s@abc\"\n")); err != nil {
+		t.Fatalf("a sourced prior should load: %v", err)
+	}
+	for _, c := range []struct{ name, toml, want string }{
+		{"no source", string(good("")), "source"},
+		{"blank source", string(good("source=\"  \"\n")), "source"},
+		{"unknown source kind", string(good("source=\"hand-written\"\n")), "source"},
+		{"estimate outside its own range", "version = 1\n[optimizers.x]\ncost_change=0.2\ncost_ci_low=-0.14\ncost_ci_high=-0.06\npairs=40\nsource=\"bench:s@abc\"\n", "inside"},
+		{"success estimate below its own lower bound", "version = 1\n[optimizers.x]\ncost_change=-0.1\ncost_ci_low=-0.14\ncost_ci_high=-0.06\nsuccess_diff=-0.2\nsuccess_ci_low=-0.1\npairs=40\nsource=\"bench:s@abc\"\n", "success"},
+	} {
+		_, err := LoadPriors([]byte(c.toml))
+		if err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Errorf("%s: err = %v; want mention of %q", c.name, err, c.want)
+		}
+	}
+}
+
+func TestPriorNeverHidesAMeasuredLoss(t *testing.T) {
+	p := Prior{CostChange: -0.15, CostCILow: -0.20, CostCIHigh: -0.10, SuccessCILow: 0, Pairs: 60, Source: "bench:s@abc"}
+	// The user's own range is wholly above zero: their sessions got more expensive.
+	// A benchmark that says "cheaper" must not turn that into a saving.
+	for _, c := range []struct{ est, lo, hi float64 }{
+		{0.10, 0.02, 0.18},   // clearly worse, fairly noisy
+		{0.30, 0.01, 0.59},   // clearly worse, very noisy: shrinkage would otherwise cross zero
+		{0.04, 0.035, 0.045}, // clearly worse, tight
+	} {
+		got := combine(c.est, c.lo, c.hi, p)
+		if got.Value != c.est || got.Low != c.lo || got.High != c.hi {
+			t.Errorf("combine(%v,%v,%v) = %+v; a measured loss must be shown unchanged", c.est, c.lo, c.hi, got)
+		}
+	}
+	// A range that includes zero still gets shrunk, so the prior still helps there.
+	if got := combine(0.05, -0.30, 0.40, p); got.Value >= 0.05 {
+		t.Errorf("an inconclusive estimate should still move toward the prior: %+v", got)
 	}
 }
 

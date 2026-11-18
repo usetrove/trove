@@ -35,6 +35,7 @@ func testCfg() config.Experiment {
 type profile struct {
 	cost, turns, errs float64 // mean per session when the arm is on / off
 	abandonOn         float64 // probability of an abandoned session with it on
+	uncached          float64 // mean uncached input tokens per session; 0 stores none
 }
 
 // simulate stores n finished sessions for optimizer, assigning arms with the
@@ -65,8 +66,12 @@ func simulate(t *testing.T, db *store.DB, optimizer string, n int, offP, onP pro
 			On: []string{}, Acted: []string{}, PinnedAt: t0.UnixMilli()}
 		sb, _ := json.Marshal(sig)
 		start := t0.Add(time.Duration(i) * time.Hour)
-		if _, err := db.ExecContext(ctx, `INSERT INTO sessions(session_key, agent, started_at, ended_at, request_count, total_cost_usd, outcome_signals)
-			VALUES(?, 'claude_code', ?, ?, 10, ?, ?)`, key, start.UnixMilli(), start.Add(10*time.Minute).UnixMilli(), cost, string(sb)); err != nil {
+		var uncached int64
+		if p.uncached > 0 { // draw noise only when asked, so older tests keep their random stream
+			uncached = int64(p.uncached * (1 + 0.1*r.NormFloat64()))
+		}
+		if _, err := db.ExecContext(ctx, `INSERT INTO sessions(session_key, agent, started_at, ended_at, request_count, total_cost_usd, total_input_uncached_tokens, outcome_signals)
+			VALUES(?, 'claude_code', ?, ?, 10, ?, ?, ?)`, key, start.UnixMilli(), start.Add(10*time.Minute).UnixMilli(), cost, uncached, string(sb)); err != nil {
 			t.Fatal(err)
 		}
 		pj, _ := json.Marshal(map[string]string{optimizer: state})

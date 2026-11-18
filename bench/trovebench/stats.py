@@ -19,6 +19,11 @@ DONT_SHIP = "dont_ship"
 NEED_MORE_DATA = "need_more_data"
 NOT_MEASURABLE = "not_measurable_with_agent"
 
+TIERS = ("", "T1", "T2", "T3")
+# T3_TEST_FAIL_MARGIN_PTS caps the success margin for routing techniques. A placeholder until a study sets it,
+# matching the Autopilot test_fail_rate guardrail's stricter T3 margin in spirit (internal/autopilot).
+T3_TEST_FAIL_MARGIN_PTS = 2.0
+
 
 @dataclass(frozen=True)
 class ShipRule:
@@ -29,6 +34,16 @@ class ShipRule:
     confidence: float = 0.95
     bootstrap_resamples: int = 10000
     bootstrap_seed: int = 20261029
+    # tier is the technique's tier ("T1", "T2", "T3"; "" when the study does not say). The success margin is the
+    # test_fail_rate guardrail: a run's success is its graded tests passing, so a success drop is a rise in the
+    # share of runs that end with failing tests. T3 (routing) is held to a stricter margin than T1 and T2.
+    tier: str = ""
+
+    def __post_init__(self) -> None:
+        if self.tier not in TIERS:
+            raise ValueError(f"ship_rule.tier must be one of {', '.join(t for t in TIERS if t)}, or left out.")
+        if self.tier == "T3" and self.success_margin_pts > T3_TEST_FAIL_MARGIN_PTS:
+            object.__setattr__(self, "success_margin_pts", T3_TEST_FAIL_MARGIN_PTS)
 
     @staticmethod
     def from_dict(d: dict) -> "ShipRule":
@@ -194,6 +209,8 @@ def compare(pairs: Sequence[Pair], treated: str, rule: ShipRule) -> Comparison:
     else:
         verdict = NEED_MORE_DATA
         reason = "The confidence intervals still straddle a threshold; more paired runs are needed."
+    if rule.tier:
+        reason += f" test_fail_rate checked with the {rule.tier} margin of {m:g} points."
     return Comparison(treated, rule.reference, n, cost_est, cost_ci, succ_est, succ_ci, verdict, reason)
 
 

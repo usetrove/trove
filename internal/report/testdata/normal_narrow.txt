@@ -10,7 +10,8 @@ Headline
     (estimated; overlapping findings
     counted once)
   Savings
-    ~$0.50 so far (estimated)
+    ~$0.50 so far (estimated), about <1%
+    of your usage (estimated)
   Measured
     not enough data yet to compare
     sessions with and without an
@@ -62,12 +63,12 @@ Optimizers
     To turn on, add under [optimizers]
     in config.toml:
     duplicate_result_collapser = "on"
+  verbosity_steer: off
   cache_breakpoints: off
   Guardrail events: none.
-  No regression detected locally. Trove
-  checks retries, tool errors and
-  re-fetches; it does not prove output
-  quality.
+  No regression check yet: not enough
+  finished sessions with an optimizer on
+  to compare.
 
 Recommendations (suggestions only; Trove changes nothing on its own)
   None yet. These need more recorded usage.

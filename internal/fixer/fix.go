@@ -25,15 +25,19 @@ import (
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/setup"
+	"github.com/usetrove/trove/internal/technique"
 )
 
 // Fix kinds.
 const (
-	MCPPrune      = "mcp_prune"
-	ContextSlim   = "context_slim"
-	CacheBreaker  = "cache_breaker_fix"
-	ModelDefault  = "model_default"
-	SettingsCheck = "settings_check"
+	MCPPrune    = "mcp_prune"
+	ContextSlim = "context_slim"
+	// ContextSlimGeneric removes generic sections that duplicate nothing. It
+	// changes what the agent is told, so it is a T2 suggestion, never in --all.
+	ContextSlimGeneric = "context_slim_generic"
+	CacheBreaker       = "cache_breaker_fix"
+	ModelDefault       = "model_default"
+	SettingsCheck      = "settings_check"
 )
 
 // Fix is one proposed change. Nothing has been written when it is returned.
@@ -51,6 +55,11 @@ type Fix struct {
 	// USDPerSession is nil when it cannot be priced honestly.
 	USDPerSession *float64 `json:"est_usd_per_session"`
 	Label         string   `json:"label"` // always "estimated"
+	// Class and Tier say what kind of change this is and how much proof it needs (docs/plan/INDEX.md).
+	// EvidenceLabel is "estimated" when the fix carries a saving figure, else "unmeasured".
+	Class         string `json:"class"`
+	Tier          string `json:"tier"`
+	EvidenceLabel string `json:"evidence_label"`
 	// Suggestion fixes (a cheaper default model) change behavior, not just size.
 	// They are never part of --all.
 	Suggestion bool `json:"suggestion,omitempty"`
@@ -63,8 +72,53 @@ type Fix struct {
 	// setting names it changes. Names only; never values or file contents.
 	Task string   `json:"task,omitempty"`
 	Keys []string `json:"keys,omitempty"`
+	// FixedOverhead marks fixes that remove context re-sent on every request
+	// (MCP pruning, the tool-search check, context slimming). They need no proxy,
+	// work on subscriptions, and are listed first.
+	FixedOverhead bool `json:"fixed_overhead,omitempty"`
+	// ResentTokensPerRequest is what the fix stops re-sending with every request.
+	// ResentLabel is "measured" when it is apportioned from provider-reported
+	// totals the gateway recorded, "estimated" when it is file bytes over a
+	// bytes-per-token ratio, and empty when there is no figure.
+	ResentTokensPerRequest int64  `json:"resent_tokens_per_request,omitempty"`
+	ResentLabel            string `json:"resent_label,omitempty"`
+	// RequestsPerSession is the average requests per session the per-request
+	// figure is multiplied by; RequestsLabel is "measured" when it comes from
+	// history or gateway records, empty when Trove has none.
+	RequestsPerSession float64 `json:"requests_per_session,omitempty"`
+	RequestsLabel      string  `json:"requests_label,omitempty"`
+	// OverheadTokensPerRequest is text the fix adds to every request (rule 15: charged,
+	// never netted into a saving). OverheadLabel is "estimated" when it is file bytes
+	// over a bytes-per-token ratio.
+	OverheadTokensPerRequest int64  `json:"overhead_tokens_per_request,omitempty"`
+	OverheadLabel            string `json:"overhead_label,omitempty"`
 
 	old, updated []byte
+	// fixedOverhead is set by detectors whose kind alone does not say so.
+	fixedOverhead bool
+}
+
+// isFixedOverhead reports whether f removes per-request fixed overhead.
+func isFixedOverhead(f *Fix) bool {
+	return f.Kind == MCPPrune || f.Kind == ContextSlim || f.Kind == ContextSlimGeneric || f.fixedOverhead
+}
+
+// sortFixes lists fixed-overhead fixes first, then the rest; within each group
+// the largest estimated saving comes first, ties by id.
+func sortFixes(fixes []*Fix) {
+	for _, f := range fixes {
+		f.FixedOverhead = isFixedOverhead(f)
+	}
+	sort.SliceStable(fixes, func(i, j int) bool {
+		a, b := fixes[i], fixes[j]
+		if a.FixedOverhead != b.FixedOverhead {
+			return a.FixedOverhead
+		}
+		if a.TokensPerSession != b.TokensPerSession {
+			return a.TokensPerSession > b.TokensPerSession
+		}
+		return a.ID < b.ID
+	})
 }
 
 // Applicable reports whether the fix can be applied by Trove.
@@ -114,7 +168,7 @@ func (e *Env) now() time.Time {
 // meaning the same thing between runs.
 func fixID(kind string, parts ...string) string {
 	h := sha256.Sum256([]byte(kind + "\x00" + strings.Join(parts, "\x00")))
-	short := map[string]string{MCPPrune: "mcp", ContextSlim: "ctx", CacheBreaker: "cache", ModelDefault: "model", SettingsCheck: "chk", SettingsProfile: "settings", TaskScout: "scout", TaskCascade: "cascade"}[kind]
+	short := map[string]string{MCPPrune: "mcp", ContextSlim: "ctx", ContextSlimGeneric: "ctxg", CacheBreaker: "cache", ModelDefault: "model", CacheTTLMain: "ttl", CacheTTLSubagents: "ttlsub", SettingsCheck: "chk", SettingsProfile: "settings", TaskScout: "scout", TaskCascade: "cascade", RetypedCommand: "run", MCPSnippet: "snip"}[kind]
 	return short + "-" + hex.EncodeToString(h[:])[:8]
 }
 
@@ -127,9 +181,9 @@ func pathHash(p string) string {
 // enough evidence, returns none.
 type detector func(ctx context.Context, e *Env) ([]*Fix, error)
 
-var detectors = []detector{detectMCPPrune, detectContextSlim, detectCacheBreaker, detectModelDefault, detectSettingsCheck, detectSettings, detectTasks}
+var detectors = []detector{detectMCPPrune, detectContextSlim, detectCacheBreaker, detectCacheTTL, detectModelDefault, detectSettingsCheck, detectSettings, detectTasks, detectRetyped, detectMCPSnippet}
 
-// Detect plans every available fix, largest estimated saving first. It writes
+// Detect plans every available fix, fixed overhead first, then largest estimated saving. It writes
 // nothing. A detector that fails is reported in errs and does not hide the rest.
 func Detect(ctx context.Context, e *Env) (fixes []*Fix, errs []error) {
 	for _, d := range detectors {
@@ -141,6 +195,11 @@ func Detect(ctx context.Context, e *Env) (fixes []*Fix, errs []error) {
 	}
 	for _, f := range fixes {
 		f.Label = "estimated"
+		f.Class, f.Tier = classOfKind(f.Kind)
+		f.EvidenceLabel = "unmeasured"
+		if f.TokensPerSession > 0 || f.USDPerSession != nil {
+			f.EvidenceLabel = "estimated"
+		}
 		if f.Path != "" {
 			if err := e.Allowed(f.Path); err != nil {
 				f.Blocked = err.Error()
@@ -150,12 +209,7 @@ func Detect(ctx context.Context, e *Env) (fixes []*Fix, errs []error) {
 			f.Diff = UnifiedDiff(displayName(e, f.Path), f.old, f.updated)
 		}
 	}
-	sort.SliceStable(fixes, func(i, j int) bool {
-		if fixes[i].TokensPerSession != fixes[j].TokensPerSession {
-			return fixes[i].TokensPerSession > fixes[j].TokensPerSession
-		}
-		return fixes[i].ID < fixes[j].ID
-	})
+	sortFixes(fixes)
 	return fixes, errs
 }
 
@@ -258,4 +312,17 @@ func applyOne(ctx context.Context, e *Env, id string) (Result, error) {
 		}
 	}
 	return r, nil
+}
+
+// classOfKind returns the class and tier of a fix kind. A kind the registry does not know is labeled
+// by the safest reading that is still honest: a config change, T1.
+func classOfKind(kind string) (class, tier string) {
+	name := kind
+	if kind == SettingsProfile {
+		name = "settings"
+	}
+	if c, t, ok := technique.ClassOf(name); ok {
+		return string(c), string(t)
+	}
+	return string(technique.ClassConfig), string(technique.T1)
 }

@@ -234,8 +234,11 @@ func (in *Ingester) loadCheckpoints(ctx context.Context) (map[string]checkpointR
 }
 
 func providerFor(source string) string {
-	if source == SourceCodex {
+	switch source {
+	case SourceCodex:
 		return pricing.OpenAI
+	case SourceGeminiCLI:
+		return pricing.Google
 	}
 	return pricing.Anthropic
 }

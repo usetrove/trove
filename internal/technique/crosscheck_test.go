@@ -30,7 +30,7 @@ func implemented(t *testing.T) map[string]string {
 	add("internal/optimize", optimize.PipelineNames...)
 	add("internal/optimize (gateway)", optimize.GatewayNames...)
 	add("internal/hooks", hooks.OptimizerNames...)
-	add("internal/fixer", fixer.MCPPrune, fixer.ContextSlim, fixer.CacheBreaker, fixer.ModelDefault, fixer.SettingsCheck, fixer.TaskScout, fixer.TaskCascade)
+	add("internal/fixer", fixer.MCPPrune, fixer.ContextSlim, fixer.ContextSlimGeneric, fixer.CacheBreaker, fixer.ModelDefault, fixer.CacheTTLMain, fixer.CacheTTLSubagents, fixer.SettingsCheck, fixer.TaskScout, fixer.TaskCascade, fixer.RetypedCommand, fixer.MCPSnippet)
 	add("internal/optimize/suggest", suggest.KindCacheTTL)
 	ms, err := external.Builtin()
 	if err != nil {
@@ -83,7 +83,7 @@ func TestEveryOptimizerIsRegistered(t *testing.T) {
 			t.Errorf("optimizer %q is not in the technique registry", n)
 		}
 	}
-	for _, k := range []string{fixer.MCPPrune, fixer.ContextSlim, fixer.CacheBreaker, fixer.ModelDefault, fixer.SettingsCheck} {
+	for _, k := range []string{fixer.MCPPrune, fixer.ContextSlim, fixer.ContextSlimGeneric, fixer.CacheBreaker, fixer.ModelDefault, fixer.SettingsCheck, fixer.RetypedCommand, fixer.MCPSnippet} {
 		if _, ok := technique.Get(k); !ok {
 			t.Errorf("fix kind %q is not in the technique registry", k)
 		}

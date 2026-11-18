@@ -103,10 +103,22 @@ func TestHookTotalsAndGuardrail(t *testing.T) {
 		t.Fatalf("reread rate = %+v", s.RereadRate)
 	}
 
-	// One more block reaches the sample: 5/20 = 25%, which is the limit.
+	// One more block reaches the sample: 5/20 = 25%, which is the limit. Sitting at
+	// the limit is no evidence of being over it, so the sequential check holds off.
 	hookEvent(t, ex, now, "c-s2", name, "blocked", 7000, 2000)
+	if ev, err := EvaluateHooks(ctx, db, m, now); err != nil || len(ev) != 0 {
+		t.Fatalf("5/20 at the 25%% limit is not beyond chance: %+v %v", ev, err)
+	}
+
+	// 20 more blocks, 15 of them retried: 20/40 = 50% is beyond chance.
+	for i := 0; i < 20; i++ {
+		hookEvent(t, ex, now, "c-s3", name, "blocked", 7000, 2000)
+	}
+	for i := 0; i < 15; i++ {
+		hookEvent(t, ex, now, "c-s3", name, "reread_anyway", 7000, 2000)
+	}
 	ev, err := EvaluateHooks(ctx, db, m, now)
-	if err != nil || len(ev) != 1 || ev[0].Rule != RuleHookReread || ev[0].SampleOn != 20 {
+	if err != nil || len(ev) != 1 || ev[0].Rule != RuleHookReread || ev[0].SampleOn != 40 {
 		t.Fatalf("expected one rollback: %+v %v", ev, err)
 	}
 	over, err := Overrides(ctx, db)

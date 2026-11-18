@@ -2,6 +2,7 @@ package analyze
 
 import (
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/usetrove/trove/internal/pricing"
@@ -60,6 +61,9 @@ type Estimate struct {
 	TotalTokens   int64            `json:"total_tokens"`
 	BytesPerToken float64          `json:"bytes_per_token"`
 	Categories    map[string]int64 `json:"categories"`
+	// ToolServers is the tool-definition tokens per MCP server (the <server> in
+	// mcp__<server>__<tool>) in this request. Server names only; never schemas.
+	ToolServers map[string]int64 `json:"tool_servers,omitempty"`
 
 	seg []int64 // tokens per segment, aligned with Parsed.Segments
 }
@@ -89,9 +93,28 @@ func estimate(p *Parsed, total int64, ratio float64) *Estimate {
 	for i, s := range p.Segments {
 		if e.seg[i] > 0 {
 			e.Categories[categoryKey(s)] += e.seg[i]
+			if sv, ok := mcpServer(s); ok {
+				if e.ToolServers == nil {
+					e.ToolServers = map[string]int64{}
+				}
+				e.ToolServers[sv] += e.seg[i]
+			}
 		}
 	}
 	return e
+}
+
+// mcpServer returns the MCP server of a tool definition named mcp__<server>__<tool>.
+func mcpServer(s Segment) (string, bool) {
+	if s.Kind != KindToolDef {
+		return "", false
+	}
+	rest, ok := strings.CutPrefix(s.Tool, "mcp__")
+	if !ok {
+		return "", false
+	}
+	sv, _, ok := strings.Cut(rest, "__")
+	return sv, ok && sv != ""
 }
 
 func categoryKey(s Segment) string {

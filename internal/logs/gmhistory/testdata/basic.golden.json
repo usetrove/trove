@@ -1,0 +1,63 @@
+{
+  "end": {
+    "Offset": 1432,
+    "Lines": 10,
+    "Turns": 2
+  },
+  "events": [
+    {
+      "Source": "gemini_cli",
+      "SessionKey": "g-5f729d553cdd0c51945682fa",
+      "RequestKey": "76df6da20daa85dbff5e8246",
+      "Turn": 1,
+      "TS": 1794909605000,
+      "Model": "gemini-3.1-pro-preview",
+      "Sidechain": false,
+      "Input": 4000,
+      "CacheWrite5m": 0,
+      "CacheWrite1h": 0,
+      "CacheWriteNA": 0,
+      "CacheRead": 8000,
+      "Output": 420,
+      "ServiceTier": "",
+      "Tools": [
+        {
+          "Name": "read_file",
+          "ResultBytes": 60,
+          "ResultHash": "3bbc9ec823feeb4c",
+          "Error": false
+        },
+        {
+          "Name": "run_shell_command",
+          "ResultBytes": 17,
+          "ResultHash": "26e978e41993f735",
+          "Error": true
+        }
+      ]
+    },
+    {
+      "Source": "gemini_cli",
+      "SessionKey": "g-5f729d553cdd0c51945682fa",
+      "RequestKey": "0a32333d196330cefe4213d1",
+      "Turn": 2,
+      "TS": 1794909609000,
+      "Model": "gemini-3.1-pro-preview",
+      "Sidechain": false,
+      "Input": 1050,
+      "CacheWrite5m": 0,
+      "CacheWrite1h": 0,
+      "CacheWriteNA": 0,
+      "CacheRead": 12000,
+      "Output": 40,
+      "ServiceTier": "",
+      "Tools": null
+    }
+  ],
+  "stats": {
+    "Lines": 10,
+    "Skipped": 1,
+    "Unknown": 6,
+    "FormatVersion": "",
+    "UnknownFormat": false
+  }
+}

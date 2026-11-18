@@ -17,15 +17,17 @@ trove report                        # "Third-party tools" section: claimed vs me
 
 Every command supports `--json`.
 
-## The three tools shipped today
+## The tools shipped today
 
-Verified on 2026-11-04 from each project's own README, LICENSE and release or package page.
+Verified on 2026-11-04 (Ponytail and Caveman on 2026-11-17) from each project's own README, LICENSE and release or package page.
 
 | Tool | Version | License | How it acts | Wired by |
 | --- | --- | --- | --- | --- |
 | `rtk` | 1.1.0 (git tag `v1.1.0`) | Apache-2.0 (Apache-only build) | shell output compressor | a `PreToolUse` Bash hook that Trove writes into `~/.claude/settings.json` |
 | `token-savior` | 4.24.0 (PyPI `token-savior-recall`) | MIT | MCP server for code navigation | `claude mcp add --scope user`, run by Trove; Trove never edits `~/.claude.json` |
 | `terse-rules` | 1.0.0 | Trove project | a short rules block | a fenced block in `~/.claude/CLAUDE.md` |
+| `ponytail` | 5.3.3 (git tag `v5.3.3`) | MIT | rules that make the agent write less code (T2) | a fenced block in `~/.claude/CLAUDE.md` |
+| `caveman` | 4.1.0 (git tag `v4.1.0`) | Apache-2.0 | skill text that makes replies terse (T2) | a fenced block in `~/.claude/CLAUDE.md` |
 
 Points worth knowing before you install:
 
@@ -40,10 +42,34 @@ Points worth knowing before you install:
   README says the benchmark source is not published. Trove shows these cautions at install.
 - **terse-rules** is not a third-party tool; it is the example of a rules file. The model may
   not follow rules, so it is judged like everything else.
+- **Ponytail** is wrapped as its rules text only: the project's `AGENTS.md` at tag `v5.3.3`
+  (`github.com/DietrichGebert/ponytail`), minus its last line, which only addresses agents
+  working on that repository. Its Claude Code and Codex plugins, skill and lifecycle hooks are
+  not installed. Its README claims -26% cost and -45% tokens from its own benchmark; an
+  independent JetBrains test (July 2026) measured a quarter to half of that, concentrated where
+  the agent over-builds. Its MIT notice ships in the binary (`manifests/ponytail.LICENSE`).
+- **Caveman** is wrapped as its skill text only: `skills/caveman/SKILL.md` at tag `v4.1.0`
+  (`github.com/JuliusBrussee/caveman`), placed in `CLAUDE.md` so it applies to every reply and
+  can be compared session against session. The frontmatter and the paragraph about
+  `/caveman ultra`, `/caveman wenyan` and `/caveman status` are removed, because those skills and
+  commands are not installed; the block's first line says so, as Apache-2.0 asks. Its proxy, CLI,
+  Auto mode, account login and other skills are never installed. The project says the rules cost
+  about 1,160 input tokens per request, and measured 41% less output than no instruction but only
+  3% less than a plain "Answer concisely." (ten questions, its 3.1.0 rules). Its license and NOTICE
+  ship in the binary (`manifests/caveman.LICENSE`, `manifests/caveman.NOTICE`). "Caveman" is that
+  project's trademark and names the source only.
+- **One output-style rule set at a time.** `terse-rules`, `ponytail` and `caveman` share the
+  `behavior_rules` slot, so enabling one while another is on is refused and names the one to turn
+  off. Stacked rule sets would cost the overhead of each and make the A/B verdict unattributable.
+  `verbosity_steer` at the gateway holds the same slot.
+- **A per-user trial instead of on-for-everyone.** `trove autopilot trial <rule set>` gives an installed rule set's
+  text to a random half of new Claude Code sessions through the SessionStart hook, and reports output tokens per turn,
+  cost per turn, test-fail rate and turns against the other half. This is a stronger comparison than the
+  period-against-period one below. See [autopilot.md](autopilot.md#rule-set-trials-one-yes-per-rule-set).
 
 ## States
 
-External tools are `off` or `on`. None of the first three can run in `shadow`, because they
+External tools are `off` or `on`. None of them can run in `shadow`, because they
 act inside the agent's own config, outside Trove's request path, so Trove cannot estimate what
 they would do without doing it. Asking for `shadow` is refused with that reason. The only way
 to evaluate them is to compare sessions with the tool on against sessions with it off. That is
@@ -65,7 +91,8 @@ allowed; it only makes sure you looked.
 A tool is charged for what it adds to every request:
 
 - **Tool definitions** (MCP servers): declared by the tool, labeled estimated.
-- **Injected rules**: counted from the rules text itself, never trusted from the manifest.
+- **Injected rules**: counted from the whole block written to the rules file (fences and the
+  `<!-- trove:managed -->` line included), never trusted from the manifest.
 - **Extra turns**: not added up separately. They show up in what the session costs.
 
 The measured comparison uses provider-reported prompt tokens and the real cost per session, which

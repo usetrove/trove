@@ -62,7 +62,8 @@ saving = cost of the request had the removed tokens still been sent
 
 **Why dollar savings are labeled "estimated".** The provider reports how many
 tokens it received, but not how many the optimizer removed. Trove knows how many
-*bytes* it removed and converts with a bytes-per-token ratio (3.5 by default). If
+*bytes* it removed and converts with a bytes-per-token ratio (3.5 by default; hooks use a ratio learned
+from your own session logs per model family once there are enough samples, see docs/hooks.md). If
 several optimizers changed one request, its saving is shared between them in
 proportion to the tokens each removed. Both steps are approximations.
 
@@ -113,10 +114,35 @@ ever on).
 | --- | --- |
 | retries | Repeated identical tool calls per session are up by at least 30% (`retry_increase_percent`) **and** the rise is larger than chance would explain. |
 | tool errors | Tool errors per session are up by the same margin and are beyond chance. |
-| re-fetch | Of sessions where something was collapsed, more than 25% (`refetch_rate_percent`) re-fetched, with even the low end of a 95% interval above 25%. |
+| re-fetch | Of sessions where something was collapsed, the share that re-fetched is above 25% (`refetch_rate_percent`) beyond chance. |
 
 If the reference average is zero, a relative rise is meaningless, so the rule
 needs a rise of at least half a call (or error) per session instead.
+
+**Sequential rollback checks.** These rules run every 5 minutes while the
+gateway is up and again at every session end (`hooks.Maintain`), so the same
+growing sample is tested over and over. A fixed-sample test checked that often
+fires on noise sooner or later. In a seeded simulation, the pre-0.6 rules
+falsely rolled back 29% of clean histories (retries) and about 90% of histories
+sitting at the limit (hook rates). Since 0.6, "beyond chance" means an
+**always-valid** sequential test (`internal/measure/seq.go`). The chance that it
+*ever* fires while the optimizer is not worse is at most 5% (one-sided), however
+often it runs:
+
+- Rates (re-fetch, the hook rules below): a mixture likelihood-ratio test
+  averaged over 50 alternative rates between the limit and 100%. It is exact,
+  with no normal approximation.
+- Means (retries, tool errors, a third-party tool's cost per session): the
+  normal-mixture sequential probability ratio test (Robbins 1970; Johari,
+  Pekelis and Walsh 2017). It is tuned to the rule's own threshold (30% of the
+  reference mean, or 10% for cost). It estimates the variance from the data, so
+  the guarantee is asymptotic. `seq_test.go` checks it at the sample sizes used
+  here, and false rollbacks stay at or below 1.1%.
+
+The price is that a rollback needs more evidence than before. For example, the
+hook rule with a 25% limit needs 11 of 20 actions (19 of 40) to have gone wrong.
+A rate sitting exactly at the limit never trips it. The A/B experiment's
+bootstrap verdicts (section 4a) are not sequential yet.
 
 **Minimum sample.** No rule runs, and no conclusion is shown, until each side has
 at least `min_sessions` (default 20) finished sessions. Below that the report says
@@ -184,9 +210,34 @@ data yet"** and shows no number.
 sessions, which pulls a noisy estimate toward the lab result and leaves a
 precise one nearly alone. The combined range is shown next to your own and is
 marked as including benchmark evidence. Rollback always uses your own data, so a
-prior can never hide a loss. No benchmark results are committed yet, so the
+prior can never hide a loss: if your own range is wholly above zero (your sessions
+measurably cost more), the combined range shows your numbers unchanged. Every prior
+must name its source (a benchmark study, contributed data or a team pool) or Trove
+refuses the file. No benchmark results are committed yet, so the
 shipped priors file is empty: for now only your own sessions count, and Trove
 will not suggest turning an optimizer on from benchmark evidence.
+
+**Cost figures in the A/B.** The report shows three, each *measured* with a
+seeded 95% bootstrap range, on your own priced sessions: **cost per turn** and
+**cost per uncached input token** (the primary figures, because they do not move
+just because a session ran longer or shorter), and **cost per session**
+(secondary). A session with no turns, or no recorded uncached input tokens, is
+left out of the figure it cannot have; it is never counted as zero. Sessions
+judged without priced requests (plugin hook trials) show neither new figure.
+For now the rollback and promotion rules below still decide on cost per session.
+
+**Adjusting for prior cost.** Some sessions are simply more expensive than others,
+and that noise widens every range. Trove uses each session's *prior cost* to
+remove part of it: the average of the same figure over the last five *off*
+sessions in the same group, taken only from earlier randomisation blocks, so it
+cannot depend on the session's own arm or on the optimizer. The method (CUPED)
+was fixed in advance in `docs/benchmark-methodology.md` section 4a. It is used
+only when at least 80% of sessions have a prior cost and prior cost predicts
+cost (correlation at least 0.3); otherwise the plain figure is shown. When it is
+used, the report says so and shows the unadjusted range next to it, and the
+verdict and rollback use the adjusted range. Turns, tool errors and abandoned
+sessions are never adjusted, and session length is never used as a covariate,
+because an optimizer can change it.
 
 **Promotion and rollback.**
 - *Promotion*: an optimizer moves from shadow to **suggested on** only when
@@ -211,6 +262,25 @@ claim and the bill can point in opposite directions; Trove reports the bill.
 Look at the results with `trove report` or `trove experiment status` (both support
 `--json`). They are recomputed from stored metadata (arms, per-session cost and
 signals), so a re-run gives the same answer.
+
+### Subscription and plugin-only users
+
+If nothing went through the gateway, Trove has no bill to read. It reads your
+agent's own session logs instead and says so:
+
+- **Usage** is priced at API list prices and shown as *API-equivalent value*
+  ("estimated"). It is not spend and not a bill, so no dollar budget pace is judged
+  for it. Logs that are on an API key still count as spend.
+- **Status line** (`trove status-line`) shows that value for the period, the
+  current session's share of it, and the measured A/B verdicts on cost per session
+  (the best optimizer, and how many cost more). Trove does not know your plan's
+  limits and never reads usage meters from provider pages, so "share" means share of
+  your own usage, never share of a limit.
+- **Savings as a share of usage** (`savings_share_percent` in `trove report`) is
+  estimated savings divided by usage plus those savings. It is "estimated", because
+  the savings are. Only the A/B verdicts are "measured".
+- When the gateway has traffic in the period, the status line uses it exactly as
+  before and does not read the logs, so it stays fast.
 
 ## 5. Limits you should know about
 

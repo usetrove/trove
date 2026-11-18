@@ -79,6 +79,11 @@ type Fixer struct {
 	// ActivityMinutes: a fix is not applied while an agent session has been
 	// active this recently; it is queued instead.
 	ActivityMinutes int `toml:"activity_minutes"`
+	// RetypedMinCount and RetypedMinSessions: a Bash command the agent typed at
+	// least this many times, in at least this many sessions, is offered as a
+	// trove_run command (docs/fixer.md).
+	RetypedMinCount    int `toml:"retyped_min_count"`
+	RetypedMinSessions int `toml:"retyped_min_sessions"`
 }
 
 // Settings holds the settings for `trove settings` (see docs/settings.md).
@@ -158,6 +163,11 @@ type Experiment struct {
 type Gateway struct {
 	Port        int `toml:"port"`
 	IdleMinutes int `toml:"idle_minutes"`
+	// KeepWarmMaxPings is how many keep-warm pings one idle session may get (1 to 6, default 2).
+	// KeepWarmDailyCapUSD caps what pings may spend in a local day (above 0, at most $1, the
+	// default). Both may only be lowered: see docs/decisions/keep-warm.md.
+	KeepWarmMaxPings    int     `toml:"keep_warm_max_pings"`
+	KeepWarmDailyCapUSD float64 `toml:"keep_warm_daily_cap_usd"`
 }
 
 // Optimize holds settings shared by all optimizers. Per-optimizer states live
@@ -169,6 +179,65 @@ type Optimize struct {
 	// BudgetMS is the time the whole optimizer pipeline may take per request
 	// before Trove forwards the original request unmodified.
 	BudgetMS int `toml:"budget_ms"`
+	// CacheTTL sets the lifetime of each cache marker that cache_breakpoints adds
+	// for custom agents.
+	CacheTTL CacheTTL `toml:"cache_ttl"`
+	// Verbosity is the note verbosity_steer appends to the system prompt:
+	// VerbosityConcise (default) or VerbosityTerse. Pinned per session.
+	Verbosity string `toml:"verbosity"`
+}
+
+// Verbosity levels for verbosity_steer.
+const (
+	VerbosityConcise = "concise"
+	VerbosityTerse   = "terse"
+)
+
+// CacheTTL is the lifetime of each cache marker cache_breakpoints adds, in
+// prompt order: last tool definition, last stable system block, then the
+// top-level marker that covers the messages. Each is "5m" (or empty, the
+// provider's default) or "1h". The provider requires a longer lifetime to come
+// before a shorter one (verified 2026-11-17 against
+// https://platform.claude.com/docs/en/build-with-claude/prompt-caching), so a
+// later marker may never outlive an earlier one.
+type CacheTTL struct {
+	Tools    string `toml:"tools" json:"tools,omitempty"`
+	System   string `toml:"system" json:"system,omitempty"`
+	Messages string `toml:"messages" json:"messages,omitempty"`
+}
+
+// ttlRank orders lifetimes; 0 means the value is not allowed.
+func ttlRank(v string) int {
+	switch v {
+	case "", "5m":
+		return 1
+	case "1h":
+		return 2
+	}
+	return 0
+}
+
+// Check reports an invalid value or an ordering where a later marker would
+// outlive an earlier one. The error names the config key to change.
+func (c CacheTTL) Check() error {
+	fields := []struct{ name, v string }{{"tools", c.Tools}, {"system", c.System}, {"messages", c.Messages}}
+	for _, f := range fields {
+		if ttlRank(f.v) == 0 {
+			return fmt.Errorf("optimize.cache_ttl.%s is %q; use \"5m\" or \"1h\"", f.name, f.v)
+		}
+	}
+	for i := 1; i < len(fields); i++ {
+		if ttlRank(fields[i].v) > ttlRank(fields[i-1].v) {
+			return fmt.Errorf("optimize.cache_ttl.%s is 1h but optimize.cache_ttl.%s is 5m; a longer lifetime must come before a shorter one (tools, then system, then messages), so set %s to \"1h\" or %s to \"5m\"",
+				fields[i].name, fields[i-1].name, fields[i-1].name, fields[i].name)
+		}
+	}
+	return nil
+}
+
+// IsDefault reports whether every marker uses the 5-minute default.
+func (c CacheTTL) IsDefault() bool {
+	return ttlRank(c.Tools) == 1 && ttlRank(c.System) == 1 && ttlRank(c.Messages) == 1
 }
 
 // Optimizers with extra requirements before "on" takes effect.
@@ -189,6 +258,13 @@ const (
 	// OptimizerHookQuietCommands adds output-quieting flags to allowlisted shell
 	// commands. It never changes what a command does.
 	OptimizerHookQuietCommands = "hook_quiet_commands"
+	// OptimizerHookOutputDedup replaces a Bash, Grep or Glob output that is identical to one
+	// earlier in the session with a one-line pointer. Like the output trimmer it needs the
+	// Trove MCP server and the recovery store before "on" takes effect.
+	OptimizerHookOutputDedup = "hook_output_dedup"
+	// OptimizerHookReadOutline replaces a very large full Read of a source file with its outline. Like the
+	// output trimmer it needs the Trove MCP server and the recovery store before "on" takes effect.
+	OptimizerHookReadOutline = "hook_read_outline"
 	// OptimizerNoiseNormalizer is lossless; it also runs in hooks on tool output.
 	OptimizerNoiseNormalizer = "noise_normalizer"
 	// OptimizerInflightDedup is a behavior of the gateway itself: when identical requests
@@ -199,6 +275,10 @@ const (
 	// has reached the budget cap, a hard cap would refuse further requests. Only its shadow mode
 	// exists: it estimates what the cap would have stopped and refuses nothing.
 	OptimizerSpendCap = "spend_cap"
+	// OptimizerKeepWarm is a behavior of the gateway itself: while an API-key session is idle it
+	// re-reads the session's cached prefix so the 5-minute cache does not expire. Shadow estimates
+	// only; on sends pings. Approved, with its limits, in docs/decisions/keep-warm.md.
+	OptimizerKeepWarm = "keep_warm"
 )
 
 // EnvOptimize is the kill-switch environment variable. Set to "off", it
@@ -226,10 +306,10 @@ type Budget struct {
 // Default returns the built-in defaults.
 func Default() Config {
 	return Config{
-		Gateway:    Gateway{Port: 8787, IdleMinutes: 30},
+		Gateway:    Gateway{Port: 8787, IdleMinutes: 30, KeepWarmMaxPings: 2, KeepWarmDailyCapUSD: 1},
 		Upstreams:  Upstreams{Anthropic: "https://api.anthropic.com", OpenAI: "https://api.openai.com"},
 		Optimizers: map[string]string{},
-		Optimize:   Optimize{CustomAgents: []string{}, BudgetMS: 25},
+		Optimize:   Optimize{CustomAgents: []string{}, BudgetMS: 25, Verbosity: VerbosityConcise},
 		Budget:     Budget{Period: "monthly", CapUSD: 0, WarnAtPercent: 80},
 		Measure: Measure{
 			BaselineDays: 7, BaselineSessions: 20, MinSessions: 20,
@@ -241,7 +321,7 @@ func Default() Config {
 		},
 		RetentionDays: 90,
 		History:       History{Enabled: true},
-		Fixer:         Fixer{MinSessions: 5, LookbackDays: 30, ContextMinTokens: 1500, ActivityMinutes: 30},
+		Fixer:         Fixer{MinSessions: 5, LookbackDays: 30, ContextMinTokens: 1500, ActivityMinutes: 30, RetypedMinCount: 5, RetypedMinSessions: 3},
 		Recovery:      Recovery{MaxMB: 200, TTLDays: 7},
 		Contribute:    Contribute{Endpoint: DefaultContributeEndpoint},
 	}
@@ -271,6 +351,10 @@ retention_days = 90
 port = 8787
 # A gap longer than this many minutes between requests starts a new session (1 to 1440).
 idle_minutes = 30
+# Keep-warm pings (the keep_warm optimizer, API-key gateway traffic only): at most this many
+# pings per idle session (1 to 6) and this much ping spend per local day (above 0, at most 1 dollar).
+keep_warm_max_pings = 2
+keep_warm_daily_cap_usd = 1.0
 
 [upstreams]
 # Where the gateway forwards your own API requests. Origin only, no path.
@@ -290,6 +374,9 @@ custom_agents = []
 # If the optimizers take longer than this many milliseconds (1 to 1000), Trove
 # forwards your original request unmodified.
 budget_ms = 25
+# How short verbosity_steer asks replies to be: "concise" or "terse". It only
+# matters while verbosity_steer is on, and changes apply to new sessions.
+verbosity = "concise"
 
 [budget]
 # Budget period: "daily", "weekly" or "monthly".
@@ -362,6 +449,11 @@ context_min_tokens = 1500
 # Fixes are not applied while an agent session was active this recently (minutes,
 # 1 to 1440); they are queued and applied when the agent is idle.
 activity_minutes = 30
+# A shell command the agent retyped at least retyped_min_count times (2 to 1000)
+# in at least retyped_min_sessions sessions (1 to 1000) is offered as a trove_run
+# command in .trove/commands.toml.
+retyped_min_count = 5
+retyped_min_sessions = 3
 
 [settings]
 # "trove settings" proposes per-task-type values for your agent's built-in token
@@ -403,6 +495,12 @@ func (c Config) Validate() error {
 	}
 	if c.Gateway.IdleMinutes < 1 || c.Gateway.IdleMinutes > 1440 {
 		add("gateway.idle_minutes is %d; use a number of minutes from 1 to 1440 (default 30).", c.Gateway.IdleMinutes)
+	}
+	if c.Gateway.KeepWarmMaxPings < 1 || c.Gateway.KeepWarmMaxPings > 6 {
+		add("gateway.keep_warm_max_pings is %d; use a number from 1 to 6 (default 2).", c.Gateway.KeepWarmMaxPings)
+	}
+	if !(c.Gateway.KeepWarmDailyCapUSD > 0 && c.Gateway.KeepWarmDailyCapUSD <= 1) {
+		add("gateway.keep_warm_daily_cap_usd is %v; use an amount above 0 and at most 1 dollar (default 1).", c.Gateway.KeepWarmDailyCapUSD)
 	}
 	for name, v := range map[string]string{"upstreams.anthropic": c.Upstreams.Anthropic, "upstreams.openai": c.Upstreams.OpenAI} {
 		if problem := checkUpstream(v); problem != "" {
@@ -455,6 +553,12 @@ func (c Config) Validate() error {
 	if c.Optimize.BudgetMS < 1 || c.Optimize.BudgetMS > 1000 {
 		add("optimize.budget_ms is %d; use a number of milliseconds from 1 to 1000 (default 25).", c.Optimize.BudgetMS)
 	}
+	if err := c.Optimize.CacheTTL.Check(); err != nil {
+		add("%s.", err.Error())
+	}
+	if v := c.Optimize.Verbosity; v != VerbosityConcise && v != VerbosityTerse {
+		add("optimize.verbosity is %q; use \"concise\" or \"terse\" (default \"concise\").", v)
+	}
 	f := c.Fixer
 	if f.MinSessions < 3 || f.MinSessions > 1000 {
 		add("fixer.min_sessions is %d; use a number from 3 to 1000 (default 5).", f.MinSessions)
@@ -467,6 +571,12 @@ func (c Config) Validate() error {
 	}
 	if f.ActivityMinutes < 1 || f.ActivityMinutes > 1440 {
 		add("fixer.activity_minutes is %d; use a number of minutes from 1 to 1440 (default 30).", f.ActivityMinutes)
+	}
+	if f.RetypedMinCount < 2 || f.RetypedMinCount > 1000 {
+		add("fixer.retyped_min_count is %d; use a number from 2 to 1000 (default 5).", f.RetypedMinCount)
+	}
+	if f.RetypedMinSessions < 1 || f.RetypedMinSessions > 1000 {
+		add("fixer.retyped_min_sessions is %d; use a number from 1 to 1000 (default 3).", f.RetypedMinSessions)
 	}
 	if t := c.Settings.DefaultTask; t != "" && !validTaskName(t) {
 		add("settings.default_task is %q; use lowercase letters, digits and - (for example quick-fix), or leave it empty.", t)

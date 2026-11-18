@@ -86,6 +86,8 @@ func requestOnlyBody(name string) []byte {
 		return []byte(`{"model":"claude-opus-5-5","system":"You are a coding agent.\nToday's date: 2026-10-29\nBe brief.\n","messages":[{"role":"user","content":"hi"}]}`)
 	case "cache_breakpoints":
 		return []byte(`{"model":"claude-opus-5-5","system":` + enc(pad) + `,"tools":[{"name":"bash","description":"run","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"hi"}]}`)
+	case "verbosity_steer":
+		return []byte(`{"model":"claude-opus-5-5","system":[{"type":"text","text":"You are a coding agent.","cache_control":{"type":"ephemeral"}}],"messages":[{"role":"user","content":"hi"}]}`)
 	case "duplicate_result_collapser":
 		return []byte(`{"model":"claude-opus-5-5","system":"s","messages":[{"role":"user","content":"read it"},` +
 			`{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":` + enc(same) + `}]},` +

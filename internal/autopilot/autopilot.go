@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/technique"
 )
 
@@ -46,6 +47,22 @@ type Policy struct {
 	// ProbationMaxDays is how long a probation may run without a clear result before the optimizer
 	// goes back to shadow. A placeholder until a benchmark sets it.
 	ProbationMaxDays int
+	// TestFailMinSessions is how many sessions that ran an allowlisted test each arm needs before the
+	// test_fail_rate guardrail can roll a trial back. A placeholder until a benchmark sets it.
+	TestFailMinSessions int
+	// TestFailMarginPts is how many percentage points more often sessions with the optimizer on may end with
+	// failing tests than sessions without it, for T1 and T2 techniques. TestFailMarginPtsT3 is the stricter
+	// margin for routing (T3) techniques. Placeholders until a benchmark sets them.
+	TestFailMarginPts   float64
+	TestFailMarginPtsT3 float64
+}
+
+// testFailMargin is the test_fail_rate margin for a tier: stricter for T3 than for T1 and T2.
+func (p Policy) testFailMargin(t technique.Tier) float64 {
+	if t == technique.T3 {
+		return p.TestFailMarginPtsT3
+	}
+	return p.TestFailMarginPts
 }
 
 // DefaultPolicy is the shipped "lossless-v1" policy.
@@ -58,6 +75,10 @@ func DefaultPolicy() Policy {
 		LookbackDays: 30,
 		CooldownDays: 7,
 		MaxAttempts:  2,
+
+		TestFailMinSessions: 10,
+		TestFailMarginPts:   10,
+		TestFailMarginPtsT3: 5,
 	}
 }
 
@@ -152,6 +173,15 @@ type Evidence struct {
 	OtherInProbation string
 	// Probation is the comparison's result so far, while in probation. The zero value means no result yet.
 	Probation ProbationEvidence
+	// Tests is the trial's test_fail_rate evidence, while in probation. The zero value decides nothing.
+	Tests TestEvidence
+}
+
+// TestEvidence is the test_fail_rate input for a trial: per arm, the sessions that ran an allowlisted test
+// and how many ended failing (measured), plus the technique's tier, which sets the margin.
+type TestEvidence struct {
+	Tier    technique.Tier
+	On, Off measure.TestFailArm
 }
 
 // ProbationEvidence is what the session-level comparison shows so far. Status is the experiment package's
@@ -300,9 +330,12 @@ func (p Policy) decideProbation(cur config.AutopilotEntry, ev Evidence, now time
 		next.State, next.Reason, next.SinceMS = state, reason, now.UnixMilli()
 	}
 	pe := ev.Probation
+	testsTrip, testsWhy := measure.TestFailTrips(ev.Tests.On, ev.Tests.Off, p.TestFailMinSessions, p.testFailMargin(ev.Tests.Tier))
 	switch {
 	case ev.RolledBack:
 		set(config.AutopilotRolledBack, "a guardrail rolled it back to shadow during the trial")
+	case testsTrip:
+		set(config.AutopilotRolledBack, "test_fail_rate guardrail: "+testsWhy+"; back to shadow")
 	case ev.Unavailable != "":
 		set(config.AutopilotShadow, "no longer available in your setup: "+ev.Unavailable)
 	case ev.CanProbation != "":

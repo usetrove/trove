@@ -18,7 +18,7 @@ func TestChargeCountsRulesTextNotTheManifestClaim(t *testing.T) {
 	m.Rules = strings.Repeat("x", 350)
 	m.Overhead.InjectedTokens = 1 // a manifest cannot understate what it injects
 	c := ChargeFor(m)
-	if c.InjectedTokens != 100 || c.PerRequest != 100 || c.Label != "estimated" {
+	if want := EstimateTokens(RulesBlock(m)); c.InjectedTokens != want || c.PerRequest != want || want <= 100 || c.Label != "estimated" {
 		t.Fatalf("charge = %+v", c)
 	}
 	s := shellTool("s", "MIT")

@@ -220,3 +220,18 @@ func Builtin() ([]Manifest, error) {
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
 }
+
+// BuiltinRules returns the rules text of a rules_file tool shipped in this binary, for a hook that adds it to a
+// session's context during a rule-set trial. ok is false for an unknown tool or one that is not a rules file.
+func BuiltinRules(name string) (string, bool) {
+	ms, err := Builtin()
+	if err != nil {
+		return "", false
+	}
+	for _, m := range ms {
+		if m.Name == name && m.ActsAs == ActsRulesFile {
+			return strings.TrimRight(m.Rules, "\n"), true
+		}
+	}
+	return "", false
+}

@@ -54,7 +54,8 @@ func sampleVar(x []float64) float64 {
 }
 
 // compareMeans asks whether treated has a higher mean than ref by at least
-// relIncrease (0.30 = 30%) and by more than chance (Welch, one-sided 95%).
+// relIncrease (0.30 = 30%) and by more than chance. Chance is judged by a
+// sequential test (seq.go) because the check is repeated on a growing sample.
 // When the reference mean is zero a relative change is undefined; then an
 // absolute rise of at least 0.5 per session is required instead.
 func compareMeans(treated, ref []float64, minN int, relIncrease float64) Comparison {
@@ -62,36 +63,34 @@ func compareMeans(treated, ref []float64, minN int, relIncrease float64) Compari
 	if len(treated) < minN || len(ref) < minN {
 		return c
 	}
-	c.Treated, c.Ref = mean(treated), mean(ref)
+	return meansVerdict(c, mean(treated), mean(ref), sampleVar(treated), sampleVar(ref), relIncrease)
+}
+
+// meansVerdict fills c from summary statistics; c carries the sample sizes.
+func meansVerdict(c Comparison, meanT, meanR, varT, varR, relIncrease float64) Comparison {
+	c.Treated, c.Ref = meanT, meanR
 	diff := c.Treated - c.Ref
-	se := math.Sqrt(sampleVar(treated)/float64(len(treated)) + sampleVar(ref)/float64(len(ref)))
+	se := math.Sqrt(varT/float64(c.NTreated) + varR/float64(c.NRef))
 	big := false
+	tau := 0.5 // the mixture is tuned to the smallest rise the rule cares about
 	if c.Ref == 0 {
 		c.Change = diff
 		big = diff >= 0.5
 	} else {
 		c.Change = diff / c.Ref
 		big = c.Change >= relIncrease
+		tau = relIncrease * math.Abs(c.Ref)
 	}
 	c.Verdict = NoRegression
-	if big && diff > z95*se {
+	if big && seqMeanExceeds(diff, se, tau) {
 		c.Verdict = Regression
 	}
 	return c
 }
 
-// wilsonLower is the lower end of the 95% Wilson interval for k of n.
-func wilsonLower(k, n int) float64 {
-	if n == 0 {
-		return 0
-	}
-	p, nn := float64(k)/float64(n), float64(n)
-	z2 := 1.96 * 1.96
-	return (p + z2/(2*nn) - 1.96*math.Sqrt(p*(1-p)/nn+z2/(4*nn*nn))) / (1 + z2/nn)
-}
-
-// compareRateToLimit flags treated when even the low end of its 95% interval
-// is above limit (a fraction, 0.25 = 25%). The reference plays no part.
+// compareRateToLimit flags treated when k of n is evidence, valid however
+// often it is checked, that the rate is above limit (a fraction, 0.25 = 25%).
+// The reference plays no part.
 func compareRateToLimit(k, n, minN int, limit float64) Comparison {
 	c := Comparison{Verdict: NotEnoughData, NTreated: n}
 	if n < minN {
@@ -99,7 +98,7 @@ func compareRateToLimit(k, n, minN int, limit float64) Comparison {
 	}
 	c.Treated = float64(k) / float64(n)
 	c.Verdict = NoRegression
-	if wilsonLower(k, n) > limit {
+	if seqRateExceeds(k, n, limit) {
 		c.Verdict = Regression
 	}
 	return c

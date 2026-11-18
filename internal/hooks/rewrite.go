@@ -83,6 +83,36 @@ func withResponseTexts(raw json.RawMessage, keys, texts []string) (json.RawMessa
 	return out, err == nil
 }
 
+// withReadContent returns a Read tool_response with file.content replaced and
+// every other field, inside file and out, unchanged. ok is false for a response
+// that is not in the Read shape.
+func withReadContent(raw json.RawMessage, content string) (json.RawMessage, bool) {
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil || m["file"] == nil {
+		return raw, false
+	}
+	var f map[string]json.RawMessage
+	if json.Unmarshal(m["file"], &f) != nil || f["content"] == nil {
+		return raw, false
+	}
+	var old string
+	if json.Unmarshal(f["content"], &old) != nil {
+		return raw, false
+	}
+	c, err := json.Marshal(content)
+	if err != nil {
+		return raw, false
+	}
+	f["content"] = c
+	fb, err := json.Marshal(f)
+	if err != nil {
+		return raw, false
+	}
+	m["file"] = fb
+	out, err := json.Marshal(m)
+	return out, err == nil
+}
+
 // outputForEngine is the response as neutral parts, one per text field, so the
 // engine's result can be mapped back by position.
 func outputForEngine(texts []string) optimize.ToolOutput {

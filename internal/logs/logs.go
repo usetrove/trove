@@ -6,6 +6,7 @@ import "context"
 const (
 	SourceClaudeCode = "claude_code"
 	SourceCodex      = "codex"
+	SourceGeminiCLI  = "gemini_cli"
 )
 
 // File is one history file found on disk. Path is used to open the file and is
@@ -63,7 +64,15 @@ type ToolCall struct {
 	ResultBytes int64  // 0 when no result was seen
 	ResultHash  string // hash of the result, for duplicate detection; never the text
 	Error       bool
+	// Command is a Bash call's command text (Claude Code only, at most MaxCommandBytes). It exists so
+	// `trove fix` can find commands the agent keeps retyping; it is held in memory for one run and
+	// never stored: ingest writes tool names, sizes and counts only.
+	// It is never marshalled.
+	Command string `json:"-"`
 }
+
+// MaxCommandBytes bounds the command text a parser keeps per Bash call.
+const MaxCommandBytes = 16 << 10
 
 // Source finds and parses one agent's history.
 type Source interface {

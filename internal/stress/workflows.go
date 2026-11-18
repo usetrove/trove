@@ -34,18 +34,19 @@ type WorkflowRow struct {
 	Description   string  `json:"description"`
 	Turns         int     `json:"turns"`
 	Requests      int     `json:"requests"`
-	InputTokens   int64   `json:"input_tokens_off"` // estimated: bytes over the engine's bytes-per-token ratio
-	TokensCut     int64   `json:"tokens_removed"`   // estimated
-	OverheadToks  int64   `json:"overhead_tokens"`  // declared by the optimizers that changed a request, charged in the on arm
-	OffUSD        float64 `json:"cost_off_usd"`     // estimated at list price
-	OnUSD         float64 `json:"cost_on_usd"`      // estimated at list price, including the declared overhead
-	SavedPct      float64 `json:"saved_pct"`        // estimated
-	Violations    int     `json:"violations"`       // broken invariants (measured by the checkers)
-	PrefixOK      int     `json:"prefix_preserved"` // requests whose cached prefix stayed byte-identical (measured)
-	Deterministic bool    `json:"deterministic"`    // a second run produced byte-identical requests (measured)
-	KeyLines      int     `json:"key_lines"`        // failure, error and traceback lines in the original tool output (measured)
-	KeyLinesKept  int     `json:"key_lines_kept"`   // of those, how many are still visible to the model after optimizing (measured)
-	Trimmed       int     `json:"trimmed_outputs"`  // outputs the engine stored in the recovery store and replaced with a marker
+	InputTokens   int64   `json:"input_tokens_off"`   // estimated: bytes over the engine's bytes-per-token ratio
+	TokensCut     int64   `json:"tokens_removed"`     // estimated
+	OverheadToks  int64   `json:"overhead_tokens"`    // declared by the optimizers that changed a request, charged in the on arm
+	OffUSD        float64 `json:"cost_off_usd"`       // estimated at list price
+	OnUSD         float64 `json:"cost_on_usd"`        // estimated at list price, including the declared overhead
+	SavedPct      float64 `json:"saved_pct"`          // estimated
+	Violations    int     `json:"violations"`         // broken invariants (measured by the checkers)
+	PrefixOK      int     `json:"prefix_preserved"`   // requests whose cached prefix stayed byte-identical (measured)
+	Deterministic bool    `json:"deterministic"`      // a second run produced byte-identical requests (measured)
+	KeyLines      int     `json:"key_lines"`          // failure, error and traceback lines in the original tool output (measured)
+	KeyLinesKept  int     `json:"key_lines_kept"`     // of those, how many are still visible to the model after optimizing (measured)
+	Trimmed       int     `json:"trimmed_outputs"`    // outputs the engine stored in the recovery store and replaced with a marker
+	Unstored      int     `json:"markers_not_stored"` // trim markers naming output the store does not hold byte for byte (measured)
 }
 
 // WorkflowReport is the whole run. Numbers are labelled: "estimated" ones depend on the scripted shape and list
@@ -99,6 +100,9 @@ type WorkflowOptions struct {
 	// CustomAgent runs the session as a custom agent that sends no cache markers (a script or home-grown agent), the
 	// case the cache_breakpoints optimizer exists for. The original arm is then priced with no prompt caching at all.
 	CustomAgent bool
+	// engine, when set, builds the engine for each run in place of every shipped optimizer. The per-optimizer checker
+	// (checker.go) uses it to run one optimizer alone; custom is true for the custom-agent arm.
+	engine func(custom bool, rec *memStore) *optimize.Engine
 }
 
 // wants reports whether the run includes the named workflow.
@@ -232,10 +236,19 @@ func runWorkflow(w wfSpec, o WorkflowOptions, tab *pricing.Table) (WorkflowRow, 
 func playWorkflow(spec SessionSpec, bodies [][]byte, turns []turn, o WorkflowOptions, tab *pricing.Table) ([][]byte, []float64, WorkflowRow) {
 	var row WorkflowRow
 	store := &memStore{}
-	eng := newEngine(allNames(), store, PricingDate)
+	mk := o.engine
+	if mk == nil {
+		mk = func(custom bool, rec *memStore) *optimize.Engine {
+			if custom {
+				return newCustomEngine(savingNames(), rec, PricingDate)
+			}
+			return newEngine(savingNames(), rec, PricingDate)
+		}
+	}
+	eng := mk(o.CustomAgent, store)
 	agent := "claude_code"
 	if o.CustomAgent {
-		eng, agent = newCustomEngine(allNames(), store, PricingDate), customAgent
+		agent = customAgent
 	}
 	expiry := rng(o.Seed, "wf-expiry", spec.Name)
 	var outs [][]byte
@@ -287,6 +300,9 @@ func playWorkflow(spec SessionSpec, bodies [][]byte, turns []turn, o WorkflowOpt
 		// The last request holds every tool output. Everything the engine stored must be byte-identical to an original,
 		// and every failure line in the original must still be visible to the model (or have been a duplicate of one that is).
 		row.Violations += len(CheckRecovery(bodies[n-1], store.snapshot()))
+		// And every trim marker the model sees must name a stored output, so a fetch returns the tool's output byte for byte.
+		row.Unstored = len(CheckTrimStored(outs[n-1], store.snapshot()))
+		row.Violations += row.Unstored
 		row.Trimmed = len(store.snapshot())
 		row.KeyLines, row.KeyLinesKept = keyLinesKept(bodies[n-1], outs[n-1])
 		if row.KeyLinesKept < row.KeyLines {
@@ -304,14 +320,15 @@ func keyLinesKept(orig, out []byte) (total, kept int) {
 	// is the six characters backslash-u-0-0-1-b. Work on that escaped text; a preserved line appears identically in out.
 	seen := map[string]bool{}
 	for _, raw := range strings.Split(string(orig), `\n`) {
-		line := ansiRE.ReplaceAllString(raw, "")
-		line = strings.TrimSpace(strings.TrimSuffix(line, `\r`))
+		raw = strings.TrimSpace(strings.TrimSuffix(raw, `\r`))
+		line := strings.TrimSpace(ansiRE.ReplaceAllString(raw, ""))
 		if len(line) < 12 || seen[line] || !isKeyLine(line) {
 			continue
 		}
 		seen[line] = true
 		total++
-		if bytes.Contains(out, []byte(line)) {
+		// Kept as-is (colors and all) or cleaned by the noise normalizer: either way the model still sees it.
+		if bytes.Contains(out, []byte(line)) || bytes.Contains(out, []byte(raw)) {
 			kept++
 		}
 	}
@@ -321,7 +338,8 @@ func keyLinesKept(orig, out []byte) (total, kept int) {
 var ansiRE = regexp.MustCompile(`\\u001b\[[0-9;]*[A-Za-z]`)
 
 func isKeyLine(l string) bool {
-	for _, m := range []string{"FAILED ", "AssertionError", "error TS", "Traceback", "ERROR ", "Error:", "FAIL "} {
+	// The request is escaped JSON, so a JSON log record's quotes appear as \".
+	for _, m := range []string{"FAILED ", "AssertionError", "error TS", "Traceback", "ERROR ", "Error:", "FAIL ", `\"level\":\"error\"`} {
 		if strings.Contains(l, m) {
 			return true
 		}
@@ -368,6 +386,7 @@ func workflowSpecs() []wfSpec {
 		{"ci-failure-triage", tierHeavy, "Monorepo with a verbose test reporter (about 500 tests per run): four full runs while fixing failures one by one.", wfCITriage},
 		{"container-build-debug", tierHeavy, "A failing container build: long build logs rerun after each Dockerfile fix, plus container logs.", wfContainerBuild},
 		{"incident-log-forensics", tierHeavy, "Pull production logs repeatedly: long logs with the same stack trace over and over, and polling the same cluster status.", wfIncident},
+		{"json-log-triage", tierHeavy, "Structured logs, one JSON object per line: tail a service's logs, find the failing records, fix, tail again.", wfJSONLogs},
 	}
 }
 
@@ -791,6 +810,36 @@ func incidentLogs(r *rand.Rand, n int) string {
 		}
 	}
 	return sb.String()
+}
+
+// jsonLogs is a structured service log, one JSON object per line: routine info records, a failing payment path that
+// logs an error record (failures of them while broken is true), and an occasional one-off record.
+func jsonLogs(r *rand.Rand, n int, broken bool) string {
+	var sb strings.Builder
+	for i := 0; i < n; i++ {
+		ts := fmt.Sprintf("2026-11-17T09:%02d:%02d.%03dZ", i/60%60, i%60, r.IntN(1000))
+		switch {
+		case broken && i%23 == 4:
+			fmt.Fprintf(&sb, `{"ts":"%s","level":"error","logger":"payments","msg":"charge failed","order":%d,"code":"gateway_timeout"}`+"\n", ts, 50000+i)
+		case i%97 == 50:
+			fmt.Fprintf(&sb, `{"ts":"%s","level":"info","logger":"%s","msg":"cache resized","entries":%d}`+"\n", ts, names[i%len(names)], 1024+i)
+		default:
+			fmt.Fprintf(&sb, `{"ts":"%s","level":"info","logger":"%s","msg":"request served","order":%d,"status":200,"latency_ms":%d}`+"\n", ts, names[r.IntN(len(names))], 50000+i, 3+r.IntN(300))
+		}
+	}
+	return sb.String()
+}
+
+func wfJSONLogs(b *wfBuilder) {
+	b.bash("docker logs --tail 600 payments", jsonLogs(b.r, 600, true))
+	b.grep("charge failed", 7)
+	b.read("src/payments/charge.go", 180)
+	b.edit("src/payments/charge.go")
+	b.bash("docker restart payments", "payments\n")
+	b.bash("docker logs --tail 600 payments", jsonLogs(b.r, 600, true))
+	b.read("src/payments/client.go", 140)
+	b.edit("src/payments/client.go")
+	b.bash("docker logs --tail 600 payments", jsonLogs(b.r, 600, false))
 }
 
 func podStatus(restarts int) string {

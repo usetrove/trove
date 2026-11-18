@@ -203,4 +203,7 @@ Needs Docker and an API key (real money; read the plan estimate first):
 - [ ] `prereg`, `plan --study bench/studies/parity.yaml` (free), read the estimate and worst case, then `run ... --yes`.
 - [ ] Read the report: pairs per effort, "incomplete units" count, parity row estimable or not, Holm-adjusted p-values.
 - [ ] Only after real results exist: `python -m trovebench defaults --results bench/results/<date>/parity-1`, then
-      `go test ./internal/recommend ./internal/experiment`, then review the diff before committing.
+      `go test ./internal/recommend ./internal/experiment`, then review the diff before committing. Open
+      `internal/experiment/priors.toml`: each `[optimizers.<name>]` table must have a `source = "bench:..."` line. `go test`
+      now fails if one is missing, or if a prior does not clear the ship rule. Then set plan item 1.4 to `done` in
+      `trove-plan/docs/plan/INDEX.md`.

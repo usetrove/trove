@@ -86,7 +86,8 @@ def test_generation_upgrades_adds_and_removes(batch):
     assert sum(r["evidence"] == "benchmark" for r in d["rule"]) == 2
     p = tomllib.loads(priors)["optimizers"]
     assert set(p) == {"hook_repeat_read", "duplicate_result_collapser"}
-    for v in p.values():                                                 # consistent with Go Prior.Supports
+    for v in p.values():                                                 # consistent with Go Prior.Supports and Prior.validate
+        assert v["source"].startswith("bench:") and v["success_diff"] >= v["success_ci_low"]
         assert v["pairs"] >= GO_MIN_PAIRS and v["cost_ci_high"] <= -GO_MIN_COST_REDUCTION_PCT / 100
         assert v["success_ci_low"] >= -GO_SUCCESS_MARGIN_PTS / 100 and v["cost_ci_low"] <= v["cost_change"] <= v["cost_ci_high"]
     assert p["hook_repeat_read"]["cost_change"] == pytest.approx(-0.2, abs=0.03)

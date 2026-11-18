@@ -23,21 +23,32 @@ type Input struct {
 	ToolName  string `json:"tool_name"`
 	Reason    string `json:"reason"`
 	Source    string `json:"source"`
+	// Model is the session's model, sent with SessionStart (code.claude.com/docs/en/hooks, checked 2026-11-17).
+	// Only its family is used, to pick the learned bytes-per-token ratio; it is never stored.
+	Model string `json:"model"`
 	// ToolResponse is the tool's output in PostToolUse events.
 	ToolResponse json.RawMessage `json:"tool_response"`
 	ToolInput    ToolInput       `json:"tool_input"`
+	// Error and IsInterrupt come with PostToolUseFailure. For Bash, a command that ran and exited
+	// non-zero has "Exit code N" as the first line of Error; IsInterrupt is true for an abort
+	// (code.claude.com/docs/en/hooks, read 2026-11-17). Error is read in memory only, never stored.
+	Error       string `json:"error"`
+	IsInterrupt bool   `json:"is_interrupt"`
 }
 
 // ToolInput is the tool's arguments. The named fields are the ones Trove reads.
 // Raw is the whole object byte for byte, because updatedInput replaces the entire
 // input and a rewrite must carry every other field over unchanged.
 type ToolInput struct {
-	FilePath string          `json:"file_path"`
-	Offset   lenient         `json:"offset"`
-	Limit    lenient         `json:"limit"`
-	Pages    string          `json:"pages"`
-	Command  string          `json:"command"`
-	Raw      json.RawMessage `json:"-"`
+	FilePath string  `json:"file_path"`
+	Offset   lenient `json:"offset"`
+	Limit    lenient `json:"limit"`
+	Pages    string  `json:"pages"`
+	Command  string  `json:"command"`
+	// SubagentType names the subagent in an Agent (formerly Task) call; read 2026-11-17 at
+	// code.claude.com/docs/en/hooks.
+	SubagentType string          `json:"subagent_type"`
+	Raw          json.RawMessage `json:"-"`
 }
 
 // UnmarshalJSON implements json.Unmarshaler.

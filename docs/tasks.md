@@ -90,12 +90,18 @@ does not undo anything itself.
 
 ## Known gaps
 
-- **No session-level A/B.** The task asks for A/B sessions against the strong
-  model alone. The experiment engine (`internal/experiment`) is built for
-  optimizers pinned at session start by the gateway or hooks; assigning an arm
-  to a file-based feature (where the arm would have to turn the files on or off
-  per session) is not built. Before/after is the only measurement, and it mixes
-  everything else that changed.
+- **The session-level A/B is a partial control.** While a scout or cascade is
+  installed, the plugin's hooks assign each new session an arm (a hash of the
+  session key, recorded in `experiment_assignments`) and `trove report` compares
+  the arms on tokens, turns and tool errors from the agent's history, with
+  every assigned session counted (intention to treat). In the off arm a
+  `pre_tool_subagent` hook (PreToolUse on `Agent|Task`) declines a call to the
+  scout, so the session is a real control. The cascade is started by you from a
+  slash command, which no hook can decline, so its off sessions are recorded and
+  compared but not blocked; if you run the cascade anyway in an off session the
+  comparison is diluted. Both are tier T3 (routing). Needs the plugin hooks or
+  `trove hooks install`; without them no arms are assigned and only the
+  before/after figures exist, which mix in everything else that changed.
 - **No test-pass signal.** Trove does not know whether tests passed. Cost and
   error counts are proxies. A `PostToolUse` Bash handler could record only an
   exit status, but that needs the hook payload verified first.

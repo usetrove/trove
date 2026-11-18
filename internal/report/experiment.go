@@ -19,9 +19,23 @@ func buildExperiments(ctx context.Context, db *store.DB, in Inputs) ([]experimen
 func experimentLines(r experiment.Result) []string {
 	out := []string{fmt.Sprintf("%s: %s", r.Optimizer, experimentStatus(r.Status))}
 	if r.Cost == nil {
-		return append(out, fmt.Sprintf("  %s (sessions with it on: %d, off: %d)", r.Reason, r.NOn, r.NOff))
+		out = append(out, fmt.Sprintf("  %s (sessions with it on: %d, off: %d)", r.Reason, r.NOn, r.NOff))
+		if r.Confounders != nil {
+			out = append(out, "  note: "+r.Confounders.Note)
+		}
+		return out
 	}
 	out = append(out, "  "+r.Reason)
+	if r.Confounders != nil {
+		out = append(out, "  note: "+r.Confounders.Note)
+	}
+	// Cost per turn and per uncached input token come first; cost per session is the secondary figure.
+	if r.CostPerTurn != nil {
+		out = append(out, "  "+metricLine("cost per turn", *r.CostPerTurn))
+	}
+	if r.CostPerUncached != nil {
+		out = append(out, "  "+metricLine("cost per uncached input token", *r.CostPerUncached))
+	}
 	out = append(out, "  "+metricLine("cost per session", *r.Cost))
 	for _, o := range r.Outcomes {
 		out = append(out, "  "+metricLine(o.Metric, o))
@@ -40,8 +54,13 @@ func metricLine(name string, m experiment.MetricResult) string {
 	if m.Kind == "points" {
 		f = func(v float64) string { return fmt.Sprintf("%+.1f points", v*100) }
 	}
-	return fmt.Sprintf("%s: %s %s (95%% range %s to %s), n=%d on / %d off, confidence %s",
+	line := fmt.Sprintf("%s: %s %s (95%% range %s to %s), n=%d on / %d off, confidence %s",
 		name, m.Label, f(m.Value), f(m.Low), f(m.High), m.NOn, m.NOff, m.Confidence)
+	if m.Adjusted {
+		line += fmt.Sprintf(", adjusted for each session's prior cost (unadjusted %s, range %s to %s)",
+			f(m.UnadjustedValue), f(m.UnadjustedLow), f(m.UnadjustedHigh))
+	}
+	return line
 }
 
 func signedPct(v float64) string { return fmt.Sprintf("%+.1f%%", v*100) }

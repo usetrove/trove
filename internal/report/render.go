@@ -253,6 +253,9 @@ func savingsText(h Headline) string {
 		return "none yet; no optimizer has been on (estimated)"
 	}
 	s := fmt.Sprintf("%s so far (estimated)", Est(h.Savings))
+	if h.SavingsShare != nil {
+		s += fmt.Sprintf(", about %s of your usage (estimated)", FormatPercent(h.SavingsShare.Value))
+	}
 	if h.Savings.Unpriced > 0 {
 		s += fmt.Sprintf(". %d requests could not be priced", h.Savings.Unpriced)
 	}

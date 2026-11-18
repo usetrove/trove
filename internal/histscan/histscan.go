@@ -8,6 +8,7 @@ import (
 	"github.com/usetrove/trove/internal/logs"
 	"github.com/usetrove/trove/internal/logs/cchistory"
 	"github.com/usetrove/trove/internal/logs/cxhistory"
+	"github.com/usetrove/trove/internal/logs/gmhistory"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -33,5 +34,19 @@ func New(db *store.DB, tbl *pricing.Table, claude *cchistory.Source, codex *cxhi
 			return claudePlan
 		},
 		Annotate: logs.NewAuditor(tbl).Annotate,
+	}
+}
+
+// AddGemini adds Gemini CLI history to in. Its plan is always unknown: Gemini CLI runs on a Google login
+// or an API key, and Trove does not read credentials to tell which.
+func AddGemini(in *logs.Ingester, s *gmhistory.Source) {
+	in.Sources = append(in.Sources, s)
+	in.Versions[logs.SourceGeminiCLI] = gmhistory.ParserVersion
+	prev := in.Plan
+	in.Plan = func(source string) logs.Plan {
+		if source == logs.SourceGeminiCLI || prev == nil {
+			return logs.PlanUnknown
+		}
+		return prev(source)
 	}
 }

@@ -53,8 +53,8 @@ func TestRegistryTiersMatchTheCode(t *testing.T) {
 		if !ok {
 			continue
 		}
-		if tq.Tier != string(c.Tier) {
-			t.Errorf("%s: registry %s says %q but the code says %q", c.Optimizer, tq.ID, tq.Tier, c.Tier)
+		if tq.Effect != string(c.Tier) {
+			t.Errorf("%s: registry %s says %q but the code says %q", c.Optimizer, tq.ID, tq.Effect, c.Tier)
 		}
 	}
 }

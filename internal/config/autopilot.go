@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // AutopilotFileName is the Autopilot consent record and state, kept in the data
@@ -45,7 +46,31 @@ var hookAssignedTrials = map[string]bool{
 }
 
 // HookAssignsTrial reports whether the named optimizer's trial arms are assigned by the hooks, never the gateway.
-func HookAssignsTrial(name string) bool { return hookAssignedTrials[name] }
+// A rule-set trial is one: the hooks add the rules to a session's context at SessionStart.
+func HookAssignsTrial(name string) bool { return hookAssignedTrials[name] || IsRuleTrial(name) }
+
+// ruleTrialPrefix marks a rule-set trial in autopilot.json: the external tool's optimizer name (internal/external
+// Prefix), because the comparison is about that tool.
+const ruleTrialPrefix = "ext_"
+
+// IsRuleTrial reports whether an autopilot.json entry is a rule-set trial (a third-party behavior-rules tool, T2).
+// Such an entry is started only by the user (`trove autopilot trial <rule set>`), never by a policy, and Autopilot
+// never turns the rule set on: it only runs the comparison and reports the verdict.
+func IsRuleTrial(name string) bool { return strings.HasPrefix(name, ruleTrialPrefix) }
+
+// RuleTrials returns the rule-set trials that are running, sorted, or nil when Autopilot is not active.
+func (f AutopilotFile) RuleTrials() []string {
+	if !f.Active() {
+		return nil
+	}
+	var out []string
+	for _, n := range f.Names() {
+		if IsRuleTrial(n) && f.Entries[n].State == AutopilotProbation {
+			out = append(out, n)
+		}
+	}
+	return out
+}
 
 // Autopilot states. Only AutopilotOn raises an optimizer above shadow.
 const (
@@ -120,6 +145,9 @@ func (f AutopilotFile) states(arms bool) map[string]string {
 	}
 	out := make(map[string]string, len(f.Entries))
 	for name, e := range f.Entries {
+		if IsRuleTrial(name) {
+			continue // a rule set lives in the agent's config; its trial arms come from the hooks, never a state
+		}
 		switch e.State {
 		case AutopilotOn:
 			out[name] = StateOn
@@ -143,7 +171,7 @@ func (f AutopilotFile) Trials() []string {
 	}
 	var out []string
 	for _, n := range f.Names() {
-		if f.Entries[n].State == AutopilotProbation {
+		if f.Entries[n].State == AutopilotProbation && !IsRuleTrial(n) {
 			out = append(out, n)
 		}
 	}

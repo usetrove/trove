@@ -1,12 +1,9 @@
 --- CLAUDE.md
 +++ CLAUDE.md
-@@ -1,16 +1,5 @@
- # Demo project
+@@ -4,13 +4,6 @@
  
--## Overview
--
--This is a demo project. It is a service that does useful things for people.
--
+ This is a demo project. It is a service that does useful things for people.
+ 
 -## Deployments
 -
 -The demo service reads events from the queue and writes summaries to the database nightly.

@@ -10,6 +10,10 @@ retention_days = 90
 port = 8787
 # A gap longer than this many minutes between requests starts a new session (1 to 1440).
 idle_minutes = 30
+# Keep-warm pings (the keep_warm optimizer, API-key gateway traffic only): at most this many
+# pings per idle session (1 to 6) and this much ping spend per local day (above 0, at most 1 dollar).
+keep_warm_max_pings = 2
+keep_warm_daily_cap_usd = 1.0
 
 [upstreams]
 # Where the gateway forwards your own API requests. Origin only, no path.
@@ -29,6 +33,9 @@ custom_agents = []
 # If the optimizers take longer than this many milliseconds (1 to 1000), Trove
 # forwards your original request unmodified.
 budget_ms = 25
+# How short verbosity_steer asks replies to be: "concise" or "terse". It only
+# matters while verbosity_steer is on, and changes apply to new sessions.
+verbosity = "concise"
 
 [budget]
 # Budget period: "daily", "weekly" or "monthly".
@@ -101,6 +108,11 @@ context_min_tokens = 1500
 # Fixes are not applied while an agent session was active this recently (minutes,
 # 1 to 1440); they are queued and applied when the agent is idle.
 activity_minutes = 30
+# A shell command the agent retyped at least retyped_min_count times (2 to 1000)
+# in at least retyped_min_sessions sessions (1 to 1000) is offered as a trove_run
+# command in .trove/commands.toml.
+retyped_min_count = 5
+retyped_min_sessions = 3
 
 [settings]
 # "trove settings" proposes per-task-type values for your agent's built-in token

@@ -83,6 +83,8 @@ type Server struct {
 	// spend backs the shadow spend cap (see spendcap.go). Nil when no ledger was given or no
 	// budget cap is set.
 	spend *spendCap
+	// warm backs keep-warm pings (see keepwarm.go).
+	warm *keepWarm
 
 	// recording counts the goroutines that turn finished responses into rows, so shutdown
 	// can let them reach the recorder before the recorder is closed.
@@ -122,12 +124,14 @@ func New(opts Options) (*Server, error) {
 		opts.Logger.Warn("in-flight dedup is off because the system could not supply random numbers", "err", err)
 		fp = nil
 	}
-	return &Server{
+	s := &Server{
 		opts: opts, log: opts.Logger, started: opts.Now(), routes: routes, transport: tr,
 		inflight: newInflightBook(), fingerprint: fp,
 		spend:    spendFor(opts),
 		sessions: session.NewTracker(time.Duration(opts.Config.Gateway.IdleMinutes) * time.Minute),
-	}, nil
+	}
+	s.warm = newKeepWarm(s)
+	return s, nil
 }
 
 // passThroughTransport never injects or removes encodings and sets no overall
@@ -260,6 +264,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 	case err := <-errc:
 		return err
 	case <-ctx.Done():
+		s.warm.stop() // cancel pings and drop held keys and prompts first
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(sctx)

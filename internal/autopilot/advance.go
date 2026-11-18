@@ -156,9 +156,12 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 	seen := measure.PhaseFor(cfg.Measure, base.InstalledAt, now, sessionsSeen(base.SessionsSeen, hookSessions))
 	baselineDone := seen.Phase == measure.PhaseActive
 	on := onNow(ctx, db, cfg)
+	// onForAll is what is on for every new session: a rule-set trial checks it, because the trial itself is
+	// only on for half of them.
+	onForAll := append([]string(nil), on...)
 	for n, e := range f.Entries {
 		if e.State == config.AutopilotProbation {
-			on = append(on, n) // on for half of sessions, so it can still conflict with what else is on
+			on = append(on, RuleTrialTool(n)) // on for half of sessions, so it can still conflict with what else is on
 		}
 	}
 	res := Result{File: f}
@@ -194,6 +197,15 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 				return Result{File: f}, fmt.Errorf("cannot read the trial of %s: %v", name, err)
 			}
 			ev.Probation = pe
+			idle := time.Duration(cfg.Gateway.IdleMinutes) * time.Minute
+			on, off, err := measure.TestFailByArm(ctx, db, name, cur.SinceMS, now.Add(-idle).UnixMilli())
+			if err != nil {
+				return Result{File: f}, fmt.Errorf("cannot read the test results of the trial of %s: %v", name, err)
+			}
+			ev.Tests = TestEvidence{On: on, Off: off}
+			if t, ok := technique.Get(name); ok {
+				ev.Tests.Tier = t.Tier
+			}
 		}
 		d := p.Decide(cur, ev, now)
 		if d.ClearRollback {
@@ -210,6 +222,13 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 			f.Record(e)
 			res.Events = append(res.Events, e)
 		}
+	}
+	// Rule-set trials the user started: judged here, never promoted (see ruletrial.go).
+	if rc, evs, err := advanceRuleTrials(ctx, db, cfg, &f, onForAll, traffic, now); err != nil {
+		return Result{File: f}, err
+	} else if rc {
+		changed = true
+		res.Events = append(res.Events, evs...)
 	}
 	// The shadow planner only writes advice. It never touches a state.
 	blocked := map[string]string{}

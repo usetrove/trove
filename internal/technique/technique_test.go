@@ -311,7 +311,7 @@ func TestHookCapabilitiesAreRequiredOnlyWhereTheHooksAreTheWayIn(t *testing.T) {
 }
 
 func TestAutoProblemAllowsAddedTextOnlyWhenItIsCharged(t *testing.T) {
-	base := Technique{Status: StatusBuilt, Tier: tierLossless}
+	base := Technique{Status: StatusBuilt, Effect: tierLossless, Tier: T1}
 	withText := func(session, use *int) Technique {
 		x := base
 		x.AddsText, x.Overhead, x.UseOverhead = true, session, use
@@ -328,7 +328,7 @@ func TestAutoProblemAllowsAddedTextOnlyWhenItIsCharged(t *testing.T) {
 		{"text, no per-session figure", withText(nil, use(68)), false},
 		{"text, nothing declared", withText(nil, nil), false},
 		{"prefix", func() Technique { x := base; x.Prefix = true; return x }(), false},
-		{"not lossless", func() Technique { x := base; x.Tier = tierRecover; return x }(), false},
+		{"not lossless", func() Technique { x := base; x.Effect = tierRecover; return x }(), false},
 		{"not built", func() Technique { x := base; x.Status = StatusExcluded; return x }(), false},
 	}
 	for _, c := range cases {
@@ -353,10 +353,55 @@ func TestOverheadOfReadsTheRegistry(t *testing.T) {
 		t.Errorf("output_trimmer: %+v %v", o, ok)
 	}
 	// A technique that adds text without declaring numbers must still be refused by the Auto check.
-	if autoProblem(Technique{AddsText: true, Auto: true, Status: StatusBuilt, Tier: tierLossless}) == "" {
+	if autoProblem(Technique{AddsText: true, Auto: true, Status: StatusBuilt, Effect: tierLossless, Tier: T1}) == "" {
 		t.Error("an undeclared text adder must not pass the Auto check")
 	}
 	if _, ok := OverheadOf("nope"); ok {
 		t.Error("an unknown name has no overhead")
+	}
+}
+
+func TestEveryTechniqueHasAClassAndATier(t *testing.T) {
+	for _, x := range registry {
+		if x.Class == "" || TierOfClass(x.Class) == "" {
+			t.Errorf("%s: class %q is missing or unknown", x.ID, x.Class)
+		}
+		if x.Tier == "" || x.Tier != TierOfClass(x.Class) {
+			t.Errorf("%s: tier %q does not match class %q", x.ID, x.Tier, x.Class)
+		}
+	}
+}
+
+func TestAutopilotBeyondT1NeedsABenchmarkVerdict(t *testing.T) {
+	for _, tier := range []Tier{T2, T3} {
+		x := Technique{Status: StatusBuilt, Effect: tierLossless, Tier: tier, Auto: true}
+		if autoProblem(x) == "" {
+			t.Errorf("%s technique with no benchmark verdict passed the Autopilot check", tier)
+		}
+		x.BenchVerdict = "bench/verdicts/example"
+		if p := autoProblem(x); p != "" {
+			t.Errorf("%s technique with a verdict was refused: %s", tier, p)
+		}
+	}
+	if autoProblem(Technique{Status: StatusBuilt, Effect: tierLossless, Auto: true}) == "" {
+		t.Error("a technique with no tier passed the Autopilot check")
+	}
+	for _, x := range registry {
+		if x.Auto && x.Tier != T1 && x.BenchVerdict == "" {
+			t.Errorf("%s: %s technique marked for Autopilot with no benchmark verdict", x.ID, x.Tier)
+		}
+	}
+}
+
+func TestClassOfKnowsRoutingNamesInsideAConfigEntry(t *testing.T) {
+	c, tier, ok := ClassOf("model_default")
+	if !ok || c != ClassModelRouting || tier != T3 {
+		t.Errorf("model_default: %v %v %v", c, tier, ok)
+	}
+	if c, tier, _ := ClassOf("mcp_prune"); c != ClassConfig || tier != T1 {
+		t.Errorf("mcp_prune: %v %v", c, tier)
+	}
+	if _, _, ok := ClassOf("nope"); ok {
+		t.Error("unknown name reported as known")
 	}
 }

@@ -100,7 +100,9 @@ func detectCacheBreaker(ctx context.Context, e *Env) ([]*Fix, error) {
 			old: b, updated: DeleteLines(b, drop),
 		}
 		per := estTokens(removed)
-		f.TokensPerSession, f.USDPerSession = e.schemaTokens(ctx).priceTokens(e, per)
+		schema := e.schemaTokens(ctx)
+		schema.setResent(f, per, "estimated", "the changing lines")
+		f.TokensPerSession, f.USDPerSession = schema.priceTokens(e, per)
 		if n, usd := e.volatileMisses(ctx); n > 0 {
 			ev := fmt.Sprintf("your gateway recorded %d cache miss(es) attributed to changing prompt content in the last %d days", n, e.Cfg.LookbackDays)
 			if usd > 0 {

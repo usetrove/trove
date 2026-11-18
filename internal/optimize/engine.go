@@ -201,7 +201,7 @@ func (e *Engine) TransformRequest(ctx context.Context, rq RequestIn, s Session) 
 		return res
 	}
 
-	pin, err := e.pins.get(ctx, in.SessionKey, e.current(), e.bpt, e.now(), e.gate)
+	pin, err := e.pins.getFor(ctx, in.SessionKey, e.current(), e.bpt, e.now(), e.gate, in.Body)
 	if err != nil {
 		// The pin still works from memory; only restart-survival is at risk.
 		e.log.Warn("could not save the session's optimizer settings; continuing with them in memory", "err", err)
@@ -226,7 +226,7 @@ func (e *Engine) TransformRequest(ctx context.Context, rq RequestIn, s Session) 
 
 	ctx, cancel := context.WithTimeout(ctx, e.budget)
 	defer cancel()
-	sess := Session{Key: in.SessionKey, Agent: in.Agent, Custom: pin.customFor(in.Agent), Raw: originalSpanText(cur)}
+	sess := Session{Key: in.SessionKey, Agent: in.Agent, Custom: pin.customFor(in.Agent), CacheTTL: pin.CacheTTL, Verbosity: pin.Verbosity, Raw: originalSpanText(cur)}
 
 	for _, o := range e.pipeline {
 		state := pin.States[o.Name()]

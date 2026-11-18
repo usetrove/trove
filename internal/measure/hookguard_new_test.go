@@ -11,11 +11,12 @@ import (
 
 // hook_read_limit is judged by how often a limited read is followed by a read of more of the file. A follow-up
 // is what the limit's note asks for, so the limit is looser (twice the shared rate, 50 percent by default).
+// The check is sequential, so 20 actions must be well above the limit: 16 of 20 is, 15 is not yet.
 func TestReadLimitGuardrailFiresAtItsOwnLimit(t *testing.T) {
 	for _, c := range []struct {
 		extra    int
 		rollback bool
-	}{{9, false}, {10, true}} {
+	}{{15, false}, {16, true}} {
 		t.Run(fmt.Sprintf("%d of 20", c.extra), func(t *testing.T) {
 			db := openDB(t)
 			ctx := context.Background()
@@ -42,11 +43,12 @@ func TestReadLimitGuardrailFiresAtItsOwnLimit(t *testing.T) {
 }
 
 // The output trimmer hides text, so it is judged more strictly than the shared rate: half of it.
+// 8 of 20 trips it; at the shared 25 percent limit 20 actions would need 11.
 func TestTrimmerGuardrailIsStricterThanTheSharedRate(t *testing.T) {
 	for _, c := range []struct {
 		back     int
 		rollback bool
-	}{{2, false}, {3, true}} { // 10 percent and 15 percent of 20, against a 12 percent limit
+	}{{7, false}, {8, true}} { // 35 and 40 percent of 20, against a 12 percent limit, judged sequentially
 		t.Run(fmt.Sprintf("%d of 20", c.back), func(t *testing.T) {
 			db := openDB(t)
 			ctx := context.Background()
@@ -83,11 +85,13 @@ func TestUnusedAdviceGuardrail(t *testing.T) {
 	}
 	for _, c := range []tc{
 		{"3 of 20 followed is above the floor", 20, 3, true, "c-", false},
-		{"2 of 20 followed is at the floor", 20, 2, true, "c-", true},
-		{"none followed", 20, 0, true, "c-", true},
+		// Against a 90 percent limit, 20 sessions with none followed happen by chance 12% of the time at the floor.
+		{"none of 20 followed is not yet beyond chance", 20, 0, true, "c-", false},
+		{"1 of 60 followed is not yet beyond chance", 60, 1, true, "c-", false},
+		{"none of 60 followed", 60, 0, true, "c-", true},
 		{"too few sessions to judge", 19, 0, true, "c-", false},
-		{"adoption cannot be observed, so nothing is judged", 20, 0, false, "c-", false},
-		{"Codex sessions are not judged at all", 20, 0, true, "x-", false},
+		{"adoption cannot be observed, so nothing is judged", 60, 0, false, "c-", false},
+		{"Codex sessions are not judged at all", 60, 0, true, "x-", false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			db := openDB(t)

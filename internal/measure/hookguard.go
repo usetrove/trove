@@ -149,9 +149,13 @@ var hookRules = []hookRule{
 	{optimizer: config.OptimizerOutputTrimmer, rule: RuleHookFetchBack, denominator: "rewritten", numerator: "fetched_back",
 		what:  countsOf("fetched back %d of %d trimmed outputs"),
 		limit: func(m config.Measure) int { return max(1, m.RefetchRatePercent/trimmerLimitDivisor) }},
+	{optimizer: config.OptimizerHookOutputDedup, rule: RuleHookFetchBack, denominator: "rewritten", numerator: "fetched_back",
+		what: countsOf("fetched back %d of %d outputs collapsed as repeats")},
 	{optimizer: config.OptimizerHookReadLimit, rule: RuleHookExtraRead, denominator: "rewritten", numerator: "extra_read",
 		what:  countsOf("read more of the file after %d of %d limited reads"),
 		limit: func(m config.Measure) int { return min(100, m.RefetchRatePercent*extraReadLimitFactor) }},
+	{optimizer: config.OptimizerHookReadOutline, rule: RuleHookExtraRead, denominator: "rewritten", numerator: "extra_read",
+		what: countsOf("read the whole file anyway after %d of %d outlined reads")},
 	{optimizer: config.OptimizerHookLargeOutput, rule: RuleHookUnusedAdvice, denominator: "advised", numerator: "adopted", adoption: true,
 		what: func(bad, acted int) string {
 			return fmt.Sprintf("did not use trove_run in %d of %d sessions where Trove suggested it", bad, acted)
@@ -187,7 +191,8 @@ func unusedAdvice(ctx context.Context, db *store.DB, r hookRule, since int64) (a
 // it rolls the optimizer back to shadow when, since the last time the user
 // cleared a rollback, at least m.MinSessions actions were counted and the share
 // that did not help (a block the agent retried, a quieted command it ran again,
-// a trimmed output it fetched back) reached m.RefetchRatePercent. These are the
+// a trimmed output it fetched back) is above m.RefetchRatePercent beyond chance,
+// by a sequential test that stays valid however often it is run. These are the
 // hook's own counts ("measured"); they cannot see what an action cost in extra
 // turns, which is what the A/B comparison is for. It is safe to call repeatedly
 // and returns the rollbacks it recorded.
@@ -231,7 +236,10 @@ func EvaluateHooksWith(ctx context.Context, db *store.DB, m config.Measure, now 
 		}
 		rate := float64(bad) / float64(acted)
 		threshold := float64(limitPercent) / 100
-		if rate < threshold {
+		// This runs at every session end and every few minutes, so a bare
+		// "rate >= limit" would fire on noise sooner or later; the sequential
+		// test keeps false rollbacks at seqAlpha however often it runs.
+		if !seqRateExceeds(bad, acted, threshold) {
 			continue
 		}
 		ev := Event{At: now.UTC(), Optimizer: r.optimizer, Rule: r.rule, Observed: rate, Threshold: threshold,

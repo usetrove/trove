@@ -9,6 +9,7 @@ import (
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/store"
+	"github.com/usetrove/trove/internal/tasks"
 )
 
 // Rules recorded in guardrail_events for rollbacks decided here.
@@ -37,6 +38,18 @@ func Optimizers(ctx context.Context, db *store.DB) ([]string, error) {
 	return out, rows.Err()
 }
 
+// taskIdle is how long a session must be quiet before a scout or cascade comparison counts it.
+const taskIdle = 30 * time.Minute
+
+// analyzeOne analyses one optimizer. Scout and cascade have their arms assigned by the hooks and may belong to
+// a user with no gateway, so they are compared on the agent's history like any other hook trial.
+func analyzeOne(ctx context.Context, db *store.DB, n string, x config.Experiment, priors Priors, now time.Time) (Result, error) {
+	if n == tasks.FeatureScout || n == tasks.FeatureCascade {
+		return AnalyzeHookTrial(ctx, db, n, x, 0, now, taskIdle)
+	}
+	return Analyze(ctx, db, n, x, priors)
+}
+
 // Evaluate analyses every optimizer that has been in an experiment. It writes
 // nothing; the same stored data always gives the same results. An optimizer
 // that an earlier pass rolled back is shown as rolled back with that reason.
@@ -51,7 +64,7 @@ func Evaluate(ctx context.Context, db *store.DB, x config.Experiment, priors Pri
 	}
 	out := make([]Result, 0, len(names))
 	for _, n := range names {
-		r, err := Analyze(ctx, db, n, x, priors)
+		r, err := analyzeOne(ctx, db, n, x, priors, time.Now())
 		if err != nil {
 			return nil, err
 		}
@@ -83,7 +96,7 @@ func Step(ctx context.Context, db *store.DB, x config.Experiment, priors Priors,
 	var results []Result
 	var events []measure.Event
 	for _, n := range names {
-		r, err := Analyze(ctx, db, n, x, priors)
+		r, err := analyzeOne(ctx, db, n, x, priors, now)
 		if err != nil {
 			return results, events, err
 		}
@@ -137,6 +150,11 @@ func (r Result) rows() []store.ExperimentRow {
 	}
 	if r.Cost != nil {
 		add(*r.Cost)
+	}
+	for _, m := range []*MetricResult{r.CostPerTurn, r.CostPerUncached} {
+		if m != nil {
+			add(*m)
+		}
 	}
 	for _, o := range r.Outcomes {
 		add(o)

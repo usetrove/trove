@@ -17,7 +17,20 @@ type usageScan struct {
 	done     bool
 	matched  bool // the project's history folder exists
 	sessions int
+	requests int            // model requests in those sessions, subagents included
 	servers  map[string]int // normalized server name -> calls
+	// commands groups Bash commands by commandKey. The text is kept here, in
+	// memory, only so a retyped command can be offered; it is never stored.
+	commands map[string]*retyped
+}
+
+// requestsPerSession is the measured average number of requests per session in
+// the project's history, or 0 when there is no history.
+func (u *usageScan) requestsPerSession() float64 {
+	if u.sessions == 0 {
+		return 0
+	}
+	return float64(u.requests) / float64(u.sessions)
 }
 
 // encodeProject is how Claude Code names a project's folder under
@@ -65,12 +78,13 @@ func serverOfTool(tool string) (string, bool) {
 }
 
 // projectUsage reads the project's Claude Code history within the lookback
-// window. Only tool names and session ids are looked at; nothing is kept.
+// window. Tool names, session ids and Bash command text are looked at, in
+// memory; nothing is kept.
 func (e *Env) projectUsage(ctx context.Context) *usageScan {
 	if e.usage != nil {
 		return e.usage
 	}
-	u := &usageScan{done: true, servers: map[string]int{}}
+	u := &usageScan{done: true, servers: map[string]int{}, commands: map[string]*retyped{}}
 	e.usage = u
 	if e.ProjectDir == "" || e.ClaudeDir == "" {
 		return u
@@ -93,9 +107,20 @@ func (e *Env) projectUsage(ctx context.Context) *usageScan {
 				return
 			}
 			sessions[ev.SessionKey] = true
+			u.requests++
 			for _, t := range ev.Tools {
 				if s, ok := serverOfTool(t.Name); ok {
 					u.servers[s]++
+				}
+				if t.Command != "" {
+					k := commandKey(t.Command)
+					r := u.commands[k]
+					if r == nil {
+						r = &retyped{cmd: t.Command, sessions: map[string]bool{}}
+						u.commands[k] = r
+					}
+					r.count++
+					r.sessions[ev.SessionKey] = true
 				}
 			}
 		})

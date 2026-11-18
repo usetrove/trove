@@ -110,6 +110,11 @@ type Headline struct {
 	WastePercent measure.Figure `json:"waste_percent"`
 	// Savings is what optimizers that were on saved (estimated).
 	Savings measure.Figure `json:"savings_usd"`
+	// SavingsShare is Savings as a percent of all usage in the period, that is of
+	// spend plus API-equivalent value plus the savings themselves (what the usage
+	// would have been without them). Estimated, because Savings is. Nil when there
+	// are no savings.
+	SavingsShare *measure.Figure `json:"savings_share_percent,omitempty"`
 	// APIEquivalent is the API list-price value of usage that is not paid per
 	// token (a subscription, or a plan Trove could not tell). Estimated, and not
 	// a bill. Nil when there is none.
@@ -140,6 +145,9 @@ type Leak struct {
 	// Advice then says what to do.
 	Command string `json:"command,omitempty"`
 	Advice  string `json:"advice"`
+	// FixedOverhead marks context re-sent on every request (tool definitions,
+	// context files). It needs no proxy, works on subscriptions, and is listed first.
+	FixedOverhead bool `json:"fixed_overhead,omitempty"`
 }
 
 // Optimizers is the optimizer section.
@@ -177,7 +185,10 @@ type OptimizerRow struct {
 	Measured *Measured `json:"measured,omitempty"`
 	// Enable is the config line that turns the optimizer on, when it is worth offering.
 	Enable string `json:"enable,omitempty"`
-	Note   string `json:"note,omitempty"`
+	// SpendShare is WouldSave as a percent of gateway spend in the period (estimated). Set only for
+	// in-flight dedup, whose build decision depends on it (docs/decisions/inflight-dedup.md).
+	SpendShare *measure.Figure `json:"spend_share_pct,omitempty"`
+	Note       string          `json:"note,omitempty"`
 }
 
 // Measured is the on-versus-off comparison (label: measured).

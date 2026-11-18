@@ -28,6 +28,28 @@ type Experiments struct{ db *DB }
 // Experiments returns the experiment result store for d.
 func (d *DB) Experiments() *Experiments { return &Experiments{db: d} }
 
+// LatestCost returns, for each optimizer, its newest stored cost_per_session row.
+// It reads one small table, so it is cheap enough for a status line.
+func (e *Experiments) LatestCost(ctx context.Context) ([]ExperimentRow, error) {
+	rows, err := e.db.QueryContext(ctx, `SELECT optimizer, metric, value, low, high, confidence, n_on, n_off, label, status, inputs_hash
+		FROM experiment_results r WHERE metric = 'cost_per_session'
+		AND id = (SELECT MAX(id) FROM experiment_results WHERE optimizer = r.optimizer AND metric = 'cost_per_session')
+		ORDER BY optimizer`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []ExperimentRow
+	for rows.Next() {
+		var r ExperimentRow
+		if err := rows.Scan(&r.Optimizer, &r.Metric, &r.Value, &r.Low, &r.High, &r.Confidence, &r.NOn, &r.NOff, &r.Label, &r.Status, &r.InputsHash); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // Put stores rows computed at time at. It does nothing when rows is empty or
 // when the newest stored rows for the optimizer came from identical inputs, so
 // re-running an analysis does not add duplicates.

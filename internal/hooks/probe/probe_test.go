@@ -200,16 +200,23 @@ func TestLiveProbeNeedsASpendingCap(t *testing.T) {
 	}
 }
 
-func TestCodexIsDocsOnlyAndCountsForBashInputOnly(t *testing.T) {
+func TestDocsOnlyAgentsAreRecordedButUnlockNothing(t *testing.T) {
 	o := opts(&fakeAgent{version: "2.1.999"})
 	o.Live = false
 	rep, _ := Run(context.Background(), o)
 	c := rep.Capabilities
-	if !c.Supports("codex", "Bash", hooks.RewriteInput) {
-		t.Fatal("Codex Bash input rewriting is documented and should count")
+	for _, agent := range []string{"codex", "cursor", "gemini"} {
+		if _, ok := c.Find(agent, "Bash"); !ok {
+			t.Errorf("%s: no docs entry recorded", agent)
+		}
+		for _, kind := range []string{hooks.RewriteInput, hooks.RewriteOutput} {
+			if c.Supports(agent, "Bash", kind) {
+				t.Errorf("%s Bash %s counts from documentation alone; it needs a live probe", agent, kind)
+			}
+		}
 	}
-	if c.Supports("codex", "Bash", hooks.RewriteOutput) || c.Supports("codex", "Read", hooks.RewriteInput) {
-		t.Fatal("Codex output rewriting is documented as unsupported")
+	if e, _ := c.Find("codex", "Bash"); e.OutputRewrite != hooks.CapNo {
+		t.Errorf("Codex documents no output replacement, got %q", e.OutputRewrite)
 	}
 }
 

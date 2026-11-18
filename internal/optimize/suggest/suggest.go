@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/pricing"
+	"github.com/usetrove/trove/internal/technique"
 )
 
 // Suggestion kinds.
@@ -51,6 +52,32 @@ type Suggestion struct {
 	Confidence    string   `json:"confidence"` // high, medium or low
 	Label         string   `json:"label"`      // always "estimated"
 	Requests      int      `json:"requests"`
+	// Class and Tier say what kind of change this is and how much proof it needs (docs/plan/INDEX.md).
+	Class string `json:"class"`
+	Tier  string `json:"tier"`
+	// EvidenceLabel is "estimated" when EstSavingsUSD is a figure, else "unmeasured". Nothing here is
+	// "measured": a suggestion has not been tried on the user's sessions.
+	EvidenceLabel string `json:"evidence_label"`
+}
+
+// kindClass is the class of each suggestion kind. The Batch API suggestion is T1: same model, same
+// output, only the turnaround time changes.
+var kindClass = map[string]technique.Class{
+	KindModelChoice:     technique.ClassModelRouting,
+	KindBatchAPI:        technique.ClassConfig,
+	KindReasoningEffort: technique.ClassEffort,
+	KindCacheTTL:        technique.ClassCacheControl,
+}
+
+// label fills Class, Tier and Evidence, so no suggestion leaves Generate without them.
+func (s *Suggestion) label() {
+	c := kindClass[s.Kind]
+	s.Class, s.Tier = string(c), string(technique.TierOfClass(c))
+	if s.EstSavingsUSD != nil {
+		s.EvidenceLabel = "estimated"
+	} else {
+		s.EvidenceLabel = "unmeasured"
+	}
 }
 
 // Querier is the part of *sql.DB the suggestions need.
@@ -90,6 +117,9 @@ func Generate(ctx context.Context, db Querier, tbl *pricing.Table, from, to time
 			return nil, err
 		}
 		out = append(out, c...)
+	}
+	for i := range out {
+		out[i].label()
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		a, b := out[i].EstSavingsUSD, out[j].EstSavingsUSD

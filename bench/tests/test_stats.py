@@ -37,6 +37,21 @@ def test_ship_requires_both_conditions():
     assert c.verdict != SHIP
 
 
+def test_t3_ship_rule_uses_a_stricter_test_fail_margin():
+    assert ShipRule.from_dict({"tier": "T3", "success_margin_pts": 5}).success_margin_pts == 2.0
+    assert ShipRule.from_dict({"tier": "T2", "success_margin_pts": 5}).success_margin_pts == 5.0
+    assert ShipRule.from_dict({"tier": "T3", "success_margin_pts": 1}).success_margin_pts == 1.0  # already stricter
+    with pytest.raises(ValueError):
+        ShipRule.from_dict({"tier": "T9"})
+    # 200 pairs, 20% cheaper, tests fail in 4 more treated runs (2 points): fine for T2, not proven safe for T3.
+    runs = paired_runs(200, 1.0, 0.8, tr_pass=lambda i: i % 50 != 0)
+    t2 = verdict(runs, ShipRule(bootstrap_resamples=2000, tier="T2"))
+    t3 = verdict(runs, ShipRule(bootstrap_resamples=2000, tier="T3"))
+    assert t2.verdict == SHIP, t2.reason
+    assert t3.verdict != SHIP, t3.reason
+    assert "test_fail_rate" in t3.reason
+
+
 def test_cost_change_estimate():
     c = verdict(paired_runs(40, 1.0, 0.8))
     assert c.cost_change_pct == pytest.approx(-20.0)

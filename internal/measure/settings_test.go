@@ -76,10 +76,75 @@ func TestSettingsEffectLessUsageNoWorseOutcomes(t *testing.T) {
 	if e.OutcomeVerdict != OutcomeNoClearChange || e.Recommend != "" {
 		t.Fatalf("outcomes did not change: %+v", e)
 	}
-	for _, want := range []string{"outputStyle for quick-fix", "less output per session", "measured", "n=25 before / 25 after", "does not see whether tests pass", "not just this project or task"} {
+	for _, want := range []string{"outputStyle for quick-fix", "less output per session", "measured", "n=25 before / 25 after",
+		"no clear change in tool errors per session, turns per session, abandoned sessions rate",
+		"Too few sessions with allowlisted test runs or git commits were recorded","not just this project or task"} {
 		if !strings.Contains(e.Text, want) {
 			t.Errorf("text misses %q: %s", want, e.Text)
 		}
+	}
+}
+
+// seedOutcomeSessions stores n sessions whose last test run failed when fail(i) is true, with the given commit count.
+func seedOutcomeSessions(t *testing.T, exec func(string, ...any), n int, start time.Time, fail func(int) bool, commits int, tag string) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		s := start.Add(time.Duration(i) * time.Hour)
+		last := TestPass
+		if fail(i) {
+			last = TestFail
+		}
+		sig := fmt.Sprintf(`{"turns":10,"has_tools":true,"tool_errors":%d,"commits":%d,"tests":{"last":%q,"runs":2,"failed":1}}`, i%2, commits+i%2, last)
+		exec(`INSERT INTO sessions(session_key, agent, started_at, ended_at, request_count, total_output_tokens, total_cache_read_tokens, outcome_signals)
+			VALUES(?, 'claude_code', ?, ?, 10, ?, 1000, ?)`, fmt.Sprintf("%s-%d", tag, i), s.UnixMilli(), s.Add(10*time.Minute).UnixMilli(), int64(1000+(i%3)*20), sig)
+	}
+}
+
+func TestSettingsEffectNamesTestAndCommitSignals(t *testing.T) {
+	exec, run := execOn(t)
+	applied := t0.Add(48 * time.Hour)
+	seedProfile(t, exec, "claude_code", "quick-fix", `["outputStyle"]`, applied)
+	seedOutcomeSessions(t, exec, 30, t0.Add(-40*time.Hour), func(i int) bool { return i%10 == 0 }, 2, "b")
+	seedOutcomeSessions(t, exec, 30, applied.Add(10*time.Hour), func(i int) bool { return i%10 == 0 }, 2, "a")
+	fx, err := run()
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := fx[0]
+	names := map[string]bool{}
+	for _, o := range e.Outcomes {
+		names[o.Metric] = true
+	}
+	if !names["last_test_failed_rate"] || !names["commits_per_session"] || e.OutcomeVerdict != OutcomeNoClearChange {
+		t.Fatalf("outcomes = %+v verdict=%s", e.Outcomes, e.OutcomeVerdict)
+	}
+	if !strings.Contains(e.Text, "last test failed rate, commits per session") || strings.Contains(e.Text, "Too few sessions") {
+		t.Errorf("text must name the test and commit signals it checked: %s", e.Text)
+	}
+}
+
+func TestSettingsEffectMoreTestFailuresOrFewerCommitsAreWorse(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		failAfter   func(int) bool
+		commitAfter int
+		want        string
+	}{
+		{"tests", func(i int) bool { return i%2 == 0 }, 2, "last test failed rate"},
+		{"commits", func(i int) bool { return i%10 == 0 }, 0, "commits per session"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			exec, run := execOn(t)
+			applied := t0.Add(48 * time.Hour)
+			seedProfile(t, exec, "claude_code", "quick-fix", `["outputStyle"]`, applied)
+			seedOutcomeSessions(t, exec, 30, t0.Add(-40*time.Hour), func(i int) bool { return i%10 == 0 }, 2, "b")
+			seedOutcomeSessions(t, exec, 30, applied.Add(10*time.Hour), tc.failAfter, tc.commitAfter, "a")
+			fx, _ := run()
+			e := fx[0]
+			if e.OutcomeVerdict != OutcomeWorse || !strings.Contains(e.Text, "outcomes got worse: "+tc.want) {
+				t.Fatalf("want worse on %s: %+v", tc.want, e)
+			}
+		})
 	}
 }
 

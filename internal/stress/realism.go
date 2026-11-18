@@ -40,7 +40,7 @@ func runSession(spec SessionSpec, seed uint64, tab *pricing.Table) (sessionOutco
 	turns := genTurns(spec, seed)
 	bodies := buildBodies(spec, turns)
 	store := &memStore{}
-	eng := newEngine(allNames(), store, PricingDate)
+	eng := newEngine(savingNames(), store, PricingDate)
 	expiry := rng(seed, "expiry", spec.Name)
 
 	var prevOff, prevOn []byte

@@ -189,39 +189,89 @@ func ttlBuckets(ctx context.Context, db Querier, tbl *pricing.Table, from, to ti
 
 func newTTLBucket() *ttlBucket { return &ttlBucket{sessions: map[string]bool{}} }
 
-func (b *ttlBucket) suggestion(sidechain bool) (Suggestion, bool) {
+// TTLAdvice is the cache-lifetime change the history supports for one bucket.
+// It carries counts and list-price figures only, never text.
+type TTLAdvice struct {
+	// Subagents is true for subagents and Claude Code's helper requests.
+	Subagents bool
+	// Key is the Claude Code setting and Value the lifetime to set ("5m" or "1h").
+	Key, Value string
+	// From is the lifetime most tokens were written at ("5m" or "1h").
+	From string
+	// Share1h is the share of lifetime-split written tokens at one hour.
+	Share1h float64
+	// NetUSD is the estimated list-price difference over the window.
+	NetUSD   float64
+	Requests int
+	Sessions int
+	// APIKeyOnly is true when every request was on an API key, so the dollar
+	// figure is what the person would have paid.
+	APIKeyOnly bool
+}
+
+// CacheTTLAdvice returns the lifetime changes the history from <= ts < to
+// supports, main conversation first. Same thresholds as the suggestion.
+func CacheTTLAdvice(ctx context.Context, db Querier, tbl *pricing.Table, from, to time.Time) ([]TTLAdvice, error) {
+	buckets, err := ttlBuckets(ctx, db, tbl, from, to)
+	if err != nil || buckets == nil {
+		return nil, err
+	}
+	var out []TTLAdvice
+	for _, side := range []bool{false, true} {
+		if a, ok := buckets[side].advice(side); ok {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
+func (b *ttlBucket) advice(sidechain bool) (TTLAdvice, bool) {
 	written := b.w5 + b.w1 + b.wOther
 	if b.reqs < minTTLRequests || written == 0 || b.unpriced > b.reqs/4 {
-		return Suggestion{}, false
+		return TTLAdvice{}, false
 	}
 	if float64(b.wOther)/float64(written) > maxUnsplitShare {
-		return Suggestion{}, false // the history does not say which lifetime was used
+		return TTLAdvice{}, false // the history does not say which lifetime was used
 	}
 	split := b.w5 + b.w1
 	if split == 0 {
-		return Suggestion{}, false
+		return TTLAdvice{}, false
 	}
-	onHour := float64(b.w1)/float64(split) >= 0.5
+	share := float64(b.w1) / float64(split)
+	onHour := share >= 0.5
 
 	// gain is what the other lifetime would have saved, loss what it would have
 	// cost. Switching from one hour to five minutes saves the one-hour premium and
 	// loses the rewrites the premium was avoiding. Switching from five minutes to
 	// one hour saves the rewrites and pays the premium on every write.
 	var gain, loss float64
-	to := "1h"
+	a := TTLAdvice{Subagents: sidechain, Key: "promptCacheTtl", From: "5m", Value: "1h", Share1h: share,
+		Requests: b.reqs, Sessions: len(b.sessions), APIKeyOnly: b.apiKey == b.reqs && b.otherPlan == 0}
+	if sidechain {
+		a.Key = "subagentPromptCacheTtl"
+	}
 	if onHour {
-		to, gain, loss = "5m", b.premium1h, b.avoided1h
+		a.From, a.Value, gain, loss = "1h", "5m", b.premium1h, b.avoided1h
 	} else {
 		gain, loss = b.savedIf1h, b.premiumIf1h
 	}
 	if !(gain > loss*ttlMargin && gain-loss >= minTTLUSD) {
+		return TTLAdvice{}, false
+	}
+	a.NetUSD = gain - loss
+	return a, true
+}
+
+func (b *ttlBucket) suggestion(sidechain bool) (Suggestion, bool) {
+	a, ok := b.advice(sidechain)
+	if !ok {
 		return Suggestion{}, false
 	}
-	net := gain - loss
+	onHour, to, net := a.From == "1h", a.Value, a.NetUSD
 
-	who, key := "your main conversation", "promptCacheTtl"
+	who, key := "your main conversation", a.Key
 	if sidechain {
-		who, key = "your subagents and Claude Code's helper requests", "subagentPromptCacheTtl"
+		who = "your subagents and Claude Code's helper requests"
 	}
 	cur := "5-minute"
 	if onHour {
@@ -241,12 +291,12 @@ func (b *ttlBucket) suggestion(sidechain bool) (Suggestion, bool) {
 	}
 	s.Detail = fmt.Sprintf("Across %d requests in %d sessions, %s mostly wrote its cache at the %s lifetime. "+
 		"At list prices, the %s lifetime would have cost about $%.2f less over this period, counting the pauses of 5 to 60 minutes that only a one-hour entry survives. "+
-		"To try it, set %q to %q in your Claude Code settings (version 2.1.242 or later; the setting is documented at code.claude.com/docs/en/settings-reference). "+
+		"To try it, run `trove fix` or set %q to %q in your Claude Code settings (version 2.1.242 or later; the setting is documented at code.claude.com/docs/en/settings-reference). "+
 		"This assumes a lost cache entry is rewritten in full and that you pause the way you did in this period, so treat it as a rough guide and look again after a week.",
 		b.reqs, len(b.sessions), who, cur, want, net, key, to)
 
 	figure := net
-	if b.apiKey == b.reqs && b.otherPlan == 0 {
+	if a.APIKeyOnly {
 		s.EstSavingsUSD = &figure
 	} else {
 		// A subscription or an unknown plan may not bill per token, so a dollar

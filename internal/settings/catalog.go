@@ -96,12 +96,13 @@ type Gap struct {
 
 // File is one embedded catalog file.
 type File struct {
-	Version     int       `toml:"version" json:"version"`
-	Harness     string    `toml:"harness" json:"harness"`
-	CheckedOn   string    `toml:"checked_on" json:"checked_on"`
-	DocsVersion string    `toml:"docs_version" json:"docs_version,omitempty"` // newest harness version seen in the docs
-	Settings    []Setting `toml:"setting" json:"settings"`
-	Gaps        []Gap     `toml:"gap" json:"gaps,omitempty"`
+	Version     int         `toml:"version" json:"version"`
+	Harness     string      `toml:"harness" json:"harness"`
+	CheckedOn   string      `toml:"checked_on" json:"checked_on"`
+	DocsVersion string      `toml:"docs_version" json:"docs_version,omitempty"` // newest harness version seen in the docs
+	Settings    []Setting   `toml:"setting" json:"settings"`
+	Gaps        []Gap       `toml:"gap" json:"gaps,omitempty"`
+	OutputCaps  []OutputCap `toml:"output_cap" json:"output_caps,omitempty"`
 }
 
 var dateRE = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
@@ -209,6 +210,16 @@ func (f File) Validate() error {
 			return fmt.Errorf("setting %s appears twice for target %s", s.Key, s.Target)
 		}
 		seen[id] = true
+	}
+	caps := map[string]bool{}
+	for _, oc := range f.OutputCaps {
+		if err := oc.Validate(); err != nil {
+			return err
+		}
+		if caps[oc.Tool] {
+			return fmt.Errorf("output cap for %s appears twice", oc.Tool)
+		}
+		caps[oc.Tool] = true
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package measure
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +25,8 @@ type fixture struct {
 	onCollapsed     []int // per on session
 	onRefetches     []int
 	noTools         bool
+	baselineTurns   []int // per session; empty means 10
+	onTurns         []int
 }
 
 func (f fixture) load(t *testing.T) (*store.DB, time.Time) {
@@ -46,10 +49,10 @@ func (f fixture) load(t *testing.T) (*store.DB, time.Time) {
 		return v[i%len(v)]
 	}
 	for i := range f.baselineRepeats {
-		add(seed{repeats: f.baselineRepeats[i], toolErrs: pick(f.baselineErrs, i)})
+		add(seed{repeats: f.baselineRepeats[i], toolErrs: pick(f.baselineErrs, i), turns: pick(f.baselineTurns, i)})
 	}
 	for i := range f.onRepeats {
-		add(seed{on: []string{opt}, repeats: f.onRepeats[i], toolErrs: pick(f.onErrs, i), collapsed: pick(f.onCollapsed, i), refetches: pick(f.onRefetches, i)})
+		add(seed{on: []string{opt}, repeats: f.onRepeats[i], toolErrs: pick(f.onErrs, i), collapsed: pick(f.onCollapsed, i), refetches: pick(f.onRefetches, i), turns: pick(f.onTurns, i)})
 	}
 	for i := range f.offRepeats {
 		add(seed{repeats: f.offRepeats[i]})
@@ -70,6 +73,8 @@ func TestGuardrailRollbackOnRegressionsNeverOnCleanHistories(t *testing.T) {
 		{"regression: retries up against off sessions", fixture{baselineRepeats: base, onRepeats: cycle([]int{2, 3, 2, 3}, 25), offRepeats: cycle([]int{1, 2, 1, 2}, 25)}, RuleRetries, RefOffSessions},
 		{"regression: tool errors up", fixture{baselineRepeats: base, onRepeats: base[:25], baselineErrs: []int{0, 1}, onErrs: []int{1, 2}}, RuleToolErrors, RefBaseline},
 		{"regression: results re-fetched in most sessions", fixture{baselineRepeats: base, onRepeats: base[:25], onCollapsed: []int{3}, onRefetches: []int{1, 1, 0}}, RuleRefetch, RefBaseline},
+		{"regression: turns per session up 40%", fixture{baselineRepeats: base, onRepeats: base[:25], baselineTurns: []int{9, 11}, onTurns: []int{13, 15}}, RuleTurns, RefBaseline},
+		{"regression: turns up even without tool signals", fixture{baselineRepeats: base, onRepeats: base[:25], baselineTurns: []int{9, 11}, onTurns: []int{13, 15}, noTools: true}, RuleTurns, RefBaseline},
 		{"regression: retries appear where there were none", fixture{baselineRepeats: cycle([]int{0}, 30), onRepeats: cycle([]int{1, 2}, 25)}, RuleRetries, RefBaseline},
 
 		{"clean: identical behaviour", fixture{baselineRepeats: base, onRepeats: cycle([]int{2, 1, 2, 1}, 30)}, "", ""},
@@ -78,6 +83,7 @@ func TestGuardrailRollbackOnRegressionsNeverOnCleanHistories(t *testing.T) {
 		{"clean: +50% but pure chance (spiky, high variance)", fixture{baselineRepeats: cycle([]int{0, 0, 0, 0, 6}, 20), onRepeats: cycle([]int{0, 0, 0, 0, 9}, 20)}, "", ""},
 		{"clean: occasional re-fetch below the limit", fixture{baselineRepeats: base, onRepeats: base[:25], onCollapsed: []int{3}, onRefetches: []int{0, 0, 0, 1, 0, 0, 0, 0}}, "", ""},
 		{"clean: re-fetch 8 of 25 sessions is not yet beyond chance", fixture{baselineRepeats: base, onRepeats: base[:25], onCollapsed: []int{2}, onRefetches: cycle([]int{1, 0, 0}, 25)[:25]}, "", ""},
+		{"clean: +10% turns is under the 30% limit", fixture{baselineRepeats: base, onRepeats: cycle([]int{2, 1, 2, 1}, 30), baselineTurns: []int{9, 11}, onTurns: []int{10, 12}}, "", ""},
 		{"clean: no tool signals at all", fixture{baselineRepeats: base, onRepeats: cycle([]int{9}, 30), noTools: true}, "", ""},
 
 		{"small sample: doubled retries in 8 sessions is not a conclusion", fixture{baselineRepeats: base, onRepeats: cycle([]int{4}, 8)}, "", ""},
@@ -145,6 +151,85 @@ func TestNoRegressionNeverClaimsQualityUnchanged(t *testing.T) {
 	s := checks[0].Summary
 	if checks[0].Verdict != NoRegression || !strings.Contains(s, "no regression detected locally") || !strings.Contains(s, "benchmarks") {
 		t.Errorf("summary = %q", s)
+	}
+	// It names exactly the signals that had enough data, and no others.
+	got := checks[0].Checked()
+	want := []string{"repeated identical tool calls per session", "tool errors per session", "turns per session"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("Checked() = %q, want %q", got, want)
+	}
+	for _, w := range want {
+		if !strings.Contains(s, w) {
+			t.Errorf("summary %q does not name %q", s, w)
+		}
+	}
+	if strings.Contains(s, "re-fetched") {
+		t.Errorf("summary %q names a signal without enough data", s)
+	}
+}
+
+// Every verdict, whatever it is, says how many extra turns the optimizer's
+// sessions took, because a lever that adds turns pays for them.
+func TestEveryVerdictShowsExtraTurns(t *testing.T) {
+	base := cycle([]int{1, 2}, 30)
+	tests := []struct {
+		name       string
+		f          fixture
+		want       Verdict
+		wantEnough bool
+		wantExtra  float64
+		wantInText string
+	}{
+		{"not enough data", fixture{baselineRepeats: base, onRepeats: cycle([]int{5}, 8)}, NotEnoughData, false, 0, "extra turns: " + TextNotEnough},
+		{"no regression, no extra turns", fixture{baselineRepeats: base, onRepeats: base}, NoRegression, true, 0, "extra turns: +0.0 per session (+0%)"},
+		{"no regression, some extra turns", fixture{baselineRepeats: base, onRepeats: base, baselineTurns: []int{9, 11}, onTurns: []int{10, 12}}, NoRegression, true, 1, "extra turns: +1.0 per session (+10%)"},
+		{"regression from retries still shows turns", fixture{baselineRepeats: base, onRepeats: cycle([]int{3, 4}, 25)}, Regression, true, 0, "extra turns: +0.0 per session"},
+		{"turn inflation", fixture{baselineRepeats: base, onRepeats: base[:25], baselineTurns: []int{9, 11}, onTurns: []int{13, 15}}, Regression, true, 4, "extra turns: +4.0 per session (+40%)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, _ := tt.f.load(t)
+			checks, err := Check(context.Background(), db, config.Default().Measure)
+			if err != nil || len(checks) != 1 {
+				t.Fatalf("checks=%+v err=%v", checks, err)
+			}
+			c := checks[0]
+			if c.Verdict != tt.want {
+				t.Fatalf("verdict = %s, want %s (%+v)", c.Verdict, tt.want, c)
+			}
+			if !strings.Contains(c.Summary, tt.wantInText) {
+				t.Errorf("summary %q does not contain %q", c.Summary, tt.wantInText)
+			}
+			x := c.ExtraTurns
+			if x.Enough != tt.wantEnough {
+				t.Fatalf("extra turns enough = %v, want %v (%+v)", x.Enough, tt.wantEnough, x)
+			}
+			if !tt.wantEnough {
+				return
+			}
+			if math.Abs(x.PerSession.Value-tt.wantExtra) > 0.05 || x.PerSession.Label != Measured || x.PerSession.N != x.NTreated {
+				t.Errorf("per session = %+v, want %v measured", x.PerSession, tt.wantExtra)
+			}
+			// Their token cost is estimated: extra turns times the on sessions' tokens per turn (1000 tokens per session).
+			if x.Tokens.Label != Estimated {
+				t.Errorf("tokens label = %s", x.Tokens.Label)
+			}
+			if tt.wantExtra > 0 && x.Tokens.Value <= 0 {
+				t.Errorf("extra turns cost nothing: %+v", x.Tokens)
+			}
+			if tt.wantExtra > 0 && !strings.Contains(c.Summary, "tokens (estimated)") {
+				t.Errorf("summary %q does not charge the extra turns", c.Summary)
+			}
+		})
+	}
+}
+
+func TestNotEnoughDataChecksNothing(t *testing.T) {
+	f := fixture{baselineRepeats: cycle([]int{1, 2}, 30), onRepeats: cycle([]int{5}, 8)}
+	db, _ := f.load(t)
+	checks, _ := Check(context.Background(), db, config.Default().Measure)
+	if got := checks[0].Checked(); len(got) != 0 {
+		t.Errorf("Checked() = %q, want none", got)
 	}
 }
 
