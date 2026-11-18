@@ -86,6 +86,10 @@ func requestOnlyBody(name string) []byte {
 		return []byte(`{"model":"claude-opus-5-5","system":"You are a coding agent.\nToday's date: 2026-10-29\nBe brief.\n","messages":[{"role":"user","content":"hi"}]}`)
 	case "cache_breakpoints":
 		return []byte(`{"model":"claude-opus-5-5","system":` + enc(pad) + `,"tools":[{"name":"bash","description":"run","input_schema":{"type":"object"}}],"messages":[{"role":"user","content":"hi"}]}`)
+	case "model_router":
+		// A typed turn then a tool turn: with a route_to target the tool turn would step down.
+		return []byte(`{"model":"claude-opus-5-5","messages":[{"role":"user","content":"go"},` +
+			`{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}]}`)
 	case "verbosity_steer":
 		return []byte(`{"model":"claude-opus-5-5","system":[{"type":"text","text":"You are a coding agent.","cache_control":{"type":"ephemeral"}}],"messages":[{"role":"user","content":"hi"}]}`)
 	case "duplicate_result_collapser":
@@ -103,6 +107,7 @@ func parityEngineCustom(t *testing.T, name string) *optimize.Engine {
 	cfg.Optimizers[name] = config.StateOn
 	cfg.Optimize.CustomAgents = []string{customLabel}
 	cfg.Optimize.BudgetMS = 1000
+	cfg.Optimize.RouteTo = "claude-sonnet-5-5" // model_router's target; the others ignore it
 	var only []optimize.Optimizer
 	for _, o := range optimize.Pipeline() {
 		if o.Name() == name {

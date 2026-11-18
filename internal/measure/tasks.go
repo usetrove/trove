@@ -127,7 +127,7 @@ func TasksEffects(ctx context.Context, db *store.DB, m config.Measure) ([]TasksE
 func tasksEffect(feat string, fixes []string, applied int64, overReq, overUse int, sess []taskSession, m config.Measure) TasksEffect {
 	e := TasksEffect{Feature: feat, FixIDs: fixes, AppliedAt: time.UnixMilli(applied).UTC(), Label: Estimated,
 		OverheadRequest: overReq, OverheadUse: overUse}
-	name := map[string]string{"task_scout": "Scout subagent", "task_cascade": "Cascade workflow"}[feat]
+	name := map[string]string{"task_scout": "Scout subagent", "task_cascade": "Cascade workflow", "task_subagent_model": "Model per subagent"}[feat]
 	var before, after []taskSession
 	for _, s := range sess {
 		if s.start < applied {

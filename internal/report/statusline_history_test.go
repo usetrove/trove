@@ -182,3 +182,53 @@ func TestHeadlineSavingsShareOfUsage(t *testing.T) {
 	}
 	assertLabeled(t, r)
 }
+
+// Plan 8.2: a subscription user's usage share is shown against a budget they set, as
+// a warning only. Usage is $3.00 API-equivalent; the warning starts at 80%.
+func TestStatusSubscriptionUsageBudget(t *testing.T) {
+	cases := []struct {
+		budget  float64
+		percent float64
+		status  string
+		want    string
+	}{
+		{4, 75, UsageUnder, "75% of $4.00 usage budget"},
+		{3.5, 85.714286, UsageNear, "86% of $3.50 usage budget · near usage budget"},
+		{2, 150, UsageOver, "150% of $2.00 usage budget · over usage budget"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.status, func(t *testing.T) {
+			db := openDB(t)
+			seedPluginOnly(t, db, "subscription")
+			cfg := config.Default()
+			cfg.Budget.UsageUSD = tc.budget
+			st, err := BuildStatus(context.Background(), db, cfg, nowLocal, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			u := st.UsageBudget
+			if u == nil || u.BudgetUSD != tc.budget || u.Share.Value != tc.percent || u.Share.Label != measure.Estimated || u.Status != tc.status {
+				t.Fatalf("usage budget = %+v, want %v%% %s", u, tc.percent, tc.status)
+			}
+			if st.Budget != nil {
+				t.Errorf("a usage budget is a warning, never spend pacing: %+v", st.Budget)
+			}
+			if line := RenderStatus(st, FormatShell, false); !strings.Contains(line, tc.want) {
+				t.Errorf("line %q is missing %q", line, tc.want)
+			}
+		})
+	}
+
+	// On an API key the usage is spend, so the usage budget does not apply.
+	db := openDB(t)
+	seedPluginOnly(t, db, "api_key")
+	cfg := config.Default()
+	cfg.Budget.UsageUSD = 2
+	st, err := BuildStatus(context.Background(), db, cfg, nowLocal, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.UsageBudget != nil {
+		t.Errorf("api-key usage got a subscription usage budget: %+v", st.UsageBudget)
+	}
+}

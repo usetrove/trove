@@ -427,12 +427,15 @@ func (s *Server) statesFor(st *sessionState, in Session) map[string]string {
 		rolled = s.opts.RolledBack()
 	}
 	locked := in.Harness != "" && !Eligible(NormLogin(in.Login))
-	if len(rolled) == 0 && !locked {
+	// model_router prices per-token API usage, so it changes nothing for any login but
+	// an API key (a Copilot bill is not per token); it still estimates in shadow.
+	routeLocked := in.Harness != "" && NormLogin(in.Login) != LoginAPIKey && src[optimize.OptimizerModelRouter] == config.StateOn
+	if len(rolled) == 0 && !locked && !routeLocked {
 		return src
 	}
 	out := make(map[string]string, len(src))
 	for k, v := range src {
-		if v == config.StateOn && (locked || rolled[k]) {
+		if v == config.StateOn && (locked || rolled[k] || (routeLocked && k == optimize.OptimizerModelRouter)) {
 			v = config.StateShadow
 		}
 		out[k] = v

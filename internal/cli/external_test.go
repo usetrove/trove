@@ -48,6 +48,41 @@ func TestExternalListAndShowJSON(t *testing.T) {
 	}
 }
 
+// Plan 9.2: Ponytail and the Caveman skill are on the referee list with their tier labels.
+func TestExternalListShowsPonytailAndCavemanWithTiers(t *testing.T) {
+	h := newHarness(t, nil)
+	if code := h.run("--json", "external", "list"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	var got struct {
+		Tools []externalRow `json:"tools"`
+	}
+	if err := json.Unmarshal(h.out.Bytes(), &got); err != nil {
+		t.Fatalf("bad json %v: %s", err, h.out)
+	}
+	tiers := map[string]string{}
+	for _, r := range got.Tools {
+		tiers[r.Name] = r.Tier
+	}
+	for name, want := range map[string]string{"ponytail": "T2", "caveman": "T2", "rtk": "T1"} {
+		if tiers[name] != want {
+			t.Errorf("%s tier = %q, want %q (rows %v)", name, tiers[name], want, tiers)
+		}
+	}
+	h.out.Reset()
+	if code := h.run("external", "list"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	for _, line := range strings.Split(h.out.String(), "\n") {
+		if (strings.HasPrefix(line, "ponytail ") || strings.HasPrefix(line, "caveman ")) && !strings.Contains(line, "T2 behavioural") {
+			t.Errorf("line lacks its tier label: %q", line)
+		}
+	}
+	if !strings.Contains(h.out.String(), "ponytail ") || !strings.Contains(h.out.String(), "caveman ") {
+		t.Errorf("ponytail and caveman must both be listed:\n%s", h.out)
+	}
+}
+
 // Installing runs a program, so piped "y" must never be enough.
 func TestExternalInstallRefusesWithoutATerminal(t *testing.T) {
 	withManifests(t, fixtureTool())

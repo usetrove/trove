@@ -53,6 +53,7 @@ Biggest leaks (estimated, overlapping, not additive)
      mid-session.
 
 Optimizers
+  model_router: off
   volatile_prefix_mover: off
   noise_normalizer: on
     Saved ~$0.50 (estimated).

@@ -159,12 +159,21 @@ func Render(r Report, o Options) string {
 	if len(r.ExternalTools) > 0 {
 		b.WriteString("\n" + heading("Third-party tools (each tool's own claim next to what Trove measured)"))
 		for _, t := range r.ExternalTools {
-			for i, l := range externalLines(t) {
+			for i, l := range externalHead(t) {
 				if i == 0 {
 					b.WriteString(wrap(l, o.width(), "  ", "    ") + "\n")
 				} else {
 					b.WriteString(wrap(strings.TrimLeft(l, " "), o.width(), "    ", "    ") + "\n")
 				}
+			}
+			// The claim and the verdict share one aligned block so they read side by side.
+			const col = "    %-21s"
+			pad := strings.Repeat(" ", len(fmt.Sprintf(col, "")))
+			for _, p := range claimVerdictPairs(t) {
+				b.WriteString(wrap(p[1], o.width(), fmt.Sprintf(col, p[0]), pad) + "\n")
+			}
+			for _, l := range externalLines(t) {
+				b.WriteString(wrap(strings.TrimLeft(l, " "), o.width(), "    ", "    ") + "\n")
 			}
 		}
 	}

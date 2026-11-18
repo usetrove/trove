@@ -11,6 +11,9 @@
       "source_url": "https://example.com/squeeze",
       "label": "claimed"
     },
+    "verdict": {
+      "text": "nothing measured yet; it needs sessions with the tool off to compare against"
+    },
     "overhead": {
       "tool_def_tokens": 300,
       "injected_tokens": 0,

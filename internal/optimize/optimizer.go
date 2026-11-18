@@ -38,6 +38,9 @@ const (
 	// TierBehavior means nothing is removed but the model is asked to act differently
 	// (technique tier T2): judged only by session A/B, never by bytes removed.
 	TierBehavior Tier = "behavior"
+	// TierRouting means the request is sent to a different model (technique tier
+	// T3). Bytes it changes are never counted as tokens removed.
+	TierRouting Tier = "routing"
 )
 
 // Session is what an optimizer may know about the session a request is in.
@@ -54,6 +57,12 @@ type Session struct {
 	// Verbosity is the level verbosity_steer uses, pinned when the session starts.
 	// Empty means concise.
 	Verbosity string
+	// RouteTo is the cheaper model model_router may step down to, pinned when the
+	// session starts. Empty leaves model_router idle.
+	RouteTo string
+	// PinnedAt is when the session's pin was made. model_router prices both
+	// models at this instant, so a price change never flips a decision mid-session.
+	PinnedAt time.Time
 	// State resolves an optimizer's state (off, shadow, on) for the tool-level
 	// entry points. The adapter supplies it because pins, guardrail rollbacks
 	// and the kill switch are resolved differently per adapter. Nil means off.
@@ -126,6 +135,8 @@ type Report struct {
 	// the engine can store it before the shortened request is forwarded. It is
 	// never recorded or serialized.
 	Originals []string `json:"-"`
+	// Route is model_router's estimate for this request; nil for other optimizers.
+	Route *RouteEstimate `json:"route,omitempty"`
 }
 
 // NetTokens is the estimated saving after the optimizer's own overhead.
@@ -160,6 +171,8 @@ type Applied struct {
 	TokensRemoved  int64  `json:"tokens_removed"`
 	OverheadTokens int    `json:"overhead_tokens,omitempty"`
 	Failed         string `json:"failed,omitempty"`
+	// Route is model_router's estimate (its money figures are estimates).
+	Route *RouteEstimate `json:"route,omitempty"`
 }
 
 // AppliedJSON encodes the applied list for the optimizations_applied column.
@@ -170,7 +183,7 @@ func AppliedJSON(reports []Report, failures []Failure) []byte {
 	}
 	out := make([]Applied, 0, len(reports)+len(failures))
 	for _, r := range reports {
-		out = append(out, Applied{Name: r.Name, State: r.State, BytesRemoved: r.BytesRemoved, TokensRemoved: r.TokensRemoved, OverheadTokens: r.OverheadTokens})
+		out = append(out, Applied{Name: r.Name, State: r.State, BytesRemoved: r.BytesRemoved, TokensRemoved: r.TokensRemoved, OverheadTokens: r.OverheadTokens, Route: r.Route})
 	}
 	for _, f := range failures {
 		out = append(out, Applied{Name: f.Optimizer, State: "failed", Failed: f.Class})
@@ -187,16 +200,18 @@ func AppliedJSON(reports []Report, failures []Failure) []byte {
 
 // Pipeline returns the optimizers in their fixed run order:
 //
-//  1. volatile_prefix_mover      system prompt layout, before anything reads it
-//  2. noise_normalizer           clean tool output first...
-//  3. output_trimmer             ...then trim what is left...
-//  4. duplicate_result_collapser ...then compare cleaned results for exact repeats
-//  5. verbosity_steer            a fixed note at the very end of the system prompt
-//  6. cache_breakpoints          last, so the size check sees the final prompt
+//  1. model_router               picks the model first, so later steps see the final one
+//  2. volatile_prefix_mover      system prompt layout, before anything reads it
+//  3. noise_normalizer           clean tool output first...
+//  4. output_trimmer             ...then trim what is left...
+//  5. duplicate_result_collapser ...then compare cleaned results for exact repeats
+//  6. verbosity_steer            a fixed note at the very end of the system prompt
+//  7. cache_breakpoints          last, so the size check sees the final prompt
 //
 // The order is part of the cache-safety contract: changing it changes bytes.
 func Pipeline() []Optimizer {
 	return []Optimizer{
+		ModelRouter{},
 		VolatilePrefixMover{},
 		NoiseNormalizer{memo: newSpanMemo()},
 		newOutputTrimmer(),
@@ -213,6 +228,7 @@ var GatewayNames = config.GatewayBehaviors
 
 // PipelineNames is the fixed order of names, for documentation and status output.
 var PipelineNames = []string{
+	OptimizerModelRouter,
 	"volatile_prefix_mover",
 	"noise_normalizer",
 	config.OptimizerOutputTrimmer,

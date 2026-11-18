@@ -155,7 +155,7 @@ func enqueue(e *Env, f *Fix) error {
 		req := *e.Settings
 		it.Settings = &req
 	}
-	if (f.Kind == TaskScout || f.Kind == TaskCascade) && e.Tasks != nil {
+	if IsTask(f.Kind) && e.Tasks != nil {
 		req := *e.Tasks
 		it.Tasks = &req
 	}

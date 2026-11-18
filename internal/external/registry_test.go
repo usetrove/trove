@@ -74,7 +74,11 @@ func TestEnableRefusesOverlapUsingTheRegistry(t *testing.T) {
 	if len(got) != 1 || !got[0].Builtin || got[0].Other != "noise_normalizer" || !strings.Contains(got[0].Reason, "overlaps the built-in noise_normalizer") {
 		t.Fatalf("got %+v", got)
 	}
-	if got := CheckEnable(rtk, nil, []string{"hook_repeat_read", "hook_quiet_commands"}); len(got) != 0 {
-		t.Errorf("refused over a built-in it never refused before: %+v", got)
+	if got := CheckEnable(rtk, nil, []string{"hook_repeat_read"}); len(got) != 0 {
+		t.Errorf("refused over a built-in that does not touch Bash calls: %+v", got)
+	}
+	// hook_quiet_commands rewrites the same Bash call, so it is refused too (plan 9.1).
+	if got := CheckEnable(rtk, nil, []string{"hook_quiet_commands"}); len(got) != 1 || got[0].Other != "hook_quiet_commands" {
+		t.Errorf("rtk beside hook_quiet_commands: %+v", got)
 	}
 }

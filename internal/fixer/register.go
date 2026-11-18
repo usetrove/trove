@@ -47,7 +47,7 @@ func register(e *Env, f *Fix, c setup.Change) error {
 	if err != nil {
 		return err
 	}
-	if f.Kind == TaskScout || f.Kind == TaskCascade {
+	if IsTask(f.Kind) {
 		return registerTask(db, e, f, c.ID)
 	}
 	if f.Kind != SettingsProfile {

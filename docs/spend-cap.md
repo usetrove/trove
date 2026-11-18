@@ -36,7 +36,57 @@ every request still goes to the provider and every client gets its answer.
 What the number is: an **estimate** of spending after the cap was reached. A person who hit a real cap would probably
 have raised it or stopped, so it is an upper bound on what the cap would have saved, not a forecast.
 
+## Active mode: warn, then stop (plan 8.1)
+
+`spend_cap = "on"` adds two things to shadow mode. Shadow mode itself is unchanged.
+
+- **Warning.** Once per period, when spending reaches `warn_at_percent` of the cap (default 80), and once when it
+  reaches the cap, the gateway logs a warning and, if `notifications.desktop` is on, shows it as a desktop
+  notification. The figures are estimated. The status line already shows *near cap* and *over cap*.
+- **Stopping.** Past the cap, a request is refused only when all of these hold. Otherwise it goes through and is
+  marked, as in shadow mode.
+  1. The agent that sent it passed the refused-request probe below. Until an agent passes, the cap only warns for it.
+  2. The ledger figure was read no more than 10 minutes ago (`spendStaleAfter`). An unread or stale figure never refuses.
+  3. The request arrived in the period that figure belongs to.
+
+A refused request never reaches the provider. The agent gets a plain-English message in the provider's own error
+shape: what was spent, the cap, and how to continue (`trove budget set <amount>`, or `spend_cap = "shadow"`).
+
+- Anthropic routes answer `402` with type `billing_error`. The errors page documents 402 billing_error, while 429
+  is for rate limits, which the SDKs retry (platform.claude.com/docs/en/api/errors, read 2026-11-18).
+- OpenAI routes answer `429` with type `insufficient_quota` and code `trove_spend_cap_reached`. OpenAI documents its
+  own spend limits as 429 and says retrying billing, spend or quota errors won't help
+  (developers.openai.com/api/docs/guides/error-codes, read 2026-11-18). The `{"error": {...}}` body shape was not on
+  that page; the probe checks the agent's reaction to it.
+
+Each refusal is recorded as one metadata row with error class `spend_cap_refused`: no tokens and no cost. Requests
+already in flight finish, so the cap stops new requests; it does not guarantee a ceiling.
+
+### The refused-request probe (manual, needs a person)
+
+Neither Claude Code's nor Codex CLI's documentation fully says which errors they retry. Claude Code's env-vars page
+lists `CLAUDE_CODE_MAX_RETRIES`, but the part read on 2026-11-18 did not list the retried status codes. So each
+agent is checked by running it once against a fake provider.
+
+1. Run `trove budget probe` in a terminal. It listens on `127.0.0.1:8799` (`--port` to change it), forwards nothing,
+   and answers every request with exactly the refusal above.
+2. In another terminal, run the agent against it with a placeholder key. No real key is needed and nothing is billed:
+   `ANTHROPIC_BASE_URL=http://127.0.0.1:8799/anthropic ANTHROPIC_API_KEY=trove-probe-placeholder claude -p "say hi"`.
+   For Codex CLI, set its custom base URL the way `trove setup` does, using `http://127.0.0.1:8799/openai/v1`.
+3. Watch what the agent prints. When it has been quiet for 30 seconds (`--quiet`), the probe asks whether the agent
+   showed Trove's message and stopped.
+4. The verdict is `stops` only if the agent tried exactly once and you answered yes. `retries` and `not_shown` mean
+   the cap keeps only warning for that agent. Results go to `spendcap-probe.json` (see PRIVACY.md). A newer result
+   replaces the older one, so probe again after an agent upgrade.
+5. Restart the gateway. `trove optimize status` names the agents that passed.
+
+Status: built and tested against recorded requests. No real agent has been probed yet, so plan item 8.1 is
+blocked on this manual probe.
+
 ## What was not built, and why
+
+Items 1, 2, 3, 4 and 7 below are answered by the active mode above; they are kept as the record of why it is built
+this way.
 
 1. **What to refuse with.** The refusal has to be a response the agent will show, not retry in a loop. A 429 invites
    a retry with backoff, which is the opposite of what a cap is for. Which status and error type make Claude Code and

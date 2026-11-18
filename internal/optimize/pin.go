@@ -26,7 +26,10 @@ type Pin struct {
 	CacheTTL config.CacheTTL `json:"cache_ttl,omitzero"`
 	// Verbosity is the level verbosity_steer uses. A pin saved before it existed
 	// loads empty, which means concise, the only level there was.
-	Verbosity     string    `json:"verbosity,omitempty"`
+	Verbosity string `json:"verbosity,omitempty"`
+	// RouteTo is the model model_router may step down to. A pin saved before it
+	// existed loads empty, which leaves model_router idle.
+	RouteTo       string    `json:"route_to,omitempty"`
 	BytesPerToken float64   `json:"bytes_per_token"`
 	PinnedAt      time.Time `json:"pinned_at"`
 	// Confounders are the tag names (never text) of things present at session
@@ -169,6 +172,7 @@ func newPinFor(key string, cfg config.Config, bpt float64, now time.Time, gate S
 		CustomAgents:  append([]string{}, cfg.Optimize.CustomAgents...),
 		CacheTTL:      cfg.Optimize.CacheTTL,
 		Verbosity:     cfg.Optimize.Verbosity,
+		RouteTo:       cfg.Optimize.RouteTo,
 		BytesPerToken: bpt,
 		PinnedAt:      now.UTC(),
 	}

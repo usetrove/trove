@@ -101,8 +101,8 @@ func TestReportExternalClaimIsNeverMeasured(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := Render(r, Options{Width: 80})
-	if !strings.Contains(out, "Claimed by the tool:") || !strings.Contains(out, "not checked by Trove") {
+	out := strings.Join(strings.Fields(Render(r, Options{Width: 80})), " ")
+	if !strings.Contains(out, "Claimed by the tool") || !strings.Contains(out, "not checked by Trove") {
 		t.Errorf("claim not labeled:\n%s", out)
 	}
 	tool := r.ExternalTools[0]
@@ -111,5 +111,40 @@ func TestReportExternalClaimIsNeverMeasured(t *testing.T) {
 	}
 	if !strings.Contains(out, "not available yet") {
 		t.Errorf("missing-data message absent:\n%s", out)
+	}
+}
+
+// Plan 9.4: the tool's own claim and Trove's measured verdict appear side by side,
+// each with its own label, and are never merged into one figure.
+func TestReportExternalClaimNextToVerdict(t *testing.T) {
+	db := openDB(t)
+	seedExternal(t, db, toolRef{"rtk", "1.1.0", "Apache-2.0"}, "on", 0, 0, 0, 0)
+	addExternalSessions(t, db, "ext_rtk", 0.80, 1.00, 40_000, 50_000)
+	r, err := Build(context.Background(), db, Inputs{Config: config.Default(), Now: now}, mustPeriod(t, Month))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := r.ExternalTools[0].Verdict
+	if v.Label != "measured" || !strings.Contains(v.Text, "cost per session 20% lower") || !strings.Contains(v.Text, "prompt tokens per request 20% lower") {
+		t.Errorf("verdict = %+v", v)
+	}
+	out := Render(r, Options{Width: 80})
+	claim, verdict, detail := strings.Index(out, "Claimed by the tool"), strings.Index(out, "Measured by Trove"), strings.Index(out, "Measured, prompt tokens")
+	if claim < 0 || verdict < claim || detail < verdict {
+		t.Fatalf("claim and verdict must sit together, ahead of the detail:\n%s", out)
+	}
+	if strings.Count(out[claim:verdict], "\n") > 3 {
+		t.Errorf("verdict is not next to the claim:\n%s", out[claim:detail])
+	}
+
+	// With nothing to compare against, the verdict says so and carries no number.
+	db2 := openDB(t)
+	seedExternal(t, db2, toolRef{"rtk", "1.1.0", "Apache-2.0"}, "on", 0, 0, 0, 0)
+	r2, err := Build(context.Background(), db2, Inputs{Config: config.Default(), Now: now}, mustPeriod(t, Month))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := r2.ExternalTools[0].Verdict; v.Label != "" || !strings.Contains(v.Text, "nothing measured yet") {
+		t.Errorf("verdict without data = %+v", v)
 	}
 }

@@ -31,15 +31,24 @@ func newBudget(a *App) *cobra.Command {
 		RunE: func(*cobra.Command, []string) error { return budgetShow(a) },
 	}
 	var period string
+	var usage bool
 	set := &cobra.Command{
 		Use:   "set <amount>",
 		Short: "Set the cap in US dollars (0 removes it)",
 		Example: "  trove budget set 1500 --period month\n" +
-			"  trove budget set 0",
+			"  trove budget set 0\n" +
+			"  trove budget set 200 --usage   # subscription: API-equivalent usage budget, warning only",
 		Args: cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error { return budgetSet(a, args[0], period) },
+		RunE: func(_ *cobra.Command, args []string) error {
+			if usage {
+				return budgetSetUsage(a, args[0], period)
+			}
+			return budgetSet(a, args[0], period)
+		},
 	}
+	set.Flags().BoolVar(&usage, "usage", false, "set the subscription usage budget (API-equivalent dollars; the status line warns, nothing is stopped)")
 	set.Flags().StringVar(&period, "period", "", "day, week or month (default: keep the current period)")
+	c.AddCommand(newBudgetProbe(a))
 	c.AddCommand(set, &cobra.Command{
 		Use: "show", Short: "Show spend against the budget", Args: cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error { return budgetShow(a) },
@@ -84,6 +93,39 @@ func budgetSet(a *App, amount, period string) error {
 		text += "\n\n" + trimNL(report.RenderPacing(p, report.Options{Width: a.termWidth(), Color: a.Color()}))
 	}
 	return a.emit(budgetOutput{Message: msg, Budget: p}, text)
+}
+
+// budgetSetUsage sets the subscription usage budget. Subscription usage is not a
+// bill, so this budget only drives a warning in the status line.
+func budgetSetUsage(a *App, amount, period string) error {
+	dir, cfg, err := loadConfig(a)
+	if err != nil {
+		return err
+	}
+	v, err := strconv.ParseFloat(strings.TrimPrefix(strings.ReplaceAll(amount, ",", ""), "$"), 64)
+	if err != nil || v < 0 {
+		return fmt.Errorf("%q is not a budget amount; use a number of US dollars such as 200, or 0 to remove the usage budget", amount)
+	}
+	per := cfg.Budget.Period
+	if period != "" {
+		p, ok := report.BudgetPeriod(period)
+		if !ok {
+			return fmt.Errorf("--period is %q; use day, week or month", period)
+		}
+		per = p
+	}
+	if err := config.SetUsageBudget(dir, per, v); err != nil {
+		return err
+	}
+	unit := strings.TrimSuffix(per, "ly")
+	if per == "daily" {
+		unit = "day"
+	}
+	msg := fmt.Sprintf("Usage budget set to %s per %s of API-equivalent usage. It is a warning only: the status line shows your usage against it and nothing is ever stopped.", report.FormatUSD(v), unit)
+	if v == 0 {
+		msg = "Usage budget removed."
+	}
+	return a.emit(budgetOutput{Message: msg}, msg)
 }
 
 func budgetShow(a *App) error {

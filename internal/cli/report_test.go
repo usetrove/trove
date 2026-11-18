@@ -124,3 +124,31 @@ func TestBudgetSetRejectsBadInput(t *testing.T) {
 		}
 	}
 }
+
+// Plan 8.2: `budget set --usage` sets the subscription usage budget, not the cap.
+func TestBudgetSetUsage(t *testing.T) {
+	h := newHarness(t, nil)
+	if code := h.run("budget", "set", "200", "--usage", "--period", "week"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	if out := h.out.String(); !strings.Contains(out, "Usage budget set to $200 per week") || !strings.Contains(out, "warning only") {
+		t.Errorf("unexpected output:\n%s", out)
+	}
+	cfg, err := os.ReadFile(filepath.Join(h.app.Getenv("TROVE_DATA_DIR"), "config.toml"))
+	if err != nil || !strings.Contains(string(cfg), "usage_usd = 200.0") || !strings.Contains(string(cfg), "cap_usd = 0.0") {
+		t.Errorf("config not updated (%v):\n%s", err, cfg)
+	}
+}
+
+// Plan 8.1: a probe verdict rests on a person saying what the agent showed, so piped
+// input can never record one.
+func TestBudgetProbeNeedsATerminal(t *testing.T) {
+	h := newHarness(t, nil)
+	h.app.In = strings.NewReader("y\n")
+	if code := h.run("budget", "probe", "--wait", "1ms"); code != 1 || !strings.Contains(h.err.String(), "needs a person at a terminal") {
+		t.Fatalf("exit %d, stderr %q", code, h.err)
+	}
+	if _, err := os.Stat(filepath.Join(h.app.Getenv("TROVE_DATA_DIR"), "spendcap-probe.json")); !os.IsNotExist(err) {
+		t.Errorf("a probe file was written without a person present: %v", err)
+	}
+}

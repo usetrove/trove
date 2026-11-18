@@ -29,8 +29,8 @@ func TestBuiltinManifestFacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ms) != 5 {
-		t.Fatalf("want caveman, ponytail, rtk, terse-rules and token-savior, got %d manifests", len(ms))
+	if len(ms) != 6 {
+		t.Fatalf("want caveman, ponytail, rtk, terse-rules, token-savior and ztk, got %d manifests", len(ms))
 	}
 	for _, m := range ms {
 		if m.SupportsShadow {

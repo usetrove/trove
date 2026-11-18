@@ -48,7 +48,14 @@ type Request struct {
 	Kind string
 	// Upstream is the configured name of an OpenAI-compatible server; empty for built-in providers.
 	Upstream string
+	// Effort is the request's output_config.effort level (one of EffortLevels), or ''.
+	Effort string
 }
+
+// EffortLevels are the documented values of output_config.effort (verified
+// 2026-11-17 on platform.claude.com/docs/en/build-with-claude/effort). Anything
+// else is stored as ” so the column can never carry free text (rule 7).
+var EffortLevels = []string{"low", "medium", "high", "xhigh", "max"}
 
 // Session kinds.
 const (
@@ -196,8 +203,8 @@ const insertRequestSQL = `INSERT INTO requests (
 	latency_ms, ttft_ms, input_uncached_tokens, cache_write_tokens, cache_read_tokens,
 	output_tokens, reasoning_tokens, cost_usd, pricing_version, segment_token_estimates,
 	findings, optimizations_applied, shadow_savings, error_class, usage_raw, service_tier,
-	tokens_removed, cost_diff_usd, signals, kind, upstream
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+	tokens_removed, cost_diff_usd, signals, kind, upstream, effort
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
 
 const upsertSessionSQL = `INSERT INTO sessions (
 	session_key, agent, started_at, ended_at, request_count,
@@ -284,7 +291,7 @@ func (d *DB) insertRequests(ctx context.Context, rows []Request) error {
 			r.Streamed, r.StatusCode, r.LatencyMS, ttft, r.InputUncachedTokens, r.CacheWriteTokens, r.CacheReadTokens,
 			r.OutputTokens, r.ReasoningTokens, cost, r.PricingVersion, jsonOrNil(r.SegmentTokenEstimate),
 			jsonOrNil(r.Findings), jsonOrNil(r.OptimizationsApplied), jsonOrNil(r.ShadowSavings), r.ErrorClass, jsonOrNil(r.UsageRaw), r.ServiceTier,
-			r.TokensRemoved, costDiff, jsonOrNil(r.Signals), kindOrUnknown(r.Kind), r.Upstream); err != nil {
+			r.TokensRemoved, costDiff, jsonOrNil(r.Signals), kindOrUnknown(r.Kind), r.Upstream, effortOrEmpty(r.Effort)); err != nil {
 			return err
 		}
 		if r.StatusCode > 0 && r.StatusCode < 400 {
@@ -308,4 +315,13 @@ func (d *DB) insertRequests(ctx context.Context, rows []Request) error {
 		}
 	}
 	return tx.Commit()
+}
+
+func effortOrEmpty(e string) string {
+	for _, l := range EffortLevels {
+		if e == l {
+			return e
+		}
+	}
+	return ""
 }

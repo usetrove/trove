@@ -14,9 +14,9 @@ import (
 )
 
 type tasksFlags struct {
-	project, testCmd, scoutModel, workerModel, escalationModel string
-	maxTurns                                                   int
-	yes                                                        bool
+	project, testCmd, scoutModel, workerModel, escalationModel, model string
+	maxTurns                                                          int
+	yes                                                               bool
 }
 
 func newTasks(a *App) *cobra.Command {
@@ -24,10 +24,11 @@ func newTasks(a *App) *cobra.Command {
 	c := &cobra.Command{
 		Use:   "tasks",
 		Short: "Add a read-only scout subagent or a test-gated cascade to a project, with approval and undo",
-		Long: "Two opt-in delegation features for Claude Code projects. Nothing is changed by this command alone.\n\n" +
+		Long: "Opt-in delegation features for Claude Code projects. Nothing is changed by this command alone.\n\n" +
 			"  trove tasks plan  scout     show the scout subagent (small model, read-only tools) and its CLAUDE.md note\n" +
 			"  trove tasks plan  cascade   show /trove-cascade: cheap model first, strong model only if your tests fail\n" +
-			"  trove tasks apply scout|cascade   write the files (asked first; backed up; `trove undo` reverses it)\n\n" +
+			"  trove tasks plan  subagent-model --model M   set model M in your own subagent files that name none\n" +
+			"  trove tasks apply scout|cascade|subagent-model   write the files (asked first; backed up; `trove undo` reverses it)\n\n" +
 			"Files are written to the project's .claude folder, between sessions only. Trove never overwrites an agent or command\n" +
 			"file you wrote. The cascade needs your test command (--test-cmd, or test_cmd under [tasks] in config.toml) and tells you\n" +
 			"which model finished and why. Savings are not claimed: `trove report` compares your sessions once enough exist.",
@@ -42,10 +43,11 @@ func newTasks(a *App) *cobra.Command {
 		sub.Flags().StringVar(&fl.workerModel, "worker-model", "", "cheap model for the first attempt (default haiku)")
 		sub.Flags().StringVar(&fl.escalationModel, "escalation-model", "", "strong model for the retry (default opus)")
 		sub.Flags().IntVar(&fl.maxTurns, "max-turns", 0, "turn limit for the cheap worker (default 25)")
+		sub.Flags().StringVar(&fl.model, "model", "", "model to write into subagent files that name none (subagent-model only; no default)")
 	}
-	plan := &cobra.Command{Use: "plan scout|cascade", Short: "Show what would be written; changes nothing", Args: feature, ValidArgs: []string{"scout", "cascade"},
+	plan := &cobra.Command{Use: "plan scout|cascade|subagent-model", Short: "Show what would be written; changes nothing", Args: feature, ValidArgs: []string{"scout", "cascade", "subagent-model"},
 		RunE: func(_ *cobra.Command, args []string) error { return runTasks(a, fl, args[0], false) }}
-	apply := &cobra.Command{Use: "apply scout|cascade", Short: "Write the files after showing the diff and asking", Args: feature, ValidArgs: []string{"scout", "cascade"},
+	apply := &cobra.Command{Use: "apply scout|cascade|subagent-model", Short: "Write the files after showing the diff and asking", Args: feature, ValidArgs: []string{"scout", "cascade", "subagent-model"},
 		RunE: func(_ *cobra.Command, args []string) error { return runTasks(a, fl, args[0], true) }}
 	apply.Flags().BoolVar(&fl.yes, "yes", false, "do not ask; you have reviewed what will change")
 	flags(plan)
@@ -65,6 +67,7 @@ func tasksOptions(cfg config.Tasks, fl tasksFlags) tasks.Options {
 	o := tasks.Options{
 		ScoutModel: pick(fl.scoutModel, cfg.ScoutModel), WorkerModel: pick(fl.workerModel, cfg.WorkerModel),
 		EscalationModel: pick(fl.escalationModel, cfg.EscalationModel), TestCmd: pick(fl.testCmd, cfg.TestCmd), MaxTurns: cfg.MaxTurns,
+		SubagentModel: fl.model,
 	}
 	if fl.maxTurns != 0 {
 		o.MaxTurns = fl.maxTurns
@@ -87,9 +90,9 @@ func runTasks(a *App, fl tasksFlags, which string, apply bool) error {
 	if fl.yes && !apply {
 		return errors.New("--yes only makes sense with `apply`. Nothing was changed")
 	}
-	feat := map[string]string{"scout": tasks.FeatureScout, "cascade": tasks.FeatureCascade}[which]
+	feat := map[string]string{"scout": tasks.FeatureScout, "cascade": tasks.FeatureCascade, "subagent-model": tasks.FeatureSubagentModel}[which]
 	if feat == "" {
-		return fmt.Errorf("unknown feature %q; use scout or cascade", which)
+		return fmt.Errorf("unknown feature %q; use scout, cascade or subagent-model", which)
 	}
 	e, closeDB, err := fixEnv(a, fl.project)
 	if err != nil {

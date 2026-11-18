@@ -33,18 +33,21 @@ const mcpSnippetTokens = 70
 const verbositySteerTokens = 85
 
 const (
-	urlRTK        = "https://github.com/rtk-ai/rtk"
-	urlHeadroom   = "https://github.com/headroomlabs-ai/headroom"
-	urlCaveman    = "https://github.com/JuliusBrussee/caveman"
-	urlLLMLingua  = "https://github.com/microsoft/LLMLingua"
-	urlSavior     = "https://github.com/Mibayy/token-savior"
-	urlSuperComp  = "https://github.com/Supercompress/Supercompress"
-	urlCCUsage    = "https://github.com/ccusage/ccusage"
-	urlPonytail   = "https://github.com/DietrichGebert/ponytail"
-	ownerTrove    = "trove"
-	tierLossless  = "lossless"
-	tierRecover   = "recoverable"
-	tierBehavior  = "behavior"
+	urlRTK       = "https://github.com/rtk-ai/rtk"
+	urlHeadroom  = "https://github.com/headroomlabs-ai/headroom"
+	urlCaveman   = "https://github.com/JuliusBrussee/caveman"
+	urlLLMLingua = "https://github.com/microsoft/LLMLingua"
+	urlSavior    = "https://github.com/Mibayy/token-savior"
+	urlSuperComp = "https://github.com/Supercompress/Supercompress"
+	urlCCUsage   = "https://github.com/ccusage/ccusage"
+	urlPonytail  = "https://github.com/DietrichGebert/ponytail"
+	urlZTK       = "https://github.com/codejunkie99/ztk"
+	ownerTrove   = "trove"
+	tierLossless = "lossless"
+	tierRecover  = "recoverable"
+	tierBehavior = "behavior"
+	// tierRouting sends the request to another model (optimize.TierRouting).
+	tierRouting   = "routing"
 	noticeInCount = "the text it adds is counted inside the tokens it removes"
 )
 
@@ -92,8 +95,8 @@ var registry = []Technique{
 	{ID: "B15", Class: ClassRecoverable, Title: "Add one output-quieting flag to an allowlisted command", Names: []string{"hook_quiet_commands"},
 		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierRecover, NoSavingEstimate: true,
 		HookNeeds:    []string{"Bash:input"},
-		Subscription: true, Overhead: none(), Licence: "Trove project",
-		Note: "rewrites the Bash command the way RTK does, but it does not claim the shell-compressor slot, matching what `trove external` refuses today; whether the two should be refused together is open"},
+		Subscription: true, Overhead: none(), Claims: []Claim{{ResourceShellCompressor, ownerTrove}}, Licence: "Trove project",
+		Note: "rewrites the Bash command the way RTK and ZTK do, so it holds the shell-compressor slot: one owner per Bash call (plan 9.1)"},
 	{ID: "B17", Class: ClassRecoverable, Title: "Replace a repeated identical tool output with a pointer at the hook", Names: []string{"hook_output_dedup"},
 		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierRecover,
 		Subscription: true, AddsText: true, Overhead: use(trimmerToolDefTokens), UseOverhead: none(), UseNetted: true,
@@ -174,9 +177,10 @@ var registry = []Technique{
 	{ID: "C7", Class: ClassSubagentRouting, Title: "Choose the model per subagent",
 		Layers: []Layer{LayerConfig, LayerInstructions}, Route: RouteConfig, Status: StatusPartial, Effect: tierBehavior,
 		Subscription: true, Overhead: none(), Licence: "Trove project", Note: "the scout and cascade (B11) use it; no general setting is written yet"},
-	{ID: "C8", Class: ClassModelRouting, Title: "Swap the model per request in the gateway", Names: []string{"model_swap"},
-		Layers: []Layer{LayerRequest}, Route: RouteNative, Status: StatusCandidate, Effect: tierBehavior, Prefix: true,
-		Gateway: true, Claims: gatewayClaim, Licence: "Trove project", Note: "not recommended: a different model has its own cache; same family only, if ever"},
+	{ID: "C8", Class: ClassModelRouting, Title: "Step down to a cheaper model on tool turns in the gateway, with a stickiness rule", Names: []string{"model_router"},
+		Layers: []Layer{LayerRequest}, Route: RouteNative, Status: StatusPartial, Effect: tierRouting, Prefix: true,
+		Gateway: true, Overhead: none(), Claims: gatewayClaim, Licence: "Trove project",
+		Note: "built: shadow estimates of each switch's cache-write cost and the stickiness rule (stay at least k = (W-R_to)/(R_from-R_to) turns, about 11.5r/(1-r)); not done: the session A/B under the T3 guardrails, which needs live API-key sessions (docs/model-router.md)"},
 	{ID: "C9", Class: ClassConfig, Title: "Output size limits for commands, MCP results and file reads",
 		Names:  []string{"bashOutputMaxChars", "MAX_MCP_OUTPUT_TOKENS", "CLAUDE_CODE_FILE_READ_MAX_OUTPUT_TOKENS"},
 		Layers: []Layer{LayerConfig}, Route: RouteConfig, Status: StatusPartial, Effect: tierBehavior,
@@ -220,7 +224,8 @@ var registry = []Technique{
 	{ID: "W5", Class: ClassRecoverable, Title: "Headroom: compress tool output, logs and files", Names: []string{"headroom"},
 		Layers: []Layer{LayerRequest, LayerToolBoundary}, Route: RouteIdeas, Status: StatusReference,
 		Claims:  []Claim{{ResourceBaseURL, "headroom"}},
-		Licence: "Apache-2.0", Source: urlHeadroom, Note: "its proxy and Trove's gateway both claim the agent's API endpoint"},
+		Licence: "Apache-2.0", Source: urlHeadroom,
+		Note: "its proxy and `headroom wrap` claim the agent's API endpoint, so they are never chained with Trove's gateway; its Python library (`compress()`, in a custom agent's own code) and MCP server do not, and Trove does not install them. It has no CLI that shortens Bash output without its proxy, and its usage beacon is on by default (verified 2026-11-18)"},
 	{ID: "W6", Class: ClassBehavior, Title: "LLMLingua: prompt compression with a model", Names: []string{"llmlingua"},
 		Layers: []Layer{LayerRequest}, Route: RouteIdeas, Status: StatusReference,
 		Licence: "MIT", Source: urlLLMLingua, Note: "Python and a model; prompt-level compression is not Autopilot-eligible"},
@@ -237,4 +242,10 @@ var registry = []Technique{
 		Claims:  []Claim{{ResourceBehaviorRules, "ponytail"}},
 		Licence: "MIT", Source: urlPonytail,
 		Note: "wraps its AGENTS.md rules text at a pinned tag only, never its plugin, skill or hooks"},
+	{ID: "W10", Class: ClassRecoverable, Title: "ZTK: rewrite shell commands so their output is smaller", Names: []string{"ztk"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteWrap, Status: StatusWrapped, Effect: tierBehavior,
+		Subscription: true, OverheadNote: "declared in its manifest (`trove external show ztk`)",
+		Claims:  []Claim{{ResourceShellCompressor, "ztk"}},
+		Licence: "MIT", Source: urlZTK,
+		Note: "Trove writes its PreToolUse Bash hook itself at a pinned version and never runs `ztk init`"},
 }

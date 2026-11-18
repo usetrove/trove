@@ -59,10 +59,15 @@ type Options struct {
 	// SpendLedger reads the spending in a period from the ledger, for the spend cap's shadow mode.
 	// Nil turns the spend cap off.
 	SpendLedger SpendLedger
-	Logger      *slog.Logger // must already redact; nil discards
-	Version     string
-	Now         func() time.Time  // tests only
-	Transport   http.RoundTripper // tests only; nil uses a pass-through transport
+	// CapRefuses reports whether the spend cap, when "on", may refuse requests from an agent
+	// (an agent.Label): only agents whose refused-request probe passed. Nil refuses no one.
+	CapRefuses func(agent string) bool
+	// OnSpendWarning receives the spend cap's warnings when it is "on". It must not block.
+	OnSpendWarning func(SpendWarning)
+	Logger         *slog.Logger // must already redact; nil discards
+	Version        string
+	Now            func() time.Time  // tests only
+	Transport      http.RoundTripper // tests only; nil uses a pass-through transport
 }
 
 // Server is the gateway.

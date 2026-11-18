@@ -59,6 +59,13 @@ Status words: *under pace*, *on pace*, *ahead of pace* (also when the projection
 *close to the cap* (at `warn_at_percent`, default 80), *the cap is reached*, and *too early to judge*
 in the first 5% of the period. A budget only informs; it never blocks a request.
 
+Subscription usage is not a bill, so a dollar cap does not apply to it. `trove budget set 200 --usage`
+(same `--period` choices) writes `usage_usd` instead: a budget in API-equivalent dollars. When the
+status line reports API-equivalent value, it adds the share used, for example
+`~$170 API-equivalent this month · 85% of $200 usage budget · near usage budget`. The share is
+estimated from list prices; the warning starts at `warn_at_percent` and turns to *over usage budget*
+at 100%. It is a warning only and nothing is ever stopped. `TROVE_BUDGET_USAGE_USD` overrides it.
+
 ## trove receipts
 
 A receipt is one line per finished session: estimated cost, model, calls, cache-hit rate

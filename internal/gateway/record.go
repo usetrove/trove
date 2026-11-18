@@ -185,8 +185,9 @@ func sanitize(s string) string {
 func (s *Server) buildRow(f *flight, res usage.Result, status int, streamed bool, first, end time.Time) store.Request {
 	label, ver := agent.Label(f.reqHeader)
 	model := res.Model
+	reqModel, effort := requestMeta(f.reqBody)
 	if model == "" {
-		model = requestModel(f.reqBody)
+		model = reqModel
 	}
 	row := store.Request{
 		TS:                  f.start,
@@ -209,6 +210,7 @@ func (s *Server) buildRow(f *flight, res usage.Result, status int, streamed bool
 		OutputTokens:        res.Output,
 		ReasoningTokens:     res.Reasoning,
 		UsageRaw:            res.Raw,
+		Effort:              effort,
 	}
 	if streamed && !first.IsZero() {
 		ms := first.Sub(f.start).Milliseconds()
@@ -307,13 +309,17 @@ func pricingTier(reported string) (tier string, batch bool) {
 	}
 }
 
-// requestModel reads only the "model" field of the request body.
-func requestModel(body []byte) string {
+// requestMeta reads only the "model" field and output_config.effort of the
+// forwarded body. The store keeps effort only when it is a documented level.
+func requestMeta(body []byte) (model, effort string) {
 	var m struct {
-		Model string `json:"model"`
+		Model        string `json:"model"`
+		OutputConfig struct {
+			Effort string `json:"effort"`
+		} `json:"output_config"`
 	}
 	_ = json.Unmarshal(body, &m)
-	return m.Model
+	return m.Model, m.OutputConfig.Effort
 }
 
 // Longest values stored for fields whose text comes from the client or the

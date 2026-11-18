@@ -14,6 +14,7 @@ import (
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/external"
 	"github.com/usetrove/trove/internal/store"
+	"github.com/usetrove/trove/internal/technique"
 )
 
 func newExternal(a *App) *cobra.Command {
@@ -82,6 +83,21 @@ type externalRow struct {
 	Label          string `json:"overhead_label"`
 	Claimed        string `json:"claimed_by_tool"`
 	SupportsShadow bool   `json:"supports_shadow"`
+	// Tier is the proof tier from the technique registry (T1, T2 or T3), empty for a tool it does not know.
+	Tier string `json:"tier,omitempty"`
+}
+
+// tierLabel is the tier with its short name, for the text listing.
+func tierLabel(t string) string {
+	switch technique.Tier(t) {
+	case technique.T1:
+		return "T1 safe"
+	case technique.T2:
+		return "T2 behavioural"
+	case technique.T3:
+		return "T3 routing"
+	}
+	return "untiered"
 }
 
 func externalRows(ctx context.Context, env external.Env) ([]externalRow, error) {
@@ -100,6 +116,9 @@ func externalRows(ctx context.Context, env external.Env) ([]externalRow, error) 
 			Label: "estimated", Claimed: m.Claimed.Text, SupportsShadow: m.SupportsShadow}
 		if t, ok := have[m.Name]; ok {
 			r.Installed, r.State = true, t.State
+		}
+		if x, ok := technique.Get(m.Name); ok {
+			r.Tier = string(x.Tier)
 		}
 		rows = append(rows, r)
 	}
@@ -124,7 +143,7 @@ func newExternalList(a *App) *cobra.Command {
 				b.WriteString("No external tools are available in this version.")
 			}
 			for _, r := range rows {
-				fmt.Fprintf(&b, "%-14s v%-8s %-12s %-14s %s\n", r.Name, r.Version, r.LicenseClass, r.ActsAs, r.State)
+				fmt.Fprintf(&b, "%-14s v%-8s %-15s %-12s %-14s %s\n", r.Name, r.Version, tierLabel(r.Tier), r.LicenseClass, r.ActsAs, r.State)
 			}
 			return a.emit(map[string]any{"tools": rows}, strings.TrimRight(b.String(), "\n"))
 		},

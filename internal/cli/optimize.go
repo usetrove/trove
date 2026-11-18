@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -63,6 +64,7 @@ func newOptimize(a *App) *cobra.Command {
 			RunE: func(*cobra.Command, []string) error { return optimizeResume(a) }},
 		newOptimizeSuggest(a),
 		newOptimizeVerbosity(a),
+		newOptimizeEffortCheck(a),
 	)
 	return cmd
 }
@@ -113,7 +115,9 @@ func optimizeStatusCmd(a *App) error {
 		case config.OptimizerInflightDedup:
 			info.Note = "estimate only: counts identical requests that arrive while one is still waiting for the provider; sharing the call is not built, so \"on\" runs as shadow"
 		case config.OptimizerSpendCap:
-			info.Note = "estimate only: counts requests made after spending reached your budget cap, which a hard cap would have refused; pausing is not built, so \"on\" runs as shadow"
+			info.Note = "shadow counts requests made after spending reached your budget cap (estimated); \"on\" also warns at " +
+				strconv.Itoa(cfg.Budget.WarnAtPercent) + "% and at the cap, and refuses requests past the cap only from agents that passed `trove budget probe` (" +
+				capVerified(dir) + ")"
 			if cfg.Budget.CapUSD <= 0 {
 				info.Note += ". It needs a budget cap: `trove budget set <amount>`"
 			}

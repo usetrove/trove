@@ -17,7 +17,14 @@ import (
 const (
 	TaskScout   = tasks.FeatureScout
 	TaskCascade = tasks.FeatureCascade
+	// TaskSubagentModel sets a model on the user's own subagent files (plan item 7.3).
+	TaskSubagentModel = tasks.FeatureSubagentModel
 )
+
+// IsTask reports whether kind is one of the tasks features.
+func IsTask(kind string) bool {
+	return kind == TaskScout || kind == TaskCascade || kind == TaskSubagentModel
+}
 
 // TasksRequest asks Detect to plan the files of one tasks feature. Nil leaves
 // `trove fix` exactly as it was.
@@ -36,6 +43,8 @@ func PlanTasks(e *Env) ([]tasks.File, error) {
 		return nil, fmt.Errorf("the tasks catalog could not be loaded: %w", err)
 	}
 	switch e.Tasks.Feature {
+	case tasks.FeatureSubagentModel:
+		return nil, e.Tasks.Options.ValidateSubagentModel(cat) // edits the user's own files; renders none
 	case tasks.FeatureScout:
 		return tasks.ScoutFiles(cat, e.Tasks.Options)
 	case tasks.FeatureCascade:
@@ -54,6 +63,9 @@ func detectTasks(_ context.Context, e *Env) ([]*Fix, error) {
 	files, err := PlanTasks(e)
 	if err != nil {
 		return nil, err
+	}
+	if e.Tasks.Feature == tasks.FeatureSubagentModel {
+		return detectSubagentModel(e)
 	}
 	oh := tasks.OverheadOf(files)
 	var out []*Fix
@@ -174,6 +186,10 @@ func registerTask(db *store.DB, e *Env, f *Fix, changeID string) error {
 		return err
 	}
 	oh := tasks.OverheadOf(files)
+	if f.Kind == TaskSubagentModel {
+		// The model it wrote is recorded as the worker model; it adds no text (overhead 0).
+		o = tasks.Options{WorkerModel: e.Tasks.Options.SubagentModel}
+	}
 	_, err = db.ExecContext(context.Background(),
 		`INSERT OR REPLACE INTO task_installs (change_id, fix_id, feature, role, scout_model, worker_model, escalation_model, overhead_request, overhead_use)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,

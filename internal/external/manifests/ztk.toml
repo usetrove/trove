@@ -1,0 +1,48 @@
+# ZTK: rewrites shell commands to run through `ztk run`, which compresses their output before
+# it reaches the model. Verified 2026-11-18 against https://github.com/codejunkie99/ztk at
+# v0.3.1 (README, LICENSE, releases page, src/hooks/claude.zig, src/version.zig): MIT, latest
+# release v0.3.1 (2026-05-19), `ztk init -g` writes a PreToolUse hook with matcher "Bash" and
+# command "ztk rewrite", and `ztk --version` prints "ztk 0.3.1".
+name = "ztk"
+version = "0.3.1"
+license = "MIT"
+source_url = "https://github.com/codejunkie99/ztk"
+verified_on = "2026-11-18"
+acts_as = "hook"
+category = "shell_compressor"
+points = ["tool_input", "tool_output"]
+supports_shadow = false
+shadow_note = "it rewrites shell commands inside the agent's own hook, outside Trove's request path, so Trove cannot estimate what it would do without doing it"
+cautions = [
+  "Only shell (Bash) tool calls pass through it. The agent's built-in Read, Grep and Glob tools do not.",
+  "The Homebrew tap installs ZTK's latest release. If that is newer than 0.3.1, Trove does not record it; remove it with `brew uninstall ztk`.",
+  "It is a young project (first release April 2026). Its savings figures are its own and Trove has not checked them.",
+  "Trove writes the hook itself and never runs `ztk init`. If you ran `ztk init -g` yourself, remove that hook first.",
+]
+
+[install]
+argv = ["brew", "install", "codejunkie99/ztk/ztk"]
+requires = ["brew"]
+
+[remove]
+argv = ["brew", "uninstall", "ztk"]
+
+[verify]
+argv = ["ztk", "--version"]
+contains = "ztk 0.3.1"
+
+# Trove writes this hook entry itself (backed up, undoable), matching what `ztk init -g` writes.
+[wire]
+hook_event = "PreToolUse"
+hook_matcher = "Bash"
+hook_command = "ztk rewrite"
+
+# Trove adds no rules text and no tool definitions for ZTK, so nothing is added to the prompt.
+[overhead]
+tool_def_tokens = 0
+injected_tokens = 0
+extra_turns_estimate = 0
+
+[claimed]
+text = "reduces LLM token consumption by 78%+"
+source_url = "https://github.com/codejunkie99/ztk"

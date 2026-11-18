@@ -226,7 +226,7 @@ func (e *Engine) TransformRequest(ctx context.Context, rq RequestIn, s Session) 
 
 	ctx, cancel := context.WithTimeout(ctx, e.budget)
 	defer cancel()
-	sess := Session{Key: in.SessionKey, Agent: in.Agent, Custom: pin.customFor(in.Agent), CacheTTL: pin.CacheTTL, Verbosity: pin.Verbosity, Raw: originalSpanText(cur)}
+	sess := Session{Key: in.SessionKey, Agent: in.Agent, Custom: pin.customFor(in.Agent), CacheTTL: pin.CacheTTL, Verbosity: pin.Verbosity, RouteTo: pin.RouteTo, PinnedAt: pin.PinnedAt, Raw: originalSpanText(cur)}
 
 	for _, o := range e.pipeline {
 		state := pin.States[o.Name()]
@@ -253,7 +253,8 @@ func (e *Engine) TransformRequest(ctx context.Context, rq RequestIn, s Session) 
 		rep.Name, rep.State = o.Name(), state
 		originals := rep.Originals
 		rep.Originals = nil
-		if rep.Changed = len(out.Raw) != len(cur.Raw) || string(out.Raw) != string(cur.Raw); !rep.Changed {
+		if rep.Changed = len(out.Raw) != len(cur.Raw) || string(out.Raw) != string(cur.Raw); !rep.Changed || o.Tier() == TierRouting {
+			// A routing change renames the model; it removes nothing.
 			rep.BytesRemoved, rep.TokensRemoved = 0, 0
 		} else if n := len(cur.Raw) - len(out.Raw); n > 0 {
 			rep.BytesRemoved = n

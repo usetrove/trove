@@ -23,6 +23,9 @@ type ExternalTool struct {
 	// Claimed is the tool's own claim, quoted from its documentation. It is
 	// labeled "claimed" and Trove has not checked it.
 	Claimed ExternalClaim `json:"claimed"`
+	// Verdict is Trove's measured result in one line, shown next to Claimed. It is
+	// built only from PromptTokens and Cost; the claim never enters it.
+	Verdict ExternalVerdict `json:"verdict"`
 
 	// Overhead is what the tool adds to every request while on (estimated).
 	Overhead external.Charge `json:"overhead"`
@@ -48,6 +51,54 @@ type ExternalClaim struct {
 	Text      string `json:"text"`
 	SourceURL string `json:"source_url"`
 	Label     string `json:"label"` // always "claimed"
+}
+
+// ExternalVerdict is Trove's own verdict on a tool, in one line.
+type ExternalVerdict struct {
+	Text  string `json:"text"`
+	Label string `json:"label,omitempty"` // "measured" when Text carries a figure, empty when it does not
+}
+
+// externalVerdict sums up the measured comparisons as relative changes, on versus off.
+func externalVerdict(t ExternalTool) ExternalVerdict {
+	var parts []string
+	if c := t.Cost; c != nil && c.Enough && c.OffMeanUSD > 0 {
+		s := "cost per session " + relChange(c.OnMeanUSD, c.OffMeanUSD)
+		if !c.Cheaper && !c.Costlier {
+			s += " (within chance)"
+		}
+		parts = append(parts, s)
+	}
+	if c := t.PromptTokens; c != nil && c.Verdict != measure.NotEnoughData && c.OffMean > 0 {
+		s := "prompt tokens per request " + relChange(c.OnMean, c.OffMean)
+		if !c.Reduced {
+			s += " (not beyond chance)"
+		}
+		parts = append(parts, s)
+	}
+	if len(parts) > 0 {
+		n := ""
+		if c := t.Cost; c != nil {
+			n = fmt.Sprintf(" (%d sessions on, %d off)", c.NOn, c.NOff)
+		}
+		return ExternalVerdict{Text: "with the tool on, " + strings.Join(parts, "; ") + n + "; measured", Label: "measured"}
+	}
+	if t.Cost == nil && t.PromptTokens == nil {
+		return ExternalVerdict{Text: "nothing measured yet; it needs sessions with the tool off to compare against"}
+	}
+	return ExternalVerdict{Text: "nothing measured yet; " + measure.TextNotEnough}
+}
+
+// relChange is on against off as "20% lower", "5% higher" or "no change".
+func relChange(on, off float64) string {
+	d := (on - off) / off * 100
+	switch {
+	case d <= -0.5:
+		return fmt.Sprintf("%.0f%% lower", -d)
+	case d >= 0.5:
+		return fmt.Sprintf("%.0f%% higher", d)
+	}
+	return "no change"
 }
 
 const externalEvidence = "Sessions with the tool on are compared with later sessions without it. Sessions differ in size and task, so this supports a conclusion but does not prove it."
@@ -93,6 +144,7 @@ func buildExternal(ctx context.Context, db *store.DB, in Inputs) ([]ExternalTool
 		if t.Cost, err = measure.NetCostFor(ctx, db, opt, in.Config.Measure); err != nil {
 			return nil, err
 		}
+		t.Verdict = externalVerdict(t)
 		for _, g := range events { // newest first
 			if g.Optimizer == opt && g.ClearedAt == nil {
 				t.RolledBack = g.Reason
@@ -104,14 +156,26 @@ func buildExternal(ctx context.Context, db *store.DB, in Inputs) ([]ExternalTool
 	return out, nil
 }
 
-// externalLines renders one tool as indented lines for the text report.
-func externalLines(t ExternalTool) []string {
+// externalHead is the tool's first lines in the text report: name, state and any license warning.
+func externalHead(t ExternalTool) []string {
 	lines := []string{fmt.Sprintf("%s v%s: %s (license %s, %s)", t.Name, t.Version, t.State, t.License, t.LicenseClass)}
 	if t.LicenseWarn != "" {
 		lines = append(lines, "  "+t.LicenseWarn)
 	}
-	lines = append(lines, fmt.Sprintf("  Claimed by the tool: %q (%s; not checked by Trove)", t.Claimed.Text, t.Claimed.SourceURL))
-	lines = append(lines, "  "+externalPromptText(t))
+	return lines
+}
+
+// claimVerdictPairs are the two rows shown side by side: the tool's claim and Trove's verdict.
+func claimVerdictPairs(t ExternalTool) [2][2]string {
+	return [2][2]string{
+		{"Claimed by the tool", fmt.Sprintf("%q (%s; not checked by Trove)", t.Claimed.Text, t.Claimed.SourceURL)},
+		{"Measured by Trove", t.Verdict.Text},
+	}
+}
+
+// externalLines renders the rest of one tool, after its claim and verdict, as indented lines.
+func externalLines(t ExternalTool) []string {
+	lines := []string{"  " + externalPromptText(t)}
 	lines = append(lines, "  "+externalCostText(t))
 	lines = append(lines, fmt.Sprintf("  Overhead: %s tokens on every request while on (estimated; %s). It is part of every prompt, so the measured figures above already include it.",
 		FormatTokens(float64(t.Overhead.PerRequest)), t.Overhead.Source))

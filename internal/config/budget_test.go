@@ -105,3 +105,32 @@ func TestGatewayBehaviorsAreKnown(t *testing.T) {
 		}
 	}
 }
+
+// Plan 8.2: the subscription usage budget has its own line and leaves the cap alone.
+func TestSetUsageBudget(t *testing.T) {
+	dir := t.TempDir()
+	if err := SetBudget(dir, "monthly", 50); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetUsageBudget(dir, "weekly", 200); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir, func(string) string { return "" })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Budget.UsageUSD != 200 || cfg.Budget.CapUSD != 50 || cfg.Budget.Period != "weekly" {
+		t.Errorf("budget = %+v", cfg.Budget)
+	}
+	if err := SetUsageBudget(dir, "monthly", -1); err == nil {
+		t.Error("want an error for a negative amount")
+	}
+	if _, err := Load(dir, func(k string) string {
+		if k == "TROVE_BUDGET_USAGE_USD" {
+			return "-3"
+		}
+		return ""
+	}); err == nil {
+		t.Error("a negative usage budget must not validate")
+	}
+}

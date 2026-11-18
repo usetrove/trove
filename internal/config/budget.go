@@ -25,6 +25,31 @@ func SetBudget(dataDir, period string, capUSD float64) error {
 	return editConfigFile(dataDir, func(src string) string { return setBudgetLines(src, period, capUSD) })
 }
 
+// SetUsageBudget writes the budget period and the subscription usage budget
+// (API-equivalent dollars, warning only) to config.toml, editing only those two lines.
+func SetUsageBudget(dataDir, period string, usageUSD float64) error {
+	switch period {
+	case "daily", "weekly", "monthly":
+	default:
+		return fmt.Errorf("budget period is %q; use \"daily\", \"weekly\" or \"monthly\".", period)
+	}
+	if usageUSD < 0 {
+		return fmt.Errorf("usage budget is %g; use a positive amount, or 0 for none.", usageUSD)
+	}
+	return editConfigFile(dataDir, func(src string) string {
+		return setSectionLines(src, "budget", [][2]string{{"period", fmt.Sprintf("period = %q", period)}, {"usage_usd", usdLine("usage_usd", usageUSD)}})
+	})
+}
+
+// usdLine is `key = 12.5`, always with a decimal point so TOML reads a float.
+func usdLine(key string, usd float64) string {
+	l := key + " = " + strconv.FormatFloat(usd, 'f', -1, 64)
+	if !strings.Contains(l, ".") {
+		l += ".0"
+	}
+	return l
+}
+
 // readConfigText returns config.toml's text, or DefaultTOML when there is none.
 func readConfigText(dataDir string) (string, error) {
 	path := filepath.Join(dataDir, FileName)
@@ -74,10 +99,7 @@ func editConfigFile(dataDir string, edit func(string) string) error {
 
 // setBudgetLines replaces or adds the period and cap_usd lines inside [budget].
 func setBudgetLines(src, period string, capUSD float64) string {
-	capLine := "cap_usd = " + strconv.FormatFloat(capUSD, 'f', -1, 64)
-	if !strings.Contains(capLine, ".") {
-		capLine += ".0"
-	}
+	capLine := usdLine("cap_usd", capUSD)
 	return setSectionLines(src, "budget", [][2]string{{"period", fmt.Sprintf("period = %q", period)}, {"cap_usd", capLine}})
 }
 
@@ -152,7 +174,7 @@ func setSectionLines(src, section string, kv [][2]string) string {
 var GatewayBehaviors = []string{OptimizerInflightDedup, OptimizerSpendCap, OptimizerKeepWarm}
 
 // GatewayActive reports whether a gateway behavior has a built active mode, so "on" means on.
-func GatewayActive(name string) bool { return name == OptimizerKeepWarm }
+func GatewayActive(name string) bool { return name == OptimizerKeepWarm || name == OptimizerSpendCap }
 
 // IsGatewayBehavior reports whether name is one of GatewayBehaviors.
 func IsGatewayBehavior(name string) bool {

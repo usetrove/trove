@@ -52,6 +52,25 @@ cannot guarantee it follows them; it can only measure what happened.
 The cascade will not install without `test_cmd` (`[tasks]` in config.toml, or
 `--test-cmd`): escalating on a guess is not allowed.
 
+## Model per subagent (plan item 7.3)
+
+`trove tasks plan|apply subagent-model --model <alias or model ID>` adds `model: <model>` to each
+subagent file directly in the project's `.claude/agents` that names no model. A file that already
+has a model line, including `inherit`, is left alone, and so are Trove's own files. It is blocked
+while `CLAUDE_CODE_SUBAGENT_MODEL` or `CLAUDE_CODE_SUBAGENT_MODEL_FORCE` is set. There is no default
+model. The edit is a suggestion, backed up and undone with `trove undo`. Overhead: none, because
+Claude Code reads the frontmatter and does not send it to the model.
+
+Verified 2026-11-17 on code.claude.com/docs/en/sub-agents.md: when `model` is omitted, Claude Code
+uses the per-invocation model, then `CLAUDE_CODE_SUBAGENT_MODEL`, then the main conversation's model.
+Each subagent runs in its own context window.
+
+Measurement: `trove report` shows before-and-after figures (`task_subagent_model`). There is no
+session A/B. A model line cannot be switched off for half the sessions, so both arms would be
+identical, and the hooks therefore assign no arms for it. Blocked: a control arm needs a verified
+way to override the model per session (for example the per-invocation model parameter, through a
+PreToolUse rewrite). Probe that live before building it.
+
 ## Safety
 
 - Only `trove-*.md` directly inside the project's `.claude/agents` or

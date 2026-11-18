@@ -73,9 +73,9 @@ All numbers, hashes, names and timings. "Kept" is how long Trove keeps it on its
 
 | Table | Holds | Kept |
 |---|---|---|
-| `requests` | One row per gateway request: time, hashed session key, agent label and version (derived, not the raw User-Agent), provider, model name, route, streamed or not, HTTP status, latency, token counts, cost, findings and shadow-savings counts, optimizer names applied, error class, the provider's usage object (numbers) | `retention_days` (default 90) |
+| `requests` | One row per gateway request: time, hashed session key, agent label and version (derived, not the raw User-Agent), provider, model name, route, streamed or not, HTTP status, latency, token counts, cost, findings and shadow-savings counts, optimizer names applied, error class, the provider's usage object (numbers), the effort level asked for (one of five fixed words, else empty) | `retention_days` (default 90) |
 | `sessions` | Per-session totals of the above, hashed key | `retention_days` after the session ends |
-| `session_pins` | Which optimizers were on for a session (names and states), plus fixed confounder tag names (for example `brevity_rules`) when a known brevity rule block, skills listing or third-party tool was present at session start, and the cache lifetime (`5m` or `1h`) set for each cache marker; never the text | `retention_days` |
+| `session_pins` | Which optimizers were on for a session (names and states), plus fixed confounder tag names (for example `brevity_rules`) when a known brevity rule block, skills listing or third-party tool was present at session start, the cache lifetime (`5m` or `1h`) set for each cache marker, and the model name `model_router` may step down to; never the text | `retention_days` |
 | `external_tools` | Third-party tools you approved: name, pinned version, license, on/off, timestamps, IDs of config changes to undo on removal | removed by `trove external remove` |
 | `experiment_assignments` | Which arm ("on" or "off") a session was given for an optimizer in the A/B comparison: hashed session key, optimizer name, a hashed stratum label, position, time | `retention_days` |
 | `experiment_results` | A/B result numbers per optimizer: metric name, relative change, 95% range, session counts, measured/estimated label, status, a hash of the inputs | `retention_days` |
@@ -116,6 +116,7 @@ at most once a day, from whichever Trove process runs first (the gateway, a hook
 | `contribute.json` | Whether you turned the summary upload on, your random install id, and the day of the last upload | Written only by `trove contribute enable/disable/reset`; absent means off |
 | `autopilot.json` | Whether you agreed to Autopilot and to trials, each optimizer's Autopilot state with a short reason, its last 50 state changes and the planner's advice. No request content | Written only by `trove autopilot on/off/pause/resume/trials`, `trove setup` after your yes, and Autopilot's own checks; absent means off |
 | `gateway.json` | The running gateway's process id and address | Removed on stop |
+| `spendcap-probe.json` | For each agent you probed with `trove budget probe`: its label (such as `claude_code`), version, how many times it tried, the verdict and the date. No request content, no key | Written only by `trove budget probe` after your answer; permissions `0600`. The spend cap refuses only agents whose verdict here is `stops` |
 | `gateway.log` | Only on macOS, only if you install the background service: the gateway's own log lines | Redacted logger; no headers or bodies. Path is `~/.trove/gateway.log` even if you chose another data folder (finding F-24) |
 | `mcp_installs.json` | The commands that undo MCP registrations Trove made | |
 | `mcp_trust.json` | Hashes of approved `.trove/commands.toml` files, keyed by a hash of the project path | |

@@ -186,10 +186,18 @@ func runGateway(a *App, listen string) error {
 	}
 	engine := optimize.New(opts)
 	srv, err := gateway.New(gateway.Options{Config: cfg, Recorder: writer, Pricing: tbl, Analyzer: analyze.New(analyze.Options{Pricing: tbl, Logger: log}), Optimizer: engine, Logger: log, Version: Version,
-		// The spend cap reads the ledger, so it survives a restart and agrees with the report (shadow mode only).
+		// The spend cap reads the ledger, so it survives a restart and agrees with the report.
 		SpendLedger: func(ctx context.Context, from, to time.Time) (float64, error) {
 			usd, _, err := measure.SpentUSD(ctx, db, measure.Window{From: from, To: to})
 			return usd, err
+		},
+		// It may refuse only agents that passed `trove budget probe`, read once at start.
+		CapRefuses: gateway.CapRefusesFrom(dir),
+		OnSpendWarning: func(w gateway.SpendWarning) {
+			log.Warn(w.Text, "level", w.Level, "percent", int(w.Percent))
+			if cfg.Notifications.Desktop {
+				textNotifier()("Trove budget", w.Text)
+			}
 		}})
 	if err != nil {
 		return err

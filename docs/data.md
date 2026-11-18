@@ -89,6 +89,7 @@ One row per request that passed through the gateway (API-key users only).
 | `signals` | JSON: outcome signals as integer counts (retries, repeated fetches), never names or output |
 | `kind` | The label you chose for the session with the `X-Trove-Kind` header (for example `automated`), `unknown` if you set none |
 | `upstream` | Which configured upstream served it |
+| `effort` | The effort level the request asked for (`low`, `medium`, `high`, `xhigh` or `max`), or empty. Anything else is stored as empty. Used by `trove optimize effort-check` |
 
 **Retention:** deleted after `retention_days`.
 
@@ -125,6 +126,7 @@ The optimizer settings fixed for a session when it started (so nothing changes m
 | `pinned_at` | When the settings were fixed |
 | `confounders` | JSON: fixed tag names (`brevity_rules`, `skill`, `external_tool`) for things present at session start that can change cost by themselves; never text. Empty or null if none |
 | `cache_ttl` | JSON: the cache lifetime (`"5m"` or `"1h"`) for each marker `cache_breakpoints` adds (`tools`, `system`, `messages`). Null when every marker used the 5-minute default |
+| `route_to` | The model `model_router` may step down to in this session, or empty. A model name only |
 
 **Retention:** deleted after `retention_days`.
 

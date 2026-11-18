@@ -36,11 +36,43 @@ type Status struct {
 	// Equivalent is the API list-price value of session-log usage that is not paid
 	// per token. Estimated. Spend and Budget stay empty in that case.
 	Equivalent *measure.Figure `json:"api_equivalent_usd,omitempty"`
+	// UsageBudget is usage against the user's subscription usage budget. Set only
+	// for api_equivalent_value usage with a usage budget. A warning, never a cap.
+	UsageBudget *UsageBudget `json:"usage_budget,omitempty"`
 	// Session is the cost of the session the status line runs in, when known.
 	Session *SessionCost `json:"session,omitempty"`
 	// Verdict summarises the measured A/B results for cost per session. Nil when
 	// no result says "saves" or "costs more".
 	Verdict *StatusVerdict `json:"ab_verdict,omitempty"`
+}
+
+// Usage budget states.
+const (
+	UsageUnder = "under"
+	UsageNear  = "near" // at or past budget.warn_at_percent
+	UsageOver  = "over" // at or past the budget
+)
+
+// UsageBudget is API-equivalent usage as a share of the user's usage budget.
+type UsageBudget struct {
+	BudgetUSD float64        `json:"budget_usd"`
+	Share     measure.Figure `json:"share_percent"` // estimated, from list prices
+	Status    string         `json:"status"`        // under, near or over
+}
+
+func usageBudget(b config.Budget, used measure.Figure) *UsageBudget {
+	if b.UsageUSD <= 0 {
+		return nil
+	}
+	pct := round6(100 * used.Value / b.UsageUSD)
+	u := &UsageBudget{BudgetUSD: b.UsageUSD, Share: measure.Figure{Value: pct, Label: measure.Estimated, N: used.N, Unpriced: used.Unpriced}, Status: UsageUnder}
+	switch {
+	case pct >= 100:
+		u.Status = UsageOver
+	case pct >= float64(b.WarnAtPercent):
+		u.Status = UsageNear
+	}
+	return u
 }
 
 // SessionCost is one session's spend so far (estimated; calls that could not be
@@ -118,6 +150,7 @@ func historyStatus(ctx context.Context, db *store.DB, cfg config.Config, st *Sta
 	}
 	// A dollar budget is a cap on a bill; a subscription has none, so no pace is judged.
 	st.Basis, st.Equivalent, st.Budget = BasisAPIEquivalent, &total, nil
+	st.UsageBudget = usageBudget(cfg.Budget, total)
 	return nil
 }
 
@@ -127,7 +160,7 @@ func historyStatus(ctx context.Context, db *store.DB, cfg config.Config, st *Sta
 // there is.
 func BuildStatus(ctx context.Context, db *store.DB, cfg config.Config, now time.Time, sessionID string) (Status, error) {
 	name := Month
-	if cfg.Budget.CapUSD > 0 {
+	if cfg.Budget.CapUSD > 0 || cfg.Budget.UsageUSD > 0 {
 		name = PeriodName(cfg.Budget.Period)
 	}
 	from := StartOf(name, now)
@@ -205,6 +238,15 @@ func RenderStatus(s Status, format string, color bool) string {
 			v += "+"
 		}
 		parts = append(parts, v+" API-equivalent this "+noun)
+		if u := s.UsageBudget; u != nil {
+			parts = append(parts, FormatPercent(u.Share.Value)+" of "+FormatUSD(u.BudgetUSD)+" usage budget")
+			switch u.Status {
+			case UsageNear:
+				parts = append(parts, styled("near usage budget", PaceNearCap, format, color))
+			case UsageOver:
+				parts = append(parts, styled("over usage budget", PaceOver, format, color))
+			}
+		}
 	} else if b := s.Budget; b != nil {
 		parts = append(parts, spend+" / "+FormatUSD(b.CapUSD),
 			FormatPercent(b.PercentUsed)+" used",

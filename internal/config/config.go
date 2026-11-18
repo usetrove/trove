@@ -185,6 +185,9 @@ type Optimize struct {
 	// Verbosity is the note verbosity_steer appends to the system prompt:
 	// VerbosityConcise (default) or VerbosityTerse. Pinned per session.
 	Verbosity string `toml:"verbosity"`
+	// RouteTo is the cheaper model model_router may step down to on tool turns
+	// (plan item 7.2). Empty means model_router does nothing. Pinned per session.
+	RouteTo string `toml:"route_to"`
 }
 
 // Verbosity levels for verbosity_steer.
@@ -301,6 +304,10 @@ type Budget struct {
 	Period        string  `toml:"period"`
 	CapUSD        float64 `toml:"cap_usd"`
 	WarnAtPercent int     `toml:"warn_at_percent"`
+	// UsageUSD is a budget for usage that is not billed per token (a subscription),
+	// in API-equivalent dollars per period. The status line warns against it and
+	// nothing is ever stopped. 0 means none.
+	UsageUSD float64 `toml:"usage_usd"`
 }
 
 // Default returns the built-in defaults.
@@ -377,6 +384,9 @@ budget_ms = 25
 # How short verbosity_steer asks replies to be: "concise" or "terse". It only
 # matters while verbosity_steer is on, and changes apply to new sessions.
 verbosity = "concise"
+# The cheaper model model_router may step down to on tool turns, for API-key
+# traffic only. Empty means model_router does nothing. Changes apply to new sessions.
+route_to = ""
 
 [budget]
 # Budget period: "daily", "weekly" or "monthly".
@@ -385,6 +395,9 @@ period = "monthly"
 cap_usd = 0.0
 # Warn when this percent of the cap is used (1 to 100).
 warn_at_percent = 80
+# Subscription usage budget in API-equivalent USD for the period. The status line
+# shows your usage against it and warns; nothing is ever stopped. 0 means none.
+usage_usd = 0.0
 
 [measure]
 # For the first baseline_days days AND baseline_sessions sessions after install,
@@ -559,6 +572,9 @@ func (c Config) Validate() error {
 	if v := c.Optimize.Verbosity; v != VerbosityConcise && v != VerbosityTerse {
 		add("optimize.verbosity is %q; use \"concise\" or \"terse\" (default \"concise\").", v)
 	}
+	if v := c.Optimize.RouteTo; len(v) > 100 || strings.ContainsAny(v, " \t\r\n\"") {
+		add("optimize.route_to is not a model name; use a model ID such as the one your agent sends, or \"\" to leave model_router idle.")
+	}
 	f := c.Fixer
 	if f.MinSessions < 3 || f.MinSessions > 1000 {
 		add("fixer.min_sessions is %d; use a number from 3 to 1000 (default 5).", f.MinSessions)
@@ -605,6 +621,9 @@ func (c Config) Validate() error {
 	}
 	if c.Budget.CapUSD < 0 {
 		add("budget.cap_usd is %g; use 0 for no cap or a positive amount.", c.Budget.CapUSD)
+	}
+	if c.Budget.UsageUSD < 0 {
+		add("budget.usage_usd is %g; use 0 for no usage budget or a positive amount.", c.Budget.UsageUSD)
 	}
 	if c.Budget.WarnAtPercent < 1 || c.Budget.WarnAtPercent > 100 {
 		add("budget.warn_at_percent is %d; use a number from 1 to 100.", c.Budget.WarnAtPercent)
@@ -806,6 +825,13 @@ func applyEnv(c *Config, getenv func(string) string) error {
 			return fmt.Errorf("TROVE_BUDGET_CAP_USD is %q; it must be a number such as 25 or 12.5.", v)
 		}
 		c.Budget.CapUSD = f
+	}
+	if v := getenv("TROVE_BUDGET_USAGE_USD"); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return fmt.Errorf("TROVE_BUDGET_USAGE_USD is %q; it must be a number such as 200 or 12.5.", v)
+		}
+		c.Budget.UsageUSD = f
 	}
 	return nil
 }

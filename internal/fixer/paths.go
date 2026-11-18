@@ -141,6 +141,13 @@ func (e *Env) Allowed(path string) error {
 			}
 		}
 	}
+	// A user's own subagent file, directly in the project's .claude/agents, for
+	// task_subagent_model only: tasks.SetModel adds one frontmatter line and refuses
+	// anything else, and the edit is backed up and undone like every fix.
+	if e.ProjectDir != "" && e.Tasks != nil && e.Tasks.Feature == TaskSubagentModel && strings.HasSuffix(strings.ToLower(path), ".md") &&
+		norm(resolve(filepath.Dir(path))) == norm(resolve(filepath.Join(e.ProjectDir, ".claude", "agents"))) {
+		return nil
+	}
 	// Codex profiles are files in the user's Codex folder (learn.chatgpt.com/docs/
 	// config-file/config-advanced, read 2026-11-05). Trove only writes the ones it
 	// names itself, so it never touches a profile the user made.

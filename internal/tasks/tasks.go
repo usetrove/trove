@@ -64,6 +64,9 @@ type Options struct {
 	EscalationModel string `json:"escalation_model"` // strong model for the retry (default opus)
 	TestCmd         string `json:"test_cmd"`         // the project's test command; no default
 	MaxTurns        int    `json:"max_turns"`        // worker turn limit before it must stop (default 25)
+	// SubagentModel is the model task_subagent_model writes into the user's own
+	// subagent files that name none. It has no default: the user picks it.
+	SubagentModel string `json:"subagent_model,omitempty"`
 }
 
 // Defaults fills empty fields.

@@ -61,7 +61,7 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 | B6 | `hook_repeat_read`: deny a repeat read of an unchanged file | tool boundary | native | no | yes | S7 `PreToolUse` deny; trial candidate (policy v2 and v3) |
 | B7 | `hook_read_limit`: add `limit: 400` to a large read | tool boundary | native | no | yes | needs `updatedInput` (S7); it replaces the whole input; trial candidate (policy v3), guardrail `hook_extra_read` |
 | B8 | `hook_large_output`: hint to use `trove_run` for known-noisy commands | tool boundary | native | no | yes | needs the MCP server; trial candidate (policy v3), guardrail `hook_unused_advice` |
-| B15 | `hook_quiet_commands`: add one output-quieting flag to an allowlisted command | tool boundary | native | no | yes | rewrites the Bash command like RTK does but is not refused beside it today; whether it should be is open; trial candidate (policy v2 and v3) |
+| B15 | `hook_quiet_commands`: add one output-quieting flag to an allowlisted command | tool boundary | native | no | yes | rewrites the Bash command like RTK and ZTK do, so it holds the shell-compressor slot and is refused beside them (one owner per Bash call, plan 9.1); trial candidate (policy v2 and v3) |
 | B17 | `hook_output_dedup`: replace a Bash, Grep or Glob output identical to one earlier in the session with a pointer | tool boundary | native | no | yes | recoverable: the repeat is kept locally and fetchable; needs the MCP server and recovery store (charged its 351 tokens of tool definitions per session); no time-based expiry, forgotten on compaction; guardrail `hook_fetch_back`; Read waits for its probe; not Autopilot-eligible; added 2026-11-17 (plan 5.1) |
 | B18 | `hook_read_outline`: replace a very large full Read of a source file with its outline | tool boundary | native | no | yes | recoverable: the full text is kept locally and fetchable, and a second full Read goes through; needs the MCP server and recovery store (charged its 351 tokens of tool definitions per session); shadow until a live probe sees Read honour `updatedToolOutput`; guardrail `hook_extra_read`; not Autopilot-eligible; added 2026-11-17 (plan 5.2) |
 | B9 | MCP tools `trove_read`, `trove_search`, `trove_run`, `trove_fetch_full` | tool boundary | native | no | yes | tool definitions are added to every request: an overhead (rule 15) |
@@ -101,11 +101,12 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 | W2 | token-savior | MCP server for code navigation | MIT (L5) | wrap | B9: both offer read and search tools |
 | W3 | terse-rules | A short rules block | Trove's own | wrap | C13, and Caveman if installed |
 | W4 | Caveman | Skill and proxy that make replies terse | Apache-2.0 from v3.0.0; earlier parts were BUSL-1.1 (L3) | candidate: wrap the skill only | C13, W3. Do not wrap its proxy |
-| W5 | Headroom | Compresses tool output, logs and files; library, proxy, CLI, MCP server | Apache-2.0 (L2) | candidate: ideas only | B1 to B3. Its proxy and Trove's gateway both claim `ANTHROPIC_BASE_URL`, so they cannot be chained |
+| W5 | Headroom | Compresses tool output, logs and files; library, proxy, CLI, MCP server | Apache-2.0 (L2) | ideas only; never wrapped | B1 to B3. Its proxy and `headroom wrap` claim `ANTHROPIC_BASE_URL`, so they are never chained with the gateway. Its Python library (`compress()`, in a custom agent's own code) and its MCP server do not conflict with the gateway; Trove does not install them. It has no CLI that shortens Bash output without the proxy, and its usage beacon is on by default (verified on github.com/headroomlabs-ai/headroom and docs.headroomlabs.ai, 2026-11-18) |
 | W6 | LLMLingua | Prompt compression with a model | MIT (L4) | idea only; Python and a model | prompt-level compression, not Autopilot-eligible |
 | W7 | SuperCompress | Query-aware context compression, hosted | MIT repo; the hosted API receives your text (L6, match not fully verified) | **excluded** | sends prompts off the machine (rule 1) |
 | W8 | ccusage | Usage analysis from local logs | MIT (L7) | reference only | `trove analyze` and `trove logs` already do this |
 | W9 | Ponytail | Rules that make the agent write less code (its AGENTS.md text) | MIT (L8) | wrap the rules text only, pinned tag v5.3.3 | C13, W3, W4: at most one rule set at a time |
+| W10 | ZTK | Rewrites shell commands to run through `ztk run`, which shortens their output | MIT | wrap: Trove writes its PreToolUse Bash hook (`ztk rewrite`), pinned v0.3.1, verified on github.com/codejunkie99/ztk 2026-11-18 | W1, B1, B3, B8, B15: one owner per Bash call |
 
 ## Findings that change the plan
 
@@ -155,7 +156,7 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 
 | Pair | Why | Rule |
 |---|---|---|
-| B3, B8, W1 | All shorten shell output; each can rewrite the same Bash call, and `updatedInput` replaces the whole input | One owner per tool call. `trove external` already flags RTK against Trove's Bash hooks |
+| B1, B3, B8, B15, W1, W10 | All shorten shell output; each can rewrite the same Bash call, and `updatedInput` replaces the whole input | One owner per Bash call. `trove external` refuses a second owner, including a Bash hook wired by hand in settings.json |
 | B9, W2 | Two read and search tool sets with different output shapes | Choose one; measure first |
 | B20, C13, W3, W4, W9 | Stacked brevity rules add overhead and can fight each other | At most one |
 | W5 proxy, the gateway | Both want `ANTHROPIC_BASE_URL` | Never chain; pick one |

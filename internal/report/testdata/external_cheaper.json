@@ -10,6 +10,10 @@
       "source_url": "https://github.com/rtk-ai/rtk",
       "label": "claimed"
     },
+    "verdict": {
+      "text": "with the tool on, cost per session 20% lower; prompt tokens per request 20% lower (25 sessions on, 25 off); measured",
+      "label": "measured"
+    },
     "overhead": {
       "tool_def_tokens": 0,
       "injected_tokens": 0,

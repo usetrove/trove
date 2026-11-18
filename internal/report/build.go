@@ -422,7 +422,6 @@ func buildOptimizers(ctx context.Context, db *store.DB, in Inputs, w measure.Win
 	for _, name := range names {
 		configured := in.Config.OptimizerState(name)
 		row := OptimizerRow{Name: name, Configured: configured, Effective: optimize.EffectiveStateFor(name, configured, in.Recoverable)}
-		row.Note = gatewayNote(name)
 		if out.Baseline != nil && row.Effective == config.StateOn {
 			row.Effective = config.StateShadow // the baseline keeps every optimizer in shadow
 		}
@@ -435,12 +434,14 @@ func buildOptimizers(ctx context.Context, db *store.DB, in Inputs, w measure.Win
 				row.Effective = config.StateShadow
 			}
 		}
+		row.Note = gatewayNote(name, row.Effective)
 		if s, ok := saved[name]; ok {
 			usd := s.USD
 			row.Saved = &usd
 			row.Measured = measuredFrom(name, s.Corroboration)
 		}
-		if s, ok := shadow[name]; ok && row.Effective != config.StateOn {
+		// spend_cap keeps marking, when on, the requests it did not refuse, so its estimate stays.
+		if s, ok := shadow[name]; ok && (row.Effective != config.StateOn || name == config.OptimizerSpendCap) {
 			usd := s.USD
 			row.WouldSave = &usd
 		}
@@ -629,7 +630,10 @@ func gateInflightDedup(o *Optimizers, gatewaySpend float64) {
 }
 
 // gatewayNote says, for a gateway behavior's row, what its figure is and that it changes nothing.
-func gatewayNote(name string) string {
+func gatewayNote(name, effective string) string {
+	if name == config.OptimizerSpendCap && effective == config.StateOn {
+		return "estimated: spending past your budget cap on requests the cap let through. It refuses only agents that passed `trove budget probe`; refusals are rows with error class spend_cap_refused"
+	}
 	switch name {
 	case config.OptimizerInflightDedup:
 		return "estimate only: counts identical requests that arrived while one was still waiting for the provider. Sharing the call is not built, so nothing is changed"

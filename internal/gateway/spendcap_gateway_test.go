@@ -208,7 +208,7 @@ func TestSpendCapDoesNothingWhenOffOrWithoutABudgetOrALedger(t *testing.T) {
 	}
 }
 
-// "on" does what shadow does: there is no active cap yet.
+// "on" with no agent verified by the refused-request probe does what shadow does: it refuses nothing.
 func TestSpendCapOnBehavesAsShadow(t *testing.T) {
 	l := newLedgerOf(100)
 	up := &capUpstream{}
@@ -217,7 +217,7 @@ func TestSpendCapOnBehavesAsShadow(t *testing.T) {
 	statuses, _ := sendN(t, g, 2)
 	for _, s := range statuses {
 		if s != 200 {
-			t.Fatalf("a request was refused with %d; the cap has no active mode", s)
+			t.Fatalf("a request was refused with %d; no agent is verified", s)
 		}
 	}
 	if _, flagged := flaggedCap(g); len(flagged) != 2 {

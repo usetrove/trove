@@ -122,16 +122,16 @@ func TestTrovesOwnTechniquesWorkTogether(t *testing.T) {
 func TestWrappedShellCompressorConflictsWithTheBuiltInOutputOptimizers(t *testing.T) {
 	ctx := Context{Login: LoginAPIKey, GatewayOn: true, Have: []string{CapMCPServer, CapRecoveryStore}}
 	r := Check([]string{"rtk", "noise_normalizer", "output_trimmer", "hook_large_output", "hook_quiet_commands", "hook_repeat_read"}, ctx)
-	for _, b := range []string{"B1", "B3", "B8"} {
+	// B15 rewrites the same Bash call, so it is refused too: one owner per Bash call (plan 9.1, a decision).
+	for _, b := range []string{"B1", "B3", "B8", "B15"} {
 		if !hasConflict(r, "W1", b) {
 			t.Errorf("RTK should conflict with %s: %v", b, r.Reasons())
 		}
 	}
-	// This is how `trove external` behaves today; changing it is a decision, not a side effect.
-	if hasConflict(r, "W1", "B15") || hasConflict(r, "W1", "B6") {
-		t.Errorf("RTK must not be refused alongside hook_quiet_commands or hook_repeat_read: %v", r.Reasons())
+	if hasConflict(r, "W1", "B6") {
+		t.Errorf("RTK must not be refused alongside hook_repeat_read: %v", r.Reasons())
 	}
-	if got, want := OverlappingBuiltins("rtk"), []string{"hook_large_output", "noise_normalizer", "output_trimmer"}; !reflect.DeepEqual(got, want) {
+	if got, want := OverlappingBuiltins("rtk"), []string{"hook_large_output", "hook_quiet_commands", "noise_normalizer", "output_trimmer"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("OverlappingBuiltins(rtk) = %v, want %v", got, want)
 	}
 }

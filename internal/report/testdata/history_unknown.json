@@ -73,6 +73,11 @@
     "kill_switch": false,
     "rows": [
       {
+        "name": "model_router",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
         "name": "volatile_prefix_mover",
         "configured": "off",
         "effective": "off"

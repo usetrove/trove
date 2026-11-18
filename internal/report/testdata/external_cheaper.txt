@@ -33,6 +33,7 @@ Biggest leaks (estimated, overlapping, not additive)
      Avoid editing early context mid-session.
 
 Optimizers
+  model_router: off
   volatile_prefix_mover: off
   noise_normalizer: off
     Saved ~$0.50 (estimated).
@@ -49,8 +50,12 @@ Optimizers
 
 Third-party tools (each tool's own claim next to what Trove measured)
   rtk v1.1.0: on (license Apache-2.0, permissive)
-    Claimed by the tool: "reduces LLM token consumption by 60-90% on common dev
-    commands" (https://github.com/rtk-ai/rtk; not checked by Trove)
+    Claimed by the tool  "reduces LLM token consumption by 60-90% on common dev
+                         commands" (https://github.com/rtk-ai/rtk; not checked
+                         by Trove)
+    Measured by Trove    with the tool on, cost per session 20% lower; prompt
+                         tokens per request 20% lower (25 sessions on, 25 off);
+                         measured
     Measured, prompt tokens per request: 40K on vs 50K off (25 sessions on, 25
     off). Sessions with the optimizer on sent fewer prompt tokens per request
     than sessions with it off; sessions differ, so this supports but does not

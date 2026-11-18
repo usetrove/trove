@@ -168,14 +168,16 @@ func TestReportShowsTheSpendCapAsAnEstimateOnly(t *testing.T) {
 		if row == nil {
 			t.Fatalf("%s: no spend_cap row", state)
 		}
-		if row.Effective != config.StateShadow || row.WouldSave == nil || row.WouldSave.Label != "estimated" || row.WouldSave.Value < 4.9 {
-			t.Errorf("%s: row %+v would-save %+v; want shadow and an estimated $5.00", state, row, row.WouldSave)
+		// "on" is active (plan 8.1) but keeps marking requests it did not refuse, so the estimate stays.
+		if row.Effective != state || row.WouldSave == nil || row.WouldSave.Label != "estimated" || row.WouldSave.Value < 4.9 {
+			t.Errorf("%s: row %+v would-save %+v; want %s and an estimated $5.00", state, row, row.WouldSave, state)
 		}
 		if row.Saved != nil || row.Measured != nil || row.Enable != "" {
 			t.Errorf("%s: it claims a saving or offers to switch on: %+v", state, row)
 		}
-		if !strings.Contains(row.Note, "no request was refused") {
-			t.Errorf("%s: note %q", state, row.Note)
+		want := map[string]string{"shadow": "no request was refused", "on": "trove budget probe"}[state]
+		if !strings.Contains(row.Note, want) {
+			t.Errorf("%s: note %q lacks %q", state, row.Note, want)
 		}
 		if d := gatewayRow(r, config.OptimizerInflightDedup); d != nil {
 			t.Errorf("%s: in-flight dedup appears although it has no estimate and is off", state)

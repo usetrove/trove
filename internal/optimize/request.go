@@ -69,10 +69,12 @@ type Message struct {
 // Request is a parsed Anthropic Messages request. Raw is never modified; Apply
 // returns a new Request.
 type Request struct {
-	Raw    []byte
-	Model  string
-	System Span // zero if absent
-	Tools  Span // zero if absent
+	Raw   []byte
+	Model string
+	// ModelSpan is the JSON string value of "model" (zero if absent or not a string).
+	ModelSpan Span
+	System    Span // zero if absent
+	Tools     Span // zero if absent
 	// SystemBlocks is set when system is an array; a string system leaves it nil.
 	SystemBlocks []SystemBlock
 	// ToolSpans are the elements of the tools array.
@@ -193,6 +195,7 @@ func scanRequest(body []byte) (*Request, error) {
 			ve, err := scanValue(body, vs)
 			if err == nil && body[vs] == '"' {
 				r.Model, _ = decodeString(body[vs:ve])
+				r.ModelSpan = Span{vs, ve}
 			}
 			return ve, err
 		case "system":

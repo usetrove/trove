@@ -239,6 +239,9 @@ func (e Env) PlanEnable(ctx context.Context, name string) (EnablePlan, error) {
 		builtins = e.BuiltinsOn()
 	}
 	p.Conflicts = CheckEnable(m, enabled, builtins)
+	if e.ClaudeDir != "" {
+		p.Conflicts = append(p.Conflicts, HandWired(m, e.Manifests, filepath.Join(e.ClaudeDir, "settings.json"), p.Conflicts)...)
+	}
 	if rec.State == "on" {
 		p.AlreadyOn = true
 		return p, nil

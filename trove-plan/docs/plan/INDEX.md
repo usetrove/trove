@@ -61,19 +61,19 @@ Status: todo | doing | done | blocked(<reason>). Update the Status column when y
 | 6.5 | Learned verbosity level | 0.7 | M | agent | 6.4 | done |
 | 6.6 | Autopilot trials for rule sets | 0.7 | M | agent | 1.1-1.3, 6.1 | done |
 | 7.1 | Cascade/scout/settings studies | 0.8 | L | agent+human | paid benchmark runs | todo |
-| 7.2 | Sticky model step-down at gateway | 0.8 | L | agent | 2.2, 2.4 | todo |
-| 7.3 | Model-per-subagent fix | 0.8 | M | agent | 2.2 | todo |
-| 7.4 | Lower effort on tool turns | 0.8 | M | agent | cache-break check | todo |
+| 7.2 | Sticky model step-down at gateway | 0.8 | L | agent | 2.2, 2.4 | blocked(A/B needs live API-key sessions; shadow built) |
+| 7.3 | Model-per-subagent fix | 0.8 | M | agent | 2.2 | blocked(session A/B needs a verified per-session model override; before/after built) |
+| 7.4 | Lower effort on tool turns | 0.8 | M | agent | cache-break check | blocked(cache-break check needs live API-key sessions; check built) |
 | 7.5 | model_default with measured estimate | 0.8 | S | agent | 1.4 | todo |
 | 7.6 | Ollama offload for subagents | 0.8 | L | agent+human | open-weight study | todo |
 | 7.7 | Verify Codex/OpenCode subagents | 0.8 | M | human | real installs | todo |
 | 7.8 | Batch API suggestion re-labeled T1 | 0.8 | S | agent | 0.1 | done |
-| 8.1 | Spend cap warn 80% then stop | 0.8 | M | agent+human | refused-request probe | todo |
-| 8.2 | Subscription budget warning | 0.8 | S | agent | 1.7 | todo |
-| 9.1 | RTK, ZTK, Headroom lib/CLI | 0.8 | M | agent | - | todo |
-| 9.2 | Ponytail + Caveman on referee list | 0.8 | S | agent | 6.1, 6.2 | todo |
+| 8.1 | Spend cap warn 80% then stop | 0.8 | M | agent+human | refused-request probe | blocked(refused-request probe on a real agent; steps in docs/spend-cap.md) |
+| 8.2 | Subscription budget warning | 0.8 | S | agent | 1.7 | done |
+| 9.1 | RTK, ZTK, Headroom lib/CLI | 0.8 | M | agent | - | done |
+| 9.2 | Ponytail + Caveman on referee list | 0.8 | S | agent | 6.1, 6.2 | done |
 | 9.3 | Randomized hand-off A/B for external tools | 0.9 | L | agent+human | probe | todo |
-| 9.4 | Claim vs verdict side by side | 0.9 | S | agent | - | todo |
+| 9.4 | Claim vs verdict side by side | 0.9 | S | agent | - | done |
 | 10.1 | Real installs macOS/Linux/Windows | cont. | - | human | - | todo |
 | 10.2 | Codex real install | cont. | - | human | - | todo |
 | 10.3 | Live hook probe + hooks-vs-gateway bench | cont. | - | human | API key | todo |

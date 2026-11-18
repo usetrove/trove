@@ -36,6 +36,9 @@ budget_ms = 25
 # How short verbosity_steer asks replies to be: "concise" or "terse". It only
 # matters while verbosity_steer is on, and changes apply to new sessions.
 verbosity = "concise"
+# The cheaper model model_router may step down to on tool turns, for API-key
+# traffic only. Empty means model_router does nothing. Changes apply to new sessions.
+route_to = ""
 
 [budget]
 # Budget period: "daily", "weekly" or "monthly".
@@ -44,6 +47,9 @@ period = "monthly"
 cap_usd = 0.0
 # Warn when this percent of the cap is used (1 to 100).
 warn_at_percent = 80
+# Subscription usage budget in API-equivalent USD for the period. The status line
+# shows your usage against it and warns; nothing is ever stopped. 0 means none.
+usage_usd = 0.0
 
 [measure]
 # For the first baseline_days days AND baseline_sessions sessions after install,

@@ -20,20 +20,20 @@ func (d *DB) Pins() *Pins { return &Pins{db: d} }
 
 // Load returns the pin saved for sessionKey, if any.
 func (p *Pins) Load(ctx context.Context, sessionKey string) (optimize.Pin, bool, error) {
-	var states, agents string
+	var states, agents, routeTo string
 	var conf, ttl sql.NullString
 	var bpt float64
 	var at int64
 	err := p.db.QueryRowContext(ctx,
-		`SELECT states, custom_agents, bytes_per_token, pinned_at, confounders, cache_ttl FROM session_pins WHERE session_key = ?`, sessionKey).
-		Scan(&states, &agents, &bpt, &at, &conf, &ttl)
+		`SELECT states, custom_agents, bytes_per_token, pinned_at, confounders, cache_ttl, route_to FROM session_pins WHERE session_key = ?`, sessionKey).
+		Scan(&states, &agents, &bpt, &at, &conf, &ttl, &routeTo)
 	if errors.Is(err, sql.ErrNoRows) {
 		return optimize.Pin{}, false, nil
 	}
 	if err != nil {
 		return optimize.Pin{}, false, err
 	}
-	pin := optimize.Pin{SessionKey: sessionKey, BytesPerToken: bpt, PinnedAt: time.UnixMilli(at).UTC()}
+	pin := optimize.Pin{SessionKey: sessionKey, BytesPerToken: bpt, PinnedAt: time.UnixMilli(at).UTC(), RouteTo: routeTo}
 	if err := json.Unmarshal([]byte(states), &pin.States); err != nil {
 		return optimize.Pin{}, false, err
 	}
@@ -86,7 +86,7 @@ func (p *Pins) Save(ctx context.Context, pin optimize.Pin) error {
 		ttl = string(b)
 	}
 	_, err = p.db.ExecContext(ctx,
-		`INSERT OR IGNORE INTO session_pins (session_key, states, custom_agents, bytes_per_token, pinned_at, confounders, cache_ttl) VALUES (?,?,?,?,?,?,?)`,
-		pin.SessionKey, string(states), string(agents), pin.BytesPerToken, pin.PinnedAt.UnixMilli(), string(confJSON), ttl)
+		`INSERT OR IGNORE INTO session_pins (session_key, states, custom_agents, bytes_per_token, pinned_at, confounders, cache_ttl, route_to) VALUES (?,?,?,?,?,?,?,?)`,
+		pin.SessionKey, string(states), string(agents), pin.BytesPerToken, pin.PinnedAt.UnixMilli(), string(confJSON), ttl, pin.RouteTo)
 	return err
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/usetrove/trove/internal/gateway/agent"
 	"github.com/usetrove/trove/internal/gateway/auth"
 	"github.com/usetrove/trove/internal/gateway/session"
+	"github.com/usetrove/trove/internal/gateway/usage"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/redact"
 )
@@ -146,6 +147,19 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, rt *route) {
 		defer s.inflight.leave(e) // forward returns only when the response has been written
 	}
 	f.capShadow = s.capEnter(r)
+	if f.capShadow && s.capRefuse(r) {
+		spent, capUSD, when := s.spend.figures()
+		code, b := capRefusal(rt.shape, spent, capUSD, when)
+		label, _ := agent.Label(r.Header)
+		s.log.Info("the spend cap refused a request", "provider", rt.label, "agent", label)
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Trove-Refused", config.OptimizerSpendCap)
+		w.WriteHeader(code)
+		_, _ = w.Write(b)
+		// One metadata row, so refusals are counted: no tokens, no cost, error class spend_cap_refused.
+		s.opts.Recorder.Enqueue(s.buildRow(f, usage.Result{ErrorClass: "spend_cap_refused"}, code, false, time.Time{}, s.opts.Now()))
+		return
+	}
 	s.warmEnter(r, f)
 	basePath := strings.TrimSuffix(upstream.Path, "/")
 	rawBase := strings.TrimSuffix(upstream.EscapedPath(), "/")
@@ -411,6 +425,22 @@ func (s *Server) capEnter(r *http.Request) (over bool) {
 		return false
 	}
 	return s.spend.over()
+}
+
+// capRefuse says whether the spend cap refuses this request, which is already past the cap: the
+// cap is "on", the agent passed the refused-request probe, and the ledger figure is fresh. Any
+// panic means no.
+func (s *Server) capRefuse(r *http.Request) (refuse bool) {
+	defer func() {
+		if recover() != nil {
+			refuse = false
+		}
+	}()
+	if s.opts.CapRefuses == nil || s.opts.Optimizer.GatewayState(config.OptimizerSpendCap) != config.StateOn {
+		return false
+	}
+	label, _ := agent.Label(r.Header)
+	return s.opts.CapRefuses(label) && s.spend.refusable()
 }
 
 // reserveBody takes n bytes from the in-flight body budget. It reports false, and takes nothing, when that would

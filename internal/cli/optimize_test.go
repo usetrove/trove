@@ -189,8 +189,8 @@ func TestOptimizeStatusSaysWhatTheSpendCapNeeds(t *testing.T) {
 		t.Errorf("without a cap: %+v; it must say a budget is needed", noCap)
 	}
 	withCap := find(status("[optimizers]\nspend_cap = \"on\"\n[budget]\nperiod = \"daily\"\ncap_usd = 10.0\n"))
-	if withCap.Effective != "shadow" || strings.Contains(withCap.Note, "trove budget set") || !strings.Contains(withCap.Note, "pausing is not built") {
-		t.Errorf("with a cap: %+v; \"on\" must run as shadow and the note must say pausing is not built", withCap)
+	if withCap.Effective != "on" || strings.Contains(withCap.Note, "trove budget set <amount>") || !strings.Contains(withCap.Note, "trove budget probe") || !strings.Contains(withCap.Note, "no agent has passed") {
+		t.Errorf("with a cap: %+v; \"on\" is active, and the note must say refusing waits for `trove budget probe`", withCap)
 	}
 	if st := status("[optimizers]\nspend_cap = \"shadow\"\n"); len(st.Unknown) != 0 {
 		t.Errorf("spend_cap was reported as an unknown optimizer: %v", st.Unknown)
