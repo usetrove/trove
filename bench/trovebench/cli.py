@@ -55,6 +55,9 @@ def build_parser() -> argparse.ArgumentParser:
         p = sub.add_parser(name, help=help_)
         _common(p)
         p.add_argument("--yes", action="store_true", help="confirm spending real API money")
+        p.add_argument("--assume-run-usd", type=float, default=None,
+                       help="mean cost per run measured elsewhere (a pilot batch); used for the estimate and the cap check "
+                            "until this batch has its own finished runs")
         p.add_argument("--through-repeat", type=int, default=None,
                        help="staged studies: run only repeats 1..N of the plan (the next look); resumes like any run")
     r = sub.add_parser("report", help="rebuild the report and CSVs from a batch folder")
@@ -150,8 +153,13 @@ def _cmd_run(args, *, smoke: bool = False, plan_only: bool = False) -> int:
     table = pricing_mod.load()
     done = {rid for rid in ledger.records if ledger.done(rid)}
     observed = [r.cost_usd for r in ledger.records.values() if r.cost_usd is not None and r.status == "ok"]
-    est = estimate(specs, done, table, cfg.model, run_cap_usd=cfg.run_cap_usd, batch_cap_usd=cfg.batch_cap_usd,
-                   profile=cfg.profile, observed_mean_usd=statistics.fmean(observed) if observed else None)
+    # A staged look starts only its own runs, so the estimate and the cap check cover those, not the whole plan.
+    todo = _through(specs, getattr(args, "through_repeat", None))
+    assumed = getattr(args, "assume_run_usd", None)
+    est = estimate(todo, done, table, cfg.model, run_cap_usd=cfg.run_cap_usd, batch_cap_usd=cfg.batch_cap_usd,
+                   profile=cfg.profile, observed_mean_usd=statistics.fmean(observed) if observed else assumed)
+    if not observed and assumed is not None:
+        est = dataclasses.replace(est, basis="mean cost per run measured in the pilot (--assume-run-usd)")
     skipped = [c for c in conds if not c.measurable]
     summary = {
         "batch": str(batch), "tasks": len(tasks), "runs_planned": est.n_runs, "runs_remaining": est.n_remaining,
@@ -210,7 +218,6 @@ def _cmd_run(args, *, smoke: bool = False, plan_only: bool = False) -> int:
     versions["config_sha256"] = cfg.sha256
     (batch / "versions.json").write_text(json.dumps(versions, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n")
 
-    todo = _through(specs, getattr(args, "through_repeat", None))
     result = execute(todo, ledger, runner.run_one, batch_cap_usd=cfg.batch_cap_usd, run_cap_usd=cfg.run_cap_usd)
     _finish(batch, cfg, conds, versions, len(tasks), ledger, study_info)
     print(f"Ran {result.ran}, skipped {result.skipped_done} already done, spent ${result.spent_usd:.4f}. Stop reason: {result.stop_reason}.")

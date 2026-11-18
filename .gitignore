@@ -30,3 +30,6 @@ server/worker/.dev.vars
 # (may hold real usage data; anchored to the repo root on purpose)
 /trove-export-*/
 /trove-*.json
+
+# launch-study VM setup (bench/scripts/launch/00_vm_setup.sh)
+.venv-bench/
