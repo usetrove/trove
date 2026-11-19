@@ -522,7 +522,7 @@ No prompts, code, file paths, hashes, model names, dollar amounts or exact token
 yours with `trove contribute delete`, which shows the exact request (`DELETE <endpoint>/<install id>`), asks, sends it, and
 then switches sharing off and removes your local id. It has no body, credentials or cookies and follows no redirects.
 It is the only thing that ever sends that request: nothing runs it automatically, and `trove data delete` only reminds
-you to run it first (CLAUDE.md rule 1, part c).
+you to run it first (PRINCIPLES.md rule 1, part c).
 
 ## Never stored or sent
 
@@ -558,7 +558,7 @@ Rules the design must keep:
   check, are kept outside this repository: employee monitoring is regulated differently in Canada,
   the EU and UK, and individual US states (notice, consent, proportionality, works-council or union
   involvement).
-- **New outbound call.** Sending anything to a team server needs a new rule in CLAUDE.md first (rule 1).
+- **New outbound call.** Sending anything to a team server needs a new rule in PRINCIPLES.md first (rule 1).
 
 ## Known gaps
 

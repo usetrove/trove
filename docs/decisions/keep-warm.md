@@ -1,6 +1,6 @@
-# Decision: keep-warm pings (plan item 4.3)
+# Decision: keep-warm pings
 
-Status: APPROVED 2026-11-17. The rule below has been added to CLAUDE.md (rules 1(d), 2 and 7).
+Status: APPROVED 2026-11-17. The rule below has been added to PRINCIPLES.md (rules 1(d), 2 and 7).
 
 ## What the feature does
 
@@ -50,7 +50,7 @@ Documentation before shipping
 - docs/threat-model.md: a new asset (in-memory key and prefix after the request) and its exposure to A1 (other local processes) and crash dumps.
 - `trove contribute` and every other channel unchanged: pings add nothing to them.
 
-## Proposed rule for CLAUDE.md
+## Rule text (now in PRINCIPLES.md)
 
 Add to the list in rule 1, after (c):
 
@@ -77,7 +77,7 @@ The cost multipliers behind these answers (about 0.1x per cache read, 1.25x and 
 
 ## Sign-off
 
-- Approved by: Jaclyn Sunardi (project owner)
+- Approved by: project owner
 - Date: 2026-11-17
 - Answers to the open questions: the recommended answers above, unchanged.
 - Provider documentation checked (source, date): platform.claude.com/docs/en/build-with-claude/prompt-caching and platform.claude.com/docs/en/about-claude/pricing, 2026-11-17. Confirmed: a read restarts the 5-minute lifetime, counted from the request's start; 5-minute writes 1.25x, 1-hour writes 2x, reads 0.1x (0.05x on Opus 5.5 and Sonnet 5.5, 0.025x on Fable 5.x, which makes pings cheaper than the answers above assumed); `max_tokens: 0` is the documented pre-warm request and bills no output, and is refused with streaming, extended thinking, structured outputs or a forced tool choice. Live check 2026-11-17 (curl through the gateway, claude-haiku-5-5, 3,723-token cached system prompt, 5-minute lifetime): the first request wrote 3,723 cache tokens; two keep_warm pings at about 4.5 and 9 minutes each read 3,723 tokens with 0 output ($0.0000383 each); the same request sent 10.5 minutes after the first read all 3,723 tokens and wrote none. A request with adaptive thinking was also pinged: the provider accepted it (200) and it read the cache. Not yet checked with a real agent session (Claude Code or a custom agent) or on other models.

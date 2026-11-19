@@ -335,7 +335,7 @@ type Event struct {
 
 // Evaluate runs Check and, for every optimizer that tripped a rule and is not
 // already rolled back, records the event and switches it back to shadow for
-// new sessions. Sessions already running keep their pinned state (CLAUDE.md
+// new sessions. Sessions already running keep their pinned state (PRINCIPLES.md
 // rule 5). It is safe to call repeatedly.
 func Evaluate(ctx context.Context, db *store.DB, m config.Measure, now time.Time) ([]OptimizerCheck, []Event, error) {
 	checks, err := Check(ctx, db, m)

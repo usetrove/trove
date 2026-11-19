@@ -27,7 +27,7 @@ import (
 // folder (including the SQLite file and its write-ahead log).
 //
 // Credentials must appear nowhere. Prompt text may pass through to the provider
-// but must never be written to disk (CLAUDE.md rules 2 and 7).
+// but must never be written to disk (PRINCIPLES.md rules 2 and 7).
 const (
 	leakAnthropicKey = "sk-ant-api03-LEAKTESTANTHROPICKEY0123456789abcdef" // secretscan:allow
 	leakOpenAIKey    = "sk-proj-LEAKTESTOPENAIKEY0123456789abcdefghij"     // secretscan:allow

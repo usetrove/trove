@@ -29,7 +29,7 @@ It never sees prompts, code, paths or tool output.
 | `tune` | use a tuned parameter value in this repo | `trove tune` (below) |
 
 The defaults file can only ever say `shadow` or `use_profile`; the loader rejects an
-`enable` rule (CLAUDE.md rule 6). An optimizer that a guardrail rolled back, or that
+`enable` rule (PRINCIPLES.md rule 6). An optimizer that a guardrail rolled back, or that
 your own result says hurts, is never suggested.
 
 ### Confidence
@@ -131,7 +131,7 @@ trove tune reset       # forget this repo's tuning
 `recommend.Provider` is the seam. `recommend.Compose` runs providers in priority order;
 the earlier one wins on the same kind and name, and a provider that fails is skipped.
 A future opt-in hosted provider would be listed first. Nothing here calls the network,
-and adding a provider that does needs a new rule in CLAUDE.md (rule 1).
+and adding a provider that does needs a new rule in PRINCIPLES.md (rule 1).
 
 ## Token overhead (rule 15)
 

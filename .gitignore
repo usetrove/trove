@@ -33,3 +33,15 @@ server/worker/.dev.vars
 
 # launch-study VM setup (bench/scripts/launch/00_vm_setup.sh)
 .venv-bench/
+
+# Local-only working files: launch drafts, the internal plan, agent instructions,
+# the demo-video project and repo backups. Kept on disk, never published.
+/docs/launch/
+/trove-plan/
+/.claude/
+/docs/demo/
+/CLAUDE.md
+/AGENTS.md
+/*.bundle
+/trove-dev-backup.exe
+/bench/VERIFY.md

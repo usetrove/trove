@@ -8,7 +8,7 @@ This page says exactly what is computed, what is stored, and what is never kept.
 
 A feature is **a number, a true/false value, or a value from a small fixed list**.
 It cannot hold text from your content. Tool output, code, file names, paths and
-commands are read in memory, reduced to these values and dropped (CLAUDE.md rules
+commands are read in memory, reduced to these values and dropped (PRINCIPLES.md rules
 7 and 12). Nothing here leaves your device; features are not part of
 `trove contribute`.
 

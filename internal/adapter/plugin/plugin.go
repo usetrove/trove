@@ -9,7 +9,7 @@
 // request never contains anything the plugin did not send.
 //
 // Credentials: the protocol has no field for headers or keys, so none can reach
-// the engine (CLAUDE.md rule 2). A request carries only provider, path, content
+// the engine (PRINCIPLES.md rule 2). A request carries only provider, path, content
 // encoding and body. The login is a three-valued label the plugin derives from
 // non-secret fields, never a token.
 //
@@ -175,7 +175,7 @@ type Reply struct {
 }
 
 // Resolver returns the optimizer states a new session starts with. It is called
-// once per session key; the answer is pinned (CLAUDE.md rule 5). It should only
+// once per session key; the answer is pinned (PRINCIPLES.md rule 5). It should only
 // lower states for guardrail rollbacks and the A/B arm, never raise them.
 type Resolver func(sessionKey string) map[string]string
 

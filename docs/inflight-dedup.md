@@ -7,7 +7,7 @@ The reasons sharing waits, and what must be true before it is built, are below.
 
 Parallel agents sometimes send the same request at the same moment: a retry that raced the original, or sibling
 subagents given the same prompt. A gateway could make one call to the provider and give every one of them the
-answer: one call, one bill. It only works for API-key traffic, because only the gateway can see the requests (CLAUDE.md
+answer: one call, one bill. It only works for API-key traffic, because only the gateway can see the requests (PRINCIPLES.md
 rules 3 and 10), so it is not offered to subscription users.
 
 ## What exists today (shadow)

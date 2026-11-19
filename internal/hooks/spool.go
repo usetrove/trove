@@ -185,7 +185,7 @@ func validKind(k string) bool {
 }
 
 // scrub drops file names from an error so the log never holds a path the agent
-// was working on (CLAUDE.md rule 7); the operation and cause stay.
+// was working on (PRINCIPLES.md rule 7); the operation and cause stay.
 func scrub(err error) string {
 	var pe *fs.PathError
 	if errors.As(err, &pe) {

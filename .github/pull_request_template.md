@@ -10,4 +10,4 @@
 - [ ] Logging and error output go through `internal/redact`
 - [ ] Any provider or agent behavior cites the official documentation checked, and the date
 - [ ] Any number shown to users is labeled **measured** or **estimated**
-- [ ] I read [CLAUDE.md](../CLAUDE.md): local-first, credentials never logged, metadata only, fail open
+- [ ] I read [PRINCIPLES.md](../PRINCIPLES.md): local-first, credentials never logged, metadata only, fail open

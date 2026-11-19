@@ -174,7 +174,7 @@ func TestUnmetRequirementsAreExplained(t *testing.T) {
 		{"gateway technique before the gateway is set up", Context{Login: LoginAPIKey}, "duplicate_result_collapser", "trove setup --gateway"},
 		{"the trimmer without the MCP server", Context{Login: LoginSubscription}, "output_trimmer", "trove mcp install"},
 		{"a candidate that is not built", Context{Login: LoginAPIKey, GatewayOn: true}, "fan_out", "not built yet"},
-		{"an excluded tool", Context{Login: LoginSubscription}, "supercompress", "CLAUDE.md rule 1"},
+		{"an excluded tool", Context{Login: LoginSubscription}, "supercompress", "PRINCIPLES.md rule 1"},
 		{"a tool studied for ideas", Context{Login: LoginSubscription}, "headroom", "ideas only"},
 		{"a custom-agent technique", Context{Login: LoginAPIKey, GatewayOn: true}, "cache_breakpoints", "custom agent"},
 	}

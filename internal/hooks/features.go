@@ -26,7 +26,7 @@ import (
 //	X                         a compaction
 //
 // Every writer fails open: a feature that cannot be recorded is dropped and the
-// hook carries on (CLAUDE.md rule 4).
+// hook carries on (PRINCIPLES.md rule 4).
 const (
 	maxFeatBytes  = 256 << 10 // stop recording past this; features are an aggregate, not a log
 	repoFreshness = 7 * 24 * time.Hour

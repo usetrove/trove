@@ -9,7 +9,7 @@ import (
 )
 
 // A session keeps the states it started with, whatever Autopilot decides later.
-// A session that starts after the change gets the new states. (CLAUDE.md rule 5.)
+// A session that starts after the change gets the new states. (PRINCIPLES.md rule 5.)
 func TestAutopilotChangesReachOnlyNewSessions(t *testing.T) {
 	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
 	states := map[string]string{"noise_normalizer": config.StateShadow}

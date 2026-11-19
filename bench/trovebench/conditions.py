@@ -56,7 +56,7 @@ HOOKS_ON = ("hook_repeat_read", "hook_read_limit", "hook_quiet_commands", "noise
 # registered, trimmed output can be fetched back (trove_fetch_full), so output_trimmer, hook_output_dedup and
 # hook_read_outline may really be on instead of being clamped to shadow (internal/optimize/pin.go), and
 # hook_large_output's hint points at a trove_run tool that exists. The MCP tool definitions are sent with every
-# request, so their tokens are paid in these conditions, as a real user pays them (CLAUDE.md rule 15).
+# request, so their tokens are paid in these conditions, as a real user pays them (PRINCIPLES.md rule 15).
 PLUGIN_ON = HOOKS_ON + ("hook_output_dedup", "hook_read_outline", "hook_large_output", "output_trimmer")
 
 # Hook-side optimizers that can be switched on by themselves (`alone:<hook>`), so the benefit or harm of each

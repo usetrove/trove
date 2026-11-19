@@ -16,7 +16,7 @@ import (
 // soon as it is registered.
 
 // VerifiedOn is when the harness facts in abilities were last checked against
-// official documentation (CLAUDE.md rule 8).
+// official documentation (PRINCIPLES.md rule 8).
 const VerifiedOn = "2026-11-04"
 
 // Caveater is implemented by optimizers whose support comes with a condition the

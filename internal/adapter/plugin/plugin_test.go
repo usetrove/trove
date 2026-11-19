@@ -123,7 +123,7 @@ func TestServeLoop(t *testing.T) {
 	}
 }
 
-// The protocol must have no field a credential could travel in (CLAUDE.md rule 2).
+// The protocol must have no field a credential could travel in (PRINCIPLES.md rule 2).
 func TestProtocolHasNoCredentialFields(t *testing.T) {
 	banned := map[string]bool{"headers": true, "header": true, "authorization": true, "api_key": true, "x-api-key": true,
 		"token": true, "secret": true, "cookie": true, "cookies": true, "credentials": true, "password": true}

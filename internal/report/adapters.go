@@ -30,7 +30,7 @@ func loginText(login string) string {
 // adapterLines describes what plugins for other harnesses did. How many times an
 // optimizer made a decision is counted by Trove (measured); the tokens it kept out
 // of the context come from sizes (estimated), with the optimizer's own overhead
-// shown beside them (CLAUDE.md rule 15). Usage and cost are what the harness itself
+// shown beside them (PRINCIPLES.md rule 15). Usage and cost are what the harness itself
 // reported, so they are labelled that way, and a cost total is only given when
 // every call reported one.
 func adapterLines(a *Adapters) []string {

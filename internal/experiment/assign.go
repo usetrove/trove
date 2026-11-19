@@ -40,7 +40,7 @@ type StratumFunc func(sessionKey string) string
 // Assigner gives each session a balanced, randomised, recorded arm. It
 // implements measure.Assigner. The first answer for a session and optimizer is
 // stored and returned forever, so a session is never switched mid-way and its
-// cached prefix stays valid (CLAUDE.md rule 5).
+// cached prefix stays valid (PRINCIPLES.md rule 5).
 type Assigner struct {
 	db      *store.DB
 	seed    int64

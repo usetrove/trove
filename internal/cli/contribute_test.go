@@ -188,7 +188,7 @@ func TestEnableShowsTheExamplePayloadAndAddressBeforeConsent(t *testing.T) {
 	}
 }
 
-// ---- trove contribute delete (CLAUDE.md rule 1, part c) ----
+// ---- trove contribute delete (PRINCIPLES.md rule 1, part c) ----
 
 type reqLog struct {
 	method, path, body string

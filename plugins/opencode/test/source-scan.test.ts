@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// The plugin never reads, stores or forwards a credential (CLAUDE.md rules 2, 3
+// The plugin never reads, stores or forwards a credential (PRINCIPLES.md rules 2, 3
 // and 10), makes no network call of its own (rule 1), and holds no optimization
 // logic. These are checks on the source text, with comments removed, because a
 // comment may say what the code does not do.

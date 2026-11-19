@@ -93,7 +93,7 @@ type Env struct {
 }
 
 // Main runs one hook and returns the process exit code, which is always 0: a
-// hook must never be the reason an agent stops (CLAUDE.md rule 4).
+// hook must never be the reason an agent stops (PRINCIPLES.md rule 4).
 func Main(e Env) (code int) {
 	// Exit code 2 would BLOCK the tool call, so nothing may escape as a panic.
 	defer func() {

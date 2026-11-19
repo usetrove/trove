@@ -292,7 +292,7 @@ func runProfile(p Profile, opts Options, weeks int, table *pricing.Table, budget
 	if p.Model() == ModelGateway {
 		// The net-savings guard: the first simulated week is the window. Its
 		// verdicts switch optimizers off for every later session, at the session
-		// boundary (CLAUDE.md rule 5). The window itself is not re-run.
+		// boundary (PRINCIPLES.md rule 5). The window itself is not re-run.
 		window := p.Sessions
 		if window > n {
 			window = n

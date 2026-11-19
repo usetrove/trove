@@ -96,7 +96,7 @@ func DeleteURL(endpoint, installID string) (string, error) {
 }
 
 // Delete asks the receiver to delete every summary stored under installID. It runs only when the user runs
-// `trove contribute delete` (CLAUDE.md rule 1) and is never called by anything automatic. It sends no body, no
+// `trove contribute delete` (PRINCIPLES.md rule 1) and is never called by anything automatic. It sends no body, no
 // credentials and no cookies, and follows no redirects.
 func Delete(ctx context.Context, endpoint, installID string) error {
 	url, err := DeleteURL(endpoint, installID)

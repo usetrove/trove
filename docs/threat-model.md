@@ -16,7 +16,7 @@ no account, no update check, and no telemetry unless the user opts in to the ano
 
 | Asset | Where it is | Why it matters |
 |---|---|---|
-| **API keys in transit** | In memory in the gateway for the length of one request; in the agent's own config or environment (not Trove's) | They spend money and can read the user's account. Trove must never log, store or echo them (CLAUDE.md rule 2). |
+| **API keys in transit** | In memory in the gateway for the length of one request; in the agent's own config or environment (not Trove's) | They spend money and can read the user's account. Trove must never log, store or echo them (PRINCIPLES.md rule 2). |
 | **Prompts, code, tool output** | In memory in the gateway; in the recovery store if the opt-in output trimmer or `trove_run` stores output | Private source code and secrets pasted into prompts. Rule 7: never in the database. |
 | **The local database** | `~/.trove/trove.db` (+ `-wal`, `-shm`) | Usage metadata. Not secret in itself, but reveals what the user works on and when. |
 | **The recovery store** | `~/.trove/recovery/` | The one place raw tool output is written. May hold secrets that appeared in command output. |
@@ -122,7 +122,7 @@ but not restricted to Anthropic or OpenAI hosts, because custom enterprise endpo
 4. The key is forwarded to the configured upstream only, in the original request.
 5. Logs go through a redacting handler; the error text returned to the client is redacted before it is cut;
    panics are formatted through the same redaction.
-6. Keep-warm exception (only with `keep_warm` on; CLAUDE.md rules 1(d), 2 and 7, docs/decisions/keep-warm.md): the
+6. Keep-warm exception (only with `keep_warm` on; PRINCIPLES.md rules 1(d), 2 and 7, docs/decisions/keep-warm.md): the
    gateway keeps the credential headers and the last request body of one idle API-key session in process memory
    after the request ends, for at most `keep_warm_max_pings` pings of about 4.5 minutes each (up to about 30
    minutes), and sends them only to the same configured upstream with no redirects. The held slot formats and

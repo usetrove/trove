@@ -15,7 +15,7 @@ var credentialHeaders = []string{"Authorization", "X-Api-Key", "Api-Key"}
 // keeping the credential. Its digest is an HMAC-SHA256 under a key that is made
 // when the process starts and exists only in its memory, so the digest means
 // nothing outside this process, cannot be reversed to a key, and is not the same
-// after a restart (CLAUDE.md rule 2).
+// after a restart (PRINCIPLES.md rule 2).
 //
 // A caller must treat the digest as a secret too: compare it, never log it, store
 // it, return it or put it in a row.

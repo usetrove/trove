@@ -1,6 +1,6 @@
 // Package credguard holds the test that keeps Trove away from other tools' credential files.
 //
-// CLAUDE.md rules 2, 3 and 10: Trove never handles subscription or OAuth credentials. For Codex CLI
+// PRINCIPLES.md rules 2, 3 and 10: Trove never handles subscription or OAuth credentials. For Codex CLI
 // that means ~/.codex/auth.json (or $CODEX_HOME/auth.json), which holds a ChatGPT login's access and
 // refresh tokens, and the OS keyring entry Codex uses for the same thing. This test fails the build
 // if shipped Go code mentions those places anywhere other than the files listed below, each of which
@@ -74,7 +74,7 @@ func TestNoShippedCodeTouchesCodexOrChatGPTCredentials(t *testing.T) {
 		}
 		if m := credentialNames.Find(b); m != nil {
 			if _, ok := allowed[rel]; !ok {
-				t.Errorf("%s mentions %q. Trove must not read Codex or ChatGPT credentials (CLAUDE.md rules 2 and 3). "+
+				t.Errorf("%s mentions %q. Trove must not read Codex or ChatGPT credentials (PRINCIPLES.md rules 2 and 3). "+
 					"If this file only refuses to touch them, add it to allowed with the reason", rel, m)
 			}
 		}

@@ -1,6 +1,6 @@
 // Package optimize rewrites outgoing requests to remove waste, safely.
 //
-// The contract every optimizer follows (CLAUDE.md rules 4, 5 and 6):
+// The contract every optimizer follows (PRINCIPLES.md rules 4, 5 and 6):
 //
 //   - Pure and deterministic. Transform's output depends only on the request
 //     bytes it is given. The agent resends its whole history every turn, so

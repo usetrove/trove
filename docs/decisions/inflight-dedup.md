@@ -1,4 +1,4 @@
-# Decision: sharing duplicate in-flight requests (plan item 4.4)
+# Decision: sharing duplicate in-flight requests
 
 Status: DECIDED 2026-11-17. **Do not build sharing now.** Keep `inflight_dedup` as shadow only.
 

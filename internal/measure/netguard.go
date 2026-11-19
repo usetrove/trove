@@ -4,7 +4,7 @@ import "fmt"
 
 // NetGuard decides whether an optimizer should be switched off for later sessions.
 // It is a pure rule over a window of measured numbers. A caller applies the
-// decision only at a session boundary (CLAUDE.md rule 5: optimizers are switched
+// decision only at a session boundary (PRINCIPLES.md rule 5: optimizers are switched
 // on or off between sessions, never mid-session).
 //
 // The rule has two triggers, and both need enough requests to be trusted:

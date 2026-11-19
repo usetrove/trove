@@ -1,7 +1,7 @@
 // Package autopilot moves optimizers through off -> shadow -> candidate -> on, and
 // back to shadow, from evidence Trove already measures. See docs/autopilot.md.
 //
-// Rules it keeps (CLAUDE.md): changes reach only sessions that start afterwards,
+// Rules it keeps (PRINCIPLES.md): changes reach only sessions that start afterwards,
 // because the engine pins each session's states when it begins (rule 5); only
 // optimizers the policy names are ever promoted, and only after shadow evidence
 // (rule 6); a user's own setting always wins; any error leaves things as they

@@ -1,6 +1,6 @@
 # Contributing
 
-Read [CLAUDE.md](CLAUDE.md) first: it holds the non-negotiable rules (local-first, credentials never logged, fail open, metadata only).
+Read [PRINCIPLES.md](PRINCIPLES.md) first: it holds the non-negotiable rules (local-first, credentials never logged, fail open, metadata only).
 
 ## Workflow
 - Small, reviewable commits, each with tests.

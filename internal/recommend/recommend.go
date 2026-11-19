@@ -6,7 +6,7 @@
 // English and a confidence level.
 //
 // It is deliberately simple and explainable: rules and lookup tables, no model.
-// A suggestion only ever suggests; nothing here changes a setting (CLAUDE.md
+// A suggestion only ever suggests; nothing here changes a setting (PRINCIPLES.md
 // rule 6). Optimizers are suggested in shadow mode first, and "enable" is only
 // said when the user's own measured A/B result supports it.
 //

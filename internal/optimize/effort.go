@@ -6,7 +6,7 @@ import "context"
 const OptimizerEffortToolTurns = "effort_tool_turns"
 
 // ToolTurnEffort is the effort level effort_tool_turns asks for on a tool turn. It is a
-// constant, so the same history always produces the same bytes (CLAUDE.md rule 5).
+// constant, so the same history always produces the same bytes (PRINCIPLES.md rule 5).
 const ToolTurnEffort = "low"
 
 // effortRank orders the documented output_config.effort levels (low, medium, high,

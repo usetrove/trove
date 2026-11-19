@@ -290,7 +290,7 @@ func newDataDelete(a *App) *cobra.Command {
 
 // deleteContributedHint is what a user does to remove a summary they shared. `trove data delete` only prints it:
 // the one request that deletes contributed data is `trove contribute delete`, run by the user on purpose
-// (CLAUDE.md rule 1), never as a side effect of deleting local data.
+// (PRINCIPLES.md rule 1), never as a side effect of deleting local data.
 func deleteContributedHint(endpoint, installID string) string {
 	if installID == "" || endpoint == "" {
 		return ""

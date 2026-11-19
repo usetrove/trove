@@ -19,10 +19,10 @@ import (
 var allowedSites = map[string]string{
 	"internal/gateway/proxy.go":     "ReverseProxy: forwards the user's own API request to the configured provider",
 	"internal/gateway/server.go":    "clones http.DefaultTransport for that same upstream connection",
-	"internal/gateway/keepwarm.go":  "keep-warm pings (CLAUDE.md rule 1(d), docs/decisions/keep-warm.md): the session's own request, max_tokens 0, to the same configured upstream with the same key; opt-in, no redirects",
+	"internal/gateway/keepwarm.go":  "keep-warm pings (PRINCIPLES.md rule 1(d), docs/decisions/keep-warm.md): the session's own request, max_tokens 0, to the same configured upstream with the same key; opt-in, no redirects",
 	"internal/cli/gateway.go":       "2 s health probe of the local gateway; the address is checked to be loopback first",
 	"internal/stress/loopback.go":   "`trove bench stress` only: the one place the stress suite builds an HTTP client or request. Its dialer refuses any address that is not a loopback IP, and the suite talks only to a gateway it starts itself with a fake upstream, so nothing leaves the machine",
-	"internal/contribute/upload.go": "opt-in anonymous summary upload (runs only after `trove contribute enable` and with contribute.endpoint set; sends exactly the text `trove contribute` shows) and the one DELETE request that only `trove contribute delete` makes (CLAUDE.md rule 1, parts b and c)",
+	"internal/contribute/upload.go": "opt-in anonymous summary upload (runs only after `trove contribute enable` and with contribute.endpoint set; sends exactly the text `trove contribute` shows) and the one DELETE request that only `trove contribute delete` makes (PRINCIPLES.md rule 1, parts b and c)",
 }
 
 // bannedSelectors are package-level names that dial, resolve or build a client.
@@ -142,7 +142,7 @@ func TestNoUnexpectedNetworkDependencies(t *testing.T) {
 	}
 	for _, banned := range []string{"getsentry", "posthog", "segmentio/analytics", "datadog", "opentelemetry"} {
 		if strings.Contains(b, banned) {
-			t.Errorf("go.mod mentions %q: telemetry libraries are not allowed (CLAUDE.md rule 1)", banned)
+			t.Errorf("go.mod mentions %q: telemetry libraries are not allowed (PRINCIPLES.md rule 1)", banned)
 		}
 	}
 }

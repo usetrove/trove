@@ -11,7 +11,7 @@ import (
 )
 
 // Pins persists per-session optimizer settings so a gateway restart in the
-// middle of a session keeps the session's optimizer states (CLAUDE.md rule 5).
+// middle of a session keeps the session's optimizer states (PRINCIPLES.md rule 5).
 // It satisfies optimize.PinStore.
 type Pins struct{ db *DB }
 

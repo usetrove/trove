@@ -11,8 +11,8 @@
 //  5. faults: upstream errors, corrupted stores, hanging hooks. Every case must fail open.
 //
 // Layers 2 to 5 never report savings. Every figure that is not a pass/fail count is labeled measured or
-// estimated (CLAUDE.md rule 6). All data lives in a fresh temporary directory that is removed at the end, and
-// the run refuses to use the real Trove data folder (CLAUDE.md rule 1 and the local-first rule).
+// estimated (PRINCIPLES.md rule 6). All data lives in a fresh temporary directory that is removed at the end, and
+// the run refuses to use the real Trove data folder (PRINCIPLES.md rule 1 and the local-first rule).
 package stress
 
 import (

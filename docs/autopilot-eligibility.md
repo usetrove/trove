@@ -220,7 +220,7 @@ the MCP server, but no optimizer that needs it is eligible yet; a check that the
 only that the MCP server is registered; and an agent-version match for installs that do not use the plugin (the
 plugin's start check handles the update case; `trove doctor` warns otherwise).
 
-## Benchmark thresholds per tier (plan item 10.7, built 2026-11-18)
+## Benchmark thresholds per tier (built 2026-11-18)
 
 Two of the trial placeholders are now set from the benchmark, per technique tier, the moment a study is published:
 

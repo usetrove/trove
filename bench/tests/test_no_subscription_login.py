@@ -1,6 +1,6 @@
 """The benchmark lab starts real agent sessions, so it must run only on the operator's own API key.
 
-CLAUDE.md rules 3, 10 and 14: Trove never handles a subscription login and never pays for or intermediates
+PRINCIPLES.md rules 3, 10 and 14: Trove never handles a subscription login and never pays for or intermediates
 model usage. These tests pin that for the lab: Codex has no runnable adapter, a run refuses to start without an
 API key, only that key is handed to a container (by name), and nothing from the operator's home directory
 (~/.codex, ~/.claude, auth.json) is mounted or copied into one.

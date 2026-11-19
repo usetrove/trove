@@ -42,7 +42,7 @@ jobs:
       # Launch drafts may hold unresolved slots, but never a bare figure or a slot with a missing source.
       - run: go run ./scripts/checkclaims
 
-  # Privacy gates (CLAUDE.md rules 1, 2 and 7). These also run inside `test`; this
+  # Privacy gates (PRINCIPLES.md rules 1, 2 and 7). These also run inside `test`; this
   # job exists so they are named in the checks list and cannot be skipped: it
   # installs strace and fails, rather than skips, if the harness cannot run.
   privacy:

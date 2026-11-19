@@ -1,4 +1,4 @@
-# Effort cache-break check (plan item 7.4)
+# Effort cache-break check
 
 Lowering effort on tool turns could save output and thinking tokens. But the provider says that
 changing `output_config.effort` between requests "can invalidate" cached message blocks, and on some

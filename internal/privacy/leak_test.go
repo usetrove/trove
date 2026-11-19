@@ -1,4 +1,4 @@
-// Package privacy holds the end-to-end proof of CLAUDE.md rules 2 and 7: no prompt text, code, file path, repo
+// Package privacy holds the end-to-end proof of PRINCIPLES.md rules 2 and 7: no prompt text, code, file path, repo
 // name, ticket title, credential or other secret reaches Trove's database, its files or anything it prints
 // for sharing. It drives the real flows with canary strings and then looks everywhere for them.
 package privacy

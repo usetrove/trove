@@ -15,7 +15,7 @@ import (
 const DefaultBytesPerToken = 3.5
 
 // Pin is the optimizer configuration frozen for one session. Config edits made
-// after a session starts only affect later sessions (CLAUDE.md rule 5), and a
+// after a session starts only affect later sessions (PRINCIPLES.md rule 5), and a
 // gateway restart reloads the pin so output does not change mid-session.
 type Pin struct {
 	SessionKey   string            `json:"session_key"`

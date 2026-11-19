@@ -6,7 +6,7 @@ Status: **shadow mode is built. Refusing requests is not.** Setting `spend_cap =
 
 You set a budget (`trove budget set 10 --period daily`). A hard cap would stop new requests once the period's spending
 reaches it, so a runaway agent loop cannot burn the day's money unnoticed. It is for API-key traffic only: the gateway
-is the only place a request can be stopped, and the gateway never handles subscription logins (CLAUDE.md rules 3 and 10).
+is the only place a request can be stopped, and the gateway never handles subscription logins (PRINCIPLES.md rules 3 and 10).
 
 ## What exists today (shadow)
 
@@ -85,7 +85,7 @@ pointed at a loopback server answering every request with the Anthropic-shape re
 request, printed `API Error: 402 Trove spend cap reached: about $10.00 of your $10.00 budget is spent this month
 (estimated at list prices). Trove did not send this request to the provider. To continue, ...` and exited with
 code 1 after 5 seconds. That is the `stops` behaviour. The verdict file is still written only by a person at a
-terminal running `trove budget probe`, so plan item 8.1 waits on that one step.
+terminal running `trove budget probe`, so this check waits on that one step.
 
 ## What was not built, and why
 
@@ -95,7 +95,7 @@ this way.
 1. **What to refuse with.** The refusal has to be a response the agent will show, not retry in a loop. A 429 invites
    a retry with backoff, which is the opposite of what a cap is for. Which status and error type make Claude Code and
    Codex CLI stop and print our message is **not verified** and must be read from their documentation (and tried in a
-   real session) before anything is built (CLAUDE.md rule 8).
+   real session) before anything is built (PRINCIPLES.md rule 8).
 2. **The message.** Plain English: what happened, what it cost, and how to continue (raise the cap with
    `trove budget set`, or resume for the period).
 3. **How to continue.** A cap with no way past it is a trap. It needs an obvious, deliberate override.

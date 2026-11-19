@@ -5,7 +5,7 @@
 // Everything here is advice. It reads only the metadata Trove already stored
 // (model names, token counts, cost, flags), never prompt text, and every number
 // is labeled "estimated". Where Trove cannot honestly put a dollar figure on a
-// suggestion it says so instead of guessing (CLAUDE.md rule 9).
+// suggestion it says so instead of guessing (PRINCIPLES.md rule 9).
 //
 // Provider facts used, verified 2026-10-29 against the Anthropic docs:
 //   - Message Batches API: 50% discount on all usage, most batches finish within

@@ -7,7 +7,7 @@ import (
 )
 
 // AdapterEvent is one row of adapter_events (migration 0015): a decision or a
-// harness report from a plugin. Metadata only (CLAUDE.md rule 7).
+// harness report from a plugin. Metadata only (PRINCIPLES.md rule 7).
 type AdapterEvent struct {
 	TS             time.Time
 	SessionKey     string // hashed, never the harness's own id

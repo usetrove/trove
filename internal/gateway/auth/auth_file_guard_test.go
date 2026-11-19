@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// Trove never reads Codex's auth.json, which holds ChatGPT login tokens (CLAUDE.md
+// Trove never reads Codex's auth.json, which holds ChatGPT login tokens (PRINCIPLES.md
 // rule 3). This test fails if any non-test Go file in internal/ or cmd/ has a line
 // that both names auth.json and opens or reads a file. It catches the literal
 // cases only; a path built at run time is not seen, so review still matters.

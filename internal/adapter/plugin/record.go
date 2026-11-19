@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// Event is one row the server hands to a Recorder. Metadata only (CLAUDE.md rule
+// Event is one row the server hands to a Recorder. Metadata only (PRINCIPLES.md rule
 // 7): the session key is already hashed, and every string field has passed the
 // checks in sanitize.go, so prompt text, paths and credentials cannot get in.
 type Event struct {

@@ -306,7 +306,7 @@ func (r *recorder) Run(ctx context.Context, dir string, env []string, name strin
 
 // Codex CLI is never run for a model request by the probe, with or without --live:
 // the only thing it does with `codex` is ask for its version. Codex also has no
-// live path, so there is nothing that could use a ChatGPT login (CLAUDE.md rules 3
+// live path, so there is nothing that could use a ChatGPT login (PRINCIPLES.md rules 3
 // and 10). If a live Codex probe is ever added it must require an OpenAI API key
 // the way the Claude one requires APIKeyAuth, and this test must be updated with it.
 func TestProbeOnlyEverAsksCodexForItsVersion(t *testing.T) {

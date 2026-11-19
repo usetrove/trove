@@ -1,4 +1,4 @@
-# model_router: step down to a cheaper model on tool turns (plan item 7.2)
+# model_router: step down to a cheaper model on tool turns
 
 `model_router` is a gateway optimizer (technique C8, tier T3 routing, off by default). For API-key
 traffic only, it sends tool turns to a cheaper model named in `optimize.route_to`. It then keeps the

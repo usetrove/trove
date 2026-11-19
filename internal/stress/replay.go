@@ -21,7 +21,7 @@ import (
 )
 
 // Replay reads Claude Code session logs (JSONL) and runs the engine on requests rebuilt from them. Privacy
-// rules for this file (CLAUDE.md rules 1, 7 and 12):
+// rules for this file (PRINCIPLES.md rules 1, 7 and 12):
 //
 //   - Files are opened read-only and read as a stream. Nothing is written, not to the scratch folder, not to
 //     the report, not to git.

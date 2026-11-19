@@ -3,7 +3,7 @@
 // A feature is a number, a boolean or a value from a small fixed set. No
 // feature can hold text from the content it was derived from: tool output,
 // code, file paths and commands are read in memory, reduced to these values and
-// dropped (CLAUDE.md rules 7 and 12). TestNoFeatureCanHoldText walks every
+// dropped (PRINCIPLES.md rules 7 and 12). TestNoFeatureCanHoldText walks every
 // exported feature type and fails if a field could carry a string that is not a
 // closed category, and the sentinel tests check that nothing planted in the
 // content reaches the database or the JSON output.

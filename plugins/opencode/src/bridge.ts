@@ -6,7 +6,7 @@ import type { Message, Reply } from "./types.ts";
 // The bridge to `trove engine serve`: one long-lived child process, one JSON
 // object per line each way. It is the only place the plugin talks to the engine.
 //
-// Fail open (CLAUDE.md rule 4): call() never throws and never waits longer than
+// Fail open (PRINCIPLES.md rule 4): call() never throws and never waits longer than
 // its timeout. Any problem (the program is missing, it crashed, it answered too
 // slowly, it spoke a different protocol, the reply was not JSON) yields null, and
 // the caller then uses its original value. A dead engine costs a missed

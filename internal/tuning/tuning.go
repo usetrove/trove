@@ -7,7 +7,7 @@
 // review finds they did not help. They stay local unless the user opts in to share
 // them as metadata.
 //
-// Cache safety (CLAUDE.md rule 5): an adapter reads the applied values once, when
+// Cache safety (PRINCIPLES.md rule 5): an adapter reads the applied values once, when
 // a session starts, and pins them; a session never sees a change. The optimizer
 // side clamps every value to a safe range (optimize.TuneParam), so an edited
 // database cannot make an optimizer unsafe. See docs/recommend.md.

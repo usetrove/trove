@@ -79,7 +79,7 @@ func Evaluate(ctx context.Context, db *store.DB, x config.Experiment, priors Pri
 // Step is the periodic pass: analyse, store the results, and roll back any
 // optimizer whose own sessions show a measured cost rise or worse outcomes.
 // Rolling back only lowers new sessions to shadow; running sessions keep their
-// pinned state (CLAUDE.md rule 5). Failures lower, never raise, so Step cannot
+// pinned state (PRINCIPLES.md rule 5). Failures lower, never raise, so Step cannot
 // make an agent stop working. It returns the results and the rollbacks it made.
 func Step(ctx context.Context, db *store.DB, x config.Experiment, priors Priors, now time.Time) ([]Result, []measure.Event, error) {
 	if !x.Enabled {

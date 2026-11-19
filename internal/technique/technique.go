@@ -4,7 +4,7 @@
 //
 // Each entry records the facts that decide how a technique combines with the
 // others: where it acts, how Trove gets it, whether it can change the cached
-// prompt, which logins it works for, what it costs to carry (CLAUDE.md rule 15),
+// prompt, which logins it works for, what it costs to carry (PRINCIPLES.md rule 15),
 // and which scarce thing it claims, such as the agent's API endpoint. The list is
 // the code form of docs/techniques.md, and a test keeps the two in step.
 //
@@ -64,7 +64,7 @@ func (s Status) Selectable() bool {
 }
 
 // Login is how the user signs in to the agent. It decides whether the gateway
-// can be used at all (CLAUDE.md rules 3 and 10).
+// can be used at all (PRINCIPLES.md rules 3 and 10).
 type Login string
 
 // The login types.

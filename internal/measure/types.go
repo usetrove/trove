@@ -2,7 +2,7 @@ package measure
 
 import "time"
 
-// Label says how a number was obtained (CLAUDE.md rule 6). Nothing is shown to
+// Label says how a number was obtained (PRINCIPLES.md rule 6). Nothing is shown to
 // a user without one.
 type Label string
 

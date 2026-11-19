@@ -6,7 +6,7 @@ themselves are data in `internal/settings/catalog/*.toml`, not code.
 
 ## Rule for what Trove may write
 
-CLAUDE.md rule 8 says to verify provider and agent details against official
+PRINCIPLES.md rule 8 says to verify provider and agent details against official
 docs. The fetch tools used here can return a model summary of a page instead of
 its raw text, and summaries are not evidence. So each catalog entry records:
 

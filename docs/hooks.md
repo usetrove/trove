@@ -98,7 +98,7 @@ rules that fail that test only count in shadow mode.
 To promote a shadow-only rule, read the page that settles it, change `Verified` and `VerifiedAt` in
 `internal/optimize/quiet.go`, and say what the page said.
 
-Error visibility is also checked mechanically (plan item 5.7). A rule's `ErrorFixture` names a recorded pair of
+Error visibility is also checked mechanically. A rule's `ErrorFixture` names a recorded pair of
 outputs from the same failing run, `internal/optimize/testdata/quiet/<name>.default.txt` and `.quiet.txt`, and a
 test fails unless the quiet one keeps every failure line of the default one (`MissingFailureLines`, the trimmer's
 failure-line rule). `pytest` has one (pytest 9.1.1, 2026-11-17: an assertion failure, a fixture error and an
@@ -296,7 +296,7 @@ Verified 2026-10-29 / 2026-10-30. Re-check when either agent changes.
   `is_interrupt: false`. The hook recorded exit 0 and 1 under one command hash, and both reached `test_runs`. The
   redacted failure payload is `internal/hooks/testdata/recorded/2.1.326/bash_post_failure.json`.
 
-### Live check of the test-pass signal (manual, plan item 2.1)
+### Live check of the test-pass signal (manual)
 
 Steps 1-4 were run on 2.1.326 on 2026-11-17 (passing and failing runs; the interrupt in step 3 and step 5 were
 not). Re-run them when Claude Code changes. Use a throwaway data dir. `trove hooks sync` ingests the spool only when
@@ -313,7 +313,7 @@ the data dir already has a database, so in a fresh data dir end the session (the
    `"tests":{"last":"fail","runs":2,"failed":1}`.
 6. `trove hooks uninstall`, then record the version and date here.
 
-### Live check of outline-first reads (manual, plan item 5.2)
+### Live check of outline-first reads (manual)
 
 Steps 1-2 were run on Claude Code 2.1.327 on 2026-11-17: `Read: rewrite output yes [live]` (the probe replaced
 `tool_response.file.content`, the field this optimizer rewrites, and the model's reply contained the replacement), and
@@ -332,12 +332,12 @@ ignore a replaced output whose shape does not match. It needs an API key and cos
    Check that it got the outline (it says so or uses offset and limit), that the hook events record one
    `rewritten` for `hook_read_outline`, and that asking it to read the whole file again works and adds one
    `extra_read`.
-4. Record the Claude Code version and date here, then mark plan item 5.2 done.
+4. Record the Claude Code version and date here.
 
 ## Known gaps
 
 - The test-pass signal reaches the session roll-up only for sessions the gateway saw (subscription sessions have
-  no `sessions` row yet; plan item 2.3). Test runs are stored under the base session key, so an idle-gap
+  no `sessions` row yet). Test runs are stored under the base session key, so an idle-gap
   continuation (`key~n`) shows none. `trove_run` results are not counted yet; only Bash calls are.
 
 - Repeat-read prevention is Claude Code only.

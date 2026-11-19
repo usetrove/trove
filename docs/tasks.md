@@ -52,7 +52,7 @@ cannot guarantee it follows them; it can only measure what happened.
 The cascade will not install without `test_cmd` (`[tasks]` in config.toml, or
 `--test-cmd`): escalating on a guess is not allowed.
 
-## Model per subagent (plan item 7.3)
+## Model per subagent
 
 `trove tasks plan|apply subagent-model --model <alias or model ID>` adds `model: <model>` to each
 subagent file directly in the project's `.claude/agents` that names no model. A file that already
@@ -152,7 +152,7 @@ does not undo anything itself.
   money to run, so it has not been run. No savings figure is claimed anywhere.
 - **Codex CLI and OpenCode** are not covered (unverified).
 - **Local-model offload (Ollama) is deferred.** A call to a local server is an
-  outbound network call, and CLAUDE.md rule 1 says any other outbound call needs
+  outbound network call, and PRINCIPLES.md rule 1 says any other outbound call needs
   a new rule. Proposed rule for approval: *the scout's summarizing step may call
   a model server on a loopback address (127.0.0.1 or ::1) that the user
   configured, off by default, never in the gateway request path, sending only

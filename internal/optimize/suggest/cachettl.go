@@ -300,7 +300,7 @@ func (b *ttlBucket) suggestion(sidechain bool) (Suggestion, bool) {
 		s.EstSavingsUSD = &figure
 	} else {
 		// A subscription or an unknown plan may not bill per token, so a dollar
-		// figure could be wrong (CLAUDE.md rule 9). Say what it is, and no more.
+		// figure could be wrong (PRINCIPLES.md rule 9). Say what it is, and no more.
 		s.Scenario = fmt.Sprintf("At list prices the difference is about $%.2f over this period. Your history does not show that you pay per token, so that is a list-price equivalent, not money you would have saved.", net)
 	}
 	return s, true

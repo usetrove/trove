@@ -14,7 +14,7 @@ Every row names a test. A row with no test says so. If a control changes and thi
 
 | Asset | The promise |
 |---|---|
-| Your API keys | Pass through memory untouched, are never logged, stored or printed (CLAUDE.md rule 2) |
+| Your API keys | Pass through memory untouched, are never logged, stored or printed (PRINCIPLES.md rule 2) |
 | Your prompts, code and tool output | May be processed in memory; never written to the database (rule 7). The one exception is the opt-in local recovery store |
 | Your subscription and OAuth credentials | Never handled. The gateway refuses every login that is not an API key (rules 3, 10) |
 | Your machine | Trove runs nothing the user did not approve, writes only its own entries into your agent files, and can restore every file byte for byte |

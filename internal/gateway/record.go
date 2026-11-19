@@ -325,7 +325,7 @@ func requestMeta(body []byte) (model, effort string) {
 // Longest values stored for fields whose text comes from the client or the
 // provider rather than from Trove. Real model names, routes and error types are
 // far shorter; the cap stops a hostile local client from using the metadata
-// store as a place to put arbitrary text (CLAUDE.md rule 7).
+// store as a place to put arbitrary text (PRINCIPLES.md rule 7).
 const (
 	maxModelLen    = 100
 	maxEndpointLen = 200

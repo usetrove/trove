@@ -18,7 +18,7 @@ func (b *blockingReader) Read([]byte) (int, error) {
 
 // TestCallDeadlineLetsTheAgentThroughWhenAHookIsSlow is the test that the per-call
 // deadline really fires: a hook past the deadline must produce no output and exit 0,
-// so the agent is let through (fail open, CLAUDE.md rule 4).
+// so the agent is let through (fail open, PRINCIPLES.md rule 4).
 func TestCallDeadlineLetsTheAgentThroughWhenAHookIsSlow(t *testing.T) {
 	old := callDeadline
 	callDeadline = 20 * time.Millisecond

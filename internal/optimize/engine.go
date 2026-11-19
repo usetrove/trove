@@ -169,7 +169,7 @@ func (e *Engine) Run(ctx context.Context, in Input) Result {
 
 // TransformRequest applies the request-level pipeline. It never returns an
 // error and never panics: on any problem it returns the original body (fail
-// open, CLAUDE.md rule 4). s.Key must be derived from the original body.
+// open, PRINCIPLES.md rule 4). s.Key must be derived from the original body.
 func (e *Engine) TransformRequest(ctx context.Context, rq RequestIn, s Session) (res Result) {
 	in := Input{Provider: rq.Provider, Path: rq.Path, Header: rq.Header, Body: rq.Body, SessionKey: s.Key, Agent: s.Agent}
 	res = Result{Body: in.Body}

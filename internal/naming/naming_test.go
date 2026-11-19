@@ -1,4 +1,4 @@
-// Package naming guards CLAUDE.md rule 13: no "Claude", "Anthropic", "Codex" or "OpenAI" in any product,
+// Package naming guards PRINCIPLES.md rule 13: no "Claude", "Anthropic", "Codex" or "OpenAI" in any product,
 // plugin, feature, package or command name of ours. Plain-text "works with Claude Code" is fine.
 //
 // The test walks every folder and file name in the repository, the command tree, the package and plugin

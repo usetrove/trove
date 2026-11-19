@@ -92,7 +92,7 @@ func rewriteKind(name string) string {
 
 // stateFor is the state an optimizer acts in for one tool call: the pinned state,
 // lowered to shadow when the agent version has not been seen to honour that kind
-// of rewrite for this tool (CLAUDE.md rule 4: doing less is always safe), and
+// of rewrite for this tool (PRINCIPLES.md rule 4: doing less is always safe), and
 // switched off where the optimizer does not belong. Both are adapter-level
 // support facts; whether and how to optimize is still the engine's call.
 func (h *handler) stateFor(name, pinned, tool string) string {

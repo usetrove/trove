@@ -163,6 +163,5 @@ local. Aider's polyglot exercises are copyright Exercism. The SWE-bench Verified
 - Custom-agent optimizers and `output_trimmer` cannot be measured with Claude Code.
 - The Claude Code result-JSON fields `num_turns` and `is_error` were not confirmed in the docs; the parser tolerates
   their absence and falls back to counting gateway requests. Confirm against a real run.
-- **Not yet run end to end.** Everything outside Docker is covered by offline tests (`pytest bench/tests`). The container
-  pipeline (image build, gateway in container, fake-agent smoke run, real smoke run) is written but has not been executed.
-  Follow the step-by-step checklist in [VERIFY.md](VERIFY.md), starting with `python -m trovebench smoke --fake` (free).
+- **Run end to end** in the published studies (for example `bench/published/launch-3/`). Everything outside Docker is
+  also covered by offline tests (`pytest bench/tests`). To check a new machine, start with `python -m trovebench smoke --fake` (free).

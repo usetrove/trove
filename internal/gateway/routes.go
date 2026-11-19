@@ -182,7 +182,7 @@ func (s *Server) match(path string) *route {
 
 // kindOf reads the session kind the user declared with X-Trove-Kind. Nothing
 // else is trusted: no User-Agent or flag reliably tells `claude -p` from an
-// interactive session, and a guess would be a wrong number (CLAUDE.md rule 9).
+// interactive session, and a guess would be a wrong number (PRINCIPLES.md rule 9).
 func kindOf(h http.Header) string {
 	switch strings.ToLower(strings.TrimSpace(h.Get("X-Trove-Kind"))) {
 	case "automated":

@@ -1,7 +1,7 @@
 # Autopilot
 
 Status: **first version built, thresholds not validated.** See "What is built" below for what exists and what does
-not. Autopilot applies optimizations automatically after one consent, without giving up the rules in `CLAUDE.md`.
+not. Autopilot applies optimizations automatically after one consent, without giving up the rules in `PRINCIPLES.md`.
 Every number named here is a placeholder to be set from a measured benchmark, not a claim.
 
 ## Why
@@ -24,7 +24,7 @@ prompt text and no credentials.
 
 ### Rule 6 wording
 
-`CLAUDE.md` rule 6 now reads: every optimization is opt-in, one at a time or by agreeing once to a named policy.
+`PRINCIPLES.md` rule 6 now reads: every optimization is opt-in, one at a time or by agreeing once to a named policy.
 Autopilot is that policy. The project owner approved the change on 2026-11-13.
 
 ## Paths by login type

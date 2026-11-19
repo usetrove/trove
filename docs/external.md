@@ -121,7 +121,7 @@ Trove"; Trove's measured prompt tokens per request and cost per session, on vers
 estimated overhead; the license class; and the reason if Trove switched it off. The claimed and
 measured figures are never combined.
 
-## Randomized test for hook tools (plan item 9.3)
+## Randomized test for hook tools
 
 For a tool that acts as a Bash hook (RTK, ZTK), Trove does not write the tool's own hook. It writes its own,
 `trove hook handoff <tool>`, and hands calls to the tool per session:
@@ -162,7 +162,7 @@ each session. The real RTK and ZTK binaries were not run (they install with Home
 - External tools are not in the capability matrix (`doctor --capabilities`, `docs/adapters.md`) yet.
 - Automatic checks run only while the gateway is running or hooks bookkeeping runs.
 
-## Proposed CLAUDE.md rule (needs your approval; not applied)
+## Proposed PRINCIPLES.md rule (needs your approval; not applied)
 
 > 16. External tools. Trove may run a package manager or the agent's own CLI to install or remove
 > a tool, only from a built-in manifest, only after the user confirms at a terminal, never silently

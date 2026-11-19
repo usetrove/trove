@@ -145,7 +145,7 @@ var OptimizerNames = []string{
 // is the state recorded when the session started ("" if none was: the session
 // began before the hooks were installed, so it stays off). A session keeps the
 // state it started with, so a change in config.toml waits for the next session
-// (CLAUDE.md rule 5). The kill switch and a guardrail rollback only ever lower
+// (PRINCIPLES.md rule 5). The kill switch and a guardrail rollback only ever lower
 // it, and they take effect at once.
 func (s Snapshot) State(name, pinned, dataDir string, getenv func(string) string) string {
 	if off, _ := optimize.Disabled(optimize.KillFile(dataDir), getenv); off {

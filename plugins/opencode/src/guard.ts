@@ -1,6 +1,6 @@
 import type { Login } from "./types.ts";
 
-// The login gate. Trove never sees a credential (CLAUDE.md rules 2, 3 and 10), so
+// The login gate. Trove never sees a credential (PRINCIPLES.md rules 2, 3 and 10), so
 // the plugin classifies the login from fields OpenCode shows for every provider:
 // the provider id, where its key came from (V1) or the connection's method (V2).
 // Only api_key and copilot may have their content changed. Everything else,

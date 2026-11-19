@@ -29,7 +29,7 @@ const routeCacheTTL = "5m"
 //
 // The decision is a pure function of the request's message history and the session's
 // pin (RouteTo and the prices at PinnedAt), so the same history always goes to the same
-// model (CLAUDE.md rule 5). It is T3: off by default, and judged only by session A/B
+// model (PRINCIPLES.md rule 5). It is T3: off by default, and judged only by session A/B
 // under the strictest guardrails.
 type ModelRouter struct {
 	// Prices overrides the pricing table; tests use it. Nil means pricing.Default().

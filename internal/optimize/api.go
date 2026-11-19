@@ -78,7 +78,7 @@ type ToolOutput struct {
 
 // RequestIn is one provider request as an adapter hands it over. Header carries
 // only what the engine needs (Content-Encoding); adapters strip credentials
-// first (CLAUDE.md rule 2).
+// first (PRINCIPLES.md rule 2).
 type RequestIn struct {
 	Provider string
 	Path     string // route without provider prefix or query
@@ -134,7 +134,7 @@ type Capable interface {
 	Points() []Point
 	// OverheadTokens is what the optimizer itself adds to the model's context on
 	// every request it is enabled for: tool definitions and fixed injected text
-	// (CLAUDE.md addendum rule 15). Text injected only when it acts is already
+	// (PRINCIPLES.md rule 15). Text injected only when it acts is already
 	// netted out of BytesRemoved. Zero means none.
 	OverheadTokens() int
 }

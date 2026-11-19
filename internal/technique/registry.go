@@ -232,7 +232,7 @@ var registry = []Technique{
 	{ID: "W7", Class: ClassBehavior, Title: "SuperCompress: query-aware context compression, hosted", Names: []string{"supercompress"},
 		Layers: []Layer{LayerRequest}, Route: RouteNone, Status: StatusExcluded,
 		Licence: "MIT repository; the hosted API receives your text", Source: urlSuperComp,
-		Note: "it sends your prompts off the machine, which CLAUDE.md rule 1 does not allow (name match not fully verified)"},
+		Note: "it sends your prompts off the machine, which PRINCIPLES.md rule 1 does not allow (name match not fully verified)"},
 	{ID: "W8", Class: ClassConfig, Title: "ccusage: usage analysis from local logs", Names: []string{"ccusage"},
 		Layers: []Layer{LayerConfig}, Route: RouteIdeas, Status: StatusReference,
 		Licence: "MIT", Source: urlCCUsage, Note: "`trove logs` and `trove report` already do this"},

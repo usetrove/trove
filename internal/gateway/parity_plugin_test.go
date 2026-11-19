@@ -16,7 +16,7 @@ import (
 	"github.com/usetrove/trove/internal/optimize"
 )
 
-// Parity for the plugin adapter (CLAUDE.md "one engine, many adapters"): the same
+// Parity for the plugin adapter (PRINCIPLES.md "one engine, many adapters"): the same
 // tool output must come out identical from the gateway, the hooks adapter and a
 // harness plugin talking `trove engine serve`'s protocol, and a whole request
 // sent through the plugin's `request` method must come out byte for byte as the

@@ -21,8 +21,6 @@ One small program. No account. Nothing to sign up for.
 - **Proves before acting.** Every optimization is opt-in, estimated in shadow mode first, measured once on, and rolled back if its guardrails trip.
 - **Works with** Claude Code and Codex CLI, on a subscription plan or with your own API keys. Claude Code is the best tested; see [Supported agents](#supported-agents) for exactly what works where.
 
-<!-- DEMO GIF: record a short terminal demo, save as docs/assets/demo.gif, then replace this comment with: <img src="./docs/assets/demo.gif" /> -->
-
 ## Get started
 
 > [!NOTE]
@@ -137,7 +135,7 @@ Once it is set up there is nothing to run day to day:
 Most people need three commands: `/trove:setup` once, `trove` for the report, and `trove status` to see what is on. To step back, use `trove autopilot pause`, `trove autopilot off`, `trove undo` or `trove uninstall`. The other commands are optional: finer control (`trove fix`, `trove hooks install`, `trove mcp install`), the API-key gateway, and developer tools (`trove bench`, `trove stress`).
 
 > [!NOTE]
-> Autopilot is a first version: its thresholds are unvalidated placeholders, and the riskier optimizations need a separate, second yes (`trove autopilot trials on`). The plugin and hook paths have not yet been run on a real Claude Code install. See [Supported agents](#supported-agents) and [Measured results](#measured-results).
+> Autopilot is a first version: its thresholds are unvalidated placeholders, and the riskier optimizations need a separate, second yes (`trove autopilot trials on`). The plugin has run on real Claude Code only inside the benchmark (`launch-3`, Claude Code 2.1.319), where its hooks acted in 2 of 30 sessions; it has not yet been checked across everyday use. See [Supported agents](#supported-agents) and [Measured results](#measured-results).
 
 ## How it works
 
@@ -177,6 +175,8 @@ All are off by default, run in shadow mode first, and fail open: any error forwa
 - **Fail open.** An internal error forwards your request unchanged.
 - **Cache safe.** Transformations are deterministic, so the same history always produces the same bytes and cached prefixes stay valid.
 - **Prove before acting.** See [measurement](docs/measurement.md).
+
+The full, numbered rules are in [PRINCIPLES.md](PRINCIPLES.md).
 
 ## How much proof each change needs
 
@@ -222,7 +222,7 @@ Known gaps are listed in the changelog. The main one: Autopilot's thresholds are
 ## Measured results
 
 > [!IMPORTANT]
-> **Bottom line.** In a pre-registered study of 30 long Claude Code sessions on Sonnet (`launch-3`, 2026-11-18), Trove's full setup with model routing on cut the estimated cost per session by **25%** (98% interval 21% to 29%), with no drop in tasks passed (measured). The saving comes from model routing, an opt-in option for API-key traffic that sends tool turns to a cheaper model; it never runs on a subscription. The Claude Code plugin alone and the safe optimizers have not yet shown a saving on real tasks: on the tasks studied they had almost nothing to remove. Trove makes no savings promise beyond what a study shows.
+> **Bottom line.** In a pre-registered study of 30 long Claude Code sessions on Sonnet (`launch-3`, 2026-11-18), Trove's full setup with model routing on cut the estimated cost per session by **25%** (98% interval 21% to 29%), with no drop in tasks passed (measured). The saving comes from model routing, an opt-in option for API-key traffic that sends tool turns to a cheaper model; it never runs on a subscription. Model routing is on `main` and ships in the next release; v0.4.0 does not include it. The Claude Code plugin alone and the safe optimizers have not yet shown a saving on real tasks: on the tasks studied they had almost nothing to remove. Trove makes no savings promise beyond what a study shows.
 
 Trove's benchmark harness (`bench/`) runs real coding tasks in Docker with your own API key. For each run it records whether the task passed and what it cost. Each study is pre-registered: the question, the decision rule and the budget are locked before the first run.
 
@@ -374,7 +374,7 @@ If you want to help check Trove's savings claims, `trove contribute` shows a sma
 | **Using Trove** | [Getting started](docs/getting-started.md) · [Reports](docs/report.md) · [Gateway](docs/gateway.md) · [Optimizers](docs/optimize.md) · [Supported agents](docs/supported-agents.md) |
 | **Trusting Trove** | [Measurement method](docs/measurement-method.md) · [Benchmark methodology](docs/benchmark-methodology.md) · [Scripted workflows](docs/workflows.md) · [Pricing and updates](docs/pricing.md) |
 | **Safety and privacy** | [Privacy](PRIVACY.md) · [Security](SECURITY.md) · [Threat model](docs/threat-model.md) |
-| **Contributing** | [Contributing](CONTRIBUTING.md) |
+| **Contributing** | [Principles](PRINCIPLES.md) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) |
 
 ## License
 
