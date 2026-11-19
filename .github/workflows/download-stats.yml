@@ -1,0 +1,70 @@
+# Daily snapshot of GitHub release download counts, so growth can be charted over time
+# (GitHub itself only keeps the running total). It reads public release data with
+# scripts/downloads and appends one row per release file to downloads.csv on the
+# `stats` branch, which holds nothing else. Trove itself sends nothing: this counts
+# downloads of release files (brew, install.sh, install.ps1, the plugin launcher,
+# the npm package and manual downloads all fetch them), not installs or users.
+name: download-stats
+
+on:
+  schedule:
+    - cron: "41 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: download-stats
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Read release download counts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: go run ./scripts/downloads --repo "$GITHUB_REPOSITORY" --json > "$RUNNER_TEMP/downloads.json"
+      - name: Append today's counts to downloads.csv on the stats branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          dir="$RUNNER_TEMP/stats"
+          url="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          if git ls-remote --exit-code --heads "$url" stats >/dev/null; then
+            git clone --quiet --depth 1 --branch stats "$url" "$dir"
+          else
+            git init --quiet "$dir"
+            git -C "$dir" checkout --quiet --orphan stats
+            git -C "$dir" remote add origin "$url"
+            printf 'date,tag,file,downloads\n' > "$dir/downloads.csv"
+            cat > "$dir/README.md" <<'EOF'
+          # Download stats
+
+          `downloads.csv` gets one row per release file per day, written by
+          `.github/workflows/download-stats.yml` on `main`. `downloads` is GitHub's running
+          total for that file on that date (UTC). These are downloads, not installs: upgrades,
+          CI jobs and repeat downloads all count, and `go install` or source builds are not counted.
+          EOF
+          fi
+          today="$(date -u +%F)"
+          if grep -q "^${today}," "$dir/downloads.csv"; then
+            echo "Already recorded for $today."
+            exit 0
+          fi
+          jq -r --arg d "$today" '.[] | .tag as $t | .by_file | to_entries[] | [$d, $t, .key, .value] | @csv' \
+            "$RUNNER_TEMP/downloads.json" | tr -d '"' >> "$dir/downloads.csv"
+          total="$(jq '[.[].archive_downloads] | add // 0' "$RUNNER_TEMP/downloads.json")"
+          cd "$dir"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898281+github-actions[bot]@users.noreply.github.com"
+          git add downloads.csv README.md
+          git commit --quiet -m "stats: downloads on $today (total $total)"
+          git push --quiet origin stats
+          echo "Recorded $today: $total downloads in total."
