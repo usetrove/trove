@@ -103,8 +103,7 @@ outputs from the same failing run, `internal/optimize/testdata/quiet/<name>.defa
 test fails unless the quiet one keeps every failure line of the default one (`MissingFailureLines`, the trimmer's
 failure-line rule). `pytest` has one (pytest 9.1.1, 2026-11-17: an assertion failure, a fixture error and an
 exception; every failure line kept). Cargo was not available to record, so its rules have none. A passing
-fixture makes a rule promotable, not promoted: on Codex the rewrite itself still waits for a live probe (see
-docs/hooks-verification.md), so `Verified` stays false.
+fixture makes a rule promotable, not promoted: on Codex the rewrite itself still waits for a live probe, so `Verified` stays false.
 
 ### Failures are never trimmed
 
@@ -250,8 +249,10 @@ is opened right after it was written.
 | Claude Code, user | `~/.claude/settings.json` (or `$CLAUDE_CONFIG_DIR`) | `hooks.<Event>` array of matcher groups. |
 | Claude Code, project | `<project>/.claude/settings.local.json` | Not committed, so a machine-specific path stays local. |
 | Codex CLI, user | `~/.codex/hooks.json` | If `config.toml` already has inline `[hooks]`, Trove skips Codex rather than create both (Codex warns when a folder has both). Codex asks you to review new hooks with `/hooks`. |
-| Cursor, user | `~/.cursor/hooks.json` | `"version": 1`; `hooks.<event>` is a flat list of `{command, type, timeout, matcher}` (timeout in seconds). Events: `preToolUse`/`postToolUse` on `Read` and `Write`, `sessionStart`, `preCompact`, `sessionEnd`; `--rewrite` adds `preToolUse` on `Shell`. User level only. |
-| Gemini CLI, user | `~/.gemini/settings.json` | Same matcher groups as Claude Code, but `timeout` is in **milliseconds**. Events: `BeforeTool`/`AfterTool` on `read_file`, `AfterTool` on `replace\|write_file`, `SessionStart`, `PreCompress`, `SessionEnd`; `--rewrite` adds the shell pre-hook, the output hook and the fetch-back counter. Gemini CLI asks you to trust changed hooks. User level only. |
+| Cursor, user (experimental) | `~/.cursor/hooks.json` | `"version": 1`; `hooks.<event>` is a flat list of `{command, type, timeout, matcher}` (timeout in seconds). Events: `preToolUse`/`postToolUse` on `Read` and `Write`, `sessionStart`, `preCompact`, `sessionEnd`; `--rewrite` adds `preToolUse` on `Shell`. User level only. |
+| Gemini CLI, user (experimental) | `~/.gemini/settings.json` | Same matcher groups as Claude Code, but `timeout` is in **milliseconds**. Events: `BeforeTool`/`AfterTool` on `read_file`, `AfterTool` on `replace\|write_file`, `SessionStart`, `PreCompress`, `SessionEnd`; `--rewrite` adds the shell pre-hook, the output hook and the fetch-back counter. Gemini CLI asks you to trust changed hooks. User level only. |
+
+Cursor and Gemini CLI have not been run on a real install, so `trove hooks install` (`--agent all`) leaves them out. Install them only by name: `--agent cursor` or `--agent gemini`. `trove hooks uninstall` still removes Trove's entries from both.
 
 Your own hooks are never changed. Trove appends its own matcher groups and recognises them on undo by the command
 prefix it recorded. If you edit the file after installing, undo still removes only Trove's handlers (and any empty

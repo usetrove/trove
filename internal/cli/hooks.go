@@ -67,11 +67,12 @@ func newHooksInstall(a *App) *cobra.Command {
 			"\"on\" under [optimizers] in config.toml; a session keeps the setting it started with.\n" +
 			"Claude Code: ~/.claude/settings.json (--scope user) or .claude/settings.local.json in a project (--scope project).\n" +
 			"Codex CLI: ~/.codex/hooks.json. Codex asks you to review new hooks with /hooks before they run.\n" +
-			"Cursor: ~/.cursor/hooks.json. Gemini CLI: ~/.gemini/settings.json. Both at user level only; their rewrites stay in shadow until a live probe (docs/hooks-verification.md).",
+			"Cursor (experimental): ~/.cursor/hooks.json. Gemini CLI (experimental): ~/.gemini/settings.json. Neither has been tested on a real install,\n" +
+			"so --agent all leaves them out; name them with --agent cursor or --agent gemini. User level only; their rewrites stay in shadow until a live probe.",
 		Args: cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error { return runHooksInstall(a, fl) },
 	}
-	c.Flags().StringVar(&fl.agent, "agent", "all", "which agent: claude, codex, cursor, gemini or all")
+	c.Flags().StringVar(&fl.agent, "agent", "all", "which agent: claude, codex, cursor, gemini or all (all = Claude Code and Codex CLI; cursor and gemini are experimental and must be named)")
 	c.Flags().StringVar(&fl.scope, "scope", "user", "Claude Code only: user (all projects) or project (.claude/settings.local.json)")
 	c.Flags().StringVar(&fl.projectDir, "project", "", "project folder for --scope project (default: the current folder)")
 	c.Flags().BoolVar(&fl.largeOutput, "large-output", false, "also add the optional hint that suggests trove_run for noisy commands (test suites, verbose builds)")
@@ -215,6 +216,9 @@ func planHooksInstall(a *App, dir, home string, fl hooksInstallFlags) ([]hooksPl
 		which := spec.binary // the --agent value: claude, codex, cursor or gemini
 		if fl.agent != "all" && fl.agent != which {
 			continue
+		}
+		if fl.agent == "all" && (which == "cursor" || which == "gemini") {
+			continue // experimental: never live-tested, so only an explicit --agent cursor|gemini installs them
 		}
 		cfgDir := spec.configDir(a, home)
 		_, onPath := a.LookPath(spec.binary)

@@ -103,6 +103,25 @@ func TestHooksInstallCursorAndGemini(t *testing.T) {
 	}
 }
 
+// Cursor and Gemini CLI are experimental (never run on a real install), so the default
+// --agent all must leave their config alone even when both are installed.
+func TestHooksInstallAllLeavesExperimentalAgentsAlone(t *testing.T) {
+	h, _, home := mcpHarness(t)
+	for _, d := range []string{".cursor", ".gemini"} {
+		if err := os.MkdirAll(filepath.Join(home, d), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if code := h.run("hooks", "install", "--yes"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	for _, p := range []string{filepath.Join(home, ".cursor", "hooks.json"), filepath.Join(home, ".gemini", "settings.json")} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("--agent all wrote %s; experimental agents must be named explicitly", p)
+		}
+	}
+}
+
 func TestHooksInstallSkipsCursorAndGeminiWhenAbsent(t *testing.T) {
 	h, _, _ := mcpHarness(t)
 	if code := h.run("hooks", "install", "--dry-run"); code != 0 {
