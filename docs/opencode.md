@@ -147,8 +147,7 @@ call that takes longer than its timeout is abandoned and the original is used.
 
 ## Known gaps
 
-- Not run on a real OpenCode yet. Everything on the OpenCode verification checklist is unchecked
-  until it is: how a local folder plugin loads in 1.x, whether a changed `output.args` is what the tool then runs
+- Not run on a real OpenCode yet. These stay unchecked until it is: how a local folder plugin loads in 1.x, whether a changed `output.args` is what the tool then runs
   with, whether `tool.execute.after` sees output before OpenCode's own truncation (2000 lines / 50 KB), whether
   assigning a new `Request` to `event.request` is honoured in 2.x (the docs only show header changes), the V2
   built-in tools' argument names, whether a provider id is the integration id `connection.active` expects, and the

@@ -24,7 +24,7 @@ One small program. No account. Nothing to sign up for.
 ## Get started
 
 > [!NOTE]
-> **Latest release: [v0.4.0](https://github.com/usetrove/trove/releases/tag/v0.4.0)** (2026-11-14). See [what's new](#whats-new-in-v040). Trove is still early: read [Measured results](#measured-results) before you expect a saving; the one confirmed saving is model routing for API-key users.
+> **Latest release: [v0.5.0](https://github.com/usetrove/trove/releases/tag/v0.5.0)** (2026-11-18). See [what's new](#whats-new-in-v050). Trove is still early: read [Measured results](#measured-results) before you expect a saving; the one confirmed saving is [model routing](#optional-model-routing-api-key-users) for API-key users.
 
 ### 1. Install
 
@@ -39,7 +39,7 @@ brew install usetrove/trove/trove
 ```powershell
 irm https://github.com/usetrove/trove/raw/main/install.ps1 | iex
 ```
-That is all there is to it. It installs `trove.exe` for your user (no administrator needed) and adds it to your user `PATH`, so `trove` works straight away in that window and in new ones. It checks the download against the release's SHA-256 checksums (and its cosign signature, if cosign is installed) and refuses to install on a mismatch. To leave your `PATH` alone, set `$env:TROVE_NO_PATH = "1"` first; to pin a version, set `$env:TROVE_VERSION = "0.4.0"`. To undo the `PATH` change, remove the folder under Settings, System, About, Advanced system settings, Environment Variables.
+That is all there is to it. It installs `trove.exe` for your user (no administrator needed) and adds it to your user `PATH`, so `trove` works straight away in that window and in new ones. It checks the download against the release's SHA-256 checksums (and its cosign signature, if cosign is installed) and refuses to install on a mismatch. To leave your `PATH` alone, set `$env:TROVE_NO_PATH = "1"` first; to pin a version, set `$env:TROVE_VERSION = "0.5.0"`. To undo the `PATH` change, remove the folder under Settings, System, About, Advanced system settings, Environment Variables.
 
 <details>
 <summary>macOS or Linux without Homebrew</summary>
@@ -47,17 +47,17 @@ That is all there is to it. It installs `trove.exe` for your user (no administra
 ```bash
 curl -fsSL https://github.com/usetrove/trove/raw/main/install.sh | sh
 ```
-This installs the latest release (v0.4.0) into `~/.local/bin`. To pin a version, set `TROVE_VERSION=0.4.0` before `sh`. If you have [cosign](https://github.com/sigstore/cosign) installed, the script also verifies the release's signature; set `TROVE_REQUIRE_SIGNATURE=1` to refuse an install it cannot verify. It never edits your shell profile: if `~/.local/bin` is not on your `PATH`, it tells you to add it.
+This installs the latest release (v0.5.0) into `~/.local/bin`. To pin a version, set `TROVE_VERSION=0.5.0` before `sh`. If you have [cosign](https://github.com/sigstore/cosign) installed, the script also verifies the release's signature; set `TROVE_REQUIRE_SIGNATURE=1` to refuse an install it cannot verify. It never edits your shell profile: if `~/.local/bin` is not on your `PATH`, it tells you to add it.
 
 </details>
 
 <details>
 <summary>Windows: prefer to download and check it yourself?</summary>
 
-Download `trove_0.4.0_windows_amd64.zip` (or `windows_arm64`) from the [release page](https://github.com/usetrove/trove/releases/tag/v0.4.0), check it, then unzip it. In PowerShell (replace the version with your release's):
+Download `trove_0.5.0_windows_amd64.zip` (or `windows_arm64`) from the [release page](https://github.com/usetrove/trove/releases/tag/v0.5.0), check it, then unzip it. In PowerShell (replace the version with your release's):
 
 ```powershell
-$v = "0.4.0"
+$v = "0.5.0"
 Invoke-WebRequest "https://github.com/usetrove/trove/releases/download/v$v/trove_${v}_windows_amd64.zip" -OutFile trove.zip
 Invoke-WebRequest "https://github.com/usetrove/trove/releases/download/v$v/checksums.txt" -OutFile checksums.txt
 $want = (Select-String -Path checksums.txt -Pattern "trove_${v}_windows_amd64.zip").Line.Split(" ")[0]
@@ -97,6 +97,23 @@ To apply a fix, run `trove fix <id> --apply`. You see the exact diff and are ask
 
 That is all you need to start. You do not need the gateway for this, and it works on a subscription plan. The gateway is an optional extra, turned on only with `trove setup --gateway`.
 
+### Optional: model routing (API-key users)
+
+This is where the [measured saving](#measured-results) comes from. If you pay with your own Anthropic API key, the local gateway can send tool turns (turns that only return tool results) to a cheaper model, and keeps a session on it long enough for the switch to pay for its cache write. It never runs on a subscription login. It is off by default; this is the opt-in.
+
+1. Point Claude Code at the gateway: start it with `trove gateway start`, then run `trove setup --gateway` (shows the change and asks first). Step by step: [docs/getting-started.md](docs/getting-started.md#route-claude-code-through-the-gateway-api-key-only).
+2. Add to `~/.trove/config.toml`:
+   ```toml
+   [optimize]
+   route_to = "claude-haiku-5-5"   # the cheaper model for tool turns
+
+   [optimizers]
+   model_router = "on"             # or "shadow" to only estimate first
+   ```
+3. Start a new session (settings never change mid-session). `trove optimize status` shows it on, and `trove` reports what it did.
+
+The study also had the plugin, the safe gateway optimizers and brevity steering (`verbosity_steer`) on, so routing's share alone was not measured separately. Undo with `model_router = "off"`, or stop everything with `trove optimize off`. Details: [docs/model-router.md](docs/model-router.md).
+
 ### Try it from source
 
 Builds one binary in the repo folder and keeps all data in a throwaway folder, so it cannot touch an existing `~/.trove` or any agent config. Requires [Go 1.27.3 or newer](https://go.dev/dl/).
@@ -135,7 +152,7 @@ Once it is set up there is nothing to run day to day:
 Most people need three commands: `/trove:setup` once, `trove` for the report, and `trove status` to see what is on. To step back, use `trove autopilot pause`, `trove autopilot off`, `trove undo` or `trove uninstall`. The other commands are optional: finer control (`trove fix`, `trove hooks install`, `trove mcp install`), the API-key gateway, and developer tools (`trove bench`, `trove stress`).
 
 > [!NOTE]
-> Autopilot is a first version: its thresholds are unvalidated placeholders, and the riskier optimizations need a separate, second yes (`trove autopilot trials on`). The plugin has run on real Claude Code only inside the benchmark (`launch-3`, Claude Code 2.1.319), where its hooks acted in 2 of 30 sessions; it has not yet been checked across everyday use. See [Supported agents](#supported-agents) and [Measured results](#measured-results).
+> Autopilot is a first version: its trial thresholds for safe (T1) and routing (T3) changes come from the `launch-1` and `launch-3` benchmarks, while behavioural (T2) changes still use unvalidated placeholders, and the riskier optimizations need a separate, second yes (`trove autopilot trials on`). The plugin has run on real Claude Code only inside the benchmark (`launch-3`, Claude Code 2.1.319), where its hooks acted in 2 of 30 sessions; it has not yet been checked across everyday use. See [Supported agents](#supported-agents) and [Measured results](#measured-results).
 
 ## How it works
 
@@ -193,7 +210,7 @@ See [docs/techniques.md](docs/techniques.md) for every technique and its tier.
 
 ## Supported agents
 
-Trove works with **Claude Code** and **Codex CLI**, and ships an experimental **OpenCode** plugin. Claude Code is the best tested. The table says what exists and how well it has been checked; the full test record, with versions, is in [docs/supported-agents.md](docs/supported-agents.md).
+Trove works with **Claude Code** and **Codex CLI**, and ships an experimental **OpenCode** plugin and experimental **Cursor** and **Gemini CLI** hooks (installed only when you name them: `trove hooks install --agent cursor` or `--agent gemini`). Claude Code is the best tested. The table says what exists and how well it has been checked; the full test record, with versions, is in [docs/supported-agents.md](docs/supported-agents.md).
 
 | Feature | Claude Code | Codex CLI |
 |---|---|---|
@@ -205,24 +222,27 @@ Trove works with **Claude Code** and **Codex CLI**, and ships an experimental **
 | Subscription logins (Claude Pro/Max, ChatGPT) | Reports, fixes, hooks and MCP work. The gateway refuses them | Same. A ChatGPT or Codex login is refused by the gateway, and Trove never opens `~/.codex/auth.json` |
 
 > [!NOTE]
-> Codex CLI support is built from its documentation and open-source code but **has not been run on a real Codex install**. Treat it as experimental. If you try it, `trove feedback` is the fastest way to tell us what broke. The test record (last reviewed 2026-10-30) also lists macOS and Linux as not yet tested on real machines; its automated tests ran on Windows 11 and in CI.
+> Codex CLI support is built from its documentation and open-source code but **has not been run on a real Codex install**. Treat it as experimental. If you try it, `trove feedback` is the fastest way to tell us what broke. Claude Code's gateway, routing, plugin hooks and MCP server have run in benchmark sessions (Claude Code 2.1.319, Linux containers), but not yet on a person's own macOS or Linux machine; see the [test record](docs/supported-agents.md).
 
-## What's new in v0.4.0
+## What's new in v0.5.0
 
-Released 2026-11-14. Full notes in the [changelog](CHANGELOG.md) and on the [release page](https://github.com/usetrove/trove/releases/tag/v0.4.0).
+Released 2026-11-18. Full notes in the [changelog](CHANGELOG.md) and on the [release page](https://github.com/usetrove/trove/releases/tag/v0.5.0).
 
-- **Autopilot trial policy `lossless-v3`.** Adds three candidates to the two from v2 (`output_trimmer`, `hook_large_output`, `hook_read_limit`), tried one at a time. It needs its own yes (`trove autopilot trials on` shows what is added and asks again), and anyone who agreed to v2 keeps exactly v2 until then. The consent text is generated from the policy, so it cannot list fewer changes than the policy makes. All trial thresholds are still unvalidated placeholders. See [docs/autopilot-eligibility.md](docs/autopilot-eligibility.md).
-- **New guardrails.** A trial candidate drops back to shadow on its own if `hook_read_limit` is followed by reads of more of the file at more than twice the shared rate, or if the `hook_large_output` hint is given and `trove_run` is then used in fewer than 10 percent of those sessions. If you installed hooks with v0.3.0 or earlier, run `trove hooks install --rewrite` again to get the counter.
-- **`output_trimmer` declares its overhead.** Its marker is netted inside its estimate and the 351 tokens of Trove MCP tool definitions are charged per session, so Autopilot can trial it. It can be trialled through hooks alone, so subscription users can too.
-- **A harder gateway.** A 5-minute whole-request read timeout (streamed responses are not limited), a 1 GiB cap on request bodies held in memory (an excess gets a plain 503 the agent retries), and free-text redaction that now also covers AWS, GitHub, Google, Slack, Stripe and npm keys and PEM private keys.
-- **Security and supply chain.** A full [security document](docs/security.md) listing every control and what it does not protect against, a fuller [SECURITY.md](SECURITY.md) with how to verify a release, Dependabot, CodeQL and `go mod verify` in CI, cosign verification in `install.sh`, SLSA build provenance on release archives (`gh attestation verify`), a secret scan over tracked files, and a reproducible-build check. The provenance and rebuild checks are new and unproven on a release.
+- **Model routing (`model_router`, T3).** For API-key gateway traffic, tool turns go to a cheaper model you name, with a stickiness rule so each switch repays its cache write. Off by default. In the pre-registered `launch-3` study, Trove's full setup with routing on cut estimated cost per session by 25% with no drop in tasks passed. See [how to turn it on](#optional-model-routing-api-key-users).
+- **More levers, each opt-in and tiered.** Lower effort on tool turns (`effort_tool_turns`, T3), brevity steering at the gateway with a level learned from your own sessions (`verbosity_steer`, T2), a model per subagent (`trove tasks`), and keep-warm pings that keep an idle API-key session's cache alive (`keep_warm`).
+- **Smarter hooks** (each off until you or Autopilot turn it on). Duplicate tool output is replaced by a pointer, very large file reads show an outline first, and application logs are trimmed like test output; the full text stays fetchable in every case. A test-pass signal feeds a new `test_fail_rate` guardrail, and a turn-inflation guardrail charges any extra turns an optimizer causes.
+- **Real numbers for subscription users.** With no gateway, the status line and `trove` now read your agent's own session logs and show usage as API-equivalent value (estimated), with an optional usage budget (`trove budget set <amount> --usage`).
+- **Third-party tools, refereed.** RTK, ZTK, Token Savior, Ponytail, Caveman and `terse-rules` can be installed and removed through `trove external`, and `trove report` shows each tool's own claim next to what Trove measured. Rule sets can be trialled as a per-user A/B (`trove autopilot trial`).
+- **Sharper measurement.** Cost per turn and per uncached input token, adjustment for each session's prior cost (CUPED), and every technique labeled by tier (T1 safe, T2 behavioural, T3 routing) with an evidence label on every suggestion.
+- **Windows installer and more agents.** A one-line PowerShell installer (`install.ps1`), and experimental Cursor and Gemini CLI hooks.
+- **Spend cap.** `spend_cap = "on"` warns at 80% and at your cap. It refuses requests past the cap only for agents that have passed `trove budget probe`; none has yet, so for now it only warns.
 
-Known gaps are listed in the changelog. The main one: Autopilot's thresholds are placeholders, and `output_trimmer` and `hook_large_output` have no benchmark study, so their trials on your own sessions are their only evidence.
+Known gaps are listed in the changelog. The main ones: behavioural (T2) changes have no benchmark verdict yet, Codex CLI, Cursor and Gemini CLI support has not been run on a real install, and the model-routing result is from one model family and one Claude Code version.
 
 ## Measured results
 
 > [!IMPORTANT]
-> **Bottom line.** In a pre-registered study of 30 long Claude Code sessions on Sonnet (`launch-3`, 2026-11-18), Trove's full setup with model routing on cut the estimated cost per session by **25%** (98% interval 21% to 29%), with no drop in tasks passed (measured). The saving comes from model routing, an opt-in option for API-key traffic that sends tool turns to a cheaper model; it never runs on a subscription. Model routing is on `main` and ships in the next release; v0.4.0 does not include it. The Claude Code plugin alone and the safe optimizers have not yet shown a saving on real tasks: on the tasks studied they had almost nothing to remove. Trove makes no savings promise beyond what a study shows.
+> **Bottom line.** In a pre-registered study of 30 long Claude Code sessions on Sonnet (`launch-3`, 2026-11-18), Trove's full setup with model routing on cut the estimated cost per session by **25%** (98% interval 21% to 29%), with no drop in tasks passed (measured). The saving comes from model routing, an opt-in option for API-key traffic that sends tool turns to a cheaper model; it never runs on a subscription. To try it, see [Optional: model routing](#optional-model-routing-api-key-users). The Claude Code plugin alone and the safe optimizers have not yet shown a saving on real tasks: on the tasks studied they had almost nothing to remove. Trove makes no savings promise beyond what a study shows.
 
 Trove's benchmark harness (`bench/`) runs real coding tasks in Docker with your own API key. For each run it records whether the task passed and what it cost. Each study is pre-registered: the question, the decision rule and the budget are locked before the first run.
 
@@ -343,7 +363,7 @@ They are list-price estimates from usage counts. `trove reconcile` compares them
 <details>
 <summary><b>How much will I actually save?</b></summary>
 
-It depends on how your agent works, and the honest answer is that it is not yet proven for typical Claude Code use. The savings are largest where there is real waste to remove: output-heavy sessions, and agents that do not cache their prompts. Run `trove` and `trove fix` to see estimates for your own history, and see [Measured results](#measured-results).
+It depends on how your agent works. The one measured saving is model routing for API-key users: 25% estimated cost per session in the `launch-3` study, with no drop in tasks passed. For subscription users the plugin has not yet shown a saving on real tasks. Beyond that, savings are largest where there is real waste to remove: output-heavy sessions, and agents that do not cache their prompts. Run `trove` and `trove fix` to see estimates for your own history, and see [Measured results](#measured-results).
 
 </details>
 

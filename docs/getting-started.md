@@ -39,11 +39,11 @@ If a report is empty, your agent has probably not written history yet, or lives 
 
 ## Route Claude Code through the gateway (API key only)
 
-Skip this if you use a Claude Pro/Max subscription. The gateway refuses subscription traffic on purpose. It is the only part that edits your real agent config (`~/.claude/settings.json`, backed up first), so it is the one place the throwaway data folder does not protect you. Only the curl part of this path has been verified end to end; the Claude Code part has not been completed yet.
+Skip this if you use a Claude Pro/Max subscription. The gateway refuses subscription traffic on purpose. It is the only part that edits your real agent config (`~/.claude/settings.json`, backed up first), so it is the one place the throwaway data folder does not protect you. Claude Code 2.1.319 has run through the gateway in the `launch-3` benchmark (pointed at it with `ANTHROPIC_BASE_URL` inside a container); the `trove setup --gateway` steps below have not yet been run by a person on a real machine.
 
 1. Have `ANTHROPIC_API_KEY` set in the terminal you will start `claude` from. Trove never reads or stores it.
 2. Terminal A: `./trove gateway start` (stays running; Ctrl-C stops it). Default address is `127.0.0.1:8787`.
-3. Terminal B: `./trove setup`. It shows the exact change, asks, and backs up the file.
+3. Terminal B: `./trove setup --gateway`. It shows the exact change, asks, and backs up the file.
 4. Start `claude` from the terminal with the key. If it offers to use the API key, say yes. Run `/status` and check the base URL is `http://127.0.0.1:8787/anthropic`.
 5. Use your agent, then `./trove gateway status` (request count should rise) and `./trove` (the report now includes gateway-measured numbers).
 6. To go back: `./trove undo`, then Ctrl-C the gateway. Background service mode (`--background`) works on macOS and Linux only.

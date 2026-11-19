@@ -4,7 +4,7 @@
 #   irm https://raw.githubusercontent.com/usetrove/trove/main/install.ps1 | iex
 #
 # Environment (all optional):
-#   TROVE_VERSION      version to install, e.g. 0.4.0 (default: latest release)
+#   TROVE_VERSION      version to install, e.g. 0.5.0 (default: latest release)
 #   TROVE_INSTALL_DIR  where to put trove.exe (default: %LOCALAPPDATA%\Programs\trove)
 #   TROVE_BASE_URL     release download base (default: GitHub Releases); for testing
 #   TROVE_COSIGN       cosign command to use (default: cosign); for testing

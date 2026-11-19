@@ -37,9 +37,16 @@ With `[optimizers] model_router = "shadow"` and `optimize.route_to = "<model>"`,
 `price_ratio`, `sticky_turns`, `switch`, `prompt_tokens_estimated` and
 `cache_write_usd_estimated` (the predicted cost of the switch), all labeled estimated.
 
-## Manual steps (blocked: needs live API-key sessions)
+## Evidence
+In the pre-registered `launch-3` study (2026-11-18; Claude Code 2.1.319, `claude-sonnet-5-5` routed to
+`claude-haiku-5-5`, 30 long sessions per arm), Trove's full setup with model_router on cut total cost by
+25.3% (98% interval 21.4% to 29.2%, estimated) with 30 of 30 tasks passed in both arms (measured).
+`verbosity_steer`, the safe gateway optimizers and the plugin were also on in that arm, so routing's own
+share was not isolated. Report: [bench/published/launch-3/report.md](../bench/published/launch-3/report.md).
+
+## Trying it on your own sessions
 1. Set `optimize.route_to` to a cheaper same-provider model, and set model_router to `shadow`.
-2. Run at least 20 real API-key sessions through `trove gateway`, then read the `route` estimates.
-3. Turn on the A/B (`[experiment] enabled = true`) and set model_router to `on`. The T3 guardrails
-   (test_fail_rate, turn inflation, spend) roll it back if they trip.
-4. Record the verdict from `trove report` and set item 7.2 to done in the plan index.
+2. Run some real API-key sessions through `trove gateway`, then read the `route` estimates.
+3. Optionally turn on the A/B (`[experiment] enabled = true`), then set model_router to `on`. The T3
+   guardrails (test_fail_rate, turn inflation, spend) roll it back if they trip.
+4. `trove report` shows the verdict on your own sessions.
