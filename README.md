@@ -19,7 +19,7 @@ One small program. No account. Nothing to sign up for.
 - **Local-first.** Everything lives in `~/.trove`. Nothing is sent anywhere unless you opt in.
 - **Honest numbers.** Every figure is labeled **measured** (counted from usage the provider reported) or **estimated** (derived from list prices or an assumption). Dollar figures are estimates, not invoices.
 - **Proves before acting.** Every optimization is opt-in, estimated in shadow mode first, measured once on, and rolled back if its guardrails trip.
-- **Works with** Claude Code and Codex CLI, on a subscription plan or with your own API keys. Claude Code is the best tested; see [Supported agents](#supported-agents) for exactly what works where.
+- **Works with** Claude Code, on a subscription plan or with your own API keys. See [Supported agents](#supported-agents) for exactly what works where.
 
 ## Get started
 
@@ -30,45 +30,28 @@ One small program. No account. Nothing to sign up for.
 
 Every path checks the download against the release's SHA-256 checksums before it runs anything.
 
-**macOS / Linux, with Homebrew:**
+**Homebrew:**
 ```bash
 brew install usetrove/trove/trove
 ```
 
-**Windows (PowerShell, experimental):**
-```powershell
-irm https://github.com/usetrove/trove/raw/main/install.ps1 | iex
-```
-That is all there is to it. It installs `trove.exe` for your user (no administrator needed) and adds it to your user `PATH`, so `trove` works straight away in that window and in new ones. It checks the download against the release's SHA-256 checksums (and its cosign signature, if cosign is installed) and refuses to install on a mismatch. To leave your `PATH` alone, set `$env:TROVE_NO_PATH = "1"` first; to pin a version, set `$env:TROVE_VERSION = "0.5.0"`. To undo the `PATH` change, remove the folder under Settings, System, About, Advanced system settings, Environment Variables.
-
-<details>
-<summary>macOS or Linux without Homebrew</summary>
-
+**npm** (Node 18+):
 ```bash
-curl -fsSL https://github.com/usetrove/trove/raw/main/install.sh | sh
+npm i -g @usetrove/trove
 ```
-This installs the latest release (v0.5.0) into `~/.local/bin`. To pin a version, set `TROVE_VERSION=0.5.0` before `sh`. If you have [cosign](https://github.com/sigstore/cosign) installed, the script also verifies the release's signature; set `TROVE_REQUIRE_SIGNATURE=1` to refuse an install it cannot verify. It never edits your shell profile: if `~/.local/bin` is not on your `PATH`, it tells you to add it.
+Or run it once without installing: `npx @usetrove/trove`.
 
-</details>
+**Script:**
+```bash
+curl -fsSL https://troverelay.com/install.sh | sh
+```
 
 <details>
-<summary>Windows: prefer to download and check it yourself?</summary>
+<summary>What the script does</summary>
 
-Download `trove_0.5.0_windows_amd64.zip` (or `windows_arm64`) from the [release page](https://github.com/usetrove/trove/releases/tag/v0.5.0), check it, then unzip it. In PowerShell (replace the version with your release's):
-
-```powershell
-$v = "0.5.0"
-Invoke-WebRequest "https://github.com/usetrove/trove/releases/download/v$v/trove_${v}_windows_amd64.zip" -OutFile trove.zip
-Invoke-WebRequest "https://github.com/usetrove/trove/releases/download/v$v/checksums.txt" -OutFile checksums.txt
-$want = (Select-String -Path checksums.txt -Pattern "trove_${v}_windows_amd64.zip").Line.Split(" ")[0]
-if ((Get-FileHash trove.zip -Algorithm SHA256).Hash.ToLower() -ne $want.ToLower()) { throw "checksum mismatch: do not use this file" }
-Expand-Archive trove.zip -DestinationPath "$HOME\trove"
-& "$HOME\trove\trove.exe" doctor
-```
+It installs the latest release (v0.5.0) into `~/.local/bin`. To pin a version, set `TROVE_VERSION=0.5.0` before `sh`. If you have [cosign](https://github.com/sigstore/cosign) installed, it also verifies the release's signature; set `TROVE_REQUIRE_SIGNATURE=1` to refuse an install it cannot verify. It never edits your shell profile: if `~/.local/bin` is not on your `PATH`, it tells you to add it.
 
 </details>
-
-The Claude Code plugin's hooks on Windows also need `sh` (Git Bash) on your `PATH`; `trove doctor` warns when it is missing.
 
 ### 2. Add the Claude Code plugin
 
@@ -125,18 +108,6 @@ export TROVE_DATA_DIR="$(mktemp -d)"
 ./trove
 ```
 
-<details>
-<summary>On Windows (experimental), in PowerShell</summary>
-
-```powershell
-go build -o trove.exe ./cmd/trove
-$env:TROVE_DATA_DIR = Join-Path $env:TEMP "trove-demo"
-.\trove.exe doctor
-.\trove.exe
-```
-
-</details>
-
 Always set `TROVE_DATA_DIR` (or pass `--data-dir`) when experimenting. Without it Trove uses `~/.trove`. What to expect, the API-key gateway walkthrough, configuration and checksum verification are in [docs/getting-started.md](docs/getting-started.md). If you have Go and want the program on your `PATH`, `go install github.com/usetrove/trove/cmd/trove@latest` builds it from source (no checksum check).
 
 ## What using Trove looks like
@@ -159,7 +130,7 @@ Most people need three commands: `/trove:setup` once, `trove` for the report, an
 Two layers. You can use the first without the second.
 
 ```
- Your agent (Claude Code, Codex CLI)
+ Your agent (Claude Code)
       │
       │  1. For everyone, no proxy
       ├──► session history on disk ──► Trove: report, fixes, hooks, MCP tools
@@ -170,7 +141,7 @@ Two layers. You can use the first without the second.
 ```
 
 1. **For everyone, no proxy.** Trove reads local session history, finds waste, proposes fixes to your agent's config files, and can add hooks and an MCP tool server. Nothing sits between your agent and the provider.
-2. **Optional local gateway, for people who pay with their own API keys.** `trove setup` points Claude Code or Codex CLI at a gateway on `127.0.0.1` using the agent's documented custom-endpoint setting. The gateway records metadata per request (token counts, sizes, hashes, model names, timings) and can apply optimizations switched on one at a time. It never handles subscription or OAuth credentials and rejects them with an explanation. `trove setup` will not point Claude Code at it unless it will use an API key (an `ANTHROPIC_API_KEY`, an `apiKeyHelper`, or `plan = "api_key"` in config.toml); with a Claude.ai login, use the plugin.
+2. **Optional local gateway, for people who pay with their own API keys.** `trove setup` points Claude Code at a gateway on `127.0.0.1` using the agent's documented custom-endpoint setting. The gateway records metadata per request (token counts, sizes, hashes, model names, timings) and can apply optimizations switched on one at a time. It never handles subscription or OAuth credentials and rejects them with an explanation. `trove setup` will not point Claude Code at it unless it will use an API key (an `ANTHROPIC_API_KEY`, an `apiKeyHelper`, or `plan = "api_key"` in config.toml); with a Claude.ai login, use the plugin.
 
 ### The optimizers
 
@@ -210,19 +181,19 @@ See [docs/techniques.md](docs/techniques.md) for every technique and its tier.
 
 ## Supported agents
 
-Trove works with **Claude Code** and **Codex CLI**, and ships an experimental **OpenCode** plugin and experimental **Cursor** and **Gemini CLI** hooks (installed only when you name them: `trove hooks install --agent cursor` or `--agent gemini`). Claude Code is the best tested. The table says what exists and how well it has been checked; the full test record, with versions, is in [docs/supported-agents.md](docs/supported-agents.md).
+Trove works with **Claude Code** on macOS and Linux. The table says what exists and how well it has been checked; the full test record, with versions, is in [docs/supported-agents.md](docs/supported-agents.md).
 
-| Feature | Claude Code | Codex CLI |
-|---|---|---|
-| History report and waste finding (`trove`) | Yes. Parsed against real session files (Claude Code 2.1.302) | Yes, but the parser has **not been verified on a real Codex install** |
-| Fixes (`trove fix`) | Yes | Some: the default-model suggestion (`~/.codex/config.toml`), and cache-breaker and context-size findings in `AGENTS.md`. Pruning unused MCP servers is Claude Code only |
-| Hooks | All of them, including repeat-read prevention and output rewrites | Session reset and session-end receipt; large-output advice on request. No repeat-read prevention (Codex names no file-read tool to match) |
-| MCP tool server (`trove mcp install`) | Yes (needs `claude` on your `PATH`) | Yes, at user level (`~/.codex/config.toml`) |
-| Optional gateway | Yes, **API-key use only**. Optimizers rewrite Anthropic Messages requests | Yes, **API-key use only** (`OPENAI_API_KEY`). Trove records metadata; the optimizers do **not** rewrite OpenAI-format requests |
-| Subscription logins (Claude Pro/Max, ChatGPT) | Reports, fixes, hooks and MCP work. The gateway refuses them | Same. A ChatGPT or Codex login is refused by the gateway, and Trove never opens `~/.codex/auth.json` |
+| Feature | Claude Code |
+|---|---|
+| History report and waste finding (`trove`) | Yes. Parsed against real session files (Claude Code 2.1.302) |
+| Fixes (`trove fix`) | Yes |
+| Hooks | All of them, including repeat-read prevention and output rewrites |
+| MCP tool server (`trove mcp install`) | Yes (needs `claude` on your `PATH`) |
+| Optional gateway | Yes, **API-key use only**. Optimizers rewrite Anthropic Messages requests |
+| Subscription logins (Claude Pro/Max) | Reports, fixes, hooks and MCP work. The gateway refuses them |
 
 > [!NOTE]
-> Codex CLI support is built from its documentation and open-source code but **has not been run on a real Codex install**. Treat it as experimental. If you try it, `trove feedback` is the fastest way to tell us what broke. Claude Code's gateway, routing, plugin hooks and MCP server have run in benchmark sessions (Claude Code 2.1.319, Linux containers), but not yet on a person's own macOS or Linux machine; see the [test record](docs/supported-agents.md).
+> Claude Code's gateway, routing, plugin hooks and MCP server have run in benchmark sessions (Claude Code 2.1.319, Linux containers), but not yet on a person's own macOS or Linux machine; see the [test record](docs/supported-agents.md). If you try it, `trove feedback` is the fastest way to tell us what broke.
 
 ## What's new in v0.5.0
 
@@ -234,10 +205,9 @@ Released 2026-11-18. Full notes in the [changelog](CHANGELOG.md) and on the [rel
 - **Real numbers for subscription users.** With no gateway, the status line and `trove` now read your agent's own session logs and show usage as API-equivalent value (estimated), with an optional usage budget (`trove budget set <amount> --usage`).
 - **Third-party tools, refereed.** RTK, ZTK, Token Savior, Ponytail, Caveman and `terse-rules` can be installed and removed through `trove external`, and `trove report` shows each tool's own claim next to what Trove measured. Rule sets can be trialled as a per-user A/B (`trove autopilot trial`).
 - **Sharper measurement.** Cost per turn and per uncached input token, adjustment for each session's prior cost (CUPED), and every technique labeled by tier (T1 safe, T2 behavioural, T3 routing) with an evidence label on every suggestion.
-- **Windows installer and more agents.** A one-line PowerShell installer (`install.ps1`), and experimental Cursor and Gemini CLI hooks.
 - **Spend cap.** `spend_cap = "on"` warns at 80% and at your cap. It refuses requests past the cap only for agents that have passed `trove budget probe`; none has yet, so for now it only warns.
 
-Known gaps are listed in the changelog. The main ones: behavioural (T2) changes have no benchmark verdict yet, Codex CLI, Cursor and Gemini CLI support has not been run on a real install, and the model-routing result is from one model family and one Claude Code version.
+Known gaps are listed in the changelog. The main ones: behavioural (T2) changes have no benchmark verdict yet, and the model-routing result is from one model family and one Claude Code version.
 
 ## Measured results
 
@@ -319,13 +289,12 @@ Nothing changes until you approve it. Each change is shown first, the original f
 
 | Command | What it changes | Undo |
 |---|---|---|
-| `trove setup` | Claude Code `settings.json` (gateway address) or Codex `~/.codex/config.toml` | `trove undo` |
+| `trove setup` | Claude Code `settings.json` (gateway address) | `trove undo` |
 | `trove setup --status-line` | Claude Code `settings.json` (`statusLine`); never replaces one you already have | `trove undo` |
 | `trove fix <id> --apply` | The agent config file named in the diff | `trove undo <id>` |
-| `trove hooks install` | Hooks in Claude Code and Codex CLI settings | `trove hooks uninstall` |
+| `trove hooks install` | Hooks in Claude Code settings | `trove hooks uninstall` |
 | `trove mcp install` | Registers the Trove MCP server with your agents | `trove mcp uninstall` |
 | `trove gateway start --background` | Installs a user background service | `trove gateway stop`, or `trove uninstall` |
-| Windows install script (`install.ps1`) | Adds its folder to your user `PATH` (opt out with `TROVE_NO_PATH=1`); changes no other setting | Remove the folder from Path under Environment Variables, and delete `%LOCALAPPDATA%\Programs\trove` |
 | Normal use | Creates `~/.trove` (database, backups, settings) | `trove uninstall --purge-data` |
 
 Shell rc files are never touched. Trove never reads or writes your API keys.
@@ -333,7 +302,7 @@ Shell rc files are never touched. Trove never reads or writes your API keys.
 ## FAQ
 
 <details>
-<summary><b>Does it work with a subscription (Claude Pro/Max, ChatGPT)?</b></summary>
+<summary><b>Does it work with a subscription (Claude Pro/Max)?</b></summary>
 
 The history report, fixes, hooks and MCP server do. The gateway is for API-key use only; Trove will not touch subscription or OAuth traffic.
 
@@ -342,7 +311,7 @@ The history report, fixes, hooks and MCP server do. The gateway is for API-key u
 <details>
 <summary><b>Which agents and versions?</b></summary>
 
-Claude Code and Codex CLI, plus an experimental OpenCode plugin. See [Supported agents](#supported-agents) above, and [docs/supported-agents.md](docs/supported-agents.md) for the test record. Codex support has not been run on a real install yet.
+Claude Code. See [Supported agents](#supported-agents) above, and [docs/supported-agents.md](docs/supported-agents.md) for the test record.
 
 </details>
 
@@ -375,7 +344,7 @@ trove uninstall                # stops the gateway, restores every agent file, r
 trove uninstall --purge-data   # also deletes what Trove stored in ~/.trove
 ```
 
-Then remove the program itself: `brew uninstall trove`, or delete the binary the install script placed on your `PATH`. Trove never deletes data if an agent file could not be restored, because the backups are then still needed.
+Then remove the program itself: `brew uninstall trove`, `npm uninstall -g @usetrove/trove` (then delete the cached copy in `~/.cache/trove-npm`), or delete the binary the install script placed on your `PATH`. Trove never deletes data if an agent file could not be restored, because the backups are then still needed.
 
 ## Reporting bugs
 
