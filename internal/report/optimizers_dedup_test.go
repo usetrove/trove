@@ -94,8 +94,8 @@ func TestReportStatesInflightDedupShareAgainstTheOnePercentBar(t *testing.T) {
 		wantPct   float64
 		wantAbove bool
 	}{
-		{"well above", 25, 40, 31.25, true},  // $12.50 of $40
-		{"below", 1, 200, 0.25, false},       // $0.50 of $200
+		{"well above", 25, 40, 31.25, true}, // $12.50 of $40
+		{"below", 1, 200, 0.25, false},      // $0.50 of $200
 		{"exactly 1% is not above", 2, 100, 1, false},
 	}
 	for _, tc := range cases {
@@ -134,7 +134,7 @@ func TestReportStatesInflightDedupShareAgainstTheOnePercentBar(t *testing.T) {
 	}
 }
 
-const shadowCap =`{"label":"estimated","optimizers":{"spend_cap":{"tokens":4020,"usd":0.50}}}`
+const shadowCap = `{"label":"estimated","optimizers":{"spend_cap":{"tokens":4020,"usd":0.50}}}`
 
 func gatewayRow(r Report, name string) *OptimizerRow {
 	for i := range r.Optimizers.Rows {

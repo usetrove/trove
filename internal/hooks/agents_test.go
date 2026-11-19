@@ -130,7 +130,7 @@ func TestRewritesStayShadowUntilExpressibleAndProbed(t *testing.T) {
 		{AgentGemini, "Read", config.OptimizerHookReadOutline, true, stateShadow},
 		{AgentCursor, "Bash", config.OptimizerHookQuietCommands, true, stateOn},
 		{AgentCursor, "Bash", config.OptimizerNoiseNormalizer, true, stateShadow}, // no output replacement
-		{AgentCursor, "Read", config.OptimizerHookRepeatRead, false, stateOn},      // a deny, not a rewrite
+		{AgentCursor, "Read", config.OptimizerHookRepeatRead, false, stateOn},     // a deny, not a rewrite
 	}
 	for _, c := range cases {
 		r := newRig(t, map[string]string{c.name: "on"})

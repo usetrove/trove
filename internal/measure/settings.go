@@ -74,7 +74,7 @@ type SettingsEffect struct {
 	Prompt *SettingsMetric `json:"prompt,omitempty"`
 	// Outcomes are tool errors, turns, abandoned sessions and, where recorded,
 	// the last allowlisted test status and git commits per session.
-	Outcomes      []SettingsMetric `json:"outcomes,omitempty"`
+	Outcomes       []SettingsMetric `json:"outcomes,omitempty"`
 	OutcomeVerdict string           `json:"outcome_verdict"`
 	Label          Label            `json:"label"`
 	OtherFixes     int              `json:"other_fixes_in_place,omitempty"`

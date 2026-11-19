@@ -78,7 +78,7 @@ func TestSettingsEffectLessUsageNoWorseOutcomes(t *testing.T) {
 	}
 	for _, want := range []string{"outputStyle for quick-fix", "less output per session", "measured", "n=25 before / 25 after",
 		"no clear change in tool errors per session, turns per session, abandoned sessions rate",
-		"Too few sessions with allowlisted test runs or git commits were recorded","not just this project or task"} {
+		"Too few sessions with allowlisted test runs or git commits were recorded", "not just this project or task"} {
 		if !strings.Contains(e.Text, want) {
 			t.Errorf("text misses %q: %s", want, e.Text)
 		}

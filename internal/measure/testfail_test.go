@@ -31,7 +31,7 @@ func TestTestFailByArmCountsTheLastRunOfFinishedSessions(t *testing.T) {
 		exit int
 	}{
 		{"on1", time.Minute, 0}, {"on1", 2 * time.Minute, 1}, // ends failing
-		{"on2~1", time.Minute, 1},                           // a split gateway key still counts; ends failing
+		{"on2~1", time.Minute, 1},                            // a split gateway key still counts; ends failing
 		{"on3", time.Minute, 1}, {"on3", 2 * time.Minute, 0}, // ends passing
 		{"on4", 50 * time.Minute, 1}, // still running at the cutoff: left out
 		{"off1", time.Minute, 0},

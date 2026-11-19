@@ -85,14 +85,14 @@ func TestTestResultRecordsExitCodesOfAllowlistedTestCommandsOnly(t *testing.T) {
 	r.bashFail(r.files, "go test ./...", "Exit code 137", false)
 
 	// None of these is a result of an allowlisted test command.
-	r.bashOK(r.files, "golangci-lint run", false)                        // allowlisted, but not a test command
-	r.bashOK(r.files, "go test ./internal/x", false)                     // not the exact allowlisted command
-	r.bashOK(r.files, "echo hi", false)                                  // not allowlisted
-	r.bashOK(r.files, "go test ./...", true)                             // interrupted: no result
-	r.bashFail(r.files, "go test ./...", "Exit code 1", true)            // aborted: no result
+	r.bashOK(r.files, "golangci-lint run", false)                             // allowlisted, but not a test command
+	r.bashOK(r.files, "go test ./internal/x", false)                          // not the exact allowlisted command
+	r.bashOK(r.files, "echo hi", false)                                       // not allowlisted
+	r.bashOK(r.files, "go test ./...", true)                                  // interrupted: no result
+	r.bashFail(r.files, "go test ./...", "Exit code 1", true)                 // aborted: no result
 	r.bashFail(r.files, "go test ./...", "Command timed out after 2m", false) // no exit code to read
-	r.bashFail(r.files, "go test ./...", "stderr\nExit code 1", false)   // the code must be the first line
-	r.bashOK(t.TempDir(), "go test ./...", false)                        // a folder without commands.toml
+	r.bashFail(r.files, "go test ./...", "stderr\nExit code 1", false)        // the code must be the first line
+	r.bashOK(t.TempDir(), "go test ./...", false)                             // a folder without commands.toml
 
 	got := r.testRuns()
 	want := []int{0, 0, 1, 137}
