@@ -221,7 +221,7 @@ func TestPingBodyRefusesWhatTheProviderWouldRejectOrWeMayNotPing(t *testing.T) {
 // expire, with the same key, endpoint and prompt, and it is recorded on the bill.
 func TestKeepWarmOnPingsWithTheSameKeyEndpointAndPrompt(t *testing.T) {
 	g, up, ft, clk := warmRig(t, config.StateOn, nil)
-	real := sendWarm(t, g, warmBody)
+	first := sendWarm(t, g, warmBody)
 
 	l := ft.live()
 	if len(l) != 1 || l[0].d != warmEvery {
@@ -246,7 +246,7 @@ func TestKeepWarmOnPingsWithTheSameKeyEndpointAndPrompt(t *testing.T) {
 	if ua := p.header.Get("User-Agent"); !strings.HasPrefix(ua, "trove-keep-warm/") {
 		t.Errorf("a ping must say it is Trove, not the agent (rule 3): User-Agent %q", ua)
 	}
-	if ping.Agent != config.OptimizerKeepWarm || ping.SessionKey != real.SessionKey || ping.CacheReadTokens != 5000 || ping.CostUSD == nil || *ping.CostUSD <= 0 {
+	if ping.Agent != config.OptimizerKeepWarm || ping.SessionKey != first.SessionKey || ping.CacheReadTokens != 5000 || ping.CostUSD == nil || *ping.CostUSD <= 0 {
 		t.Errorf("ping row %+v: want it on the same session, with its cost", ping)
 	}
 	if !strings.Contains(string(ping.OptimizationsApplied), `"keep_warm"`) {

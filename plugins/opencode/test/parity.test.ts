@@ -33,7 +33,16 @@ const s: SessionCtx = { id: "parity-session", login: "api_key", provider: "anthr
 
 test("fixtures exist for every request-level and tool-level optimizer", () => {
   const names = fixtures.cases.map((c) => c.optimizer).sort();
-  assert.deepEqual(names, ["cache_breakpoints", "duplicate_result_collapser", "noise_normalizer", "output_trimmer", "volatile_prefix_mover"]);
+  assert.deepEqual(names, [
+    "cache_breakpoints",
+    "duplicate_result_collapser",
+    "effort_tool_turns",
+    "model_router",
+    "noise_normalizer",
+    "output_trimmer",
+    "verbosity_steer",
+    "volatile_prefix_mover",
+  ]);
 });
 
 for (const c of fixtures.cases) {

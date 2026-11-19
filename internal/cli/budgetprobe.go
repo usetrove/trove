@@ -61,7 +61,7 @@ func budgetProbe(a *App, port int, wait, quiet time.Duration) error {
 	defer func() { _ = srv.Close() }()
 
 	base := "http://" + addr
-	fmt.Fprintf(a.Err, "Fake provider listening on %s. Nothing is forwarded.\n"+
+	_, _ = fmt.Fprintf(a.Err, "Fake provider listening on %s. Nothing is forwarded.\n"+
 		"In another terminal, run your agent against it with a placeholder key, for example:\n"+
 		"  ANTHROPIC_BASE_URL=%s%s ANTHROPIC_API_KEY=trove-probe-placeholder claude -p \"say hi\"\n"+
 		"For other agents, use the base URL %s%s or %s%s/v1 the way `trove setup` does, on this port.\n"+

@@ -45,7 +45,7 @@ type ExtraTurns struct {
 	Text   string `json:"text"`
 }
 
-func extraTurns(treated, ref []finishedSession, c Comparison) ExtraTurns {
+func extraTurns(treated, _ []finishedSession, c Comparison) ExtraTurns {
 	x := ExtraTurns{NTreated: c.NTreated, NRef: c.NRef}
 	if c.Verdict == NotEnoughData {
 		x.Text = "extra turns: " + TextNotEnough

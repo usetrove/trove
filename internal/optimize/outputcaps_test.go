@@ -73,12 +73,12 @@ func TestReadLimitEstimateStopsAtReadCap(t *testing.T) {
 	call := ToolCall{Name: "Read", Input: []byte(`{"file_path":` + quote(path) + `}`)}
 	_, rep := ReadLimit{}.TransformInput(context.Background(), call, Session{Mode: config.StateShadow})
 	capB, _ := outputCapBytes("Read", DefaultBytesPerToken)
-	max := capB - int64(ReadLimitLines*bytesPerLine) // the note is netted off too
-	if rep.Decision == nil || rep.Decision.Bytes <= 0 || rep.Decision.Bytes > max {
-		t.Fatalf("estimate %+v must not exceed what the agent would have received (%d)", rep.Decision, max)
+	limit := capB - int64(ReadLimitLines*bytesPerLine) // the note is netted off too
+	if rep.Decision == nil || rep.Decision.Bytes <= 0 || rep.Decision.Bytes > limit {
+		t.Fatalf("estimate %+v must not exceed what the agent would have received (%d)", rep.Decision, limit)
 	}
-	if rep.BytesRemoved > int(max) {
-		t.Fatalf("BytesRemoved %d above %d", rep.BytesRemoved, max)
+	if rep.BytesRemoved > int(limit) {
+		t.Fatalf("BytesRemoved %d above %d", rep.BytesRemoved, limit)
 	}
 }
 

@@ -41,7 +41,7 @@ export function dataDir(config: string): string {
  */
 export function configWith(optimizers: Record<string, string>, opts: { experiment?: boolean } = {}): string {
   const lines = Object.entries(optimizers).map(([k, v]) => `${k} = "${v}"`);
-  return `[optimizers]\n${lines.join("\n")}\n\n[optimize]\ncustom_agents = ["other"]\nbudget_ms = 1000\n\n[experiment]\nenabled = ${opts.experiment ?? false}\n`;
+  return `[optimizers]\n${lines.join("\n")}\n\n[optimize]\ncustom_agents = ["other"]\nbudget_ms = 1000\nroute_to = "claude-sonnet-5-5"\n\n[experiment]\nenabled = ${opts.experiment ?? false}\n`;
 }
 
 /** Runs `fn` with TROVE_DATA_DIR set for the child processes the bridge spawns. */

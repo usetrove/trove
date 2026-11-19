@@ -61,7 +61,7 @@ func TestExperimentLinesCarryLabelRangeAndSampleSize(t *testing.T) {
 			}
 		}
 	}
-	if perTurn == 0 || perUncached == 0 || perSession == 0 || !(perTurn < perUncached && perUncached < perSession) {
+	if perTurn == 0 || perUncached == 0 || perSession == 0 || perTurn >= perUncached || perUncached >= perSession {
 		t.Errorf("want cost per turn, then per uncached token, then per session; got lines %d %d %d", perTurn, perUncached, perSession)
 	}
 

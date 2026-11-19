@@ -95,7 +95,7 @@ func mainModel(path string) string {
 	if path == "" {
 		return ""
 	}
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return ""
 	}
@@ -129,7 +129,7 @@ func mainModel(path string) string {
 }
 
 func readCapped(path string, n int64) ([]byte, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}

@@ -17,13 +17,13 @@ import (
 // TestHandoffStandIn is not a test: it is the stand-in third-party tool the hand-off tests run (the usual Go
 // helper-process pattern). It echoes its stdin after a fixed prefix, writes a line to stderr, and exits 2 when the
 // input asks it to block, so every channel the hand-off must pass through is exercised.
-func TestHandoffStandIn(t *testing.T) {
+func TestHandoffStandIn(_ *testing.T) {
 	if os.Getenv("TROVE_HANDOFF_STANDIN") != "1" {
 		return
 	}
 	in, _ := io.ReadAll(os.Stdin)
-	fmt.Fprint(os.Stdout, "TOOL:"+string(in))
-	fmt.Fprint(os.Stderr, "tool says hi")
+	_, _ = fmt.Fprint(os.Stdout, "TOOL:"+string(in))
+	_, _ = fmt.Fprint(os.Stderr, "tool says hi")
 	if bytes.Contains(in, []byte("please-block")) {
 		os.Exit(2)
 	}

@@ -156,7 +156,7 @@ func TestGeminiRepeatReadIsDeniedInItsOwnShape(t *testing.T) {
 	if out, _ := r.run(EventReset, start, "--agent", AgentGemini); out != "" {
 		t.Fatalf("start: %q", out)
 	}
-	read := func(prompt string) string {
+	read := func(_ string) string {
 		in := map[string]any{"file_path": p}
 		out, _ := r.run(EventPreRead, geminiInput("BeforeTool", "read_file", in, nil), "--agent", AgentGemini)
 		if out == "" {
