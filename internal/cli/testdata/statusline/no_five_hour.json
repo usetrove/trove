@@ -1,0 +1,9 @@
+{
+  "session_id": "sess-abc",
+  "model": {"id": "claude-opus-5-5", "display_name": "Opus"},
+  "version": "2.1.290",
+  "prompt_cache": {"warm": false, "caching_observed": true, "ttl": "5m", "expires_at": null},
+  "rate_limits": {
+    "seven_day": {"used_percentage": 41.2, "resets_at": 4103049600}
+  }
+}

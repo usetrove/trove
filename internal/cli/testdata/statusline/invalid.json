@@ -1,0 +1,10 @@
+{
+  "session_id": "sess-abc",
+  "model": {"id": "my model CANARY-PROMPT-7731", "display_name": "Opus"},
+  "version": "2.1.290 (canary-private-notes.go)",
+  "prompt_cache": {"warm": "yes", "ttl": "2h"},
+  "rate_limits": {
+    "five_hour": {"used_percentage": 140, "resets_at": 4102444800},
+    "seven_day": {"used_percentage": "NaN", "resets_at": "tomorrow"}
+  }
+}

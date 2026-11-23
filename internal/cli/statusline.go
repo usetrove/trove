@@ -2,9 +2,7 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"time"
 
@@ -69,31 +67,10 @@ func statusLine(a *App, format string) (line string, st *report.Status, problem 
 	}
 	defer func() { _ = db.Close() }()
 
-	status, err := report.BuildStatus(context.Background(), db, cfg, time.Now(), claudeSessionID(a, format))
+	status, err := report.BuildStatus(context.Background(), db, cfg, time.Now(), readClaudeInput(a, format).SessionID)
 	if err != nil {
 		return "Trove: database problem, run `trove doctor`", nil, err.Error()
 	}
 	color := format != report.FormatShell && !a.NoColor && a.Getenv("NO_COLOR") == ""
 	return report.RenderStatus(status, format, color) + autopilotSuffix(dir), &status, ""
-}
-
-// claudeSessionID reads the session id Claude Code sends as JSON on stdin. It
-// reads only when stdin is a pipe or file, never a terminal, so running the
-// command by hand does not wait for input.
-func claudeSessionID(a *App, format string) string {
-	if format != report.FormatClaude || a.In == nil {
-		return ""
-	}
-	if f, ok := a.In.(*os.File); ok {
-		if fi, err := f.Stat(); err != nil || fi.Mode()&os.ModeCharDevice != 0 {
-			return ""
-		}
-	}
-	var in struct {
-		SessionID string `json:"session_id"`
-	}
-	if json.NewDecoder(io.LimitReader(a.In, 1<<20)).Decode(&in) != nil {
-		return ""
-	}
-	return in.SessionID
 }
