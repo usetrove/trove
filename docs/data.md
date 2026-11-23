@@ -434,6 +434,26 @@ Decisions and usage reports from harness plugins (such as the OpenCode plugin).
 
 **Retention:** deleted after `retention_days`.
 
+### `limit_samples`
+
+Claude Code's plan-usage meter, as it passes it to `trove status-line --format claude` on stdin. A row is written only when a value changed since the session's previous row. Empty means Claude Code did not send that value (the 5-hour and weekly windows come only for Pro, Max and Ultra subscriptions, after the session's first response).
+
+| Column | Meaning |
+|---|---|
+| `id` | Row number |
+| `ts` | When |
+| `session_key` | Hash of the session id |
+| `five_hour_pct` | Share of the 5-hour limit used, 0 to 100, as Claude Code reported it |
+| `five_hour_resets_at` | When the 5-hour window resets |
+| `seven_day_pct` | Share of the weekly limit used, 0 to 100, as Claude Code reported it |
+| `seven_day_resets_at` | When the weekly window resets |
+| `cache_warm` | 1 if the main conversation's cached prefix was still within its lifetime, 0 if not |
+| `cache_ttl` | That cache's lifetime in seconds (300 or 3600) |
+| `model` | Model id, checked against a strict pattern |
+| `cc_version` | Claude Code version number, checked against a strict pattern |
+
+**Retention:** deleted after `retention_days`.
+
 ### `repo_features`
 
 What kind of repo you work in, as a few fixed labels.

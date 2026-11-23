@@ -152,6 +152,8 @@ func TestSchemaIsMetadataOnly(t *testing.T) {
 			"n_on", "n_off", "label", "status", "inputs_hash"},
 		"hook_events": {"id", "ts", "session_key", "hook", "kind", "bytes", "tokens"},
 		"test_runs":   {"id", "ts", "session_key", "cmd_hash", "exit_code"},
+		"limit_samples": {"id", "ts", "session_key", "five_hour_pct", "five_hour_resets_at", "seven_day_pct",
+			"seven_day_resets_at", "cache_warm", "cache_ttl", "model", "cc_version"},
 		"adapter_events": {"id", "ts", "session_key", "harness", "login", "provider", "model", "kind", "optimizer", "state",
 			"bytes", "tokens", "overhead_tokens", "in_tokens", "out_tokens", "cache_read_tokens", "cache_write_tokens", "cost_usd", "detail"},
 		"repo_features": {"repo_key", "computed_at", "size_bucket", "lang_mix", "test_framework"},

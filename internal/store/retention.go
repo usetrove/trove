@@ -35,6 +35,7 @@ var retentionRules = []retentionRule{
 	{"hook_events", `DELETE FROM hook_events WHERE ts < ?`, []string{"ts"}, false},
 	{"test_runs", `DELETE FROM test_runs WHERE ts < ?`, []string{"ts"}, false},
 	{"adapter_events", `DELETE FROM adapter_events WHERE ts < ?`, []string{"ts"}, false},
+	{"limit_samples", `DELETE FROM limit_samples WHERE ts < ?`, []string{"ts"}, false},
 	{"experiment_results", `DELETE FROM experiment_results WHERE computed_at < ?`, []string{"computed_at"}, false},
 	{"repo_features", `DELETE FROM repo_features WHERE computed_at < ?`, []string{"computed_at"}, false},
 	{"usage_daily", `DELETE FROM usage_daily WHERE day < ?`, []string{"day"}, true},
