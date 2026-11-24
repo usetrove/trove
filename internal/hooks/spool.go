@@ -32,6 +32,11 @@ const (
 	KindExtraRead = "extra_read"
 	// KindAdopted: the agent used trove_run. Counted once per session, for hook_large_output's guardrail.
 	KindAdopted = "adopted"
+	// KindOverridden: the user sent a prompt again after the cold-resume guard blocked one (hook_cold_resume).
+	KindOverridden = "overridden"
+	// KindCleared: the session ended with /clear after the cold-resume guard blocked a prompt, before any prompt
+	// went through.
+	KindCleared = "cleared"
 	// KindArmOn and KindArmOff are not decisions. They record which side of a trial a session was
 	// assigned when it started, so a session that never ends is still counted. They go to
 	// experiment_assignments, not hook_events.
@@ -178,7 +183,7 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 
 func validKind(k string) bool {
 	switch k {
-	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindArmOn, KindArmOff, KindTestRun:
+	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindOverridden, KindCleared, KindArmOn, KindArmOff, KindTestRun:
 		return true
 	}
 	return false

@@ -174,3 +174,56 @@ func TestLimitSpoolLineIsMetadataOnly(t *testing.T) {
 		t.Errorf("spool line:\n got %s\nwant %s", b, want)
 	}
 }
+
+// The cold-resume hook reads a session's newest spooled sample without the database.
+func TestLatestSpooledLimitSample(t *testing.T) {
+	dir := t.TempDir()
+	if _, found := LatestSpooledLimitSample(dir, "c-one"); found {
+		t.Fatal("no spool yet, so no sample")
+	}
+	a, b := fullSample("c-one"), fullSample("c-two")
+	c := fullSample("c-one")
+	c.TS, c.CacheTTLSeconds = a.TS.Add(time.Minute), i64(300)
+	for _, s := range []LimitSample{a, b, c} {
+		if err := AppendLimitSpool(dir, s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, found := LatestSpooledLimitSample(dir, "c-one")
+	if !found || got.TS.UnixMilli() != c.TS.UnixMilli() || got.CacheTTLSeconds == nil || *got.CacheTTLSeconds != 300 {
+		t.Fatalf("want the session's newest line, got %+v (found %v)", got, found)
+	}
+	if got, found := LatestSpooledLimitSample(dir, "c-two"); !found || got.SessionKey != "c-two" {
+		t.Errorf("another session's line: %+v %v", got, found)
+	}
+	if _, found := LatestSpooledLimitSample(dir, "c-three"); found {
+		t.Error("a session with no line has no sample")
+	}
+	if _, found := LatestSpooledLimitSample(dir, "../c-one"); found {
+		t.Error("a key that is not a hash must be refused")
+	}
+}
+
+// Only the end of the spool is read; a line cut by that read is skipped, and a damaged line never yields a sample.
+func TestLatestSpooledLimitSampleReadsOnlyTheTail(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, LimitSpoolDir), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := `{"t":1,"s":"c-old","ttl":3600}` + "\n"
+	filler := strings.Repeat(`{"t":2,"s":"c-other"}`+"\n", limitTailBytes/20)
+	body := old + filler + `{"t":3,"s":"c-new","ttl":12345}` + "\n" + `{"t":4,"s":"c-new","ttl":300` + "\n"
+	if err := os.WriteFile(spoolPath(dir), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, found := LatestSpooledLimitSample(dir, "c-old"); found {
+		t.Error("a line before the tail must not be read")
+	}
+	got, found := LatestSpooledLimitSample(dir, "c-new")
+	if !found || got.TS.UnixMilli() != 3 {
+		t.Fatalf("the torn last line must be skipped for the one before it: %+v %v", got, found)
+	}
+	if got.CacheTTLSeconds != nil {
+		t.Errorf("a TTL that is not 300 or 3600 must be dropped, got %v", *got.CacheTTLSeconds)
+	}
+}

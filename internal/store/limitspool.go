@@ -300,3 +300,51 @@ func (d *DB) ingestLimitFile(ctx context.Context, path string) (int, error) {
 	}
 	return n, tx.Commit()
 }
+
+// limitTailBytes is how much of the spool's end LatestSpooledLimitSample reads. A line is about 250 bytes, so this
+// holds the last few hundred changes, across every session.
+const limitTailBytes = 64 << 10
+
+// LatestSpooledLimitSample returns the newest spooled sample of one session, reading only the end of the spool and
+// never the database, so a hook can call it on its hot path. found is false when the session has no line there (no
+// status line, or an ingest moved its lines into limit_samples). A line is written only when a value changed, so
+// the sample's time is when it last changed, not when the last response arrived.
+func LatestSpooledLimitSample(dataDir, sessionKey string) (s LimitSample, found bool) {
+	if !validMarkerKey(sessionKey) {
+		return LimitSample{}, false
+	}
+	f, err := os.Open(filepath.Join(limitSpoolDir(dataDir), limitSpoolName)) //nolint:gosec // Trove's own data dir
+	if err != nil {
+		return LimitSample{}, false
+	}
+	defer func() { _ = f.Close() }()
+	fi, err := f.Stat()
+	if err != nil {
+		return LimitSample{}, false
+	}
+	start := fi.Size() - limitTailBytes
+	if start < 0 {
+		start = 0
+	}
+	buf := make([]byte, fi.Size()-start)
+	if _, err := f.ReadAt(buf, start); err != nil && !errors.Is(err, io.EOF) {
+		return LimitSample{}, false
+	}
+	lines := strings.Split(string(buf), "\n")
+	if start > 0 && len(lines) > 0 {
+		lines = lines[1:] // the first line was cut by the read; it may be any session's
+	}
+	for i := len(lines) - 1; i >= 0; i-- {
+		if !strings.Contains(lines[i], sessionKey) {
+			continue
+		}
+		var l limitLine
+		if json.Unmarshal([]byte(lines[i]), &l) != nil || l.S != sessionKey {
+			continue
+		}
+		if s, ok := l.sample(); ok {
+			return s, true
+		}
+	}
+	return LimitSample{}, false
+}
