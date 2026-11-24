@@ -152,6 +152,24 @@ re-prompts: the prompt after a routine turn being a correction more often than i
 points. It ends if the steer is switched on everywhere or the live check stops passing. Like a rule-set trial it never
 turns anything on. See [hooks.md](hooks.md#routine-steer).
 
+### Code-output trials (Ponytail; added 2026-11-24)
+
+Ponytail (W9) asks the agent to write less code, so tokens per turn are the wrong yardstick for it.
+`trove autopilot trial ponytail` assigns arms exactly like any other rule-set trial. It is judged on two outcomes:
+- **Code written per session.** This is the input size of the agent's `Write`, `Edit`, `MultiEdit` and
+  `NotebookEdit` calls in that session's history. It covers the main conversation and subagents, and only sizes are
+  read (`history_tool_calls`). Sizes become tokens at 3.5 bytes per token (estimated). The difference is also shown as
+  a share of the plan limits for the model most of the trial used (estimated, from the [limit fit](limit-fit.md)).
+- **Test pass rate per arm.** This is the share of sessions that ran an allowlisted test command and ended with the
+  tests passing (measured).
+
+Every finished session with history counts, including sessions that wrote no code. Leaving those out would hide a
+rule set that stops the agent coding at all.
+
+The test_fail_rate guardrail and a worse cost or turn count stop the trial (`rolled_back`). So does more code with the
+rules than without, beyond chance. Less code, beyond chance, with tests held, ends the trial with the figures. Like
+every rule-set trial it never turns Ponytail on; the user decides.
+
 ## Settings policy (a third, separate yes; added 2026-11-24, plan 4.5)
 
 `trove autopilot settings on` asks for agreement to `settings-v1`, the only policy that edits a file outside

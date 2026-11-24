@@ -5,6 +5,11 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ## [Unreleased]
 
 ### Added
+- Code-output trial for Ponytail: `trove autopilot trial ponytail` is now judged on two outcomes:
+  - code written per session, the input size of Write, Edit, MultiEdit and NotebookEdit calls in history (estimated tokens), shown as a share of the plan limits (estimated);
+  - test pass rate per arm (measured).
+
+  More code with the rules, beyond chance, stops the trial. Less code with tests held ends it with the figures. Autopilot still never turns a rule set on. See docs/autopilot.md.
 - Routine agents (B25, T3, opt-in): `trove tasks apply agents` writes `trove-test-runner` and `trove-lint-fixer` subagents on a cheaper model (`routine_model`, default haiku) at `effort: low`, plus `/trove-test` and `/trove-lint` skills that fork into them. The main conversation keeps its own model and effort.
   - Every reply starts with `STATUS: done|failed|unsure` followed by at most 8 lines. On `failed` or `unsure` the main agent is told to do the work itself or use general-purpose.
   - `trove tasks apply explore` (separate opt-in) replaces the built-in Explore in a project with a read-only one on the routine model at low effort. It is never offered over your own Explore.

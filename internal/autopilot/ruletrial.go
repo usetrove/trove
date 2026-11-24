@@ -178,6 +178,16 @@ func advanceRuleTrials(ctx context.Context, db *store.DB, dir string, cfg config
 			}
 			ev.Blocked = firstNonEmpty(steerTrialBlocked(dir, cfg, name), ev.Blocked)
 			d = DecideSteerTrial(cur, ev, v, s, now)
+		} else if IsCodeRuleSet(tool) {
+			cOn, cOff, model, err := measure.CodeTrialByArm(ctx, db, name, cur.SinceMS, now.Add(-idle).UnixMilli())
+			if err != nil {
+				return changed, events, fmt.Errorf("cannot read the code written in the trial of %s: %v", tool, err)
+			}
+			c := measure.JudgeCodeTrial(cOn, cOff, tOn, tOff, TrialPolicy().probationMin(technique.T2))
+			if c.Enough && c.SavedPerSession > 0 && model != "" {
+				c.Limits = measure.CodeLimits(dir, model, c.SavedPerSession, now)
+			}
+			d = DecideCodeTrial(cur, ev, v, c, now)
 		} else {
 			d = DecideRuleTrial(cur, ev, v, now)
 		}
@@ -203,6 +213,51 @@ func ruleTrialBlocked(on []string, tool string) string {
 		}
 	}
 	return blockedBy(on, tool)
+}
+
+// codeRuleSets are the rule sets whose purpose is less code (technique W9, "rules that make the agent write less
+// code"). Their trial is judged on the code the agent writes per session and on test results, not on tokens per turn.
+var codeRuleSets = map[string]bool{"ponytail": true}
+
+// IsCodeRuleSet reports whether tool is a rule set judged by a code-output trial.
+func IsCodeRuleSet(tool string) bool { return codeRuleSets[tool] && IsRuleSet(tool) }
+
+// DecideCodeTrial is DecideRuleTrial for a code rule set, a pure function of its inputs. Beside the trial's usual
+// guardrails (test failures, and sessions that come out worse on cost or turns) it stops when sessions with the
+// rules write more code, beyond chance. It finishes, never turning the rule set on, when they write less, beyond
+// chance, with test pass rate held by the guardrail. Its verdict names code tokens per session (estimated), the
+// share of the plan limits (estimated) and test pass rate on each side (measured).
+func DecideCodeTrial(cur config.AutopilotEntry, ev Evidence, v experiment.Result, c measure.CodeVerdict, now time.Time) Decision {
+	p := TrialPolicy()
+	next := cur
+	set := func(state, reason string) {
+		next.State, next.Reason, next.SinceMS = state, reason, now.UnixMilli()
+	}
+	if cur.State != config.AutopilotProbation {
+		return Decision{Entry: cur}
+	}
+	figures := c.Text()
+	testsTrip, testsWhy := measure.TestFailTrips(ev.Tests.On, ev.Tests.Off, p.TestFailMinSessions, p.testFailMargin(technique.T2))
+	switch {
+	case ev.Blocked != "":
+		set(config.AutopilotOff, "trial stopped: "+ev.Blocked)
+	case testsTrip:
+		set(config.AutopilotRolledBack, "trial stopped by the test_fail_rate guardrail: "+testsWhy+". So far: "+figures)
+	case ev.CanProbation != "":
+		set(config.AutopilotOff, "the trial cannot continue: "+ev.CanProbation)
+	case v.Status == experiment.WorseOutcomes || v.Status == experiment.CostsMore:
+		set(config.AutopilotRolledBack, "trial stopped: sessions with the rules came out worse ("+v.Reason+"). So far: "+figures)
+	case c.Enough && c.Worse:
+		set(config.AutopilotRolledBack, "trial stopped: more code written per session with the rules than without, beyond chance. "+figures)
+	case c.Enough && c.Saves:
+		set(config.AutopilotOff, "trial finished: less code written per session with the rules, beyond chance, and tests held. "+figures+
+			". Autopilot does not turn rule sets on; turn it on yourself if you want it")
+	case now.Sub(time.UnixMilli(cur.SinceMS)) >= time.Duration(p.ProbationMaxDays)*24*time.Hour:
+		set(config.AutopilotOff, fmt.Sprintf("trial finished after %d days with no clear effect on the code written. %s", p.ProbationMaxDays, figures))
+	default:
+		next.Reason = fmt.Sprintf("trial running: each side needs %d finished sessions. So far: %s", p.probationMin(technique.T2), figures)
+	}
+	return Decision{Entry: next}
 }
 
 // RepromptMarginPts is how many percentage points more often the prompt after a steered routine turn may be a
