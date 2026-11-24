@@ -428,6 +428,34 @@ Verified 2026-10-29 / 2026-10-30. Re-check when either agent changes.
     the last point the guard never blocks until a live check or the user's own session records that it can
     (`UserPromptSubmit` in `hook-capabilities.json`, `block`).
 
+- Model switches and compaction, for the rebuild guards (read 2026-11-24 at `code.claude.com/docs/en/hooks`,
+  `/prompt-caching` and `/model-config`):
+  - `PreModelSwitch` input: `from_model`, `to_model`, `requested_model`, `source` (`"command"` for `/model <name>`,
+    the Model setting in `/config` or turning on fast mode; `"picker"`; `"sdk"`), `context_tokens` (the last
+    response's input, cache read, cache creation and output tokens; `0` before the first response),
+    `prompt_cache_warm`, `cache_ttl` (`"5m"` or `"1h"`), `estimated_cache_write_usd` ("on `to_model` at the
+    `cache_ttl` rate, excluding the next response") and `pricing`. The matcher compares the canonical name of
+    `to_model`.
+  - It answers `permissionDecision` `allow`, `deny` or `ask`. "Only `/model` in an interactive session can show the
+    `"ask"` prompt. On every other surface, including non-interactive mode with the `-p` flag, `/config`, and
+    `set_model` requests, Claude Code treats `"ask"` as a refusal." "Claude Code shows the user any `systemMessage`
+    your hook returns regardless of the decision." Claude Code already "asks you to confirm the switch only while
+    the cache is still warm and the new model isn't the one that produced the last response" (prompt-caching).
+  - Its default timeout is 30 s, and "A PreModelSwitch hook that doesn't respond before its timeout blocks the
+    switch." An exit code other than 0 or 2 without JSON lets the switch go ahead.
+  - `PostModelSwitch` gets the same fields and two more sources, `"auto"` and `"resume"`. It fires for "A setting such
+    as `opusplan` entering or leaving plan mode" and cannot block. Whether `PreModelSwitch` fires for those toggles is
+    not stated. "each plan-mode toggle is a model switch and starts a fresh cache" (prompt-caching).
+  - `PreCompact` input: `trigger` (`manual` for `/compact`; `auto` for the auto-compact window and idle compaction)
+    and `custom_instructions`. No token or cache field. "Exit with code 2 to block compaction. For a manual
+    `/compact`, the stderr message is shown to the user." It can also block with JSON `decision: "block"`; whether
+    that reason is shown is not stated, so Trove uses exit 2. Its `systemMessage` and `continue` are discarded. A
+    blocked auto compaction is skipped when proactive, but when it was "triggered to recover from a context-limit
+    error … the current request fails", so Trove never blocks `auto`. Default timeout 600 s; what a timeout does is
+    not stated.
+  - Compaction while the cache is cold: "the summarization request reprocesses that history as uncached input"
+    (prompt-caching). `PostCompact` gets `trigger` and `compact_summary` and has no decision control.
+
 ### Live check of the test-pass signal (manual)
 
 Steps 1-4 were run on 2.1.326 on 2026-11-17 (passing and failing runs; the interrupt in step 3 and step 5 were
