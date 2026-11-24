@@ -26,6 +26,9 @@ trove hooks install --rewrite   # also install the hooks that rewrite tool input
 | `post_tool_test_result` | Claude Code `PostToolUse` and `PostToolUseFailure` on `Bash` | The test-pass signal. When the command is exactly one of the project's test commands in `.trove/commands.toml` (an entry named `test`, or starting or ending with `test-`, `test_`, `-test`, `_test`; arguments compared after splitting on whitespace), it records the exit code and a hash of the command in `test_runs`. A successful call counts as exit 0; a failure's code is read from the first line of its error (`Exit code N`). Interrupted runs and failures without that line are not recorded. Never prints anything and never changes the call. The session roll-up carries the last status (pass, fail or none) and the run and failure counts. |
 | `pre_tool_subagent` | `PreToolUse` on `Agent` (`Task` before Claude Code v2.1.63; checked 2026-11-17) | Does nothing unless a scout is installed and this session is in the "off" arm of its A/B trial; then it declines a call to the scout subagent with a short message asking the agent to do the work directly. See docs/tasks.md. |
 | `user_prompt_cold_check` | Claude Code `UserPromptSubmit` | The cold-resume guard (`hook_cold_resume`, off by default; see [below](#cold-resume-guard)). When a large session's prompt cache has expired, it warns about what the next prompt will cost, or stops the first prompt after a cold resume once. Returns at once while the guard is off. |
+| `pre_model_switch` | Claude Code `PreModelSwitch` | The model-switch guard (`hook_model_switch`, off by default; see [below](#model-switch-and-cold-compact-guards)). Adds what switching a large, warm session to another model costs to Claude Code's own confirmation. Never blocks or asks. |
+| `post_model_switch` | Claude Code `PostModelSwitch` | Records that a switch the model-switch guard warned about went ahead. Prints nothing. |
+| `pre_compact_cold_check` | Claude Code `PreCompact`, matcher `manual` | The cold-compact guard (`hook_cold_compact`, off by default). Stops a manual `/compact` once when the cache has expired and the history is large. The existing `session_reset` entry on `PreCompact` is unchanged. |
 | `pre_tool_large_output` (optional, `--large-output`) | `PreToolUse` on `Bash` | For a known-noisy command (`go test ./...`, `npm test`, bare `pytest`, `make`, verbose builds) adds a hint to use `trove_run`. Never blocks. Only fires when the MCP server is registered. |
 | `post_tool_run` (installed with `--large-output` or `--rewrite`) | `PostToolUse` on `mcp__trove__trove_run` | Counts, once per session, that the agent used `trove_run`. It is how the guardrail for the hint above sees whether the hint is followed. Changes nothing. Run `trove hooks install` again if your hooks were installed with v0.3.0 or earlier; `trove hooks status` says when it is missing. |
 
@@ -274,6 +277,53 @@ shadow when that share is above 50% beyond chance, with at least 20 blocks (same
 above). Stopping a prompt you then send anyway did not help you. The 50% is a placeholder, not set by a benchmark.
 `trove report` shows what followed: see [measurement.md](measurement.md#cold-resume-guard).
 
+## Model-switch and cold-compact guards
+
+Two more actions make the next request reprocess the whole context. Both guards use the cold-resume guard's
+thresholds (`optimize.cold_resume_min_tokens`, `optimize.cold_resume_min_week_pct`) and its modes. Both are pinned per
+session, act once per session, are never turned on by Autopilot, and are measured with their own guardrail.
+
+```toml
+[optimizers]
+hook_model_switch = "shadow"   # off (default) | shadow | on
+hook_cold_compact = "shadow"   # off (default) | shadow | on
+```
+
+**`hook_model_switch` (B22).** "Each model has its own cache", so switching a session to another model makes the next
+request write the whole context again.
+- **When it acts:** on `PreModelSwitch` with `prompt_cache_warm` true, a different `to_model`, and `context_tokens` at
+  or above the threshold (or the weekly share's low end at or above its threshold).
+- **`on`:** a `systemMessage` (at most 420 bytes) with the tokens, Claude Code's own `estimated_cache_write_usd` and
+  the share of the 5-hour and weekly limits (estimated, with range and basis).
+- **Never a decision:** Claude Code already asks you to confirm a switch while the cache is warm, and that
+  confirmation decides. The guard never answers `allow`, `deny` or `ask`, because `"ask"` is a refusal outside an
+  interactive `/model`.
+- **Speed:** a `PreModelSwitch` hook that times out blocks the switch. The guard reads no transcript and runs under
+  the 150 ms safety net, with a 5 s timeout set. Measured on the Windows dev machine: p95 39 ms
+  (`TestModelSwitchTiming`).
+- **Outcome:** `post_model_switch` records `overridden` when the switch went ahead (not for `auto` or `resume`
+  switches). Guardrail `model_switch_override`: rolled back to shadow when more than 50% of warnings are followed by
+  the switch beyond chance, with at least 20 warnings (a placeholder).
+- **opusplan:** plan-mode toggles under the `opusplan` setting are not warned about (whether they reach
+  `PreModelSwitch` is not documented). `trove report` shows a finding instead when your `model` setting is
+  `opusplan`: the Opus↔Sonnet switches in your history, the tokens they rebuilt, and their cost and share of the
+  limits. A `/model` switch between the same families looks the same in the log, so it is an upper bound.
+
+**`hook_cold_compact` (B23).** After the cache expired, a `/compact` sends the whole history to be summarized "as
+uncached input".
+- **When it acts:** on a manual `/compact` (`trigger` `manual`) when the newest main-conversation request is older
+  than the cache lifetime in effect (as for the idle case above) and its prompt tokens reach the thresholds.
+- **`on`:** exits 2 with a message on stderr, which is shown to you for a manual `/compact`. The message gives the
+  cost (priced as uncached input), says "type /compact again to compact anyway", or offers `/clear` and the same
+  in-memory note as the cold-resume guard.
+- **Second `/compact`:** goes through and records `overridden`. A `/clear` while the stop is pending records
+  `cleared`.
+- **Never `auto`:** blocking an auto compaction that recovers from a context-limit error fails the request.
+- **No print-mode gate:** a stopped manual compaction is only skipped, and the session goes on.
+- **The one non-zero exit:** this is the only hook that exits non-zero on purpose. Every error, panic and the 250 ms
+  safety net still end in exit 0, and without a stderr to write to it never stops anything. Guardrail
+  `cold_compact_override`, same rule as above.
+
 ## Measurement
 
 Each decision is one row in `hook_events`: hook, kind, bytes, estimated tokens, hashed session key.
@@ -513,6 +563,11 @@ wait longer than its cache lifetime. Use a throwaway data dir.
 
 ## Known gaps
 
+- The model-switch guard cannot tell a plan-mode toggle from a `/model` switch, and the opusplan finding counts both.
+  The cold-compact guard's session_reset neighbour still forgets the session's reads when a `/compact` is stopped,
+  so a later repeat read is allowed (never a wrong block). Neither guard has been tried in a real session yet:
+  check that the cost appears beside Claude Code's switch confirmation, that a cold `/compact` is stopped once and
+  goes through the second time, and whether `PreModelSwitch` fires on an opusplan toggle.
 - The cold-resume guard never stops a prompt after a mid-session idle gap, only warns, because self-started turns
   look the same. After a block, a turn Claude Code starts itself would count as `overridden`. The first prompt
   after a resume could itself be a self-started turn (for example a message from another session); it is stopped

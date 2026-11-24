@@ -304,6 +304,12 @@ agent's own session logs instead and says so:
 
   So read it as a direction, not a verdict.
 
+The model-switch guard (`model_switch` in `--json`) and the cold-compact guard (`cold_compact`) get the same
+section. For the model-switch guard "overridden" is the share of warnings after which the switch went ahead, and it
+has no hour-after comparison because it never stops anything. With the `opusplan` model setting, the report also
+shows the Opus↔Sonnet switches in history and what they rebuilt (measured; cost and limit share estimated), an upper
+bound because a `/model` switch between the same families looks the same.
+
 ## 5. Limits you should know about
 
 - **Sessions are inferred.** Without a Claude Code session id, a session is a
