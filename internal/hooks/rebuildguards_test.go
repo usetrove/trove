@@ -247,3 +247,167 @@ func TestModelSwitchTiming(t *testing.T) {
 		t.Errorf("p95 = %v", p95)
 	}
 }
+
+// compact runs PreCompact through Main with a stderr writer, as `trove hook` does.
+func (r *coldRig) compact(trigger string) (stdout, stderr string, code int) {
+	r.t.Helper()
+	var out, errb bytes.Buffer
+	code = Main(Env{Args: []string{EventCompactCheck, "--data-dir", r.dir}, Stdin: strings.NewReader(r.fill("claude_pre_compact_trigger.json", "{{TRIGGER}}", trigger)),
+		Stdout: &out, Stderr: &errb, Getenv: r.env, Now: func() time.Time { return r.now }})
+	return out.String(), errb.String(), code
+}
+
+func TestColdCompactGuardModes(t *testing.T) {
+	cases := []struct {
+		name     string
+		state    string
+		trigger  string
+		now      time.Time
+		wantCode int
+		wantKind string
+	}{
+		{"off", "off", "manual", coldLastRequest.Add(2 * time.Hour), 0, ""},
+		{"shadow, cold", "shadow", "manual", coldLastRequest.Add(2 * time.Hour), 0, KindWouldBlock},
+		{"on, cold", "on", "manual", coldLastRequest.Add(2 * time.Hour), 2, KindBlocked},
+		{"on, warm: the summary reads the cache", "on", "manual", coldLastRequest.Add(30 * time.Minute), 0, ""},
+		{"on, auto: never stopped", "on", "auto", coldLastRequest.Add(2 * time.Hour), 0, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := newGuardRig(t, config.OptimizerHookColdCompact, c.state)
+			r.now = c.now
+			r.begin("startup", false, 0, 0)
+			out, msg, code := r.compact(c.trigger)
+			if code != c.wantCode || out != "" {
+				t.Fatalf("code %d (want %d), stdout %q, stderr %q", code, c.wantCode, out, msg)
+			}
+			if (msg != "") != (c.wantCode == 2) {
+				t.Errorf("stderr %q", msg)
+			}
+			var want []string
+			if c.wantKind != "" {
+				want = []string{c.wantKind}
+			}
+			if got := guardKinds(r.rig, config.OptimizerHookColdCompact); strings.Join(got, ",") != strings.Join(want, ",") {
+				t.Errorf("kinds %v, want %v", got, want)
+			}
+		})
+	}
+}
+
+func TestColdCompactMessage(t *testing.T) {
+	r := newGuardRig(t, config.OptimizerHookColdCompact, "on")
+	r.now = coldLastRequest.Add(2 * time.Hour)
+	r.begin("startup", false, 0, 0)
+	_, msg, code := r.compact("manual")
+	if code != 2 {
+		t.Fatalf("code %d", code)
+	}
+	for _, want := range []string{"1-hour prompt cache lifetime", "uncached input", "about 163,000 tokens", "(estimated by Trove)",
+		"type /compact again", "/clear", "--- note ---", "Files edited: internal/upload/upload.go"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message lacks %q:\n%s", want, msg)
+		}
+	}
+}
+
+// The second /compact goes through and counts as compacting anyway; a /clear after a stop counts as cleared.
+func TestColdCompactOncePerSessionAndOutcomes(t *testing.T) {
+	r := newGuardRig(t, config.OptimizerHookColdCompact, "on")
+	r.now = coldLastRequest.Add(2 * time.Hour)
+	r.begin("startup", false, 0, 0)
+	if _, _, code := r.compact("manual"); code != 2 {
+		t.Fatal("first /compact not stopped")
+	}
+	if _, _, code := r.compact("manual"); code != 0 {
+		t.Fatal("second /compact stopped")
+	}
+	if _, _, code := r.compact("manual"); code != 0 {
+		t.Fatal("third /compact stopped")
+	}
+	if got := guardKinds(r.rig, config.OptimizerHookColdCompact); strings.Join(got, ",") != "blocked,overridden" {
+		t.Errorf("kinds %v", got)
+	}
+
+	c := newGuardRig(t, config.OptimizerHookColdCompact, "on")
+	c.now = coldLastRequest.Add(2 * time.Hour)
+	c.begin("startup", false, 0, 0)
+	if _, _, code := c.compact("manual"); code != 2 {
+		t.Fatal("not stopped")
+	}
+	h := &handler{dir: c.dir, agent: AgentClaude, now: func() time.Time { return c.now }}
+	h.coldSessionEnd(Input{Reason: "clear"}, c.key())
+	if got := guardKinds(c.rig, config.OptimizerHookColdCompact); strings.Join(got, ",") != "blocked,cleared" {
+		t.Errorf("kinds %v", got)
+	}
+}
+
+// Rule 4: errors, panics and the deadline end in exit 0, and without a stderr writer nothing is ever stopped.
+func TestColdCompactFailsOpen(t *testing.T) {
+	t.Run("no stderr", func(t *testing.T) {
+		r := newGuardRig(t, config.OptimizerHookColdCompact, "on")
+		r.now = coldLastRequest.Add(2 * time.Hour)
+		r.begin("startup", false, 0, 0)
+		if out, code := r.run(EventCompactCheck, r.fill("claude_pre_compact_trigger.json", "{{TRIGGER}}", "manual")); code != 0 || out != "" {
+			t.Fatalf("a block nobody can read: code %d out %q", code, out)
+		}
+	})
+	t.Run("panic", func(t *testing.T) {
+		r := newGuardRig(t, config.OptimizerHookColdCompact, "on")
+		r.now = coldLastRequest.Add(2 * time.Hour)
+		r.begin("startup", false, 0, 0)
+		coldCompactTestHook = func() { panic("boom") }
+		t.Cleanup(func() { coldCompactTestHook = nil })
+		if _, msg, code := r.compact("manual"); code != 0 || msg != "" {
+			t.Fatalf("code %d stderr %q", code, msg)
+		}
+	})
+	t.Run("stalled", func(t *testing.T) {
+		r := newGuardRig(t, config.OptimizerHookColdCompact, "on")
+		r.now = coldLastRequest.Add(2 * time.Hour)
+		r.begin("startup", false, 0, 0)
+		old := postDeadline
+		postDeadline = 20 * time.Millisecond
+		release := make(chan struct{})
+		coldCompactTestHook = func() { <-release }
+		t.Cleanup(func() {
+			close(release)
+			time.Sleep(50 * time.Millisecond)
+			postDeadline, coldCompactTestHook = old, nil
+		})
+		if _, msg, code := r.compact("manual"); code != 0 || msg != "" {
+			t.Fatalf("code %d stderr %q", code, msg)
+		}
+	})
+	t.Run("damaged transcript", func(t *testing.T) {
+		r := newGuardRig(t, config.OptimizerHookColdCompact, "on")
+		r.now = coldLastRequest.Add(2 * time.Hour)
+		r.begin("startup", false, 0, 0)
+		_ = os.WriteFile(r.transcript, []byte("\x00{nope\n"), 0o600)
+		if _, msg, code := r.compact("manual"); code != 0 || msg != "" {
+			t.Fatalf("code %d stderr %q", code, msg)
+		}
+	})
+}
+
+// Rule 7: the note and the session's text never reach a file.
+func TestColdCompactWritesNoContent(t *testing.T) {
+	r := newGuardRig(t, config.OptimizerHookColdCompact, "on")
+	r.now = coldLastRequest.Add(2 * time.Hour)
+	r.begin("startup", false, 0, 0)
+	if _, _, code := r.compact("manual"); code != 2 {
+		t.Fatal("not stopped")
+	}
+	_ = filepath.Walk(r.dir, func(p string, fi os.FileInfo, err error) error {
+		if err != nil || fi.IsDir() {
+			return nil
+		}
+		b, _ := os.ReadFile(p)
+		for _, bad := range []string{"retry with backoff", "upload_test.go", "jitter", sessionID, r.files} {
+			if bytes.Contains(b, []byte(bad)) {
+				t.Errorf("%s contains %q", filepath.Base(p), bad)
+			}
+		}
+		return nil
+	})
+}

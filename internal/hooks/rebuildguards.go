@@ -2,7 +2,9 @@ package hooks
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
@@ -109,4 +111,92 @@ func cacheTTL(v string) time.Duration {
 		return time.Hour
 	}
 	return coldDefaultTTL
+}
+
+// The cold-compact guard (hook_cold_compact, technique B23). A /compact after the cache expired sends the whole
+// history to be summarized as uncached input (code.claude.com/docs/en/prompt-caching, read 2026-11-24). The guard
+// stops the first manual /compact of a session in that state once, by exiting 2: "For a manual /compact, the
+// stderr message is shown to the user" (code.claude.com/docs/en/hooks). The second /compact goes through. Auto
+// compaction is never stopped: when it recovers from a context-limit error, blocking it fails the request.
+
+// EventCompactCheck runs on PreCompact (matcher manual).
+const EventCompactCheck = "pre_compact_cold_check"
+
+const (
+	// pinCompactPending is "<tokens>" after the guard stopped a /compact, until the next /compact or the session ends.
+	pinCompactPending = "c:compact_pending"
+	suffixCompact     = ".compact"
+)
+
+// coldCompactTestHook runs before the cold-compact guard decides; tests use it to make the hook panic or stall.
+var coldCompactTestHook func()
+
+// compactCheck returns a block (exit 2 with a message) or nothing.
+func (h *handler) compactCheck(in Input, key string) (*blockExit, error) {
+	if h.agent != AgentClaude || in.Trigger != "manual" {
+		return nil, nil
+	}
+	if coldCompactTestHook != nil {
+		coldCompactTestHook()
+	}
+	st := loadSession(h.dir, key)
+	// A /compact after a stopped one is the user's answer: compact anyway. Record it once and let it through.
+	if v := st.Pins[pinCompactPending]; v != "" && v != pinCleared {
+		n, _ := strconv.ParseInt(v, 10, 64)
+		st.do(op{T: "pin", N: pinCompactPending, V: pinCleared})
+		if err := st.save(h.dir, key); err != nil {
+			return nil, err
+		}
+		return nil, h.emit(key, config.OptimizerHookColdCompact, KindOverridden, 0, n)
+	}
+	state := h.snap.State(config.OptimizerHookColdCompact, st.Pins[config.OptimizerHookColdCompact], h.dir, h.getenv)
+	if state == stateOff || guardFired(h.dir, key, suffixCompact) {
+		return nil, nil
+	}
+	s, ok := parseColdSettings(st.Pins[pinColdSettings])
+	if !ok {
+		return nil, nil
+	}
+	t, ok := lastMainRequest(in.TranscriptPath)
+	if !ok {
+		return nil, nil
+	}
+	r := rebuild{tokens: t.prompt, model: t.model, ttl: h.ttlInEffect(key, t), uncached: true}
+	if h.now().Sub(t.at) <= r.ttl {
+		return nil, nil // the summarization reads the history from the cache
+	}
+	h.priceRebuild(&r)
+	// A manual /compact is always typed, so the stop reaches a person: "ask" with nothing to gate.
+	d := decideCold(state, coldSettings{action: config.ColdResumeAsk, minTokens: s.minTokens, minWeekPct: s.minWeekPct}, caseResume, r, true)
+	if d.kind == "" {
+		return nil, nil
+	}
+	if err := markGuardFired(h.dir, key, suffixCompact); err != nil {
+		return nil, err
+	}
+	if err := h.emit(key, config.OptimizerHookColdCompact, d.kind, 0, r.tokens); err != nil {
+		return nil, err
+	}
+	if !d.block {
+		return nil, nil
+	}
+	st.do(op{T: "pin", N: pinCompactPending, V: strconv.FormatInt(r.tokens, 10)})
+	if err := st.save(h.dir, key); err != nil {
+		return nil, err
+	}
+	return &blockExit{msg: compactBlockText(r, buildColdNote(in.TranscriptPath, in.Cwd))}, nil
+}
+
+func compactBlockText(r rebuild, note string) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Trove stopped this /compact once: this session was idle longer than its %s prompt cache lifetime, so compacting now sends the whole history to be summarized as uncached input, ",
+		ttlWords(r.ttl)) + coldCostText(r) + ".\n\n")
+	b.WriteString("To compact anyway, type /compact again. Trove will not stop it twice.\n")
+	if note == "" {
+		b.WriteString("To start fresh instead, type /clear. Clearing costs nothing.\n")
+	} else {
+		b.WriteString("To start fresh instead, type /clear, then paste this note with your next prompt. Clearing costs nothing.\n\n")
+		b.WriteString("--- note ---\n" + note + "--- end of note ---\n")
+	}
+	return b.String()
 }

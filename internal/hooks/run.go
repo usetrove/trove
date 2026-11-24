@@ -55,7 +55,7 @@ const (
 )
 
 // Events lists every event name.
-var Events = []string{EventPreRead, EventPostRead, EventPostEdit, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch, EventPostRun, EventSubagent, EventTestResult, EventPromptSubmit, EventModelSwitch, EventPostModelSwitch}
+var Events = []string{EventPreRead, EventPostRead, EventPostEdit, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch, EventPostRun, EventSubagent, EventTestResult, EventPromptSubmit, EventModelSwitch, EventPostModelSwitch, EventCompactCheck}
 
 const (
 	// maxHashBytes is the largest file the repeat-read hook will hash. Bigger
@@ -90,10 +90,20 @@ type Env struct {
 	Notify func(measure.Receipt)
 	// NotifyText shows a short desktop notification, synchronously. May be nil.
 	NotifyText func(title, body string)
+	// Stderr receives the message of a hook that blocks by exiting 2 (only the cold-compact guard does). Without it
+	// such a hook exits 0 and blocks nothing, because a block the user cannot read must not happen.
+	Stderr io.Writer
 }
 
-// Main runs one hook and returns the process exit code, which is always 0: a
-// hook must never be the reason an agent stops (PRINCIPLES.md rule 4).
+// blockExit is a decision to block by exiting 2 with msg on stderr. It is the only way a handler can end in a
+// non-zero exit; every error, panic and deadline still ends in 0.
+type blockExit struct{ msg string }
+
+func (b *blockExit) Error() string { return "block: " + b.msg }
+
+// Main runs one hook and returns the process exit code. It is 0 except for a deliberate block by the
+// cold-compact guard (2, with its message on stderr): a hook must never be the reason an agent stops
+// (PRINCIPLES.md rule 4), so every error, panic and timeout ends in 0.
 func Main(e Env) (code int) {
 	// Exit code 2 would BLOCK the tool call, so nothing may escape as a panic.
 	defer func() {
@@ -118,23 +128,34 @@ func Main(e Env) (code int) {
 		deadline = endDeadline
 	case EventPostOutput, EventPostRead:
 		deadline = postDeadline // both may store the full output before replacing it
-	case EventPromptSubmit:
-		deadline = postDeadline // reads up to 1 MiB of the transcript
+	case EventPromptSubmit, EventCompactCheck:
+		deadline = postDeadline // read up to 1 MiB of the transcript
 	}
-	done := make(chan []byte, 1)
+	type result struct {
+		out   []byte
+		block *blockExit
+	}
+	done := make(chan result, 1)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				logf(dir, event, "recovered from a panic: %s", redact.FormatPanic(r, nil))
-				done <- nil
+				done <- result{}
 			}
 		}()
-		done <- run(dir, event, agent, e)
+		out, block := run(dir, event, agent, e)
+		done <- result{out, block}
 	}()
 	select {
-	case out := <-done:
-		if len(out) > 0 && e.Stdout != nil {
-			_, _ = e.Stdout.Write(out)
+	case res := <-done:
+		if res.block != nil && e.Stderr != nil {
+			if _, err := io.WriteString(e.Stderr, res.block.msg); err == nil {
+				return 2
+			}
+			return 0
+		}
+		if len(res.out) > 0 && e.Stdout != nil {
+			_, _ = e.Stdout.Write(res.out)
 		}
 	case <-time.After(deadline):
 		logf(dir, event, "took longer than %s; the call was let through", deadline)
@@ -187,19 +208,19 @@ type handler struct {
 	bptN int
 }
 
-func run(dir, event, agent string, e Env) []byte {
+func run(dir, event, agent string, e Env) ([]byte, *blockExit) {
 	valid := false
 	for _, v := range Events {
 		valid = valid || v == event
 	}
 	if !valid {
 		logf(dir, event, "unknown hook event %q; known: %s", event, strings.Join(Events, ", "))
-		return nil
+		return nil, nil
 	}
 	in, err := parseFor(agent, e.Stdin)
 	if err != nil || in.SessionID == "" {
 		logf(dir, event, "could not read the hook input: %v", orEmpty(err))
-		return nil
+		return nil, nil
 	}
 	snap, _ := LoadSnapshot(dir)
 	h := &handler{dir: dir, agent: agent, getenv: e.Getenv, now: e.Now, notify: e.Notify, notifyText: e.NotifyText, snap: snap, budget: callDeadline}
@@ -235,14 +256,19 @@ func run(dir, event, agent string, e Env) []byte {
 		out, err = h.modelSwitch(in, key)
 	case EventPostModelSwitch:
 		err = h.postModelSwitch(in, key)
+	case EventCompactCheck:
+		var b *blockExit
+		if b, err = h.compactCheck(in, key); b != nil && err == nil {
+			return nil, b
+		}
 	case EventSessionEnd:
 		err = h.sessionEnd(in, key)
 	}
 	if err != nil {
 		logf(dir, event, "%v", err)
-		return nil
+		return nil, nil
 	}
-	return reply(agent, out)
+	return reply(agent, out), nil
 }
 
 func orEmpty(err error) error {

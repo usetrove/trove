@@ -152,6 +152,9 @@ type rebuild struct {
 	model  string
 	ttl    time.Duration
 	limits *limitfit.Estimate // share of the plan limits; nil without a fit
+	// uncached marks a rebuild read as uncached input rather than written to the cache: a compaction after the
+	// cache expired "reprocesses that history as uncached input" (code.claude.com/docs/en/prompt-caching).
+	uncached bool
 }
 
 // coldDecision is what the guard does with one prompt.
@@ -257,6 +260,10 @@ func (h *handler) coldSessionEnd(in Input, key string) {
 		n, _ := strconv.ParseInt(v, 10, 64)
 		_ = h.emit(key, config.OptimizerHookColdResume, KindCleared, 0, n)
 	}
+	if v := st.Pins[pinCompactPending]; v != "" && v != pinCleared && in.Reason == "clear" {
+		n, _ := strconv.ParseInt(v, 10, 64)
+		_ = h.emit(key, config.OptimizerHookColdCompact, KindCleared, 0, n)
+	}
 	sweepColdMarkers(h.dir, h.now())
 }
 
@@ -318,7 +325,9 @@ func (h *handler) ttlInEffect(key string, t mainRequest) time.Duration {
 // tokens to the cache at the lifetime in effect is the rebuild; both figures are estimates.
 func (h *handler) priceRebuild(r *rebuild) {
 	d := limitfit.Delta{Model: r.model}
-	if r.ttl == time.Hour {
+	if r.uncached {
+		d.Tokens[limitfit.TInput] = r.tokens
+	} else if r.ttl == time.Hour {
 		d.Tokens[limitfit.TWrite1h] = r.tokens
 	} else {
 		d.Tokens[limitfit.TWrite5m] = r.tokens

@@ -12,7 +12,8 @@ import (
 
 // RunHook runs `trove hook <event> ...` for cmd/trove, before the command tree is
 // built, so a hook pays for as little start-up work as possible. args are the
-// arguments after "hook". The exit code is always 0 (see hooks.Main).
+// arguments after "hook". The exit code is 0, except a hand-off (the tool's own code) and the cold-compact
+// guard's deliberate block (2, see hooks.Main).
 func RunHook(args []string, stdin io.Reader, stdout io.Writer) int {
 	if runProbeHook(args, stdin, stdout) {
 		return 0
@@ -21,7 +22,8 @@ func RunHook(args []string, stdin io.Reader, stdout io.Writer) int {
 		// The one hook whose exit code is not always 0: it passes on the third-party tool's own (plan item 9.3).
 		return hooks.Handoff(hooks.Env{Args: args, Stdin: stdin, Stdout: stdout, Getenv: os.Getenv}, os.Stderr)
 	}
-	return hooks.Main(hooks.Env{Args: args, Stdin: stdin, Stdout: stdout, Getenv: os.Getenv, Notify: notifierSync(), NotifyText: textNotifierSync()})
+	// Stderr carries the message of the one deliberate block, the cold-compact guard's exit 2; every other path exits 0.
+	return hooks.Main(hooks.Env{Args: args, Stdin: stdin, Stdout: stdout, Stderr: os.Stderr, Getenv: os.Getenv, Notify: notifierSync(), NotifyText: textNotifierSync()})
 }
 
 // newHookCmd is the same entry point as a (hidden) cobra command, so
