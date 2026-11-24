@@ -174,7 +174,7 @@ var registry = []Technique{
 	{ID: "C1", Class: ClassCacheControl, Title: "Cache lifetime: 5 minutes or 1 hour", Names: []string{"cache_ttl", "cache_ttl_main", "cache_ttl_subagents"},
 		Layers: []Layer{LayerConfig, LayerRequest}, Route: RouteConfig, Status: StatusPartial, Effect: tierBehavior,
 		Subscription: true, Overhead: none(), Licence: "Trove project",
-		Note: "built: a per-user estimate (the cache_ttl suggestion) and a `trove fix` that writes the verified setting; not built: a per-breakpoint split in the gateway. A blanket downgrade is not a default (docs/techniques.md, finding 2)"},
+		Note: "built: a per-user estimate (the cache_ttl suggestion), a `trove fix` that writes the verified setting, and the subagent one-hour lifetime under Autopilot's settings-v1 policy with a 14-day tripwire (docs/autopilot.md); not built: a per-breakpoint split in the gateway. A blanket downgrade is not a default (docs/techniques.md, finding 2)"},
 	{ID: "C2", Class: ClassCacheControl, Title: "Hold sibling subagent requests until the first cache entry exists", Names: []string{"fan_out"},
 		Layers: []Layer{LayerRequest}, Route: RouteNative, Status: StatusCandidate, Effect: tierLossless,
 		Gateway: true, Claims: gatewayClaim, Licence: "Trove project",

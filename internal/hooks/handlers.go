@@ -418,6 +418,9 @@ func (h *handler) sessionEnd(in Input, key string) error {
 	if cfg.Notifications.Desktop && h.notify != nil && len(recs) > 0 {
 		h.notify(recs[len(recs)-1])
 	}
+	// Autopilot's settings policy: judged here, at a session end, and only written while no other session is
+	// open (rule 5). Best effort, after the receipt, and before the notices so a change is announced at once.
+	settingsStep(ctx, db, h.dir, cfg, in, h.getenv, h.now())
 	// Autopilot turn-on and rollback notices, once each. Best effort.
 	_ = autopilot.Announce(h.dir, cfg.Notifications.Desktop, h.notifyText)
 	// Last, and best effort: the receipt is already written.

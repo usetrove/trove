@@ -93,7 +93,33 @@ func DisableTrials(dir string, now time.Time) (config.AutopilotFile, error) {
 // Disable withdraws consent and forgets Autopilot's states and plan. New sessions
 // go back to what config.toml says. Sessions already running keep their pins.
 func Disable(dir string) error {
-	return config.SaveAutopilot(dir, config.AutopilotFile{Entries: map[string]config.AutopilotEntry{}})
+	off := config.AutopilotFile{Entries: map[string]config.AutopilotEntry{}}
+	// A setting Autopilot changed in the agent's own files stays recorded, so it is taken back at the next
+	// session end with no other session open (withdrawSubTTL), never forgotten in place.
+	if cur, err := config.LoadAutopilot(dir); err == nil {
+		for n, st := range cur.Settings {
+			if st.State == config.AutopilotOn {
+				if off.Settings == nil {
+					off.Settings = map[string]config.AutopilotSetting{}
+				}
+				off.Settings[n] = st
+			}
+		}
+	}
+	return config.SaveAutopilot(dir, off)
+}
+
+// SettingChangeLeft returns the fix id of a settings change Autopilot made that is still recorded as on ("" if
+// none), so `trove autopilot off` can say it is taken back at the next quiet session end.
+func SettingChangeLeft(dir string) string {
+	f, err := config.LoadAutopilot(dir)
+	if err != nil {
+		return ""
+	}
+	if st, ok := f.Settings[SubTTLName]; ok && st.State == config.AutopilotOn {
+		return st.FixID
+	}
+	return ""
 }
 
 // SetPaused pauses or resumes Autopilot without losing its states.

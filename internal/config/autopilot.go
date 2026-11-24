@@ -31,6 +31,37 @@ const AutopilotPolicyV2 = "lossless-v2"
 // because it widens what the user agreed to. It is what `trove autopilot trials on` offers now.
 const AutopilotPolicyV3 = "lossless-v3"
 
+// AutopilotSettingsPolicy is the policy for changes to the agent's own settings files, agreed to on its own with
+// `trove autopilot settings on`, because it edits a file outside ~/.trove. It names exactly one setting:
+// the subagent prompt cache lifetime (cache_ttl_subagents). See docs/autopilot.md, "Settings policy".
+const AutopilotSettingsPolicy = "settings-v1"
+
+// AutopilotSetting is the state of one setting under the settings policy.
+type AutopilotSetting struct {
+	AutopilotEntry
+	// FixID is the fix Autopilot applied while State is on ("" otherwise). Never a value or a path.
+	FixID string `json:"fix_id,omitempty"`
+	// EvalMS is when the setting was last judged.
+	EvalMS int64 `json:"eval_ms,omitempty"`
+	// Estimate is the last judgement, numbers and labels only.
+	Estimate *AutopilotSettingEstimate `json:"estimate,omitempty"`
+}
+
+// AutopilotSettingEstimate is what the last judgement of a setting found. Every figure is an estimate.
+type AutopilotSettingEstimate struct {
+	Basis       string  `json:"basis"` // "api_prices" or "fit"
+	Label       string  `json:"label"` // always "estimated"
+	Requests    int     `json:"requests"`
+	Sessions    int     `json:"sessions"`
+	NetUSD      float64 `json:"net_usd"`                 // at API list prices; positive = the one-hour lifetime saves
+	NetPct5h    float64 `json:"net_pct_5h,omitempty"`    // basis fit: saving in percent of the 5-hour limit
+	NetPct5hLo  float64 `json:"net_pct_5h_lo,omitempty"` // and its 90% interval
+	NetPct5hHi  float64 `json:"net_pct_5h_hi,omitempty"`
+	WindowDays  int     `json:"window_days"`
+	GapRebuilds int     `json:"gap_rebuilds,omitempty"`
+	GapReads    int     `json:"gap_reads,omitempty"`
+}
+
 // KnownAutopilotPolicy reports whether this version understands the named policy.
 func KnownAutopilotPolicy(name string) bool {
 	return name == AutopilotPolicy || name == AutopilotPolicyV2 || name == AutopilotPolicyV3
@@ -113,6 +144,17 @@ type AutopilotFile struct {
 	// Plan is the shadow planner's latest advice (see internal/autopilot/planner.go).
 	Plan      []AutopilotPlanItem `json:"plan,omitempty"`
 	PlannedMS int64               `json:"planned_ms,omitempty"`
+	// SettingsPolicy is AutopilotSettingsPolicy once the user agreed to it with `trove autopilot settings on`,
+	// "" otherwise; SettingsConsentedAt is when. Settings holds the state of each setting it names.
+	SettingsPolicy      string                      `json:"settings_policy,omitempty"`
+	SettingsConsentedAt int64                       `json:"settings_consented_ms,omitempty"`
+	Settings            map[string]AutopilotSetting `json:"settings,omitempty"`
+}
+
+// SettingsActive reports whether Autopilot may change the agent's settings: Autopilot is active and the user
+// agreed to the settings policy this version knows.
+func (f AutopilotFile) SettingsActive() bool {
+	return f.Active() && f.SettingsPolicy == AutopilotSettingsPolicy
 }
 
 // HasTrials reports whether the user agreed to trials: the policy is one that has a probation list.

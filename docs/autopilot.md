@@ -134,6 +134,58 @@ rule set on, because T2 needs a benchmark verdict before Autopilot may; the user
 a time. `trove autopilot trial <rule set> --stop` ends it at once. The numbers (sessions per arm, days) are the trial
 policy's placeholders.
 
+## Settings policy (a third, separate yes; added 2026-11-24, plan 4.5)
+
+`trove autopilot settings on` asks for agreement to `settings-v1`, the only policy that edits a file outside
+`~/.trove`. It names one setting: `subagentPromptCacheTtl` in `~/.claude/settings.json`, the prompt cache lifetime of
+subagents, workflows, compaction, session titles and the other requests outside the main conversation (technique C1,
+T1 `cache_control`, fix kind `cache_ttl_subagents`). `--yes` agrees without a prompt and `--json` needs it. `trove setup`,
+`--autopilot` and the other agreements never give it. `trove autopilot settings off` withdraws it.
+
+**What it reads.** At a session end, at most every 6 hours, Trove reads the Claude Code history (up to 0.5 s of new
+lines) and the rebuild ledger ([analyze.md](analyze.md#rebuild-ledger)). From the subagent requests only, it counts:
+
+- the rebuilds caused by a pause of more than 5 and at most 60 minutes while the agent was on the five-minute lifetime,
+  and their size (measured). A one-hour entry would have been read instead;
+- the cache writes at each lifetime (measured), and, when the history ran on one hour, the reads after such a pause.
+
+**The estimate.** The net of the one-hour lifetime is the rewrites it avoids minus the one-hour premium on every other
+write. It assumes a lost entry is rewritten in full, so it is always labeled **estimated**. The basis is one of these:
+
+- **estimated from your meter**: for a mostly-subscription history, when the plan-limit fit has weights per token
+  type ([limit-fit.md](limit-fit.md)). The saving is a share of the 5-hour limit with its 90% interval. How a one-hour
+  write counts toward the plan limits is not documented, so this fit is the only source for its weight;
+- **estimated from API prices** otherwise: per-model list prices (a five-minute write 1.25x, a one-hour write 2x, a read
+  0.1x or less of the base input price).
+
+**When it sets `"1h"`.** All of these must hold: at least 100 subagent requests in 5 sessions over 30 days; at least 5
+such rebuilds; at most 20% of writes without a recorded lifetime; prices known for most of the models. On API prices,
+the avoided rewrites must exceed the premium by 25% and the net must be at least $1 (the `cache_ttl` suggestion's own
+thresholds). On the meter, the whole 90% interval must be a saving. Then it writes the key, backed up, recorded in
+`fixes` and reversible with `trove undo <id>`, only while no other agent session wrote its transcript in the last
+`fixer.activity_minutes` (default 30). Otherwise it waits for the next session end.
+
+**It never changes a value the user set.** It leaves the setting alone when any of these is set: `subagentPromptCacheTtl`
+in the user, project or local settings; `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`, `FORCE_PROMPT_CACHING_5M`,
+`ENABLE_PROMPT_CACHING_1H` or a `DISABLE_PROMPT_CACHING*` variable in the environment or a settings file's `env`; a
+`cacheTtl` in the frontmatter of a subagent in `~/.claude/agents` or the project's `.claude/agents`. The setting would
+override that frontmatter value. A value applied by hand with `trove fix` counts as the user's.
+
+**Tripwire.** 14 days after the change, and at every check after that, it estimates the last 14 days the other way
+round: the one-hour premium paid against the reads that only a one-hour entry served. If the net is below zero (point
+estimate, at least 30 requests), it removes what it set, again only at a quiet session end. If the file was edited since,
+only the key is deleted, and only while it still holds `"1h"`. Then it waits 30 days and tries at most twice. If the
+user undoes the change, it never sets it again. If the policy is withdrawn, or Autopilot is turned off or paused, its
+own change is taken back at the next quiet session end.
+
+`trove autopilot` shows the state, the reason and the last estimate (`settings` in `--json`). The thresholds are
+placeholders until a benchmark sets them.
+
+Rules: 5 (written only between sessions; the docs do not say whether Claude Code re-reads these keys mid-session, so
+Trove assumes it might), 6 (own consent, only the named setting, from history evidence, never over the user's value,
+automatic rollback, every figure labeled), 7 (numbers and labels only in `autopilot.json`), 9 (no figure without
+enough data), 15 (no tokens added). Verified on 2026-11-24: see S10 in [techniques.md](techniques.md#what-was-verified).
+
 ## What stays manual
 
 - Optimizers that can change answers keep a stricter rule or an explicit choice. Output trimming is a trial candidate in v3 (with a guardrail half as tolerant as the rest); `cache_breakpoints` and `volatile_prefix_mover` (custom agents only, never Claude Code), `inflight_dedup` and `spend_cap` (shadow only) are never promoted by Autopilot, and the spend cap should never be automatic.

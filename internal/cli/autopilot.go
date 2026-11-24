@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -67,6 +68,37 @@ Today that is %d:
 
 Withdraw it any time with ` + "`trove autopilot trials off`" + `. That also removes anything a trial kept.`
 
+// settingsConsent is what the user agrees to for the settings policy (settings-v1). It is a separate yes because
+// it edits a file outside ~/.trove: the agent's own settings.
+const settingsConsent = `The settings policy lets Autopilot change one setting in your Claude Code user settings
+(~/.claude/settings.json): subagentPromptCacheTtl, the prompt cache lifetime of subagents, compaction and
+other requests outside your main conversation (Claude Code 2.1.242 or later).
+
+  - It sets it to "1h" only when your own history shows the one-hour lifetime pays: enough subagent
+    rebuilds after pauses of 5 to 60 minutes to outweigh the higher one-hour write price (2x the input
+    price, against 1.25x for five minutes). The figure is estimated from your plan-limit meter when Trove
+    has fitted it, otherwise from API list prices, and says which.
+  - It never changes a value you set: not the setting in any settings file, not the
+    CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL, FORCE_PROMPT_CACHING_5M or ENABLE_PROMPT_CACHING_1H variables,
+    and not a cacheTtl in one of your subagents.
+  - It writes only when a session ends and no other agent session is open, so no running session changes.
+  - After 14 days it checks the last 14 days of history again, and keeps checking. If the one-hour
+    lifetime no longer pays, it removes what it set. If you undo it yourself, it never sets it again.
+  - Every change is backed up; ` + "`trove undo <id>`" + ` reverses it.
+  - For this Trove reads your local Claude Code history (counts only, never text) when a session ends.
+    The thresholds are placeholders, not yet validated by a benchmark.
+
+Withdraw it any time with ` + "`trove autopilot settings off`" + `.`
+
+type autopilotSettingJSON struct {
+	Name   string `json:"name"`
+	State  string `json:"state"`
+	Reason string `json:"reason,omitempty"`
+	FixID  string `json:"fix_id,omitempty"`
+
+	Estimate *config.AutopilotSettingEstimate `json:"estimate,omitempty"`
+}
+
 type autopilotOptimizerJSON struct {
 	Name   string `json:"name"`
 	State  string `json:"state"`
@@ -80,6 +112,9 @@ type autopilotStatusJSON struct {
 	// Trials is true when the user has agreed to trials (policy lossless-v2 or lossless-v3).
 	Trials     bool                     `json:"trials"`
 	Optimizers []autopilotOptimizerJSON `json:"optimizers,omitempty"`
+	// SettingsPolicy is "settings-v1" when the user agreed to it; Settings are the settings it judges.
+	SettingsPolicy string                 `json:"settings_policy,omitempty"`
+	Settings       []autopilotSettingJSON `json:"settings,omitempty"`
 	// Thresholds are placeholders until a benchmark sets them.
 	Thresholds string `json:"thresholds,omitempty"`
 	// TrialRule says what a trial needs, when trials are on.
@@ -92,10 +127,10 @@ type autopilotStatusJSON struct {
 func newAutopilot(a *App) *cobra.Command {
 	var yes, stop bool
 	c := &cobra.Command{
-		Use:       "autopilot [on|off|pause|resume|trials [on|off]|trial <rule set>]",
+		Use:       "autopilot [on|off|pause|resume|trials [on|off]|settings [on|off]|trial <rule set>]",
 		Short:     "Let Trove turn on proven savings by itself (with no argument: show what it is doing)",
 		Args:      cobra.MaximumNArgs(2),
-		ValidArgs: []string{"on", "off", "pause", "resume", "trials", "trial"},
+		ValidArgs: []string{"on", "off", "pause", "resume", "trials", "settings", "trial"},
 		RunE: func(_ *cobra.Command, args []string) error {
 			verb := ""
 			if len(args) >= 1 {
@@ -110,22 +145,22 @@ func newAutopilot(a *App) *cobra.Command {
 			if stop {
 				return fmt.Errorf("--stop only goes with `trove autopilot trial <rule set>`")
 			}
-			if verb == "trials" {
+			if verb == "trials" || verb == "settings" {
 				sub := "on"
 				if len(args) == 2 {
 					sub = args[1]
 				}
 				if sub != "on" && sub != "off" {
-					return fmt.Errorf("unknown action %q. Use `trove autopilot trials on` or `trove autopilot trials off`.", sub)
+					return fmt.Errorf("unknown action %q. Use `trove autopilot %s on` or `trove autopilot %s off`.", sub, verb, verb)
 				}
-				verb = "trials " + sub
+				verb = verb + " " + sub
 			} else if len(args) == 2 {
 				return fmt.Errorf("unknown action %q. Use on, off, pause, resume or trials, or no argument to see the status.", strings.Join(args, " "))
 			}
 			return runAutopilot(a, verb, yes)
 		},
 	}
-	c.Flags().BoolVar(&yes, "yes", false, "agree without asking (for `on`, `trials on` and `trial`)")
+	c.Flags().BoolVar(&yes, "yes", false, "agree without asking (for `on`, `trials on`, `settings on` and `trial`)")
 	c.Flags().BoolVar(&stop, "stop", false, "stop a rule-set trial (with `trial <rule set>`)")
 	return c
 }
@@ -205,11 +240,45 @@ func runAutopilot(a *App, verb string, yes bool) error {
 			return fmt.Errorf("cannot turn off trials: %v. Check that %s is writable.", err, dir)
 		}
 		changed = "Trials are off. New sessions are no longer split; sessions already running keep their settings. Anything a trial had kept is off again."
+	case "settings on":
+		cur, _ := config.LoadAutopilot(dir)
+		if !cur.Enabled {
+			return fmt.Errorf("Autopilot is not on. Run `trove autopilot on` first, then `trove autopilot settings on`.")
+		}
+		if cur.SettingsPolicy == config.AutopilotSettingsPolicy {
+			changed = "The settings policy is already on."
+			break
+		}
+		if !yes {
+			if a.JSON {
+				return fmt.Errorf("The settings policy needs your agreement. Run `trove autopilot settings on --yes` to agree without a prompt.")
+			}
+			_, _ = fmt.Fprint(a.Out, settingsConsent+"\n\n")
+			if !a.confirm("Let Autopilot change this setting?") {
+				return a.emit(autopilotStatusJSON{Changed: "Settings policy not turned on."}, "Settings policy not turned on. Nothing was changed.")
+			}
+		}
+		if _, err := autopilot.EnableSettings(dir, time.Now()); err != nil {
+			return fmt.Errorf("cannot turn on the settings policy: %v. Check that %s is writable.", err, dir)
+		}
+		changed = "The settings policy is on. Nothing is changed yet: the setting is judged when a session ends."
+	case "settings off":
+		id, err := autopilot.DisableSettings(dir)
+		if err != nil {
+			return fmt.Errorf("cannot turn off the settings policy: %v. Check that %s is writable.", err, dir)
+		}
+		changed = "The settings policy is off. Autopilot will not change your Claude Code settings."
+		if id != "" {
+			changed += " What it set is removed when a session ends with no other session open, or now with `trove undo " + id + "`."
+		}
 	case "off":
 		if err := autopilot.Disable(dir); err != nil {
 			return fmt.Errorf("cannot turn off Autopilot: %v. Check that %s is writable.", err, dir)
 		}
 		changed = "Autopilot is off. New sessions use only what config.toml says; sessions already running keep their settings."
+		if id := autopilot.SettingChangeLeft(dir); id != "" {
+			changed += " The Claude Code setting it changed is set back when a session ends with no other session open, or now with `trove undo " + id + "`."
+		}
 	case "pause", "resume":
 		cur, err := config.LoadAutopilot(dir)
 		if err != nil {
@@ -240,6 +309,16 @@ func runAutopilotStatus(a *App, dir, changed string) error {
 	for _, n := range f.Names() {
 		e := f.Entries[n]
 		st.Optimizers = append(st.Optimizers, autopilotOptimizerJSON{Name: n, State: e.State, Reason: e.Reason})
+	}
+	st.SettingsPolicy = f.SettingsPolicy
+	names := make([]string, 0, len(f.Settings))
+	for n := range f.Settings {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		e := f.Settings[n]
+		st.Settings = append(st.Settings, autopilotSettingJSON{Name: n, State: e.State, Reason: e.Reason, FixID: e.FixID, Estimate: e.Estimate})
 	}
 	if f.Enabled {
 		st.Thresholds = fmt.Sprintf("at least %d shadow sessions and %d estimated net tokens in %d days (placeholder values, not yet validated by a benchmark)",
@@ -276,6 +355,21 @@ func renderAutopilot(s autopilotStatusJSON) string {
 			line += "  (" + o.Reason + ")"
 		}
 		b.WriteString(line + "\n")
+	}
+	if s.SettingsPolicy != "" || len(s.Settings) > 0 {
+		b.WriteString("\nSettings policy: ")
+		if s.SettingsPolicy != "" {
+			b.WriteString("on (" + s.SettingsPolicy + ")\n")
+		} else {
+			b.WriteString("off. See it with `trove autopilot settings on`.\n")
+		}
+		for _, o := range s.Settings {
+			line := fmt.Sprintf("  %-28s %s", o.Name, o.State)
+			if o.Reason != "" {
+				line += "  (" + o.Reason + ")"
+			}
+			b.WriteString(line + "\n")
+		}
 	}
 	if s.Thresholds != "" {
 		b.WriteString("\nIt turns an optimizer on after " + s.Thresholds + ". Savings shown are estimated until measured.\n")

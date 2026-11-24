@@ -117,6 +117,8 @@ type RebuildEntry struct {
 	Write1h int64 `json:"-"`
 	// Session is the hashed session key, for counting per session; it is not in the JSON.
 	Session string `json:"-"`
+	// Subagent is true for a request outside the main conversation; it is not in the JSON.
+	Subagent bool `json:"-"`
 }
 
 // RebuildLedger returns one entry per request whose cache write was a rebuild, plus each main
@@ -132,7 +134,7 @@ func RebuildLedger(reqs []LedgerRequest) []RebuildEntry {
 			prev, ttl = nil, 0
 		}
 		cw := r.cacheWrite()
-		e := RebuildEntry{TS: r.TS, CacheWrite: cw, Model: r.Model, Write1h: r.CacheWrite1h, Session: r.SessionKey}
+		e := RebuildEntry{TS: r.TS, CacheWrite: cw, Model: r.Model, Write1h: r.CacheWrite1h, Session: r.SessionKey, Subagent: !r.main()}
 		if prev == nil {
 			if cw > RebuildMinTokens {
 				e.Cause = CauseSubagent
