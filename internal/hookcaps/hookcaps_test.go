@@ -137,3 +137,27 @@ func TestBlockFieldRoundTrips(t *testing.T) {
 		t.Errorf("an entry without a block result must not grow a field: %s", b)
 	}
 }
+
+func TestPromptContextNeedsASessionCheckAndIsSeparateFromBlock(t *testing.T) {
+	cases := []struct {
+		name string
+		e    Capability
+		want bool
+	}{
+		{"documented only", Capability{Agent: "claude", Tool: ToolPrompt, Context: Yes, Method: "docs"}, false},
+		{"seen in the user's session", Capability{Agent: "claude", Tool: ToolPrompt, Context: Yes, Method: "session"}, true},
+		{"checked and not safe", Capability{Agent: "claude", Tool: ToolPrompt, Context: No, Method: "session"}, false},
+		{"a block result says nothing about context", Capability{Agent: "claude", Tool: ToolPrompt, Block: Yes, Method: "session"}, false},
+		{"another agent", Capability{Agent: "codex", Tool: ToolPrompt, Context: Yes, Method: "session"}, false},
+	}
+	for _, c := range cases {
+		caps := Capabilities{V: Version, Entries: []Capability{c.e}}
+		if got := caps.Supports("claude", ToolPrompt, PromptContext); got != c.want {
+			t.Errorf("%s: Supports = %v, want %v", c.name, got, c.want)
+		}
+	}
+	both := Capabilities{V: Version, Entries: []Capability{{Agent: "claude", Tool: ToolPrompt, Context: Yes, Method: "session"}}}
+	if both.Supports("claude", ToolPrompt, PromptBlock) {
+		t.Error("a context result must not allow blocking")
+	}
+}

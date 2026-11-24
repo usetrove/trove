@@ -190,8 +190,35 @@ func bigRebuild(s coldSettings, r rebuild) bool {
 	return r.limits != nil && r.limits.Week != nil && r.limits.Week.Lo >= s.minWeekPct
 }
 
-// promptSubmit is the UserPromptSubmit hook.
+// promptSubmit is the UserPromptSubmit hook: the cold-resume guard first, then, for a prompt it let through, the
+// routine steer. An error in either is logged and costs only that part's reply (rule 4).
 func (h *handler) promptSubmit(in Input, key string) ([]byte, error) {
+	cold, err := h.coldCheck(in, key)
+	if err != nil {
+		logf(h.dir, EventPromptSubmit, "cold-resume guard: %v", err)
+		cold = nil
+	}
+	if coldBlocks(cold) {
+		return cold, nil
+	}
+	steer, err := h.routineSteer(in, key)
+	if err != nil {
+		logf(h.dir, EventPromptSubmit, "routine steer: %v", err)
+		steer = ""
+	}
+	return promptReply(cold, steer), nil
+}
+
+// coldBlocks reports whether the guard's reply stops the prompt.
+func coldBlocks(out []byte) bool {
+	var v struct {
+		Decision string `json:"decision"`
+	}
+	return len(out) > 0 && json.Unmarshal(out, &v) == nil && v.Decision == "block"
+}
+
+// coldCheck is the cold-resume guard's part of UserPromptSubmit.
+func (h *handler) coldCheck(in Input, key string) ([]byte, error) {
 	if h.agent != AgentClaude {
 		return nil, nil
 	}

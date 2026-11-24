@@ -141,11 +141,19 @@ func (h *handler) reset(in Input, key string) ([]byte, error) {
 		// SessionStart replies are not translated to carry context.
 		if h.ruleTrialAgent() {
 			for _, n := range h.snap.RuleTrial {
+				arm := stateOff
 				if measure.Arm(key, n) == config.StateOn {
-					st.do(op{T: "pin", N: n, V: stateOn})
+					arm = stateOn
+				}
+				st.do(op{T: "pin", N: n, V: arm})
+				if n == config.OptimizerHookRoutineSteer {
+					// The steer's pin is also its state, so its arm is kept apart: "off" there still counts routine
+					// prompts, for the comparison.
+					st.do(op{T: "pin", N: pinSteerArm, V: arm})
+				}
+				if arm == stateOn {
 					_ = h.emit(key, n, KindArmOn, 0, 0)
 				} else {
-					st.do(op{T: "pin", N: n, V: stateOff})
 					_ = h.emit(key, n, KindArmOff, 0, 0)
 				}
 			}
@@ -171,6 +179,9 @@ func (h *handler) reset(in Input, key string) ([]byte, error) {
 		}
 	}
 	h.armColdResume(in, st)
+	if in.Event == "SessionStart" {
+		pinSteerModelFor(st, in.Model) // after the new-session check above, which looks for no pins at all
+	}
 	if in.Event == "PreCompact" || in.Event == "PostCompact" || (in.Event == "SessionStart" && in.Source != "" && in.Source != "startup") {
 		st.do(op{T: "clear"})
 	}

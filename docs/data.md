@@ -416,7 +416,7 @@ One row per decision made by Trove's agent hooks.
 | `ts` | When |
 | `session_key` | Hash of the session id |
 | `hook` | Which optimizer (for example hook_repeat_read) |
-| `kind` | What happened: blocked, would_block, advised, would_advise, reread_anyway, rewritten, would_rewrite, reissued, fetched_back, extra_read, adopted, overridden (the user sent a prompt again after the cold-resume guard blocked one) or cleared (the session ended with `/clear` after that block) |
+| `kind` | What happened: blocked, would_block, advised, would_advise, reread_anyway, rewritten, would_rewrite, reissued, fetched_back, extra_read, adopted, overridden (the user sent a prompt again after the cold-resume guard blocked one), cleared (the session ended with `/clear` after that block), and for `hook_routine_steer` steered, would_steer, reprompted (the prompt after a routine one read as a correction) or turn_end (the prompt after a routine one). The prompt itself is never stored |
 | `bytes` | Size of the file or output involved |
 | `tokens` | Estimated tokens kept out of the context, 0 when unknown |
 

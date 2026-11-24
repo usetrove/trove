@@ -30,6 +30,9 @@ const (
 	// PromptBlock is not a rewrite: it is whether a UserPromptSubmit hook may block a prompt the user typed,
 	// telling it apart from a run nobody watches (`claude -p`). Only the cold-resume guard asks for it.
 	PromptBlock = "block"
+	// PromptContext is whether UserPromptSubmit additionalContext lands after the cached prefix, next to the new
+	// prompt, so the turns after it still read the earlier cache. Only hook_routine_steer asks for it.
+	PromptContext = "context"
 )
 
 // ToolPrompt is the Tool of an entry about the UserPromptSubmit event rather than a tool.
@@ -48,6 +51,10 @@ type Capability struct {
 	// Block is set only on a ToolPrompt entry: "yes" when a live check or the user's own session saw a
 	// UserPromptSubmit block reach a typed prompt and Trove tell an unwatched print-mode run apart.
 	Block string `json:"block,omitempty"`
+	// Context is set only on a ToolPrompt entry: "yes" when a check in the user's own session saw UserPromptSubmit
+	// additionalContext land right after the prompt it came with and the next turn read the whole earlier prefix
+	// from the cache (`trove hooks verify --prompt-context`).
+	Context string `json:"context,omitempty"`
 	// Method is "live" (Trove ran an agent session on the user's API key and it showed
 	// the model the rewritten value), "session" (the user ran the test in their own
 	// session with `trove hooks verify`; the output result is what they reported) or
@@ -102,6 +109,8 @@ func (c Capabilities) Supports(agent, tool, kind string) bool {
 			return e.OutputRewrite == Yes
 		case PromptBlock:
 			return e.Block == Yes
+		case PromptContext:
+			return e.Context == Yes
 		}
 	}
 	return false

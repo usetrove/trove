@@ -80,15 +80,19 @@ func (h *handler) modelSwitch(in Input, key string) ([]byte, error) {
 }
 
 // postModelSwitch records that a switch the guard warned about (or would have) went ahead. It prints nothing.
-// Switches Claude Code made itself ("auto") or restored on resume are not the user's answer.
+// Switches Claude Code made itself ("auto") or restored on resume are not the user's answer. Every switch, whatever
+// its source, updates whether the routine steer may act on the session's model.
 func (h *handler) postModelSwitch(in Input, key string) error {
-	if h.agent != AgentClaude || in.Source == "auto" || in.Source == "resume" {
+	if h.agent != AgentClaude {
 		return nil
 	}
 	st := loadSession(h.dir, key)
+	if len(st.Pins) > 0 { // a session SessionStart never pinned stays that way, so its next SessionStart pins it
+		pinSteerModelFor(st, in.ToModel)
+	}
 	v := st.Pins[pinSwitchPending]
-	if v == "" || v == pinCleared {
-		return nil
+	if in.Source == "auto" || in.Source == "resume" || v == "" || v == pinCleared {
+		return st.save(h.dir, key)
 	}
 	n, _ := strconv.ParseInt(v, 10, 64)
 	st.do(op{T: "pin", N: pinSwitchPending, V: pinCleared})

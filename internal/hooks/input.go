@@ -39,7 +39,7 @@ type Input struct {
 	IsInterrupt bool   `json:"is_interrupt"`
 	// SessionStart sends these when source is "resume" or "fork" and the transcript has a response (Claude Code
 	// v2.1.251 or later; code.claude.com/docs/en/hooks, read 2026-11-23). Only numbers are kept, for the cold-resume
-	// guard. UserPromptSubmit's prompt text is deliberately not a field here: it is never read.
+	// guard.
 	ContextTokens            *int64   `json:"context_tokens"`
 	PromptCacheLikelyExpired *bool    `json:"prompt_cache_likely_expired"`
 	EstimatedCacheWriteUSD   *float64 `json:"estimated_cache_write_usd"`
@@ -51,6 +51,9 @@ type Input struct {
 	CacheTTL        string `json:"cache_ttl"`
 	// Trigger is PreCompact's "manual" (/compact) or "auto".
 	Trigger string `json:"trigger"`
+	// PromptText is UserPromptSubmit's prompt text. Only hook_routine_steer reads it, in memory, through
+	// routine.Classify; it is never stored, logged, hashed or written to the spool (rule 7).
+	PromptText string `json:"prompt"`
 }
 
 // ToolInput is the tool's arguments. The named fields are the ones Trove reads.
