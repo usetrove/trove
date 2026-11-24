@@ -195,11 +195,10 @@ func TestModelSwitchFailsOpen(t *testing.T) {
 		r := newGuardRig(t, config.OptimizerHookModelSwitch, "on")
 		r.begin("startup", false, 0, 0)
 		callDeadline = 20 * time.Millisecond
-		release := make(chan struct{})
-		coldWarnTestHook = func() { <-release }
+		stall, release := stalledHook(t, r.dir)
+		coldWarnTestHook = stall
 		t.Cleanup(func() {
-			close(release)
-			time.Sleep(50 * time.Millisecond)
+			release()
 			coldWarnTestHook = nil
 		})
 		start := time.Now()
@@ -368,11 +367,10 @@ func TestColdCompactFailsOpen(t *testing.T) {
 		r.begin("startup", false, 0, 0)
 		old := postDeadline
 		postDeadline = 20 * time.Millisecond
-		release := make(chan struct{})
-		coldCompactTestHook = func() { <-release }
+		stall, release := stalledHook(t, r.dir)
+		coldCompactTestHook = stall
 		t.Cleanup(func() {
-			close(release)
-			time.Sleep(50 * time.Millisecond)
+			release()
 			postDeadline, coldCompactTestHook = old, nil
 		})
 		if _, msg, code := r.compact("manual"); code != 0 || msg != "" {
@@ -410,4 +408,29 @@ func TestColdCompactWritesNoContent(t *testing.T) {
 		}
 		return nil
 	})
+}
+
+// stalledHook stands in for a hook stuck past its safety net. The call it stalls is abandoned by Main, but its
+// goroutine lives on; release lets it go and waits until it has finished touching the data dir, so the test's
+// temporary folder can be removed. Once released, the hook panics, and Main's recovery logs that panic as its last
+// write.
+func stalledHook(t *testing.T, dir string) (stall func(), release func()) {
+	t.Helper()
+	ch := make(chan struct{})
+	stall = func() {
+		<-ch
+		panic("stalled test hook released")
+	}
+	release = func() {
+		close(ch)
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			if b, _ := os.ReadFile(filepath.Join(dir, "hooks.log")); bytes.Contains(b, []byte("stalled test hook released")) {
+				time.Sleep(10 * time.Millisecond) // the log file is closed just after the write
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	return stall, release
 }

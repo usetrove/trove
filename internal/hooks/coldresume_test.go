@@ -431,11 +431,10 @@ func TestColdResumeFailsOpen(t *testing.T) {
 		r.begin("resume", true, 200000, 0.75)
 		old := postDeadline
 		postDeadline = 20 * time.Millisecond
-		release := make(chan struct{})
-		coldResumeTestHook = func() { <-release }
+		stall, release := stalledHook(t, r.dir)
+		coldResumeTestHook = stall
 		t.Cleanup(func() {
-			close(release)
-			time.Sleep(50 * time.Millisecond)
+			release()
 			postDeadline, coldResumeTestHook = old, nil
 		})
 		if out, code := r.run(EventPromptSubmit, r.fill("claude_user_prompt_submit.json")); out != "" || code != 0 {
