@@ -287,6 +287,12 @@ const (
 	// context to the cache again because the cache expired (UserPromptSubmit, docs/hooks.md). It changes no
 	// request; optimize.cold_resume_action says which.
 	OptimizerHookColdResume = "hook_cold_resume"
+	// OptimizerHookModelSwitch adds the cost of rebuilding a large, warm context on another model to Claude Code's
+	// own switch confirmation (PreModelSwitch systemMessage). It never blocks or asks.
+	OptimizerHookModelSwitch = "hook_model_switch"
+	// OptimizerHookColdCompact stops a manual /compact once when the cache has expired and the history is large,
+	// because the summarization would reprocess it as uncached input (PreCompact, exit 2).
+	OptimizerHookColdCompact = "hook_cold_compact"
 	// OptimizerNoiseNormalizer is lossless; it also runs in hooks on tool output.
 	OptimizerNoiseNormalizer = "noise_normalizer"
 	// OptimizerInflightDedup is a behavior of the gateway itself: when identical requests

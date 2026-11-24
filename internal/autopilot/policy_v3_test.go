@@ -236,3 +236,14 @@ func TestNoPolicyPromotesTheColdResumeGuard(t *testing.T) {
 		}
 	}
 }
+
+// Neither rebuild guard may be named by a policy either (decided 2026-11-24, docs/hooks.md).
+func TestNoPolicyPromotesTheRebuildGuards(t *testing.T) {
+	for _, p := range []Policy{DefaultPolicy(), PolicyV2(), PolicyV3(), TrialPolicy()} {
+		for _, n := range p.Names() {
+			if n == config.OptimizerHookModelSwitch || n == config.OptimizerHookColdCompact {
+				t.Errorf("policy %s names %s", p.Name, n)
+			}
+		}
+	}
+}

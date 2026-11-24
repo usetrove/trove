@@ -36,6 +36,10 @@ const verbositySteerTokens = 85
 // 1,500-byte cap at 3.5 bytes per token, rounded up. Tests in internal/hooks and internal/measure keep them in step.
 const coldResumeNoteTokens = 450
 
+// coldWarnTokens is the most a rebuild warning (a systemMessage) can cost if it reaches the model: its 400-byte cap
+// at 3.5 bytes per token, rounded up. A test in internal/hooks keeps the cap and this in step.
+const coldWarnTokens = 120
+
 const (
 	urlRTK       = "https://github.com/rtk-ai/rtk"
 	urlHeadroom  = "https://github.com/headroomlabs-ai/headroom"
@@ -121,6 +125,16 @@ var registry = []Technique{
 		OverheadNote: "nothing reaches the model unless the user pastes the resume note after /clear (at most about 450 tokens, once); the block reason is shown to the user and not added to context (code.claude.com/docs/en/hooks, 2026-11-23)",
 		Licence:      "Trove project",
 		Note:         "built: shadow, warn, and ask on the first prompt after a cold resume. Ask acts as warn until a live check or the user's own session shows a block reaches a typed prompt and print-mode runs can be told apart; a mid-session idle gap is only ever warned about, because self-started turns cannot be told from typed ones"},
+	{ID: "B22", Class: ClassGuard, Title: "Add the cost of a model switch on a large, warm context to the switch confirmation", Names: []string{"hook_model_switch"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierLossless, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(coldWarnTokens),
+		OverheadNote: "one systemMessage shown to the user beside Claude Code's own confirmation (code.claude.com/docs/en/hooks, 2026-11-24); whether it reaches the model is not documented, so its length (at most about 120 tokens) is declared per warning",
+		Licence:      "Trove project", Note: "warn only: it never answers allow, deny or ask, so Claude Code's own confirmation decides; the opusplan plan-mode toggles are a report finding instead"},
+	{ID: "B23", Class: ClassGuard, Title: "Stop a manual /compact once when the cache is cold and the history large", Names: []string{"hook_cold_compact"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierLossless, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(coldResumeNoteTokens),
+		OverheadNote: "the stop message is stderr shown to the user (code.claude.com/docs/en/hooks, 2026-11-24); the resume note costs its tokens once if the user pastes it after /clear (at most about 450)",
+		Licence:      "Trove project", Note: "manual compaction only: a blocked auto compaction can fail the current request; the second /compact of a session goes through"},
 	{ID: "B9", Class: ClassLossless, Title: "Trove MCP tools: trove_read, trove_search, trove_run, trove_fetch_full", Names: []string{"trove_mcp"},
 		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierLossless,
 		Subscription: true, AddsText: true, OverheadNote: "tool definitions go into every request; measured by `trove mcp schema-size`",
