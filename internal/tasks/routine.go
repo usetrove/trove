@@ -59,7 +59,8 @@ const statusRule = "\nReturn format (strict):\n" +
 
 // redelegate is appended to each routine agent's description so the main agent knows what to do
 // when the cheap agent reports a problem. It is in every request, so it is kept short (rule 15).
-const redelegate = " If it replies STATUS: failed or unsure, do not retry it: do the work yourself or use general-purpose."
+// It must stay a valid plain YAML scalar: no ": " and no "#" after a space.
+const redelegate = " If its status is failed or unsure, do not retry it; do the work yourself or use general-purpose."
 
 // skillFile renders a skill that forks into agent. It sets no model or effort: the agent's own
 // fields apply (see the package note above).

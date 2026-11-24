@@ -47,6 +47,8 @@ type Report struct {
 	// Tasks are the scout and cascade features from `trove tasks` that are still
 	// in place, with what the data shows about each (see docs/tasks.md).
 	Tasks []measure.TasksEffect `json:"tasks,omitempty"`
+	// Agents is per agent type for the scout, routine agents and Explore override (observational before/after).
+	Agents []measure.AgentEffect `json:"agents,omitempty"`
 	// Notes are plain-English caveats and next steps (for example the empty state).
 	Notes []string `json:"notes,omitempty"`
 	// History is the part of the figures that came from agents' local session

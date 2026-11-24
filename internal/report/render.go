@@ -177,6 +177,16 @@ func Render(r Report, o Options) string {
 		}
 	}
 
+	if len(r.Agents) > 0 {
+		b.WriteString("\n" + heading("Per agent: cheaper model, low effort (before/after is observational; the session A/B is the evidence)"))
+		for _, a := range r.Agents {
+			b.WriteString(wrap(a.Text, o.width(), "  ", "    ") + "\n")
+			if a.Recommend != "" {
+				b.WriteString(wrap("Trove suggests: "+a.Recommend, o.width(), "    ", "    ") + "\n")
+			}
+		}
+	}
+
 	if len(r.ExternalTools) > 0 {
 		b.WriteString("\n" + heading("Third-party tools (each tool's own claim next to what Trove measured)"))
 		for _, t := range r.ExternalTools {

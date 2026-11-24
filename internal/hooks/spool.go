@@ -61,6 +61,9 @@ type event struct {
 	Samples int     `json:"ns,omitempty"`
 	// Exit is a test command's exit code, for KindTestRun only.
 	Exit int `json:"x,omitempty"`
+	// Agent is the hashed subagent id and Status the STATUS word, for KindSubagentStart and KindSubagentStop only.
+	Agent  string `json:"a,omitempty"`
+	Status string `json:"st,omitempty"`
 }
 
 const (
@@ -148,6 +151,21 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 		return 0, err
 	}
 	defer func() { _ = test.Close() }()
+	// A resumed subagent starts again: the first start is kept. A stop sets the latest stop and status.
+	subStart, err := tx.PrepareContext(ctx, `INSERT INTO subagent_runs (session_key, agent_key, agent_type, started_at) VALUES (?,?,?,?)
+		ON CONFLICT (session_key, agent_key) DO UPDATE SET started_at = CASE WHEN started_at = 0 THEN excluded.started_at ELSE started_at END,
+		agent_type = CASE WHEN agent_type = 'unknown' THEN excluded.agent_type ELSE agent_type END`)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = subStart.Close() }()
+	subStop, err := tx.PrepareContext(ctx, `INSERT INTO subagent_runs (session_key, agent_key, agent_type, stopped_at, status) VALUES (?,?,?,?,?)
+		ON CONFLICT (session_key, agent_key) DO UPDATE SET stopped_at = excluded.stopped_at, status = excluded.status,
+		agent_type = CASE WHEN agent_type = 'unknown' THEN excluded.agent_type ELSE agent_type END`)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = subStop.Close() }()
 	n := 0
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
@@ -158,6 +176,22 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 		if e.Kind == KindArmOn || e.Kind == KindArmOff {
 			// The first record for a session and optimizer wins, so an arm never changes.
 			if _, err := arm.ExecContext(ctx, e.Key, e.Hook, strings.TrimPrefix(e.Kind, "arm_"), e.T); err != nil {
+				return 0, err
+			}
+			n++
+			continue
+		}
+		if e.Kind == KindSubagentStart || e.Kind == KindSubagentStop {
+			if e.Agent == "" {
+				continue
+			}
+			var err error
+			if e.Kind == KindSubagentStart {
+				_, err = subStart.ExecContext(ctx, e.Key, e.Agent, e.Hook, e.T)
+			} else {
+				_, err = subStop.ExecContext(ctx, e.Key, e.Agent, e.Hook, e.T, validStatus(e.Status))
+			}
+			if err != nil {
 				return 0, err
 			}
 			n++
@@ -183,10 +217,19 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 
 func validKind(k string) bool {
 	switch k {
-	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindOverridden, KindCleared, KindArmOn, KindArmOff, KindTestRun:
+	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindOverridden, KindCleared, KindArmOn, KindArmOff, KindTestRun, KindSubagentStart, KindSubagentStop:
 		return true
 	}
 	return false
+}
+
+// validStatus keeps the CHECK constraint of subagent_runs.status from failing a whole spool on a bad line.
+func validStatus(s string) string {
+	switch s {
+	case "done", "failed", "unsure":
+		return s
+	}
+	return "unknown"
 }
 
 // scrub drops file names from an error so the log never holds a path the agent

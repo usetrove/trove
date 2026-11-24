@@ -66,6 +66,39 @@ func TestRoutineAgentsAreCheapLowEffortAndStrict(t *testing.T) {
 	}
 }
 
+// Frontmatter values are written as plain YAML scalars, so none may hold ": ", " #", or start with a character
+// YAML treats specially; otherwise Claude Code could fail to read the file.
+func TestFrontmatterValuesArePlainYAMLScalars(t *testing.T) {
+	c := cat(t)
+	var all []File
+	for _, r := range []func(*Catalog, Options) ([]File, error){ScoutFiles, RoutineFiles, ExploreFiles, CascadeFiles} {
+		fs, err := r(c, Options{TestCmd: "go test ./...", LintCmd: "golangci-lint run"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		all = append(all, fs...)
+	}
+	for _, f := range all {
+		if f.Role == RoleSnippet {
+			continue
+		}
+		for _, line := range strings.Split(strings.TrimSuffix(frontmatter(t, f.Content), "\n"), "\n") {
+			k, v, ok := strings.Cut(line, ": ")
+			if !ok || k == "" || strings.ContainsAny(k, " \t") {
+				t.Errorf("%s: %q is not a key: value line", f.Path, line)
+				continue
+			}
+			if k == "argument-hint" {
+				continue // "[task]" is the form Claude Code's own command examples use
+			}
+			if strings.Contains(v, ": ") || strings.Contains(v, " #") || strings.HasSuffix(v, ":") ||
+				strings.ContainsAny(v[:1], "!&*?|>'\"%@`{}[],#-") {
+				t.Errorf("%s: the value of %s is not a safe plain YAML scalar: %q", f.Path, k, v)
+			}
+		}
+	}
+}
+
 func TestRoutineUsesConfiguredCommandsAndRejectsBadOnes(t *testing.T) {
 	fs, err := RoutineFiles(cat(t), Options{TestCmd: "go test ./...", LintCmd: "gofmt -l .", RoutineModel: "sonnet", RoutineEffort: "medium"})
 	if err != nil {

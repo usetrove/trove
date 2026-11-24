@@ -210,6 +210,9 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	if r.Tasks, err = measure.TasksEffects(ctx, db, in.Config.Measure); err != nil {
 		return r, err
 	}
+	if r.Agents, err = measure.AgentEffects(ctx, db, in.Config.Measure, in.LimitFit, in.Now); err != nil {
+		return r, err
+	}
 	ad, err := measure.AdoptionFor(ctx, db, w, in.Config.Measure)
 	if err != nil {
 		return r, err

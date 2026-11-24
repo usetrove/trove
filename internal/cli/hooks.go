@@ -111,6 +111,11 @@ func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.H
 		// Declines the scout subagent in the off arm of its A/B trial; a no-op otherwise. Agent was called Task
 		// before Claude Code v2.1.63 (code.claude.com/docs/en/sub-agents, read 2026-11-17).
 		{Event: "PreToolUse", Matcher: "Agent|Task", Command: build(hooks.EventSubagent), Timeout: 5},
+		// Which agent type each subagent run was, and the STATUS word of its reply, for per-agent figures
+		// (docs/tasks.md). SubagentStart and SubagentStop receive agent_id and agent_type; the stop also has
+		// last_assistant_message (code.claude.com/docs/en/hooks, read 2026-11-24). No matcher: every type counts.
+		{Event: "SubagentStart", Command: build(hooks.EventSubagentRecord), Timeout: 5},
+		{Event: "SubagentStop", Command: build(hooks.EventSubagentRecord), Timeout: 5},
 		// The test-pass signal. PostToolUse fires only when a tool call succeeds and PostToolUseFailure when it
 		// fails, with "Exit code N" in its error (code.claude.com/docs/en/hooks, read 2026-11-17), so both are needed.
 		{Event: "PostToolUse", Matcher: "Bash", Command: build(hooks.EventTestResult), Timeout: 5},

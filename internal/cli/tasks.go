@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -296,6 +298,12 @@ func runTasksRemove(a *App, fl tasksFlags, which string) error {
 		_, _ = fmt.Fprintf(a.Err, "Note: the files were removed, but Trove could not update its record of them (%v).\n", err)
 	}
 	rep.Undone = res
+	for _, r := range res {
+		// A removed skill leaves its trove-* folder; remove it only if it is now empty.
+		if r.Action == "removed_file" && filepath.Base(r.Path) == "SKILL.md" && strings.HasPrefix(filepath.Base(filepath.Dir(r.Path)), "trove-") {
+			_ = os.Remove(filepath.Dir(r.Path))
+		}
+	}
 	var b strings.Builder
 	for _, r := range res {
 		fmt.Fprintf(&b, "%s: %s\n", r.Path, r.Detail)

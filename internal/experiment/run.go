@@ -44,7 +44,7 @@ const taskIdle = 30 * time.Minute
 // analyzeOne analyses one optimizer. Scout and cascade have their arms assigned by the hooks and may belong to
 // a user with no gateway, so they are compared on the agent's history like any other hook trial.
 func analyzeOne(ctx context.Context, db *store.DB, n string, x config.Experiment, priors Priors, now time.Time) (Result, error) {
-	if n == tasks.FeatureScout || n == tasks.FeatureCascade || n == tasks.FeatureSubagentModel || isHandoffTool(n) {
+	if n == tasks.FeatureScout || n == tasks.FeatureCascade || n == tasks.FeatureSubagentModel || n == tasks.FeatureRoutine || n == tasks.FeatureExplore || isHandoffTool(n) {
 		return AnalyzeHookTrial(ctx, db, n, x, 0, now, taskIdle)
 	}
 	return Analyze(ctx, db, n, x, priors)

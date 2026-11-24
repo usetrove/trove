@@ -229,18 +229,41 @@ func (h *handler) subagent(in Input, key string) ([]byte, error) {
 	if out := h.subagentModelControl(in, key); out != nil {
 		return out, nil
 	}
-	if in.ToolInput.SubagentType != tasks.ScoutName {
+	feat, ok := trialFeatureOf(in.ToolInput.SubagentType)
+	if !ok {
 		return nil, nil
 	}
-	if loadSession(h.dir, key).Pins[tasks.FeatureScout] != stateOff {
+	if loadSession(h.dir, key).Pins[feat] != stateOff {
 		return nil, nil
 	}
 	for _, n := range h.snap.RolledBack {
-		if n == tasks.FeatureScout {
+		if n == feat {
 			return nil, nil
 		}
 	}
-	return denyJSON("Trove is comparing sessions with and without the scout helper, and this session is one of the ones without it. Please do this work directly instead."), nil
+	if feat == tasks.FeatureExplore {
+		// The control for the Explore override is the built-in Explore, which a project file cannot be switched
+		// off for. The off arm gets the main conversation's model back for the call; the low effort, read-only
+		// tools and prompt of Trove's file stay, so this arm measures the model change only (docs/tasks.md).
+		if in.Cwd == "" || !troveExploreIn(in.Cwd) {
+			return nil, nil
+		}
+		return restoreMainModel(in), nil
+	}
+	return denyJSON("Trove is comparing sessions with and without this helper, and this session is one of the ones without it. Please do this work directly instead."), nil
+}
+
+// trialFeatureOf maps a subagent type to the tasks feature whose trial controls it.
+func trialFeatureOf(subagentType string) (string, bool) {
+	switch subagentType {
+	case tasks.ScoutName:
+		return tasks.FeatureScout, true
+	case tasks.TestRunnerName, tasks.LintFixerName:
+		return tasks.FeatureRoutine, true
+	case tasks.ExploreAgent:
+		return tasks.FeatureExplore, true
+	}
+	return "", false
 }
 
 // largeOutput is pre_tool_large_output: for a known-noisy shell command the

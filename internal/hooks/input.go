@@ -54,6 +54,12 @@ type Input struct {
 	// PromptText is UserPromptSubmit's prompt text. Only hook_routine_steer reads it, in memory, through
 	// routine.Classify; it is never stored, logged, hashed or written to the spool (rule 7).
 	PromptText string `json:"prompt"`
+	// SubagentStart and SubagentStop (code.claude.com/docs/en/hooks, read 2026-11-24). The id is hashed and the
+	// type stored only as tasks.AgentTypeLabel; LastAssistantMessage is read in memory for its STATUS line by
+	// tasks.ParseStatus and never stored, logged or hashed (rule 7).
+	AgentID              string `json:"agent_id"`
+	AgentType            string `json:"agent_type"`
+	LastAssistantMessage string `json:"last_assistant_message"`
 }
 
 // ToolInput is the tool's arguments. The named fields are the ones Trove reads.

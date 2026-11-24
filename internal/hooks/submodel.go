@@ -31,6 +31,18 @@ func (h *handler) subagentModelControl(in Input, key string) []byte {
 	if in.ToolInput.SubagentType == "" || in.Cwd == "" || !troveSetModelFor(in.Cwd, in.ToolInput.SubagentType) {
 		return nil
 	}
+	return restoreMainModel(in)
+}
+
+// troveExploreIn reports whether the project's Explore subagent is the one Trove wrote (task_explore).
+func troveExploreIn(cwd string) bool {
+	b, err := readCapped(filepath.Join(cwd, ".claude", "agents", tasks.ExploreFile+".md"), 64<<10)
+	return err == nil && bytes.Contains(b, []byte(tasks.Managed)) && frontmatterName(b) == tasks.ExploreAgent
+}
+
+// restoreMainModel is the PreToolUse reply that sets the Agent call's per-invocation model to the main
+// conversation's model alias, or nil when that is uncertain or the call names a model itself.
+func restoreMainModel(in Input) []byte {
 	alias, ok := tasks.ModelAlias(mainModel(in.TranscriptPath))
 	if !ok {
 		return nil

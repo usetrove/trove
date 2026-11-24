@@ -5,6 +5,15 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ## [Unreleased]
 
 ### Added
+- Routine agents (B25, T3, opt-in): `trove tasks apply agents` writes `trove-test-runner` and `trove-lint-fixer` subagents on a cheaper model (`routine_model`, default haiku) at `effort: low`, plus `/trove-test` and `/trove-lint` skills that fork into them. The main conversation keeps its own model and effort.
+  - Every reply starts with `STATUS: done|failed|unsure` followed by at most 8 lines. On `failed` or `unsure` the main agent is told to do the work itself or use general-purpose.
+  - `trove tasks apply explore` (separate opt-in) replaces the built-in Explore in a project with a read-only one on the routine model at low effort. It is never offered over your own Explore.
+  - The scout gains `effort: low` and the same status line.
+  - `trove tasks remove <feature>` undoes one feature's files in the current project. It never touches a file you wrote and is refused while a session is active.
+  - Blocked under `CLAUDE_CODE_SUBAGENT_MODEL_FORCE`. The plan explains that `CLAUDE_CODE_EFFORT_LEVEL` overrides the effort field.
+  - A new `subagent_record` hook (`SubagentStart`, `SubagentStop`; run `trove hooks install` again or update the plugin) records subagent runs in the new `subagent_runs` table (migration 0029). `trove report` then shows per agent type: tokens and thinking share (measured), share of the limits (estimated), the effort each request ran at, the failure rate and re-delegations. For Explore and the scout it also shows a before/after, labelled observational.
+  - The session A/B declines the routine agents in the off arm, and runs Trove's Explore on the main model there.
+  - Verified on code.claude.com (sub-agents, skills, model-config, hooks) on 2026-11-24. See docs/tasks.md, "Routine agents".
 - `hook_routine_steer` (B24, T2, off by default): on a routine prompt ("yes", "continue", "run the tests", "commit"), the `UserPromptSubmit` hook adds "Answer directly without deliberating." as `additionalContext`, to cut thinking on turns that need little.
   - It acts on Claude Opus 5.5 only. The phrase is documented as unreliable on Haiku 5.5 and Fable 5.2, and Sonnet 5.5 waits for a trial of its own. A session on any other model, or whose model is unknown, is left alone silently.
   - Routine prompts are decided by a new deterministic classifier, `internal/routine`, in memory. The prompt is never stored.
