@@ -55,7 +55,7 @@ const (
 )
 
 // Events lists every event name.
-var Events = []string{EventPreRead, EventPostRead, EventPostEdit, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch, EventPostRun, EventSubagent, EventTestResult}
+var Events = []string{EventPreRead, EventPostRead, EventPostEdit, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch, EventPostRun, EventSubagent, EventTestResult, EventPromptSubmit}
 
 const (
 	// maxHashBytes is the largest file the repeat-read hook will hash. Bigger
@@ -118,6 +118,8 @@ func Main(e Env) (code int) {
 		deadline = endDeadline
 	case EventPostOutput, EventPostRead:
 		deadline = postDeadline // both may store the full output before replacing it
+	case EventPromptSubmit:
+		deadline = postDeadline // reads up to 1 MiB of the transcript
 	}
 	done := make(chan []byte, 1)
 	go func() {
@@ -227,6 +229,8 @@ func run(dir, event, agent string, e Env) []byte {
 		out, err = h.subagent(in, key)
 	case EventTestResult:
 		err = h.testResult(in, key)
+	case EventPromptSubmit:
+		out, err = h.promptSubmit(in, key)
 	case EventSessionEnd:
 		err = h.sessionEnd(in, key)
 	}

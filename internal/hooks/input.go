@@ -37,6 +37,12 @@ type Input struct {
 	// (code.claude.com/docs/en/hooks, read 2026-11-17). Error is read in memory only, never stored.
 	Error       string `json:"error"`
 	IsInterrupt bool   `json:"is_interrupt"`
+	// SessionStart sends these when source is "resume" or "fork" and the transcript has a response (Claude Code
+	// v2.1.251 or later; code.claude.com/docs/en/hooks, read 2026-11-23). Only numbers are kept, for the cold-resume
+	// guard. UserPromptSubmit's prompt text is deliberately not a field here: it is never read.
+	ContextTokens            *int64   `json:"context_tokens"`
+	PromptCacheLikelyExpired *bool    `json:"prompt_cache_likely_expired"`
+	EstimatedCacheWriteUSD   *float64 `json:"estimated_cache_write_usd"`
 }
 
 // ToolInput is the tool's arguments. The named fields are the ones Trove reads.

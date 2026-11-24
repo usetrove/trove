@@ -170,6 +170,7 @@ func (h *handler) reset(in Input, key string) ([]byte, error) {
 			}
 		}
 	}
+	h.armColdResume(in, st)
 	if in.Event == "PreCompact" || in.Event == "PostCompact" || (in.Event == "SessionStart" && in.Source != "" && in.Source != "startup") {
 		st.do(op{T: "clear"})
 	}
@@ -394,6 +395,7 @@ func (h *handler) postRun(in Input, key string) error {
 func (h *handler) sessionEnd(in Input, key string) error {
 	defer func() { _ = os.Remove(sessionPath(h.dir, key)) }()
 	defer func() { _ = os.Remove(featPath(h.dir, key)) }()
+	h.coldSessionEnd(in, key) // before Maintain, so its count is ingested now
 	h.sweepOldSessions()
 	ctx, cancel := context.WithTimeout(context.Background(), endDeadline-250*time.Millisecond)
 	defer cancel()
