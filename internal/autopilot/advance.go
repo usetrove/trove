@@ -253,7 +253,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 		}
 	}
 	// Rule-set trials the user started: judged here, never promoted (see ruletrial.go).
-	if rc, evs, err := advanceRuleTrials(ctx, db, cfg, &f, onForAll, traffic, now); err != nil {
+	if rc, evs, err := advanceRuleTrials(ctx, db, dir, cfg, &f, onForAll, traffic, now); err != nil {
 		return Result{File: f}, err
 	} else if rc {
 		changed = true

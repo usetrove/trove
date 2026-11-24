@@ -84,10 +84,20 @@ func HookAssignsTrial(name string) bool { return hookAssignedTrials[name] || IsR
 // Prefix), because the comparison is about that tool.
 const ruleTrialPrefix = "ext_"
 
-// IsRuleTrial reports whether an autopilot.json entry is a rule-set trial (a third-party behavior-rules tool, T2).
-// Such an entry is started only by the user (`trove autopilot trial <rule set>`), never by a policy, and Autopilot
-// never turns the rule set on: it only runs the comparison and reports the verdict.
-func IsRuleTrial(name string) bool { return strings.HasPrefix(name, ruleTrialPrefix) }
+// nativeRuleTrials are Trove's own T2 hook techniques that are trialled the way a rule set is: the user starts the
+// trial, the hooks assign the arms, and Autopilot only reports the verdict. Their entry is the optimizer's own name.
+var nativeRuleTrials = map[string]bool{OptimizerHookRoutineSteer: true}
+
+// IsRuleTrial reports whether an autopilot.json entry is a rule-set trial (a third-party behavior-rules tool, or one
+// of Trove's own T2 hook techniques in nativeRuleTrials). Such an entry is started only by the user (`trove autopilot
+// trial <name>`), never by a policy, and Autopilot never turns the technique on: it only runs the comparison and
+// reports the verdict.
+func IsRuleTrial(name string) bool {
+	return strings.HasPrefix(name, ruleTrialPrefix) || nativeRuleTrials[name]
+}
+
+// IsNativeRuleTrial reports whether name is one of Trove's own techniques trialled as a rule set is.
+func IsNativeRuleTrial(name string) bool { return nativeRuleTrials[name] }
 
 // RuleTrials returns the rule-set trials that are running, sorted, or nil when Autopilot is not active.
 func (f AutopilotFile) RuleTrials() []string {
