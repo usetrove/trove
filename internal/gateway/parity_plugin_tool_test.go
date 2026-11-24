@@ -47,6 +47,9 @@ type toolFixture struct {
 	prior bool
 }
 
+// actsOnCall names optimizers that act only on the nth identical call in a turn; the fixture runs n-1 times first.
+var actsOnCall = map[string]int{"hook_edit_batch": optimize.EditBatchAt}
+
 func toolInputFixtures(t *testing.T) map[string]toolFixture {
 	t.Helper()
 	dir := t.TempDir()
@@ -64,6 +67,8 @@ func toolInputFixtures(t *testing.T) map[string]toolFixture {
 		"hook_repeat_read":    {"Read", enc(map[string]any{"file_path": small}), true},
 		"hook_quiet_commands": {"Bash", enc(map[string]any{"command": "npm install"}), false},
 		"hook_large_output":   {"Bash", enc(map[string]any{"command": "go test ./..."}), false},
+		"hook_write_to_edit":  {"Write", enc(map[string]any{"file_path": big, "content": strings.Repeat("a line of a large file\n", 4000) + "one more\n"}), false},
+		"hook_edit_batch":     {"Edit", enc(map[string]any{"file_path": big, "old_string": "a", "new_string": "b"}), false},
 	}
 }
 
@@ -107,6 +112,9 @@ func TestPluginParityWithHooksOnToolInput(t *testing.T) {
 			if fx.prior {
 				eng.TransformToolOutput(context.Background(), hooks.ToolCallOf(in), optimize.ToolOutput{Parts: []optimize.Part{{Text: "x"}}}, hookSess())
 			}
+			for i := 0; i < actsOnCall[row.Optimizer]-1; i++ {
+				eng.TransformToolInput(context.Background(), hooks.ToolCallOf(in), hookSess())
+			}
 			wantCall, wantReps := eng.TransformToolInput(context.Background(), hooks.ToolCallOf(in), hookSess())
 
 			// Plugin side, over the protocol.
@@ -116,6 +124,9 @@ func TestPluginParityWithHooksOnToolInput(t *testing.T) {
 			if fx.prior {
 				pluginReply(t, srv, plugin.Message{Method: "tool_output", Session: sess, Call: &call,
 					Output: &optimize.ToolOutput{Parts: []optimize.Part{{Text: "x"}}}})
+			}
+			for i := 0; i < actsOnCall[row.Optimizer]-1; i++ {
+				pluginReply(t, srv, plugin.Message{Method: "tool_input", Session: sess, Call: &call})
 			}
 			rep := pluginReply(t, srv, plugin.Message{Method: "tool_input", Session: sess, Call: &call})
 
