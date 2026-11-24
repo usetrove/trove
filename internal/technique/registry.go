@@ -32,6 +32,10 @@ const mcpSnippetTokens = 70
 // test in internal/optimize keeps it equal to VerbositySteer{}.OverheadTokens().
 const verbositySteerTokens = 85
 
+// coldResumeNoteTokens is the most the cold-resume guard's note can cost if the user pastes it after /clear: its
+// 1,500-character cap at 3.5 bytes per token, rounded up. A test in internal/hooks keeps the cap and this in step.
+const coldResumeNoteTokens = 450
+
 const (
 	urlRTK       = "https://github.com/rtk-ai/rtk"
 	urlHeadroom  = "https://github.com/headroomlabs-ai/headroom"
@@ -111,6 +115,12 @@ var registry = []Technique{
 		HookNeeds:    []string{"Read:output"},
 		Requires:     []string{CapMCPServer, CapRecoveryStore},
 		Licence:      "Trove project", Note: "full reads of 40 KB or more of a file the outliner knows; the full text is kept locally and a second full Read goes through; stays in shadow until a live probe sees Read honour updatedToolOutput"},
+	{ID: "B21", Class: ClassGuard, Title: "Warn, or ask once, before a prompt rebuilds a large session's expired cache", Names: []string{"hook_cold_resume"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusPartial, Effect: tierLossless, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(coldResumeNoteTokens),
+		OverheadNote: "nothing reaches the model unless the user pastes the resume note after /clear (at most about 450 tokens, once); the block reason is shown to the user and not added to context (code.claude.com/docs/en/hooks, 2026-11-23)",
+		Licence:      "Trove project",
+		Note:         "built: shadow, warn, and ask on the first prompt after a cold resume. Ask acts as warn until a live check or the user's own session shows a block reaches a typed prompt and print-mode runs can be told apart; a mid-session idle gap is only ever warned about, because self-started turns cannot be told from typed ones"},
 	{ID: "B9", Class: ClassLossless, Title: "Trove MCP tools: trove_read, trove_search, trove_run, trove_fetch_full", Names: []string{"trove_mcp"},
 		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierLossless,
 		Subscription: true, AddsText: true, OverheadNote: "tool definitions go into every request; measured by `trove mcp schema-size`",

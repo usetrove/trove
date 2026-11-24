@@ -188,7 +188,22 @@ type Optimize struct {
 	// RouteTo is the cheaper model model_router may step down to on tool turns
 	// (plan item 7.2). Empty means model_router does nothing. Pinned per session.
 	RouteTo string `toml:"route_to"`
+	// ColdResumeAction is what hook_cold_resume does when it is on: ColdResumeWarn (default) shows a warning
+	// and lets the prompt go through, ColdResumeAsk stops the first prompt after a cold resume once. Pinned per
+	// session.
+	ColdResumeAction string `toml:"cold_resume_action"`
+	// ColdResumeMinTokens and ColdResumeMinWeekPct are the rebuild sizes from which hook_cold_resume acts: the
+	// tokens the next request would write to the cache again, or the low end of its estimated share of the
+	// weekly limit. Either one is enough. Pinned per session.
+	ColdResumeMinTokens  int64   `toml:"cold_resume_min_tokens"`
+	ColdResumeMinWeekPct float64 `toml:"cold_resume_min_week_pct"`
 }
+
+// Actions for hook_cold_resume.
+const (
+	ColdResumeWarn = "warn"
+	ColdResumeAsk  = "ask"
+)
 
 // Verbosity levels for verbosity_steer.
 const (
@@ -268,6 +283,10 @@ const (
 	// OptimizerHookReadOutline replaces a very large full Read of a source file with its outline. Like the
 	// output trimmer it needs the Trove MCP server and the recovery store before "on" takes effect.
 	OptimizerHookReadOutline = "hook_read_outline"
+	// OptimizerHookColdResume warns, or asks once, before a prompt that would write a large session's whole
+	// context to the cache again because the cache expired (UserPromptSubmit, docs/hooks.md). It changes no
+	// request; optimize.cold_resume_action says which.
+	OptimizerHookColdResume = "hook_cold_resume"
 	// OptimizerNoiseNormalizer is lossless; it also runs in hooks on tool output.
 	OptimizerNoiseNormalizer = "noise_normalizer"
 	// OptimizerInflightDedup is a behavior of the gateway itself: when identical requests
@@ -316,8 +335,9 @@ func Default() Config {
 		Gateway:    Gateway{Port: 8787, IdleMinutes: 30, KeepWarmMaxPings: 2, KeepWarmDailyCapUSD: 1},
 		Upstreams:  Upstreams{Anthropic: "https://api.anthropic.com", OpenAI: "https://api.openai.com"},
 		Optimizers: map[string]string{},
-		Optimize:   Optimize{CustomAgents: []string{}, BudgetMS: 25, Verbosity: VerbosityConcise},
-		Budget:     Budget{Period: "monthly", CapUSD: 0, WarnAtPercent: 80},
+		Optimize: Optimize{CustomAgents: []string{}, BudgetMS: 25, Verbosity: VerbosityConcise,
+			ColdResumeAction: ColdResumeWarn, ColdResumeMinTokens: 150000, ColdResumeMinWeekPct: 3},
+		Budget: Budget{Period: "monthly", CapUSD: 0, WarnAtPercent: 80},
 		Measure: Measure{
 			BaselineDays: 7, BaselineSessions: 20, MinSessions: 20,
 			RetryIncreasePercent: 30, RefetchRatePercent: 25,
@@ -387,6 +407,16 @@ verbosity = "concise"
 # The cheaper model model_router may step down to on tool turns, for API-key
 # traffic only. Empty means model_router does nothing. Changes apply to new sessions.
 route_to = ""
+# What hook_cold_resume does when it is on: "warn" shows what continuing a session
+# whose cache expired will cost and lets the prompt go through; "ask" stops the first
+# prompt after resuming such a session, once, so you can /clear instead. Changes
+# apply to new sessions.
+cold_resume_action = "warn"
+# hook_cold_resume acts from this many tokens re-written to the cache (10000 to
+# 2000000), or from this estimated share of the weekly limit, in percent (above 0, at
+# most 100), whichever is reached first.
+cold_resume_min_tokens = 150000
+cold_resume_min_week_pct = 3.0
 
 [budget]
 # Budget period: "daily", "weekly" or "monthly".
@@ -571,6 +601,15 @@ func (c Config) Validate() error {
 	}
 	if v := c.Optimize.Verbosity; v != VerbosityConcise && v != VerbosityTerse {
 		add("optimize.verbosity is %q; use \"concise\" or \"terse\" (default \"concise\").", v)
+	}
+	if v := c.Optimize.ColdResumeAction; v != ColdResumeWarn && v != ColdResumeAsk {
+		add("optimize.cold_resume_action is %q; use \"warn\" or \"ask\" (default \"warn\").", v)
+	}
+	if v := c.Optimize.ColdResumeMinTokens; v < 10000 || v > 2000000 {
+		add("optimize.cold_resume_min_tokens is %d; use a number of tokens from 10000 to 2000000 (default 150000).", v)
+	}
+	if v := c.Optimize.ColdResumeMinWeekPct; !(v > 0 && v <= 100) {
+		add("optimize.cold_resume_min_week_pct is %v; use a percentage above 0 and at most 100 (default 3).", v)
 	}
 	if v := c.Optimize.RouteTo; len(v) > 100 || strings.ContainsAny(v, " \t\r\n\"") {
 		add("optimize.route_to is not a model name; use a model ID such as the one your agent sends, or \"\" to leave model_router idle.")

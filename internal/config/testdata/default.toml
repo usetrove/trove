@@ -39,6 +39,16 @@ verbosity = "concise"
 # The cheaper model model_router may step down to on tool turns, for API-key
 # traffic only. Empty means model_router does nothing. Changes apply to new sessions.
 route_to = ""
+# What hook_cold_resume does when it is on: "warn" shows what continuing a session
+# whose cache expired will cost and lets the prompt go through; "ask" stops the first
+# prompt after resuming such a session, once, so you can /clear instead. Changes
+# apply to new sessions.
+cold_resume_action = "warn"
+# hook_cold_resume acts from this many tokens re-written to the cache (10000 to
+# 2000000), or from this estimated share of the weekly limit, in percent (above 0, at
+# most 100), whichever is reached first.
+cold_resume_min_tokens = 150000
+cold_resume_min_week_pct = 3.0
 
 [budget]
 # Budget period: "daily", "weekly" or "monthly".

@@ -144,6 +144,22 @@ func TestLoad(t *testing.T) {
 		{name: "bad cache ttl value", file: "[optimize.cache_ttl]\ntools = \"2h\"\n", wantErr: []string{"optimize.cache_ttl.tools", "\"5m\" or \"1h\""}},
 		{name: "cache ttl shorter before longer", file: "[optimize.cache_ttl]\ntools = \"5m\"\nsystem = \"1h\"\n", wantErr: []string{"optimize.cache_ttl", "longer lifetime must come before a shorter one"}},
 		{name: "cache ttl messages longer than system", file: "[optimize.cache_ttl]\nmessages = \"1h\"\n", wantErr: []string{"optimize.cache_ttl", "longer lifetime must come before a shorter one"}},
+		{name: "cold resume settings", file: "[optimize]\ncold_resume_action = \"ask\"\ncold_resume_min_tokens = 200000\ncold_resume_min_week_pct = 1.5\n",
+			check: func(t *testing.T, c Config) {
+				if c.Optimize.ColdResumeAction != ColdResumeAsk || c.Optimize.ColdResumeMinTokens != 200000 || c.Optimize.ColdResumeMinWeekPct != 1.5 {
+					t.Errorf("got %+v", c.Optimize)
+				}
+			}},
+		{name: "cold resume defaults", check: func(t *testing.T, c Config) {
+			if c.Optimize.ColdResumeAction != ColdResumeWarn || c.Optimize.ColdResumeMinTokens != 150000 || c.Optimize.ColdResumeMinWeekPct != 3 {
+				t.Errorf("got %+v", c.Optimize)
+			}
+		}},
+		{name: "bad cold resume action", file: "[optimize]\ncold_resume_action = \"block\"\n", wantErr: []string{"optimize.cold_resume_action", "\"warn\" or \"ask\""}},
+		{name: "cold resume tokens too low", file: "[optimize]\ncold_resume_min_tokens = 500\n", wantErr: []string{"optimize.cold_resume_min_tokens is 500", "10000 to 2000000"}},
+		{name: "cold resume tokens too high", file: "[optimize]\ncold_resume_min_tokens = 3000000\n", wantErr: []string{"optimize.cold_resume_min_tokens"}},
+		{name: "cold resume week share zero", file: "[optimize]\ncold_resume_min_week_pct = 0\n", wantErr: []string{"optimize.cold_resume_min_week_pct", "above 0"}},
+		{name: "cold resume week share over 100", file: "[optimize]\ncold_resume_min_week_pct = 150\n", wantErr: []string{"optimize.cold_resume_min_week_pct"}},
 		{name: "bad optimizer name", file: "[optimizers]\n\"Bad Name\" = \"on\"\n", wantErr: []string{"not a valid optimizer name"}},
 		{name: "http upstream rejected", file: "[upstreams]\nanthropic = \"http://example.com\"\n", wantErr: []string{"upstreams.anthropic", "https://"}},
 		{name: "upstream with path rejected", file: "[upstreams]\nopenai = \"https://api.openai.com/v1\"\n", wantErr: []string{"origin only"}},

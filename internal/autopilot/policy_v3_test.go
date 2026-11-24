@@ -224,3 +224,15 @@ func TestAV3CandidateWithGoodShadowEvidenceStartsATrialOneAtATime(t *testing.T) 
 	}
 	_ = technique.CapMCPServer
 }
+
+// The cold-resume guard changes what the user sees, not what is sent, so only the user turns it on: no policy may
+// name it (decided 2026-11-23, docs/hooks.md). Its guardrail can still lower it to shadow.
+func TestNoPolicyPromotesTheColdResumeGuard(t *testing.T) {
+	for _, p := range []Policy{DefaultPolicy(), PolicyV2(), PolicyV3(), TrialPolicy()} {
+		for _, n := range p.Names() {
+			if n == config.OptimizerHookColdResume {
+				t.Errorf("policy %s names %s", p.Name, n)
+			}
+		}
+	}
+}
