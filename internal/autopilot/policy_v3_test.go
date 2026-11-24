@@ -247,3 +247,14 @@ func TestNoPolicyPromotesTheRebuildGuards(t *testing.T) {
 		}
 	}
 }
+
+// The routine steer is T2 with no benchmark verdict: no policy may name it; only the user starts its trial.
+func TestNoPolicyPromotesTheRoutineSteer(t *testing.T) {
+	for _, p := range []Policy{DefaultPolicy(), PolicyV2(), PolicyV3(), TrialPolicy()} {
+		for _, n := range p.Names() {
+			if n == config.OptimizerHookRoutineSteer {
+				t.Errorf("policy %s names %s", p.Name, n)
+			}
+		}
+	}
+}

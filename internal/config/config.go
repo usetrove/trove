@@ -293,6 +293,10 @@ const (
 	// OptimizerHookColdCompact stops a manual /compact once when the cache has expired and the history is large,
 	// because the summarization would reprocess it as uncached input (PreCompact, exit 2).
 	OptimizerHookColdCompact = "hook_cold_compact"
+	// OptimizerHookRoutineSteer adds "Answer directly without deliberating." to the context of a routine prompt
+	// (a confirmation, "continue", "run the tests") through UserPromptSubmit additionalContext, to cut thinking on
+	// turns that need none (T2, technique B24). Only on models where the phrase is documented to work (Opus 5.5).
+	OptimizerHookRoutineSteer = "hook_routine_steer"
 	// OptimizerNoiseNormalizer is lossless; it also runs in hooks on tool output.
 	OptimizerNoiseNormalizer = "noise_normalizer"
 	// OptimizerInflightDedup is a behavior of the gateway itself: when identical requests

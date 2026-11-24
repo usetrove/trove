@@ -152,6 +152,7 @@ var OptimizerNames = []string{
 	config.OptimizerNoiseNormalizer, config.OptimizerOutputTrimmer,
 	config.OptimizerHookOutputDedup, config.OptimizerHookReadOutline,
 	config.OptimizerHookColdResume, config.OptimizerHookModelSwitch, config.OptimizerHookColdCompact,
+	config.OptimizerHookRoutineSteer,
 }
 
 // State is the state a hook acts in right now for the named optimizer. pinned

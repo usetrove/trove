@@ -40,6 +40,12 @@ const coldResumeNoteTokens = 450
 // at 3.5 bytes per token, rounded up. A test in internal/hooks keeps the cap and this in step.
 const coldWarnTokens = 120
 
+// routineSteerTokens is the most hook_routine_steer adds each time it steers a prompt: the 37-byte phrase plus up to
+// 68 bytes of the system-reminder wrapper Claude Code puts around additionalContext, at 3.5 bytes per token, rounded
+// up. The text stays in the transcript, so later requests carry it too (as cached input). A test in internal/hooks
+// keeps the phrase and this in step.
+const routineSteerTokens = 30
+
 const (
 	urlRTK       = "https://github.com/rtk-ai/rtk"
 	urlHeadroom  = "https://github.com/headroomlabs-ai/headroom"
@@ -135,6 +141,12 @@ var registry = []Technique{
 		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(coldResumeNoteTokens),
 		OverheadNote: "the stop message is stderr shown to the user (code.claude.com/docs/en/hooks, 2026-11-24); the resume note costs its tokens once if the user pastes it after /clear (at most about 450)",
 		Licence:      "Trove project", Note: "manual compaction only: a blocked auto compaction can fail the current request; the second /compact of a session goes through"},
+	{ID: "B24", Class: ClassBehavior, Title: "Ask for a direct answer, without deliberating, on routine prompts", Names: []string{"hook_routine_steer"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusPartial, Effect: tierBehavior, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(routineSteerTokens),
+		OverheadNote: "the phrase \"Answer directly without deliberating.\" as UserPromptSubmit additionalContext on each routine prompt it steers (at most about 30 tokens with Claude Code's wrapper, estimated); it stays in the transcript, so every later request of the session carries it as cached input",
+		Licence:      "Trove project",
+		Note:         "built: the classifier, shadow counts and the session A/B trial; acts only on Claude Opus 5.5, where the per-message phrase is documented to reduce thinking without touching earlier cache breakpoints (platform.claude.com/docs/en/build-with-claude/adaptive-thinking, 2026-11-24); never on Haiku 5.5 or Fable 5.2, where it is documented as unreliable, or on an unknown model; on and the trial act as shadow until a live check records that the text lands after the cached prefix"},
 	{ID: "B9", Class: ClassLossless, Title: "Trove MCP tools: trove_read, trove_search, trove_run, trove_fetch_full", Names: []string{"trove_mcp"},
 		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierLossless,
 		Subscription: true, AddsText: true, OverheadNote: "tool definitions go into every request; measured by `trove mcp schema-size`",
