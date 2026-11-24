@@ -1,6 +1,17 @@
 {
   "description": "Trove hooks. They stay inert until an optimizer is set to shadow or on in Trove's config, and every one exits quietly on any error.",
   "hooks": {
+    "PostModelSwitch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook post_model_switch",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Read",
@@ -81,6 +92,17 @@
           {
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook session_reset",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreModelSwitch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook pre_model_switch",
             "timeout": 5
           }
         ]

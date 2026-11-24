@@ -119,6 +119,10 @@ func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.H
 		// no matcher and a default timeout of 30 s (code.claude.com/docs/en/hooks, read 2026-11-23); 5 s is far
 		// above the hook's own 250 ms safety net.
 		{Event: "UserPromptSubmit", Command: build(hooks.EventPromptSubmit), Timeout: 5},
+		// The model-switch guard (hook_model_switch). A PreModelSwitch hook that times out blocks the switch
+		// (code.claude.com/docs/en/hooks, read 2026-11-24); the hook's own safety net is 150 ms, far inside 5 s.
+		{Event: "PreModelSwitch", Command: build(hooks.EventModelSwitch), Timeout: 5},
+		{Event: "PostModelSwitch", Command: build(hooks.EventPostModelSwitch), Timeout: 5},
 	}
 	if largeOutput || rewrite {
 		s = append(s, setup.HookSpec{Event: "PreToolUse", Matcher: "Bash", Command: build(hooks.EventLargeOutput), Timeout: 5})
