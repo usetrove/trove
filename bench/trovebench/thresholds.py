@@ -37,7 +37,7 @@ T1 = {"noise_normalizer", "duplicate_result_collapser", "output_trimmer", "hook_
       "hook_quiet_commands", "hook_large_output", "hook_output_dedup", "hook_read_outline", "volatile_prefix_mover",
       "cache_breakpoints"}
 T2 = {"verbosity_steer"}
-T3 = {"model_router", "effort_tool_turns"}
+T3 = {"model_router", "effort_tool_turns", "effort_routine_prompts", "thinking_clear"}
 
 
 class ThresholdsError(ValueError):

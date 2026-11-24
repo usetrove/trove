@@ -5,6 +5,14 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ## [Unreleased]
 
 ### Added
+- Effort and thinking controls at the gateway (API key only, off by default, T3). See docs/gateway.md#effort-and-thinking-controls.
+  - `effort_routine_prompts` (B28) runs the turn after a routine prompt at low effort, using per-message effort. It adds an empty system message with `output_config.effort` and the beta `mid-conversation-output-config-2026-07-01`. The top-level value never changes, so the cached prefix holds.
+  - `effort_tool_turns` stays on its top-level path: per-message effort cannot act on a tool-result turn.
+  - `thinking_clear` (B29, shadow first) adds `clear_thinking_20251015` (keep 2 turns, beta `context-management-2025-06-27`) in sessions of about 100k tokens. Each request records the old thinking it would not send and the cache it would rewrite (estimated). These are weighed with the plan-limit fit when there is one, else API prices, and Autopilot may only promote it when the result is net positive.
+  - The gateway adds a beta to `anthropic-beta` only when the changed body is forwarded.
+  - New bench conditions: `alone:effort_routine_prompts` and `alone:thinking_clear`.
+
+  Verified on platform.claude.com (effort-per-message, context-editing) on 2026-11-24.
 - `trove headless` (`env`, `ci`): run `claude -p`, cron and CI jobs on the monthly API credits included with Max, Ultra and Team plans, through the gateway.
   - It prints the two-line trade-off and a shell function or a GitHub Actions workflow. Both use `claude --bare -p` with an API key from a variable you fill, set for the job's command only.
   - It never reads, stores or moves a key or a login, and never touches interactive sessions.

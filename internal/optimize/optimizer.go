@@ -137,6 +137,11 @@ type Report struct {
 	Originals []string `json:"-"`
 	// Route is model_router's estimate for this request; nil for other optimizers.
 	Route *RouteEstimate `json:"route,omitempty"`
+	// Clear is thinking_clear's estimate for this request; nil for other optimizers.
+	Clear *ClearEstimate `json:"clear,omitempty"`
+	// Betas are anthropic-beta values the changed request needs. The engine passes them on only when the change
+	// is forwarded (state on, changed, nothing failed), and the gateway adds them to the request's header.
+	Betas []string `json:"-"`
 }
 
 // NetTokens is the estimated saving after the optimizer's own overhead.
@@ -173,6 +178,8 @@ type Applied struct {
 	Failed         string `json:"failed,omitempty"`
 	// Route is model_router's estimate (its money figures are estimates).
 	Route *RouteEstimate `json:"route,omitempty"`
+	// Clear is thinking_clear's estimate (token counts, estimated).
+	Clear *ClearEstimate `json:"clear,omitempty"`
 }
 
 // AppliedJSON encodes the applied list for the optimizations_applied column.
@@ -183,7 +190,7 @@ func AppliedJSON(reports []Report, failures []Failure) []byte {
 	}
 	out := make([]Applied, 0, len(reports)+len(failures))
 	for _, r := range reports {
-		out = append(out, Applied{Name: r.Name, State: r.State, BytesRemoved: r.BytesRemoved, TokensRemoved: r.TokensRemoved, OverheadTokens: r.OverheadTokens, Route: r.Route})
+		out = append(out, Applied{Name: r.Name, State: r.State, BytesRemoved: r.BytesRemoved, TokensRemoved: r.TokensRemoved, OverheadTokens: r.OverheadTokens, Route: r.Route, Clear: r.Clear})
 	}
 	for _, f := range failures {
 		out = append(out, Applied{Name: f.Optimizer, State: "failed", Failed: f.Class})
@@ -202,23 +209,27 @@ func AppliedJSON(reports []Report, failures []Failure) []byte {
 //
 //  1. model_router               picks the model first, so later steps see the final one
 //  2. effort_tool_turns          lowers effort on tool turns, for the model chosen above
+//     2b. effort_routine_prompts    per-message low effort after routine prompts, for the same model
 //  3. volatile_prefix_mover      system prompt layout, before anything reads it
 //  4. noise_normalizer           clean tool output first...
 //  5. output_trimmer             ...then trim what is left...
 //  6. duplicate_result_collapser ...then compare cleaned results for exact repeats
 //  7. verbosity_steer            a fixed note at the very end of the system prompt
-//  8. cache_breakpoints          last, so the size check sees the final prompt
+//  8. thinking_clear             a context_management field at the end of the request, outside the prompt
+//  9. cache_breakpoints          last, so the size check sees the final prompt
 //
 // The order is part of the cache-safety contract: changing it changes bytes.
 func Pipeline() []Optimizer {
 	return []Optimizer{
 		ModelRouter{},
 		EffortToolTurns{},
+		EffortRoutinePrompts{},
 		VolatilePrefixMover{},
 		NoiseNormalizer{memo: newSpanMemo()},
 		newOutputTrimmer(),
 		DuplicateCollapser{},
 		VerbositySteer{},
+		ThinkingClear{},
 		CacheBreakpoints{},
 	}
 }
@@ -232,10 +243,12 @@ var GatewayNames = config.GatewayBehaviors
 var PipelineNames = []string{
 	OptimizerModelRouter,
 	OptimizerEffortToolTurns,
+	OptimizerEffortRoutinePrompts,
 	"volatile_prefix_mover",
 	"noise_normalizer",
 	config.OptimizerOutputTrimmer,
 	"duplicate_result_collapser",
 	OptimizerVerbositySteer,
+	OptimizerThinkingClear,
 	"cache_breakpoints",
 }

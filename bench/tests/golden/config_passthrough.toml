@@ -10,6 +10,8 @@ cache_breakpoints = "off"
 verbosity_steer = "off"
 model_router = "off"
 effort_tool_turns = "off"
+effort_routine_prompts = "off"
+thinking_clear = "off"
 
 [measure]
 baseline_days = 0

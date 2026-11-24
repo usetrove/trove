@@ -207,12 +207,16 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 		cur := f.Entries[name]
 		_, back := rolled[name]
 		sessions, events, tokens := combine(byName[name], hookShadow[name])
+		netBlock, err := netEstimateBlocker(ctx, db, dir, name, now)
+		if err != nil {
+			return res, err
+		}
 		ev := Evidence{
 			BaselineDone:   baselineDone,
 			ShadowSessions: sessions,
 			NetTokens:      p.NetOf(name, sessions, events, tokens),
 			RolledBack:     back,
-			Blocked:        firstNonEmpty(blockedBy(on, name), p.CannotJudge(name)),
+			Blocked:        firstNonEmpty(blockedBy(on, name), p.CannotJudge(name), netBlock),
 
 			NeedsProbation:   p.NeedsProbation(name),
 			NoSavingEstimate: NoSavingEstimate(name),
@@ -404,6 +408,26 @@ func probationBlocker(cfg config.Config, tr measure.Traffic, name string) string
 		return "it needs the gateway to pick which sessions run with it, and none of your recent traffic went through it"
 	}
 	return ""
+}
+
+// netEstimateBlocker says why an optimizer whose cost and saving are both estimated per request cannot leave
+// shadow, or "". Only thinking_clear has such an estimate: clearing old thinking saves context but makes each new
+// turn rewrite the cache after it, and it may only be promoted when the weighed shadow estimate is net positive.
+func netEstimateBlocker(ctx context.Context, db *store.DB, dir, name string, now time.Time) (string, error) {
+	if name != optimize.OptimizerThinkingClear {
+		return "", nil
+	}
+	v, err := measure.ThinkingClearShadow(ctx, db, dir, now.Add(-measure.ThinkingClearWindow), now)
+	if err != nil {
+		return "", fmt.Errorf("cannot read the shadow estimate of %s: %v", name, err)
+	}
+	if v.NetPositive {
+		return "", nil
+	}
+	if v.Requests < measure.ThinkingClearMinRequests {
+		return fmt.Sprintf("its shadow estimate needs %d requests and has %d", measure.ThinkingClearMinRequests, v.Requests), nil
+	}
+	return "its shadow estimate is not net positive: " + v.Text(), nil
 }
 
 // otherInProbation returns the name of another optimizer in probation, or "".

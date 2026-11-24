@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -148,6 +149,8 @@ type Result struct {
 	Skipped string
 	// Changed is true when Body differs from the input body.
 	Changed bool
+	// Betas are the anthropic-beta values Body needs, sorted and unique; nil when Body is the original.
+	Betas []string
 }
 
 // TokensRemoved sums the estimated tokens removed by optimizers in "on" state.
@@ -272,6 +275,7 @@ func (e *Engine) TransformRequest(ctx context.Context, rq RequestIn, s Session) 
 		res.Applied = append(res.Applied, rep)
 		if state == config.StateOn && rep.Changed {
 			cur = out
+			res.Betas = addBetas(res.Betas, rep.Betas)
 		}
 	}
 	if string(cur.Raw) != string(in.Body) {
@@ -281,8 +285,25 @@ func (e *Engine) TransformRequest(ctx context.Context, rq RequestIn, s Session) 
 			return Result{Body: in.Body, Failures: append(res.Failures, Failure{Optimizer: "engine", Class: "malformed"})}
 		}
 		res.Body, res.Changed = cur.Raw, true
+	} else {
+		res.Betas = nil
 	}
 	return res
+}
+
+// addBetas merges more into have, sorted and without repeats, so the header is the same for the same request.
+func addBetas(have, more []string) []string {
+	for _, b := range more {
+		dup := false
+		for _, h := range have {
+			dup = dup || h == b
+		}
+		if !dup {
+			have = append(have, b)
+		}
+	}
+	sort.Strings(have)
+	return have
 }
 
 // store saves the full text of shortened output. It reports a failure, so the

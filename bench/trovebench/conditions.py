@@ -27,7 +27,7 @@ OPTIMIZERS = (
 # Gateway optimizers outside the safe (T1) set. verbosity_steer is T2 (it asks for shorter replies) and
 # model_router is T3 (it sends tool turns to a cheaper model), so `all_safe` never includes them; they are on
 # only in conditions that name them. Listing them here makes every condition pin them explicitly.
-BEHAVIOR_OPTIMIZERS = ("verbosity_steer", "model_router", "effort_tool_turns")
+BEHAVIOR_OPTIMIZERS = ("verbosity_steer", "model_router", "effort_tool_turns", "effort_routine_prompts", "thinking_clear")
 ALL_GATEWAY = OPTIMIZERS + BEHAVIOR_OPTIMIZERS
 # Settings profiles that change something for Claude Code (`trove settings plan --task X --allow-unproven`, checked
 # 2026-11-18 on Claude Code 2.1.327): quick-fix and exploration both set outputStyle = Concise in the project's
@@ -185,8 +185,19 @@ def parse_condition(spec: str, agent: str, route_to: str = "") -> Condition:
     if spec in ("alone:verbosity_steer", "alone_verbosity_steer"):
         return Condition("alone_verbosity_steer", uses_gateway=True, on=("verbosity_steer",))
     if spec in ("alone:effort_tool_turns", "alone_effort_tool_turns"):
-        # Lowers effort on tool turns (plan item 7.4); acts only on models whose effort cache check said keeps.
+        # Lowers the top-level effort on tool turns (plan item 7.4); acts only on models whose effort cache check said
+        # keeps (Sonnet 5.5, Haiku 5.5). It stays on the top-level path: per-message effort (checked 2026-11-24 on
+        # platform.claude.com/docs/en/build-with-claude/effort-per-message) cannot act on a tool turn, because a user
+        # turn holding only tool results "doesn't count as new input", so the change would wait for the next prompt.
+        # The per-prompt variant is its own condition, alone:effort_routine_prompts.
         return Condition("alone_effort_tool_turns", uses_gateway=True, on=("effort_tool_turns",))
+    if spec in ("alone:effort_routine_prompts", "alone_effort_routine_prompts"):
+        # Low effort, by per-message effort, for the turn after a routine prompt; models documented to support it.
+        return Condition("alone_effort_routine_prompts", uses_gateway=True, on=("effort_routine_prompts",))
+    if spec in ("alone:thinking_clear", "alone_thinking_clear"):
+        # Clears old thinking in very long sessions (context editing); its shadow estimate decides promotion, and this
+        # measures what it does to success.
+        return Condition("alone_thinking_clear", uses_gateway=True, on=("thinking_clear",))
     if spec.startswith("alone:"):
         name = spec.split(":", 1)[1]
         if name in HOOK_OPTIMIZERS:

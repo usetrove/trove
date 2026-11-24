@@ -35,6 +35,7 @@ Biggest leaks (estimated, overlapping, not additive)
 Optimizers
   model_router: off
   effort_tool_turns: off
+  effort_routine_prompts: off
   volatile_prefix_mover: off
   noise_normalizer: off
     Saved ~$0.50 (estimated).
@@ -44,6 +45,7 @@ Optimizers
     To turn on, add under [optimizers] in config.toml:
     duplicate_result_collapser = "on"
   verbosity_steer: off
+  thinking_clear: off
   cache_breakpoints: off
   Guardrail 2026-10-29: Trove switched terse-rules off because sessions with it
     on cost $1.5200 each on average against $1.0200 without it (25 on, 25 off

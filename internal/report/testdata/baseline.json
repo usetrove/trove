@@ -181,6 +181,11 @@
         "effective": "off"
       },
       {
+        "name": "effort_routine_prompts",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
         "name": "volatile_prefix_mover",
         "configured": "off",
         "effective": "off"
@@ -212,6 +217,11 @@
       },
       {
         "name": "verbosity_steer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "thinking_clear",
         "configured": "off",
         "effective": "off"
       },

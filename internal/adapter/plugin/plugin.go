@@ -430,7 +430,8 @@ func (s *Server) statesFor(st *sessionState, in Session) map[string]string {
 	// model_router prices per-token API usage, so it changes nothing for any login but
 	// an API key (a Copilot bill is not per token); it still estimates in shadow.
 	// effort_tool_turns changes how a request is served, so it too acts for API-key logins only.
-	apiOnly := map[string]bool{optimize.OptimizerModelRouter: true, optimize.OptimizerEffortToolTurns: true}
+	apiOnly := map[string]bool{optimize.OptimizerModelRouter: true, optimize.OptimizerEffortToolTurns: true,
+		optimize.OptimizerEffortRoutinePrompts: true, optimize.OptimizerThinkingClear: true}
 	routeLocked := false
 	if in.Harness != "" && NormLogin(in.Login) != LoginAPIKey {
 		for k := range apiOnly {
