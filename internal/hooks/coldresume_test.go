@@ -702,3 +702,25 @@ func sortDurations(d []time.Duration) {
 		}
 	}
 }
+
+// The warning's last sentence names the step that applies, never one already taken.
+func TestColdWarnNamesTheNextStep(t *testing.T) {
+	r := rebuild{tokens: 200000, ttl: time.Hour}
+	cases := []struct {
+		action string
+		c      coldCase
+		want   string
+		not    string
+	}{
+		{config.ColdResumeWarn, caseResume, `set optimize.cold_resume_action = "ask"`, "verify"},
+		{config.ColdResumeWarn, caseIdle, `set optimize.cold_resume_action = "ask"`, "verify"},
+		{config.ColdResumeAsk, caseResume, "trove hooks verify --prompt-block", "cold_resume_action"},
+		{config.ColdResumeAsk, caseIdle, "/clear before a long break.", "cold_resume_action"},
+	}
+	for _, c := range cases {
+		got := coldWarnText(r, c.c, c.action)
+		if !strings.Contains(got, c.want) || strings.Contains(got, c.not) {
+			t.Errorf("%s/%d: %q", c.action, c.c, got)
+		}
+	}
+}

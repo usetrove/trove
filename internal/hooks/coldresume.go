@@ -245,7 +245,7 @@ func (h *handler) promptSubmit(in Input, key string) ([]byte, error) {
 		st.do(op{T: "pin", N: pinColdPending, V: strconv.FormatInt(r.tokens, 10)})
 		return coldBlockJSON(coldBlockText(r, buildColdNote(in.TranscriptPath, in.Cwd))), nil
 	case d.warn:
-		return coldWarnJSON(coldWarnText(r, c)), nil
+		return coldWarnJSON(coldWarnText(r, c, s.action)), nil
 	}
 	return nil, nil
 }
@@ -682,13 +682,21 @@ func coldBlockText(r rebuild, note string) string {
 	return b.String()
 }
 
-func coldWarnText(r rebuild, c coldCase) string {
+// coldWarnText is the warning. Its last sentence names the step that applies: with "warn" chosen, asking instead;
+// with "ask" chosen after a resume, the check that lets Trove stop a prompt on this version; otherwise /clear alone.
+func coldWarnText(r rebuild, c coldCase, action string) string {
 	why := "this session's prompt cache had expired"
 	if c == caseIdle {
 		why = fmt.Sprintf("this session was idle longer than its %s prompt cache lifetime", ttlWords(r.ttl))
 	}
-	return "Trove: " + why + ", so this prompt writes the whole context to the cache again, " + coldCostText(r) +
-		". To avoid it next time, /clear before a long break, or set optimize.cold_resume_action = \"ask\"."
+	next := " To avoid it next time, /clear before a long break."
+	switch {
+	case action == config.ColdResumeWarn:
+		next = " To avoid it next time, /clear before a long break, or set optimize.cold_resume_action = \"ask\"."
+	case c == caseResume:
+		next = " Trove did not stop the prompt because this Claude Code version has not passed `trove hooks verify --prompt-block` here."
+	}
+	return "Trove: " + why + ", so this prompt writes the whole context to the cache again, " + coldCostText(r) + "." + next
 }
 
 func coldBlockJSON(reason string) []byte {
