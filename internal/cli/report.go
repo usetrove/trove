@@ -120,6 +120,9 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 		return report.EmptyReport(p), nil
 	}
 	defer func() { _ = db.Close() }()
+	// The status line's plan-usage samples, also for users who run the status line without the hooks.
+	// Best effort: a problem here must not stop the report.
+	_, _ = db.IngestLimitSpool(context.Background(), dir)
 	if _, serr := os.Stat(filepath.Join(dir, "hooks")); serr == nil {
 		// Bring the hooks' counters and guardrail up to date first. Best effort:
 		// a problem here must not stop the report.

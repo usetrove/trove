@@ -16,7 +16,10 @@ import (
 type statusOutput struct {
 	Line   string         `json:"line"`
 	Status *report.Status `json:"status,omitempty"`
-	Error  string         `json:"error,omitempty"`
+	// LimitSample says what happened to Claude Code's plan-usage meter: written, unchanged, or why it
+	// was skipped. Empty when the input carried no meter.
+	LimitSample string `json:"limit_sample,omitempty"`
+	Error       string `json:"error,omitempty"`
 }
 
 func newStatusLine(a *App) *cobra.Command {
@@ -48,29 +51,30 @@ func newStatusLine(a *App) *cobra.Command {
 // runStatusLine never fails the agent's status bar: any problem becomes a short
 // line telling the user what to run, with exit code 0.
 func runStatusLine(a *App, format string) error {
-	line, st, problem := statusLine(a, format)
-	out := statusOutput{Line: line, Status: st, Error: problem}
-	return a.emit(out, line)
+	out := statusLine(a, format, readClaudeInput(a, format), time.Now())
+	return a.emit(out, out.Line)
 }
 
-func statusLine(a *App, format string) (line string, st *report.Status, problem string) {
+func statusLine(a *App, format string, in claudeInput, now time.Time) statusOutput {
 	dir, cfg, err := loadConfig(a)
 	if err != nil {
-		return "Trove: settings problem, run `trove doctor`", nil, err.Error()
+		return statusOutput{Line: "Trove: settings problem, run `trove doctor`", Error: err.Error()}
 	}
 	db, err := store.OpenReadOnly(dir)
 	if err != nil {
+		// The meter is Claude Code's, not Trove's, so it is recorded even before Trove has a database.
 		if os.IsNotExist(err) {
-			return "Trove: no usage yet", nil, ""
+			return statusOutput{Line: "Trove: no usage yet", LimitSample: recordLimitSample(nil, dir, in, now)}
 		}
-		return "Trove: database problem, run `trove doctor`", nil, err.Error()
+		return statusOutput{Line: "Trove: database problem, run `trove doctor`", Error: err.Error(), LimitSample: recordLimitSample(nil, dir, in, now)}
 	}
 	defer func() { _ = db.Close() }()
 
-	status, err := report.BuildStatus(context.Background(), db, cfg, time.Now(), readClaudeInput(a, format).SessionID)
+	status, err := report.BuildStatus(context.Background(), db, cfg, now, in.SessionID)
 	if err != nil {
-		return "Trove: database problem, run `trove doctor`", nil, err.Error()
+		return statusOutput{Line: "Trove: database problem, run `trove doctor`", Error: err.Error(), LimitSample: recordLimitSample(db, dir, in, now)}
 	}
 	color := format != report.FormatShell && !a.NoColor && a.Getenv("NO_COLOR") == ""
-	return report.RenderStatus(status, format, color) + autopilotSuffix(dir), &status, ""
+	line := report.RenderStatus(status, format, color) + autopilotSuffix(dir)
+	return statusOutput{Line: line, Status: &status, LimitSample: recordLimitSample(db, dir, in, now)}
 }

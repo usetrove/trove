@@ -4,9 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
-	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -107,9 +106,17 @@ func (d *DB) LastLimitSample(ctx context.Context, sessionKey string) (LimitSampl
 }
 
 // InsertLimitSampleIfChanged stores s unless the session's latest sample already has the same values.
-// The check and the insert are one statement, so two status lines racing for the same session cannot
-// both add the same values. It reports whether a row was written.
+// The check and the insert are one statement, so two writers racing for the same session cannot both
+// add the same values. It reports whether a row was written.
 func (d *DB) InsertLimitSampleIfChanged(ctx context.Context, s LimitSample) (bool, error) {
+	return insertLimitSampleIfChanged(ctx, d, s)
+}
+
+type execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
+func insertLimitSampleIfChanged(ctx context.Context, ex execer, s LimitSample) (bool, error) {
 	if s.SessionKey == "" {
 		return false, errors.New("a limit sample needs a session key")
 	}
@@ -127,7 +134,7 @@ func (d *DB) InsertLimitSampleIfChanged(ctx context.Context, s LimitSample) (boo
 	args := append([]any{s.TS.UnixMilli(), s.SessionKey}, vals...)
 	args = append(args, s.SessionKey)
 	args = append(args, vals...)
-	res, err := d.ExecContext(ctx, q, args...)
+	res, err := ex.ExecContext(ctx, q, args...)
 	if err != nil {
 		return false, err
 	}
@@ -135,22 +142,18 @@ func (d *DB) InsertLimitSampleIfChanged(ctx context.Context, s LimitSample) (boo
 	return n > 0, err
 }
 
-// OpenSampleWriter opens an existing database for the status line's one small write. It creates
-// nothing, runs no migration and never waits for a lock (busy_timeout 0): if another process is
-// writing, the write fails at once with SQLITE_BUSY and the caller skips the sample (rule 4). A
-// missing file is an error that satisfies os.IsNotExist.
-func OpenSampleWriter(dataDir string) (*DB, error) {
-	path := filepath.Join(dataDir, DBFileName)
-	if _, err := os.Stat(path); err != nil {
-		return nil, err
-	}
-	sdb, err := sql.Open("sqlite", fileURI(path)+"?mode=rw&_pragma=busy_timeout(0)")
-	if err != nil {
-		return nil, fmt.Errorf("cannot open the database %s: %v", path, err)
-	}
-	sdb.SetMaxOpenConns(1)
-	return &DB{DB: sdb, path: path}, nil
-}
+var (
+	// The same strict pattern adapter_events uses for model names, plus [ ] for ids such as "x[1m]".
+	modelIDRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/@+\[\]-]{0,95}$`)
+	versionRE = regexp.MustCompile(`^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}([.+-][0-9A-Za-z.]{1,16})?$`)
+)
+
+// ValidModelID reports whether s looks like a model id and nothing else, so free text never reaches
+// limit_samples.model (rule 7).
+func ValidModelID(s string) bool { return modelIDRE.MatchString(s) }
+
+// ValidVersion reports whether s is a plain version number such as 2.1.290.
+func ValidVersion(s string) bool { return versionRE.MatchString(s) }
 
 // fileURI is path as a SQLite file: URI, with Windows drive paths handled.
 func fileURI(path string) string {

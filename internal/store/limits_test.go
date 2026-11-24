@@ -2,9 +2,6 @@ package store
 
 import (
 	"context"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
@@ -135,51 +132,5 @@ func TestLimitSampleAbsentValuesAreNull(t *testing.T) {
 	last, _, _ := db.LastLimitSample(ctx, "c-abc")
 	if !last.SameValues(s) {
 		t.Errorf("round trip: %+v", last)
-	}
-}
-
-func TestSampleWriterNeverCreatesAndNeverWaits(t *testing.T) {
-	ctx := context.Background()
-	if _, err := OpenSampleWriter(filepath.Join(t.TempDir(), "none")); !os.IsNotExist(err) {
-		t.Errorf("a missing database must not be created: %v", err)
-	}
-
-	dir := filepath.Join(t.TempDir(), "data")
-	db, err := Open(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	w, err := OpenSampleWriter(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = w.Close() }()
-	if ok, err := w.InsertLimitSampleIfChanged(ctx, fullSample("c-abc")); err != nil || !ok {
-		t.Fatalf("unlocked write: %v %v", ok, err)
-	}
-
-	// Another process holds the write lock: the writer fails at once instead of waiting.
-	conn, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = conn.Close() }()
-	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _, _ = conn.ExecContext(ctx, `ROLLBACK`) }()
-	next := fullSample("c-abc")
-	next.FiveHourPct = f64(50)
-	start := time.Now()
-	_, err = w.InsertLimitSampleIfChanged(ctx, next)
-	if err == nil {
-		t.Fatal("a write while the database is locked should fail")
-	}
-	if !strings.Contains(strings.ToLower(err.Error()), "lock") && !strings.Contains(strings.ToLower(err.Error()), "busy") {
-		t.Errorf("want a busy/locked error, got %v", err)
-	}
-	if d := time.Since(start); d > time.Second {
-		t.Errorf("the writer waited %v for the lock; it must not wait", d)
 	}
 }

@@ -5,11 +5,12 @@ import (
 	"io"
 	"math"
 	"os"
-	"regexp"
+
 	"time"
 
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/report"
+	"github.com/usetrove/trove/internal/store"
 )
 
 // claudeInput is the part of the JSON Claude Code sends a status line command on stdin that Trove uses.
@@ -50,12 +51,6 @@ func (in claudeInput) planUsage() *report.PlanUsage {
 	}
 	return &report.PlanUsage{Source: report.PlanUsageSource, FiveHour: in.FiveHour, SevenDay: in.SevenDay}
 }
-
-var (
-	// The same strict pattern adapter_events uses for model names, plus [ ] for ids such as "x[1m]".
-	modelIDRE = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/@+\[\]-]{0,95}$`)
-	versionRE = regexp.MustCompile(`^[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}([.+-][0-9A-Za-z.]{1,16})?$`)
-)
 
 // readClaudeInput reads Claude Code's status line JSON. It reads only for the claude format and only when
 // stdin is a pipe or file, never a terminal, so running the command by hand does not wait for input.
@@ -108,11 +103,11 @@ func parseClaudeInput(top map[string]json.RawMessage) claudeInput {
 	var model struct {
 		ID string `json:"id"`
 	}
-	if json.Unmarshal(top["model"], &model) == nil && modelIDRE.MatchString(model.ID) {
+	if json.Unmarshal(top["model"], &model) == nil && store.ValidModelID(model.ID) {
 		in.Model = model.ID
 	}
 	var version string
-	if json.Unmarshal(top["version"], &version) == nil && versionRE.MatchString(version) {
+	if json.Unmarshal(top["version"], &version) == nil && store.ValidVersion(version) {
 		in.Version = version
 	}
 	return in

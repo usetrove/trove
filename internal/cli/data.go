@@ -34,7 +34,7 @@ var hooksKept = map[string]bool{"config.json": true, "capabilities.json": true}
 
 var (
 	dataDeleteFiles = []string{"contribute.json", "gateway.log"}
-	dataDeleteDirs  = []string{"recovery"}
+	dataDeleteDirs  = []string{"recovery", store.LimitSpoolDir}
 	dataDeleteGlobs = []string{"hooks.log*", "contribute.json.*"}
 )
 
