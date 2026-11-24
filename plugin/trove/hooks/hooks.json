@@ -95,6 +95,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook pre_compact_cold_check",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PreModelSwitch": [

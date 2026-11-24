@@ -103,7 +103,7 @@ func TestHooksInstallAndUninstallKeepUserHooks(t *testing.T) {
 		t.Fatalf("SessionEnd = %v", end)
 	}
 	// PostToolUse: read and edit records and the test-pass signal, which also needs PostToolUseFailure.
-	for ev, n := range map[string]int{"PostToolUse": 3, "PostToolUseFailure": 1, "SessionStart": 1, "PreCompact": 1} {
+	for ev, n := range map[string]int{"PostToolUse": 3, "PostToolUseFailure": 1, "SessionStart": 1, "PreCompact": 2, "PreModelSwitch": 1, "PostModelSwitch": 1} {
 		if got := hookCommandsIn(t, hookClaudeSettings(home), ev); len(got) != n {
 			t.Errorf("%s = %v", ev, got)
 		}
@@ -112,6 +112,10 @@ func TestHooksInstallAndUninstallKeepUserHooks(t *testing.T) {
 	if got := hookCommandsIn(t, hookClaudeSettings(home), "UserPromptSubmit"); len(got) != 1 || !strings.HasPrefix(got[0], "|") ||
 		!strings.Contains(got[0], "hook user_prompt_cold_check") {
 		t.Errorf("UserPromptSubmit = %v", got)
+	}
+	if got := hookCommandsIn(t, hookClaudeSettings(home), "PreCompact"); len(got) != 2 || !strings.HasPrefix(got[1], "manual|") ||
+		!strings.Contains(got[1], "hook pre_compact_cold_check") || !strings.Contains(got[0], "hook session_reset") {
+		t.Errorf("PreCompact = %v", got)
 	}
 	cx := hookCommandsIn(t, codexHooksFile(home), "SessionEnd")
 	if len(cx) != 1 || !strings.Contains(cx[0], "--agent codex") {

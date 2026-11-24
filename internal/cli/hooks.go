@@ -123,6 +123,9 @@ func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.H
 		// (code.claude.com/docs/en/hooks, read 2026-11-24); the hook's own safety net is 150 ms, far inside 5 s.
 		{Event: "PreModelSwitch", Command: build(hooks.EventModelSwitch), Timeout: 5},
 		{Event: "PostModelSwitch", Command: build(hooks.EventPostModelSwitch), Timeout: 5},
+		// The cold-compact guard (hook_cold_compact), manual /compact only: a blocked auto compaction can fail the
+		// request (code.claude.com/docs/en/hooks, read 2026-11-24). The session_reset entry above stays as it was.
+		{Event: "PreCompact", Matcher: "manual", Command: build(hooks.EventCompactCheck), Timeout: 5},
 	}
 	if largeOutput || rewrite {
 		s = append(s, setup.HookSpec{Event: "PreToolUse", Matcher: "Bash", Command: build(hooks.EventLargeOutput), Timeout: 5})
