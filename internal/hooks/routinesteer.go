@@ -71,6 +71,9 @@ func steerModelOK(model string) bool {
 	return steerModels[strings.TrimSuffix(model, "[1m]")]
 }
 
+// SteerModelOK is steerModelOK for the live check, which reports whether the session it ran in would be steered.
+func SteerModelOK(model string) bool { return steerModelOK(model) }
+
 // pinSteerModelFor records whether the session's model may be steered. It runs on every SessionStart and
 // PostModelSwitch; an event without a model clears it, so a session whose model is unknown stays unsteered.
 func pinSteerModelFor(st *sessionState, model string) {

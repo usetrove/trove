@@ -20,7 +20,7 @@ import (
 // runProbeHook runs a probe hook (`trove hook probe_pre|probe_post`). It returns
 // false when args are not a probe event.
 func runProbeHook(args []string, stdin io.Reader, stdout io.Writer) bool {
-	if len(args) == 0 || (args[0] != "probe_pre" && args[0] != "probe_post" && args[0] != "probe_prompt") {
+	if len(args) == 0 || (args[0] != "probe_pre" && args[0] != "probe_post" && args[0] != "probe_prompt" && args[0] != "probe_context") {
 		return false
 	}
 	getenv := os.Getenv
@@ -37,6 +37,10 @@ func runProbeHook(args []string, stdin io.Reader, stdout io.Writer) bool {
 	}
 	if args[0] == "probe_prompt" {
 		hookprobe.PromptHookMain(stdin, stdout, getenv)
+		return true
+	}
+	if args[0] == "probe_context" {
+		hookprobe.ContextHookMain(stdin, stdout, getenv)
 		return true
 	}
 	hookprobe.HookMain(strings.TrimPrefix(args[0], "probe_"), stdin, stdout, getenv)
@@ -161,6 +165,9 @@ func RenderProbe(rep hookprobe.Report) string {
 	for _, e := range rep.Capabilities.Entries {
 		if e.Tool == hookcaps.ToolPrompt {
 			fmt.Fprintf(&b, "%s %s: block a typed prompt %s [%s]\n    %s\n", e.Agent, e.Tool, orUntested(e.Block), e.Method, e.Evidence)
+			if e.Context != "" {
+				fmt.Fprintf(&b, "%s %s: added context stays after the cached prefix %s [%s]\n    %s\n", e.Agent, e.Tool, e.Context, e.Method, e.ContextEvidence)
+			}
 			continue
 		}
 		fmt.Fprintf(&b, "%s %s: rewrite input %s, rewrite output %s [%s]\n    %s\n", e.Agent, e.Tool, e.InputRewrite, e.OutputRewrite, e.Method, e.Evidence)

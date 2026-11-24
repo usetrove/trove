@@ -55,6 +55,8 @@ type Capability struct {
 	// additionalContext land right after the prompt it came with and the next turn read the whole earlier prefix
 	// from the cache (`trove hooks verify --prompt-context`).
 	Context string `json:"context,omitempty"`
+	// ContextEvidence says what the context check saw; Evidence stays the block check's.
+	ContextEvidence string `json:"context_evidence,omitempty"`
 	// Method is "live" (Trove ran an agent session on the user's API key and it showed
 	// the model the rewritten value), "session" (the user ran the test in their own
 	// session with `trove hooks verify`; the output result is what they reported) or

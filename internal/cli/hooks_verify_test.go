@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -153,5 +154,106 @@ func TestProbeKeepsAPromptBlockResultFromASession(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("%d prompt entries", n)
+	}
+}
+
+// TestHooksVerifyPromptContextStoresTheGate plays the user's session through the real `trove hook probe_context`
+// entry and checks the result is stored beside an earlier block result, not over it.
+func TestHooksVerifyPromptContextStoresTheGate(t *testing.T) {
+	h := newHarness(t, map[string]string{"ANTHROPIC_API_KEY": ""})
+	if code := h.run("hooks", "verify", "--prompt-context", "--json"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	var rep struct {
+		Armed struct {
+			State    string    `json:"state_dir"`
+			Settings string    `json:"settings_file"`
+			Prompts  [4]string `json:"prompts"`
+		} `json:"armed"`
+	}
+	if err := json.Unmarshal(h.out.Bytes(), &rep); err != nil || rep.Armed.Settings == "" || rep.Armed.Prompts[3] == "" {
+		t.Fatalf("%v: %s", err, h.out)
+	}
+	dir := filepath.Dir(filepath.Dir(rep.Armed.State))
+	if err := hooks.SaveCapabilities(dir, hooks.Capabilities{V: hookcaps.Version, Entries: []hooks.Capability{
+		{Agent: "claude", Tool: hookcaps.ToolPrompt, Block: hookcaps.Yes, Method: "session", Evidence: "block seen"}}}); err != nil {
+		t.Fatal(err)
+	}
+
+	transcript := filepath.Join(t.TempDir(), "t.jsonl")
+	hook := func(in string) string {
+		var out bytes.Buffer
+		if !runProbeHook([]string{"probe_context", "--state", rep.Armed.State}, strings.NewReader(in), &out) {
+			t.Fatal("probe_context was not routed")
+		}
+		return out.String()
+	}
+	hook(`{"hook_event_name":"SessionStart","model":"claude-opus-5-5"}`)
+	var lines []string
+	user := func(p string) string {
+		b, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": p}})
+		return string(b)
+	}
+	reply := func(in, read, write int) string {
+		return fmt.Sprintf(`{"type":"assistant","message":{"model":"claude-opus-5-5","content":[],"usage":{"input_tokens":%d,"cache_read_input_tokens":%d,"cache_creation_input_tokens":%d}}}`, in, read, write)
+	}
+	for i, p := range rep.Armed.Prompts {
+		in, _ := json.Marshal(map[string]any{"hook_event_name": "UserPromptSubmit", "transcript_path": transcript, "prompt": p})
+		out := hook(string(in))
+		switch i {
+		case 0:
+			lines = append(lines, user(p), reply(3, 0, 20010))
+		case 1:
+			var v struct {
+				H struct {
+					Context string `json:"additionalContext"`
+				} `json:"hookSpecificOutput"`
+			}
+			if json.Unmarshal([]byte(out), &v) != nil || !strings.HasPrefix(v.H.Context, "TROVE_PROBE_CTX_") {
+				t.Fatalf("prompt 2 reply: %s", out)
+			}
+			ctx, _ := json.Marshal(map[string]any{"type": "attachment", "content": v.H.Context})
+			lines = append(lines, string(ctx), user(p), reply(3, 20013, 330))
+		case 2:
+			lines = append(lines, user(p), reply(3, 20346, 20))
+			if err := os.WriteFile(transcript, []byte(strings.Join(lines, "\n")+"\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	h.reset()
+	if code := h.run("hooks", "verify", "--prompt-context", "--finish"); code != 0 {
+		t.Fatalf("exit %d: %s", code, h.err)
+	}
+	caps := hooks.LoadCapabilities(dir)
+	if !caps.Supports("claude", hookcaps.ToolPrompt, hookcaps.PromptContext) {
+		t.Fatalf("the context gate was not stored: %+v\n%s", caps, h.out)
+	}
+	if !caps.Supports("claude", hookcaps.ToolPrompt, hookcaps.PromptBlock) {
+		t.Fatalf("the earlier block result was lost: %+v", caps)
+	}
+	if !strings.Contains(h.out.String(), "may now send its text") {
+		t.Errorf("output: %s", h.out)
+	}
+	if _, err := os.Stat(rep.Armed.Settings); err == nil {
+		t.Fatal("the test settings file was left behind")
+	}
+}
+
+// A later block check keeps the context result in the same UserPromptSubmit entry.
+func TestBlockCheckKeepsTheContextResult(t *testing.T) {
+	old := hooks.Capabilities{V: hookcaps.Version, Entries: []hooks.Capability{
+		{Agent: "claude", Tool: hookcaps.ToolPrompt, Context: hookcaps.Yes, ContextEvidence: "ctx seen", Method: "session"}}}
+	got := mergeTools(old, []hooks.Capability{{Agent: "claude", Tool: hookcaps.ToolPrompt, Block: hookcaps.No, Method: "session"}})
+	e, _ := got.Find("claude", hookcaps.ToolPrompt)
+	if e.Context != hookcaps.Yes || e.ContextEvidence != "ctx seen" || e.Block != hookcaps.No || len(got.Entries) != 1 {
+		t.Errorf("merged %+v", got.Entries)
+	}
+}
+
+func TestPromptChecksRunOneAtATime(t *testing.T) {
+	h := newHarness(t, nil)
+	if code := h.run("hooks", "verify", "--prompt-block", "--prompt-context"); code == 0 {
+		t.Fatal("both checks at once must be refused")
 	}
 }

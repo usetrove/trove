@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/usetrove/trove/internal/hookcaps"
 	"github.com/usetrove/trove/internal/hooks"
 	hookprobe "github.com/usetrove/trove/internal/hooks/probe"
 )
@@ -20,6 +21,7 @@ type hooksVerifyFlags struct {
 	promptBlock bool
 	sawBlock    string
 	sawSystem   string
+	promptCtx   bool
 }
 
 func newHooksVerify(a *App) *cobra.Command {
@@ -43,6 +45,7 @@ func newHooksVerify(a *App) *cobra.Command {
 	c.Flags().StringSliceVar(&fl.sawOutput, "saw-output", nil, "with --finish: tools whose reply contained the replacement text, as Tool or Tool=no (for example Bash,Read=no)")
 	c.Flags().BoolVar(&fl.promptBlock, "prompt-block", false, "check instead whether a stopped prompt reaches you and print-mode runs can be told apart (for hook_cold_resume's ask mode)")
 	c.Flags().StringVar(&fl.sawBlock, "saw-block", "", "with --prompt-block --finish: yes if your first prompt was stopped with the TROVE_PROBE_BLOCK_ text, else no")
+	c.Flags().BoolVar(&fl.promptCtx, "prompt-context", false, "check instead whether text a UserPromptSubmit hook adds lands after the cached prefix (for hook_routine_steer)")
 	c.Flags().StringVar(&fl.sawSystem, "saw-system", "", "with --prompt-block --finish: yes if the model's reply to the second prompt contained TROVE_PROBE_SYS_, else no")
 	return c
 }
@@ -61,8 +64,14 @@ func runHooksVerify(a *App, fl hooksVerifyFlags) error {
 	if err != nil {
 		return err
 	}
+	if fl.promptBlock && fl.promptCtx {
+		return errors.New("--prompt-block and --prompt-context are separate checks; run one at a time")
+	}
 	if fl.promptBlock {
 		return runPromptVerify(a, dir, fl)
+	}
+	if fl.promptCtx {
+		return runContextVerify(a, dir, fl)
 	}
 	state := filepath.Join(dir, "hooks", "verify")
 	switch {
@@ -152,6 +161,13 @@ func mergeTools(old hooks.Capabilities, fresh []hooks.Capability) hooks.Capabili
 	for _, e := range old.Entries {
 		if !replaced[key{e.Agent, e.Tool}] {
 			out.Entries = append(out.Entries, e)
+			continue
+		}
+		// The UserPromptSubmit entry holds two checks' results. A new block result keeps the stored context result.
+		for i := range fresh {
+			if f := &fresh[i]; f.Agent == e.Agent && f.Tool == hookcaps.ToolPrompt && e.Tool == hookcaps.ToolPrompt && f.Context == "" {
+				f.Context, f.ContextEvidence = e.Context, e.ContextEvidence
+			}
 		}
 	}
 	out.Entries = append(out.Entries, fresh...)
