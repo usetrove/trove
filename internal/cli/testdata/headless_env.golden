@@ -1,0 +1,18 @@
+# trove headless: run headless Claude Code jobs (cron, scripts) on the monthly API credits your
+# Max, Ultra or Team plan includes, through Trove's local gateway. Interactive sessions are not touched:
+# the variables below are set for the job's command only.
+#
+# 1. Create an API key in the Console organisation linked to your plan. Keep it in your secret store and
+#    give it to the job as HEADLESS_API_KEY. Trove never reads, stores or moves it.
+# 2. Keep the gateway running: trove gateway start --background
+#
+# --bare makes Claude Code use only the API key: it never reads your login or keychain. It also skips hooks,
+# plugins, MCP servers, auto memory and CLAUDE.md; pass --append-system-prompt-file or --settings if a job
+# needs them. When the credits run out the job's requests stop (unless your organisation has bought credits
+# or auto-reload); they are never charged to your plan.
+headless_job() {
+  ANTHROPIC_BASE_URL="http://127.0.0.1:8787/anthropic" \
+  ANTHROPIC_API_KEY="${HEADLESS_API_KEY:?set HEADLESS_API_KEY to an API key from the Console organisation linked to your plan}" \
+    claude --bare -p "$@"
+}
+# Example: headless_job "Summarize README.md" --allowedTools "Read"

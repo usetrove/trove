@@ -1,0 +1,32 @@
+# trove headless: a CI job that runs claude -p on your plan's monthly API credits through Trove's gateway.
+# Use a plain shell step like this one, not the Claude Code GitHub Action: runs that action starts count as
+# Claude Code usage, which the credits don't cover, even with -p.
+# Store an API key from the Console organisation linked to your plan as the repository secret HEADLESS_API_KEY.
+# The gateway keeps its records on the runner, which discards them when the job ends.
+name: headless-job
+on:
+  workflow_dispatch:
+jobs:
+  headless:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # use the version your other workflows pin
+      - name: Install Trove and Claude Code
+        run: |
+          curl -fsSL https://troverelay.com/install.sh | sh
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Start Trove's gateway
+        run: |
+          trove gateway start > "$RUNNER_TEMP/trove-gateway.log" 2>&1 &
+          for i in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8787/trove/health > /dev/null && exit 0
+            sleep 1
+          done
+          echo "Trove's gateway did not start; see $RUNNER_TEMP/trove-gateway.log" >&2
+          exit 1
+      - name: Run the job
+        env:
+          ANTHROPIC_BASE_URL: http://127.0.0.1:8787/anthropic
+          ANTHROPIC_API_KEY: ${{ secrets.HEADLESS_API_KEY }}
+        run: claude --bare -p "Summarize README.md" --allowedTools "Read"

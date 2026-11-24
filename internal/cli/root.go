@@ -76,6 +76,7 @@ func NewRoot(a *App) *cobra.Command {
 		newFix(a),
 		newSettings(a),
 		newTasks(a),
+		newHeadless(a),
 		newUndo(a),
 		newShare(a),
 		newDoctor(a),

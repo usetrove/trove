@@ -92,6 +92,15 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 			return r, err
 		}
 		r.Opusplan = opusplanFrom(rebuilds, w, in)
+		weekEnd := w.To
+		if !in.Now.IsZero() && in.Now.Before(weekEnd) {
+			weekEnd = in.Now // the week ending now, not at the end of a period still running
+		}
+		hw, err := measure.HeadlessWeek(ctx, db, weekEnd)
+		if err != nil {
+			return r, err
+		}
+		r.Headless = headlessFrom(hw, in)
 		r.Requests += hist.otherReqs
 		r.Headline.Tokens.Value += hist.otherTok
 		r.Headline.Tokens.N = r.Requests

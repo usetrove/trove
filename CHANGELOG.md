@@ -5,6 +5,12 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ## [Unreleased]
 
 ### Added
+- `trove headless` (`env`, `ci`): run `claude -p`, cron and CI jobs on the monthly API credits included with Max, Ultra and Team plans, through the gateway.
+  - It prints the two-line trade-off and a shell function or a GitHub Actions workflow. Both use `claude --bare -p` with an API key from a variable you fill, set for the job's command only.
+  - It never reads, stores or moves a key or a login, and never touches interactive sessions.
+  - `trove report` gains "Headless and SDK runs": the last 7 days' share of Claude Code's use (estimated) and of the weekly limit (estimated), split by the history entrypoint (observed, not documented).
+
+  Credit terms verified on support.claude.com and code.claude.com on 2026-11-24. See docs/headless.md.
 - Code-write nudges (T2, off by default, explicit opt-in, shadow first), on a new PreToolUse hook `pre_tool_code_write`:
   - `hook_write_to_edit` (B26) denies once a Write that rewrites a file of 300+ lines to change at most 10% of them, with "Use Edit for targeted changes". The same Write sent again goes through. The diff is computed in memory.
   - `hook_edit_batch` (B27) adds a note on the third Edit to a file in one turn, suggesting one Write or a single sed for mechanical changes.

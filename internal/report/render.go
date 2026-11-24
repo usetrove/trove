@@ -116,6 +116,9 @@ func Render(r Report, o Options) string {
 	if r.Opusplan != nil {
 		renderOpusplan(&b, r.Opusplan, o)
 	}
+	if r.Headless != nil {
+		renderHeadless(&b, r.Headless, o)
+	}
 	if r.ColdResume != nil {
 		renderColdResume(&b, r.ColdResume, o)
 	}

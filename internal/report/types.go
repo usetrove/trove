@@ -71,6 +71,9 @@ type Report struct {
 	// Opusplan is the plan-mode finding for users whose model setting is opusplan. Nil otherwise, or with no
 	// Opus<->Sonnet switch in the period.
 	Opusplan *Opusplan `json:"opusplan,omitempty"`
+	// Headless is the share of the last week's Claude Code use made by print-mode and SDK runs. Nil when there were
+	// none.
+	Headless *Headless `json:"headless,omitempty"`
 	// Tools is how the Trove MCP tools are doing. Nil when the server is not
 	// registered and no agent has used them.
 	Tools *Tools `json:"trove_tools,omitempty"`
