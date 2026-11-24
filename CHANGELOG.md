@@ -4,6 +4,9 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+- Plan-usage meter in the status line. With `--format claude`, `trove status-line` reads the 5-hour and weekly used percentages that Claude Code passes on stdin and shows them at the end of the line, for example `5h 23% · wk 41%`. Claude Code sends them only for Pro, Max and Ultra, after the session's first response. They are Claude Code's own numbers, labeled measured. They are rounded down, and a window past its reset time is not shown. `--json` adds `plan_usage`. Each change is recorded in the new table `limit_samples`: percentages, reset times, prompt-cache warmth and TTL, model id, Claude Code version and the hashed session key, a row only when a value changed. The status line never writes the database. It appends to `statusline/limits.jsonl` after one file check, and session end and `trove report` move the lines into the table. In-process timing on Windows over 50,000 requests: p95 17 to 25 ms with an unchanged meter and 22 to 25 ms with one that changes every run (measured; budget 50 ms). No usage endpoint is called and no other input field is read. Fields verified on code.claude.com/docs/en/statusline on 2026-11-23. Deleted after `retention_days`; `trove data delete` removes the spool.
+
 ## [0.5.0] - 2026-11-18
 
 ### Added

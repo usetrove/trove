@@ -32,7 +32,9 @@ func newStatusLine(a *App) *cobra.Command {
 		Long: "Prints spend, budget pace, the current session's cost and savings on one line, for example:\n" +
 			"  ~$612 / $1,500 · 41% used · 48% of month · on pace · session ~$3.20 · saved ~$47\n" +
 			"\"~\" marks an estimate from list prices. It reads a small summary the gateway keeps current, so it\n" +
-			"returns in a few milliseconds. Formats: claude (Claude Code's statusLine setting), tmux, shell.\n\n" +
+			"returns in a few milliseconds. Formats: claude (Claude Code's statusLine setting), tmux, shell.\n" +
+			"With claude, it also shows Claude Code's own plan usage when Claude Code sends it (\"5h 23% · wk 41%\")\n" +
+			"and records each change locally; it never calls a usage endpoint.\n\n" +
 			"Claude Code:  settings.json -> \"statusLine\": {\"type\": \"command\", \"command\": \"trove status-line --format claude\"}\n" +
 			"tmux:         set -g status-right '#(trove status-line --format tmux)'\n" +
 			"bash/zsh:     add $(trove status-line) to your prompt",

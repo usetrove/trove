@@ -102,11 +102,61 @@ An existing `statusLine` is never replaced.
 tmux: `set -g status-right '#(trove status-line --format tmux)'`. bash or zsh: add
 `$(trove status-line)` to your prompt.
 
-Timing: `TestStatusLineReadsClaudeCodeInputAndIsFast` runs it 50 times over 50,000 recorded requests and
-requires p95 under 50 ms. On the development machine (Windows 11) the in-process time was a median of
-about 7 ms and a p95 of about 11 ms. Process start-up is on top of that and depends on the operating
-system. One finding from that test: cobra's Windows "started from Explorer" check cost about 30 ms on
-every command, so it is switched off (`cobra.MousetrapHelpText = ""`).
+### Plan-usage meter
+
+With `--format claude`, the line ends with Claude Code's own subscription meter when Claude Code sends it,
+for example `… · saved ~$47 · 5h 23% · wk 41%`. These are Claude Code's numbers, not Trove's estimates, so
+they carry no `~`; in `--json` they are `plan_usage` (`source: "claude_code"`, each window's
+`used_percent` labeled measured, and `resets_at`). Trove reads them only from the status line's stdin. It
+never calls a usage endpoint or reads a web page for them (PRINCIPLES.md rule 11).
+
+Fields used, verified 2026-11-23 at <https://code.claude.com/docs/en/statusline>:
+
+| Field | What Trove does with it |
+|---|---|
+| `session_id` | Hashed as above; the key of each sample |
+| `rate_limits.five_hour.used_percentage`, `rate_limits.seven_day.used_percentage` | Shown and recorded. 0 to 100 |
+| `rate_limits.five_hour.resets_at`, `rate_limits.seven_day.resets_at` | Recorded; a window past its reset time is not shown. Unix epoch seconds |
+| `prompt_cache.warm`, `prompt_cache.ttl` | Recorded (`ttl` is `"5m"` or `"1h"`, stored as 300 or 3600 seconds) |
+| `model.id`, `version` | Recorded when they match a strict pattern, else dropped |
+
+What the docs say about when they are absent: `rate_limits` appears only for claude.ai Pro, Max and Ultra
+subscribers (or behind a Claude apps gateway that sets a spend limit), only after the session's first
+API response; each window may be absent on its own, and Claude Code drops a window once its `resets_at`
+passes. `prompt_cache` needs Claude Code v2.1.251 or later, covers the main conversation only, and is
+absent until its first response. Claude Code runs the command after each assistant message, when a
+rate-limit window reaches `resets_at` and when a warm cache reaches `expires_at`. Trove does not read
+`rate_limits.spend_limit`, `context_window`, `cost` or any other field; the folders, transcript path and
+session name are never decoded.
+
+Rules: every field is optional and checked on its own, so a bad value drops only itself. A percentage
+outside 0 to 100 is treated as absent. Percentages are rounded down, so 99.6% shows as 99% and the line
+never reports a limit reached before it is (rule 9).
+
+Recording (table `limit_samples`, see docs/data.md): the status line keeps a sample only when a value
+changed since the session's previous one. It never writes to the database and never takes its lock. It
+checks an empty marker file named by the hashed session key and a hash of the latest values
+(`statusline/seen/`, one file check), falls back to the database's latest row on its read-only
+connection, and appends one line to `statusline/limits.jsonl`. Session end and `trove report` move the
+spool into the table. `--json` says what happened as `limit_sample`: `spooled`, `unchanged`,
+`skipped_no_data_dir`, `skipped_spool_full` or `skipped_error`. None of these changes the line or the
+exit code (rule 4).
+
+Why a spool and not a direct write: on the development machine (Windows 11), opening, writing and
+closing SQLite from the status line cost 25 to 30 ms per changed sample, because closing checkpoints and
+re-creates the write-ahead log. Reading back a file written moments earlier cost another 20 ms. The
+write path's p95 was 43 to 73 ms. The marker file avoids every read of something just written.
+
+Timing: `TestStatusLineReadsClaudeCodeInputAndIsFast` runs it 50 times over 50,000 recorded requests with
+the full documented input, once with the same meter every time and once with a meter that changes on
+every run, and requires p95 under 50 ms for both. On the development machine (Windows 11, 2026-11-23,
+measured back to back against the previous build) the previous build had a median of 11 to 14 ms and a p95 of
+15 to 30 ms. With an unchanged meter the median was 11 to 16 ms and the p95 17 to 25 ms; with a meter that
+changes every run, the median was 17 ms and the p95 22 to 25 ms. Under a full parallel `go test ./...` the
+p95 of both the old and new paths can pass 100 ms on that machine, so the timing is judged in an
+isolated run. Process start-up is on top of that and depends on the operating system. One finding from
+that test: cobra's Windows "started from Explorer" check cost about 30 ms on every command, so it is
+switched off (`cobra.MousetrapHelpText = ""`).
 
 ## trove share
 
@@ -128,6 +178,14 @@ system sans-serif and leaves 8% of slack for font differences.
 - Session cost in the status line comes from `sessions.total_cost_usd`, which counts unpriced calls as
   zero, so it can be low. The headline spend carries an unpriced count and shows `+`.
 - Desktop notifications are not implemented on Windows.
+- Plan-usage samples wait in `statusline/limits.jsonl` until a session ends (with Trove's hooks) or
+  `trove report` runs, so `limit_samples` lags the status line. With neither, the spool stops growing
+  at 1 MB (about 4,000 changes) and later samples are dropped.
+- The status line never creates Trove's data folder, so nothing is recorded before Trove has one.
+- A model id is stored as Claude Code sends it when it looks like an id (letters, digits and `._:/@+[]-`,
+  up to 96 characters), the same rule as `adapter_events`. A custom model named after something private
+  would be stored; free text with spaces is dropped.
+- Nothing analyses `limit_samples` yet. Turning tokens into "% of the 5-hour limit" is later work.
 - `trove optimize status` does not show baseline progress yet; `trove report` does.
 - No command lifts a guardrail rollback yet (`measure.ClearOverride` exists).
 - The measurement layer's quality claim mentions benchmarks "(Prompt 8)" that do not exist yet; the
