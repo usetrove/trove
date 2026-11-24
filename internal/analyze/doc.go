@@ -10,5 +10,8 @@
 // memory: line hashes (never text) of system-level segments, used to tell a
 // changed date from a changed instruction.
 //
-// All numbers produced here are estimates and are labeled as such.
+// All numbers produced here are estimates and are labeled as such. The history
+// ledgers (ledger.go, ledger_output.go) are the exception: they pass on counts
+// copied from the agent's log, which the report labels measured, next to the
+// figures they infer, which it labels estimated.
 package analyze

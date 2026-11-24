@@ -59,6 +59,18 @@ How to use them:
 - **Observed fields can change without notice.** The Claude Code docs say nothing about the transcript's fields or their stability. A value that stops matching is stored empty, and the request is still counted.
 - Rows read before parser version 2 have these columns empty. Files still on disk are re-read once after upgrading; files Claude Code already deleted stay empty.
 
+**Conversation position (parser version 3, added 2026-11-23).** Used by the history ledgers in [analyze.md](analyze.md). All of these fields are **observed in local transcripts, not documented**: the Claude Code docs do not describe the transcript's line fields.
+
+| Stored | Read from | Observed on 2.1.307-2.1.331 |
+|---|---|---|
+| `phase` | The last `user` line before the request: a tool result → `tool_result`; a typed prompt (string content, or text blocks) → `prompt`; `isCompactSummary` → `compact`; nothing yet → `other`. Lines with `isMeta` (written by Claude Code itself) change nothing. | Before a new request: tool result 10,384, prompt 1,320, compaction summary 1. |
+| `compacted` | A `system` line with `subtype` `compact_boundary` since the agent's previous request | 15 boundaries, each followed by an `isCompactSummary` user line |
+| `agent_key` | Hash of the line's `agentId` | On every assistant line in subagent files, never in main files |
+| `text_bytes` | Byte length of each `text` block in the response (`thinking` blocks are not counted) | One content block per line |
+| `fast_mode` | `usage.speed` or `service_tier` is `fast` | |
+
+The phase and a pending compaction carry over from one scan to the next in `history_files.carry_phase` / `carry_compacted`. Without that, a request read after a checkpoint would not know what came before it. A field that stops matching leaves the column empty, and the request is still counted.
+
 **Gemini CLI (added 2026-11-17, unverified on a real install).** Files: `~/.gemini/tmp/<project>/chats/session-*.jsonl`, plus subagent sessions in `chats/<parent id>/`; `GEMINI_CLI_HOME` moves the home folder. Retention is 30 days by default (`general.sessionRetention`). Source: geminicli.com/docs/cli/session-management/ and the open-source record types (`packages/core/src/services/chatRecordingTypes.ts`). Each `gemini` message with `tokens` is one request: uncached input is `input - cached` (Gemini's prompt count includes cached tokens, per the Gemini API reference) plus `tool` (tool-use prompt tokens, outside the prompt count by the `totalTokenCount` formula; billed as input, inferred); `thoughts` are added to output, which they are billed as. Old whole-file `.json` sessions are not read. The plan is always unknown: Gemini CLI runs on a Google login or an API key and Trove reads no credentials. Gemini CLI's pages say it was replaced by Antigravity CLI on 2026-06-18. Cursor history is not read: its transcript format is not documented.
 
 **Codex is unverified.** Codex was not installed where this was written and OpenAI's docs do not describe the session files. The token fields and `session_meta` / `turn_context` fields were checked in the open-source repo. The `{timestamp, type, payload}` wrapper and the tool-call item names come from community write-ups only. Check it on a real install before trusting Codex numbers.

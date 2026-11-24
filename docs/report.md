@@ -30,6 +30,18 @@ Sections, in order:
      until both sides have enough sessions.
    - A budget line appears here when a cap is set.
 2. **Spend by agent and model.** Narrow terminals drop the token column.
+   - **Cache rebuilds (Claude Code history).** Cache writes that rebuilt a prefix rather than
+     extending it: total count and tokens (measured), then count, tokens and share per cause
+     (estimated: the cause is inferred). Also shown: the threshold, session starts (listed, not
+     counted) and what "unexplained" can hide. See [analyze.md](analyze.md#history-ledgers-claude-code-added-2026-11-23).
+     `--json`: `cache_rebuilds`.
+   - **Output by kind (Claude Code history).** Output tokens (measured) split into thinking
+     (measured where the log has a count, `~` where estimated), visible text and tool input
+     (estimated). Split by phase (after a prompt or continuing after a tool result), model, effort
+     and Claude Code version, plus earlier thinking carried in context (estimated upper bound).
+     Rows that could not be split show `-`. `--json`: `output_mix`.
+   - Both appear only when there is Claude Code history in the period. The output section
+     appears only when some of it could be split.
 3. **Biggest leaks.** Up to five, ranked by estimated dollars, each with what to do. For a leak an
    optimizer can remove, the action is the exact `[optimizers]` line to add, once Trove offers it.
    During the baseline nothing is offered, and the report says so.
