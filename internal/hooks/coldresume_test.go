@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -36,6 +37,11 @@ type coldRig struct {
 func newColdRig(t *testing.T, state, action string, canBlock bool) *coldRig {
 	t.Helper()
 	r := &coldRig{rig: newRig(t, nil), entry: "cli"}
+	// These tests are about the guard's decisions, not its speed: on a loaded machine the 250 ms safety net would
+	// let prompts through (correctly) and hide them. TestColdResumeFailsOpen and TestColdResumeTiming cover speed.
+	old := postDeadline
+	postDeadline = 10 * time.Second
+	t.Cleanup(func() { postDeadline = old })
 	r.env = func(k string) string {
 		if k == "CLAUDE_CODE_ENTRYPOINT" {
 			return r.entry
@@ -661,7 +667,8 @@ func TestColdResumeTiming(t *testing.T) {
 	sortDurations(ds)
 	p95 := ds[len(ds)*95/100]
 	t.Logf("cold-resume hook acting, 1 MiB transcript: p50=%v p95=%v max=%v", ds[len(ds)/2], p95, ds[len(ds)-1])
-	if p95 > 150*time.Millisecond {
+	enforce := runtime.GOOS != "windows" // as in TestHandlerTiming: real-time antivirus adds a fixed cost per file open
+	if enforce && p95 > 150*time.Millisecond {
 		t.Errorf("acting: p95 = %v, want well under the 250 ms safety net", p95)
 	}
 
@@ -683,7 +690,7 @@ func TestColdResumeTiming(t *testing.T) {
 	sortDurations(ds)
 	p95 = ds[len(ds)*95/100]
 	t.Logf("cold-resume hook passing a warm prompt, 1 MiB transcript: p50=%v p95=%v max=%v", ds[len(ds)/2], p95, ds[len(ds)-1])
-	if p95 > 100*time.Millisecond {
+	if enforce && p95 > 100*time.Millisecond {
 		t.Errorf("passing: p95 = %v", p95)
 	}
 }
