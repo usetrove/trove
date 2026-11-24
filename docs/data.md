@@ -345,15 +345,33 @@ Config changes Trove made at your request (`trove fix`, `trove settings`, `trove
 |---|---|
 | `change_id` | Same id as `fixes.change_id` |
 | `fix_id` | Which fix |
-| `feature` | task_scout or task_cascade |
-| `role` | Role of the file written (scout, worker, escalate, cascade, snippet) |
+| `feature` | task_scout, task_cascade, task_subagent_model, task_routine_agents or task_explore |
+| `role` | Role of the file written (scout, worker, escalate, cascade, snippet, subagent, test_runner, lint_fixer, test_skill, lint_skill, explore) |
 | `scout_model` | Model alias chosen for the scout |
 | `worker_model` | Model alias chosen for the worker |
 | `escalation_model` | Model alias chosen for escalation |
 | `overhead_request` | Estimated tokens it adds to every request |
 | `overhead_use` | Estimated tokens it adds each time it is used |
+| `effort` | Effort level written into the file (routine agents, Explore override, scout); empty when none |
 
 **Retention:** deleted after `retention_days` together with its reverted fix; kept while the fix is in place.
+
+### `subagent_runs`
+
+One row per subagent run that Claude Code's SubagentStart and SubagentStop hooks reported. It ties a subagent's
+requests in `history_requests` to an agent type, so `trove report` can show tokens per agent type. The subagent's
+reply is read in memory for its first `STATUS:` line and never stored.
+
+| Column | Meaning |
+|---|---|
+| `session_key` | Hash of the session id |
+| `agent_key` | Hash of the subagent's id, the same hash as `history_requests.agent_key` |
+| `agent_type` | Trove's own `trove-*` names and Claude Code's built-in names as they are; any other name is stored as `user` |
+| `started_at` | When the subagent started (0 when only its stop was seen) |
+| `stopped_at` | When it stopped (0 while running or when the stop was not seen) |
+| `status` | done, failed, unsure or unknown, from the first `STATUS:` line of its reply |
+
+**Retention:** deleted after `retention_days`.
 
 ### `external_tools`
 

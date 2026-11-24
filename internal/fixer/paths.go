@@ -46,6 +46,9 @@ var trovePerfileRE = regexp.MustCompile(`^trove-[a-z0-9-]+\.config\.toml$`)
 // troveTaskRE matches the subagent and command files Trove generates.
 var troveTaskRE = regexp.MustCompile(`^trove-[a-z0-9-]+\.md$`)
 
+// troveSkillDirRE matches the skill folders Trove generates: .claude/skills/trove-<name>/.
+var troveSkillDirRE = regexp.MustCompile(`^trove-[a-z0-9-]+$`)
+
 func norm(p string) string {
 	p = filepath.ToSlash(filepath.Clean(p))
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
@@ -140,6 +143,12 @@ func (e *Env) Allowed(path string) error {
 				return nil
 			}
 		}
+	}
+	// Trove's skills (docs/tasks.md, routine agents): only SKILL.md directly inside a trove-* folder in the
+	// project's .claude/skills, the documented project location (skills.md, read 2026-11-24).
+	if e.ProjectDir != "" && filepath.Base(path) == "SKILL.md" && troveSkillDirRE.MatchString(filepath.Base(filepath.Dir(path))) &&
+		norm(resolve(filepath.Dir(filepath.Dir(path)))) == norm(resolve(filepath.Join(e.ProjectDir, ".claude", "skills"))) {
+		return nil
 	}
 	// A user's own subagent file, directly in the project's .claude/agents, for
 	// task_subagent_model only: tasks.SetModel adds one frontmatter line and refuses

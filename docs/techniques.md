@@ -96,6 +96,7 @@ for a user with a Claude.ai login (no gateway). "Proxy" in the Route column mean
 | B13 | `trove fix` `settings_check`: flag and remove a cost-raising setting you already have (caching off, tool search off, a one-hour cache lifetime with one-hour writes in your history) | config | config | no | yes | suggestion only, never in `--all`, no saving figure; added 2026-11-13 |
 | B14 | `trove settings`: catalog of the agent's documented token controls with version checks, profiles and measurement | config | config | no | yes | existed before this document; an earlier draft left it out. Catalog extended 2026-11-13 |
 | B11 | Scout subagent and test-gated cascade (`trove tasks`) | instructions | native + config | no | yes | cheaper model for easy work |
+| B25 | Routine subagents `trove-test-runner` and `trove-lint-fixer` with `/trove-test` and `/trove-lint` skills, and an opt-in project `Explore` override, on a cheaper model at `effort: low` with a strict `STATUS:` reply (`trove tasks apply agents` or `explore`) (T3, routing) | config | native | no, subagents run in their own context window | yes | per-agent tokens, thinking share and share of limits before/after (observational) and a session A/B; failed or unsure replies re-delegated and counted as a guardrail; see [tasks.md](tasks.md#routine-agents); added 2026-11-24 |
 | B12 | Autopilot (promotion and rollback at session boundaries) | all | native | no | yes | see [autopilot.md](autopilot.md) |
 
 ### Candidates

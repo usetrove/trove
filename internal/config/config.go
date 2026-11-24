@@ -652,6 +652,16 @@ func (c Config) Validate() error {
 	if t := c.Tasks.TestCmd; strings.ContainsAny(t, "\r\n`") || len(t) > 200 {
 		add("tasks.test_cmd must be one line of at most 200 characters without backticks.")
 	}
+	if t := c.Tasks.LintCmd; strings.ContainsAny(t, "\r\n`") || len(t) > 200 {
+		add("tasks.lint_cmd must be one line of at most 200 characters without backticks.")
+	}
+	for _, e := range []struct{ key, v string }{{"scout_effort", c.Tasks.ScoutEffort}, {"routine_effort", c.Tasks.RoutineEffort}} {
+		switch e.v {
+		case "", "low", "medium", "high", "xhigh", "max":
+		default:
+			add("tasks.%s is %q; use low, medium, high, xhigh or max, or leave it empty for low.", e.key, e.v)
+		}
+	}
 	if c.Recovery.MaxMB < 1 || c.Recovery.MaxMB > 10000 {
 		add("recovery.max_mb is %d; use a size in MB from 1 to 10000 (default 200).", c.Recovery.MaxMB)
 	}
@@ -921,4 +931,13 @@ type Tasks struct {
 	TestCmd string `toml:"test_cmd"`
 	// MaxTurns limits the cheap worker before it must stop (0 means 25).
 	MaxTurns int `toml:"max_turns"`
+	// ScoutEffort is the scout's effort level (empty means low).
+	ScoutEffort string `toml:"scout_effort"`
+	// RoutineModel and RoutineEffort are the model and effort of the routine agents
+	// and the Explore override (empty means haiku and low).
+	RoutineModel  string `toml:"routine_model"`
+	RoutineEffort string `toml:"routine_effort"`
+	// LintCmd is the project's formatter or linter command, written into the lint
+	// fixer when set. Optional: without it the agent looks for one.
+	LintCmd string `toml:"lint_cmd"`
 }
