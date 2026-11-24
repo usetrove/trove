@@ -116,6 +116,12 @@ func Render(r Report, o Options) string {
 	if r.ColdResume != nil {
 		renderColdResume(&b, r.ColdResume, o)
 	}
+	if r.ModelSwitch != nil {
+		renderModelSwitch(&b, r.ModelSwitch, o)
+	}
+	if r.ColdCompact != nil {
+		renderColdCompact(&b, r.ColdCompact, o)
+	}
 
 	b.WriteString("\n" + heading("Biggest leaks (estimated, overlapping, not additive)"))
 	if len(r.Leaks) == 0 {

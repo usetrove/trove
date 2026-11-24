@@ -1,0 +1,14 @@
+Model-switch guard (hook_model_switch)
+  Showed the cost of a switch 2 times (measured). You switched anyway 1 time
+  (50%); Claude Code's own confirmation decided.
+  In shadow would have shown it 1 time (measured).
+
+Cold-compact guard (hook_cold_compact)
+  Stopped 2 /compacts once (measured). You ran 1 again (50%) and cleared 1
+  (50%); the rest ended or went quiet.
+  In shadow would have stopped 1 (measured).
+  Context not written to the cache again after a clear: about 400K tokens
+  (estimated, less 450 per note you may have pasted).
+  Not enough sessions yet to compare the hour after: 0 stopped and 0 shadow
+  events with meter readings in a matching size; 10 of each are needed.
+

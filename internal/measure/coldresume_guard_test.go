@@ -61,3 +61,35 @@ func TestColdResumeOverrideGuardrail(t *testing.T) {
 		})
 	}
 }
+
+// The two other rebuild guards are judged the same way: the model-switch guard by switches after its warnings, the
+// cold-compact guard by /compacts run again after a stop.
+func TestRebuildGuardOverrideRules(t *testing.T) {
+	for _, c := range []struct {
+		optimizer, rule, acted string
+	}{
+		{config.OptimizerHookModelSwitch, RuleModelSwitchOverride, "advised"},
+		{config.OptimizerHookColdCompact, RuleColdCompactOverride, "blocked"},
+	} {
+		t.Run(c.optimizer, func(t *testing.T) {
+			db := openDB(t)
+			ctx := context.Background()
+			now := t0.Add(24 * time.Hour)
+			ex := func(q string, a ...any) error { _, err := db.ExecContext(ctx, q, a...); return err }
+			for i := 0; i < 20; i++ {
+				hookEvent(t, ex, now, "c-s", c.optimizer, c.acted, 0, 200000)
+				if i < 18 {
+					hookEvent(t, ex, now, "c-s", c.optimizer, "overridden", 0, 200000)
+				}
+			}
+			ev, err := EvaluateHooks(ctx, db, config.Default().Measure, now)
+			if err != nil || len(ev) != 1 || ev[0].Rule != c.rule || !strings.Contains(ev[0].Reason, "because you ") {
+				t.Fatalf("%+v %v", ev, err)
+			}
+			s, err := GuardSummary(ctx, db, Window{From: t0, To: now.Add(time.Hour)}, c.optimizer)
+			if err != nil || s == nil || s.OverriddenShare == nil || s.OverriddenShare.Value != 90 || s.OverriddenShare.N != 20 {
+				t.Fatalf("summary %+v %v", s, err)
+			}
+		})
+	}
+}

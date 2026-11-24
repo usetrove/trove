@@ -107,6 +107,10 @@ const (
 	// RuleColdResumeOverride: the user sent the prompt again after the cold-resume guard stopped it, so stopping it
 	// did not help them.
 	RuleColdResumeOverride = "cold_resume_override"
+	// RuleModelSwitchOverride: the user switched model anyway after the model-switch guard showed the cost.
+	RuleModelSwitchOverride = "model_switch_override"
+	// RuleColdCompactOverride: the user ran /compact again after the cold-compact guard stopped one.
+	RuleColdCompactOverride = "cold_compact_override"
 )
 
 // Placeholder limits for the rules that are not a plain "share the agent undid". They are not tuned by any
@@ -171,6 +175,12 @@ var hookRules = []hookRule{
 		limit: func(config.Measure) int { return 100 - MinAdoptionPercent }},
 	{optimizer: config.OptimizerHookColdResume, rule: RuleColdResumeOverride, denominator: "blocked", numerator: "overridden", actor: "you",
 		what:  countsOf("sent the prompt again after %d of %d prompts it stopped"),
+		limit: func(config.Measure) int { return ColdResumeOverrideLimitPercent }},
+	{optimizer: config.OptimizerHookModelSwitch, rule: RuleModelSwitchOverride, denominator: "advised", numerator: "overridden", actor: "you",
+		what:  countsOf("switched model anyway after %d of %d warnings"),
+		limit: func(config.Measure) int { return ColdResumeOverrideLimitPercent }},
+	{optimizer: config.OptimizerHookColdCompact, rule: RuleColdCompactOverride, denominator: "blocked", numerator: "overridden", actor: "you",
+		what:  countsOf("ran /compact again after %d of %d stopped compactions"),
 		limit: func(config.Measure) int { return ColdResumeOverrideLimitPercent }},
 }
 

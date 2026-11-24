@@ -62,6 +62,10 @@ type Report struct {
 	// ColdResume is what the cold-resume guard (hook_cold_resume) did and what followed. Nil when it did nothing in
 	// the period.
 	ColdResume *measure.ColdResume `json:"cold_resume,omitempty"`
+	// ModelSwitch and ColdCompact are the same for the model-switch and cold-compact guards. Nil when the guard did
+	// nothing in the period.
+	ModelSwitch *measure.ColdResume `json:"model_switch,omitempty"`
+	ColdCompact *measure.ColdResume `json:"cold_compact,omitempty"`
 	// Tools is how the Trove MCP tools are doing. Nil when the server is not
 	// registered and no agent has used them.
 	Tools *Tools `json:"trove_tools,omitempty"`

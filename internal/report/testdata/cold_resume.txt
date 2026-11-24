@@ -6,5 +6,5 @@ Cold-resume guard (hook_cold_resume)
   Context not written to the cache again after a clear: about 499K tokens
   (estimated, less 450 per note you may have pasted).
   Not enough sessions yet to compare the hour after: 0 stopped and 0 shadow
-  prompts with meter readings in a matching size; 10 of each are needed.
+  events with meter readings in a matching size; 10 of each are needed.
 

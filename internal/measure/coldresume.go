@@ -64,10 +64,17 @@ func coldBucket(tokens int64) int {
 	return len(coldBuckets)
 }
 
-// ColdResumeSummary reads the guard's events in w. It returns nil when the guard never did anything there.
+// ColdResumeSummary reads the cold-resume guard's events in w. It returns nil when the guard never did anything there.
 func ColdResumeSummary(ctx context.Context, db *store.DB, w Window) (*ColdResume, error) {
+	return GuardSummary(ctx, db, w, config.OptimizerHookColdResume)
+}
+
+// GuardSummary reads one rebuild guard's events in w: hook_cold_resume, hook_model_switch or hook_cold_compact. The
+// figures mean the same for each; "stopped" is a warning for hook_model_switch, which never stops anything. It
+// returns nil when the guard never did anything there.
+func GuardSummary(ctx context.Context, db *store.DB, w Window, optimizer string) (*ColdResume, error) {
 	rows, err := db.QueryContext(ctx, `SELECT ts, kind, tokens FROM hook_events WHERE hook = ? AND ts >= ? AND ts < ? ORDER BY ts`,
-		config.OptimizerHookColdResume, w.From.UnixMilli(), w.To.UnixMilli())
+		optimizer, w.From.UnixMilli(), w.To.UnixMilli())
 	if err != nil {
 		return nil, err
 	}
@@ -110,9 +117,13 @@ func ColdResumeSummary(ctx context.Context, db *store.DB, w Window) (*ColdResume
 		return nil, nil
 	}
 	c.TokensAvoided = Figure{Value: float64(avoided), Label: Estimated, N: c.Cleared}
-	if c.Blocked > 0 {
-		c.OverriddenShare = &Figure{Value: 100 * float64(c.Overridden) / float64(c.Blocked), Label: Measured, N: c.Blocked}
-		c.ClearedShare = &Figure{Value: 100 * float64(c.Cleared) / float64(c.Blocked), Label: Measured, N: c.Blocked}
+	acted := c.Blocked
+	if optimizer == config.OptimizerHookModelSwitch {
+		acted = c.Advised // it only ever warns; "overridden" means the switch went ahead
+	}
+	if acted > 0 {
+		c.OverriddenShare = &Figure{Value: 100 * float64(c.Overridden) / float64(acted), Label: Measured, N: acted}
+		c.ClearedShare = &Figure{Value: 100 * float64(c.Cleared) / float64(acted), Label: Measured, N: acted}
 	}
 
 	readings, err := fiveHourReadings(ctx, db, w)
@@ -205,7 +216,7 @@ func compareHourAfter(g, s [][]float64) (*HourAfter, string) {
 		varSum += w * w * (vg/float64(len(g[b])) + vs/float64(len(s[b])))
 	}
 	if ng < MinColdResumeArm || ns < MinColdResumeArm {
-		return nil, fmt.Sprintf("Not enough sessions yet to compare the hour after: %d stopped and %d shadow prompts with meter readings in a matching size; %d of each are needed.",
+		return nil, fmt.Sprintf("Not enough sessions yet to compare the hour after: %d stopped and %d shadow events with meter readings in a matching size; %d of each are needed.",
 			ng, ns, MinColdResumeArm)
 	}
 	d := diff / wsum

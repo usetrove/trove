@@ -219,6 +219,12 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	if r.ColdResume, err = measure.ColdResumeSummary(ctx, db, w); err != nil {
 		return r, err
 	}
+	if r.ModelSwitch, err = measure.GuardSummary(ctx, db, w, config.OptimizerHookModelSwitch); err != nil {
+		return r, err
+	}
+	if r.ColdCompact, err = measure.GuardSummary(ctx, db, w, config.OptimizerHookColdCompact); err != nil {
+		return r, err
+	}
 	return r, nil
 }
 

@@ -20,5 +20,5 @@
     "label": "estimated",
     "n": 2
   },
-  "hour_after_note": "Not enough sessions yet to compare the hour after: 0 stopped and 0 shadow prompts with meter readings in a matching size; 10 of each are needed."
+  "hour_after_note": "Not enough sessions yet to compare the hour after: 0 stopped and 0 shadow events with meter readings in a matching size; 10 of each are needed."
 }

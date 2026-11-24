@@ -1,0 +1,50 @@
+{
+  "cold_compact": {
+    "blocked": 2,
+    "would_block": 1,
+    "advised": 0,
+    "would_advise": 0,
+    "overridden": 1,
+    "cleared": 1,
+    "overridden_share_percent": {
+      "value": 50,
+      "label": "measured",
+      "n": 2
+    },
+    "cleared_share_percent": {
+      "value": 50,
+      "label": "measured",
+      "n": 2
+    },
+    "tokens_avoided": {
+      "value": 399550,
+      "label": "estimated",
+      "n": 1
+    },
+    "hour_after_note": "Not enough sessions yet to compare the hour after: 0 stopped and 0 shadow events with meter readings in a matching size; 10 of each are needed."
+  },
+  "model_switch": {
+    "blocked": 0,
+    "would_block": 0,
+    "advised": 2,
+    "would_advise": 1,
+    "overridden": 1,
+    "cleared": 0,
+    "overridden_share_percent": {
+      "value": 50,
+      "label": "measured",
+      "n": 2
+    },
+    "cleared_share_percent": {
+      "value": 0,
+      "label": "measured",
+      "n": 2
+    },
+    "tokens_avoided": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "hour_after_note": "Not enough sessions yet to compare the hour after: 0 stopped and 0 shadow events with meter readings in a matching size; 10 of each are needed."
+  }
+}
