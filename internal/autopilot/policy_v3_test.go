@@ -258,3 +258,14 @@ func TestNoPolicyPromotesTheRoutineSteer(t *testing.T) {
 		}
 	}
 }
+
+// The code-write nudges are T2 with no benchmark verdict: no policy may name them; only the user turns them on.
+func TestNoPolicyPromotesTheCodeWriteNudges(t *testing.T) {
+	for _, p := range []Policy{DefaultPolicy(), PolicyV2(), PolicyV3(), TrialPolicy()} {
+		for _, n := range p.Names() {
+			if n == config.OptimizerHookWriteToEdit || n == config.OptimizerHookEditBatch {
+				t.Errorf("policy %s names %s", p.Name, n)
+			}
+		}
+	}
+}

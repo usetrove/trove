@@ -179,6 +179,8 @@ var hookRules = []hookRule{
 	{optimizer: config.OptimizerHookModelSwitch, rule: RuleModelSwitchOverride, denominator: "advised", numerator: "overridden", actor: "you",
 		what:  countsOf("switched model anyway after %d of %d warnings"),
 		limit: func(config.Measure) int { return ColdResumeOverrideLimitPercent }},
+	{optimizer: config.OptimizerHookWriteToEdit, rule: RuleCodeWriteRetry, denominator: "blocked", numerator: "overridden",
+		what: countsOf("sent the same Write again after %d of %d denied Writes")},
 	{optimizer: config.OptimizerHookColdCompact, rule: RuleColdCompactOverride, denominator: "blocked", numerator: "overridden", actor: "you",
 		what:  countsOf("ran /compact again after %d of %d stopped compactions"),
 		limit: func(config.Measure) int { return ColdResumeOverrideLimitPercent }},
@@ -276,5 +278,13 @@ func EvaluateHooksWith(ctx context.Context, db *store.DB, m config.Measure, now 
 		}
 		events = append(events, ev)
 	}
-	return events, nil
+	skip := map[string]bool{}
+	for n := range active {
+		skip[n] = true
+	}
+	for _, e := range events {
+		skip[e.Optimizer] = true
+	}
+	more, err := evaluateCodeWrites(ctx, db, m, now, skip)
+	return append(events, more...), err
 }

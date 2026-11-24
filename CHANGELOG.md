@@ -5,6 +5,11 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ## [Unreleased]
 
 ### Added
+- Code-write nudges (T2, off by default, explicit opt-in, shadow first), on a new PreToolUse hook `pre_tool_code_write`:
+  - `hook_write_to_edit` (B26) denies once a Write that rewrites a file of 300+ lines to change at most 10% of them, with "Use Edit for targeted changes". The same Write sent again goes through. The diff is computed in memory.
+  - `hook_edit_batch` (B27) adds a note on the third Edit to a file in one turn, suggesting one Write or a single sed for mechanical changes.
+
+  Guardrails: retries, Edit failures (from history) and failing tests right after. PreToolUse deny reason and `additionalContext` behaviour verified on code.claude.com/docs/en/hooks on 2026-11-24. See docs/hooks.md#code-write-nudges.
 - Code-output trial for Ponytail: `trove autopilot trial ponytail` is now judged on two outcomes:
   - code written per session, the input size of Write, Edit, MultiEdit and NotebookEdit calls in history (estimated tokens), shown as a share of the plan limits (estimated);
   - test pass rate per arm (measured).

@@ -297,6 +297,12 @@ const (
 	// (a confirmation, "continue", "run the tests") through UserPromptSubmit additionalContext, to cut thinking on
 	// turns that need none (T2, technique B24). Only on models where the phrase is documented to work (Opus 5.5).
 	OptimizerHookRoutineSteer = "hook_routine_steer"
+	// OptimizerHookWriteToEdit denies, once per file and session, a Write that rewrites a large existing file to
+	// change only a small share of its lines, with the reason "use Edit for targeted changes" (T2, technique B26).
+	OptimizerHookWriteToEdit = "hook_write_to_edit"
+	// OptimizerHookEditBatch adds a note on the third Edit to the same file in one turn, suggesting one Write or a
+	// single sed when the edits are mechanical (T2, technique B27). It never denies.
+	OptimizerHookEditBatch = "hook_edit_batch"
 	// OptimizerNoiseNormalizer is lossless; it also runs in hooks on tool output.
 	OptimizerNoiseNormalizer = "noise_normalizer"
 	// OptimizerInflightDedup is a behavior of the gateway itself: when identical requests

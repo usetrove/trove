@@ -131,6 +131,10 @@ func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.H
 		// The cold-compact guard (hook_cold_compact), manual /compact only: a blocked auto compaction can fail the
 		// request (code.claude.com/docs/en/hooks, read 2026-11-24). The session_reset entry above stays as it was.
 		{Event: "PreCompact", Matcher: "manual", Command: build(hooks.EventCompactCheck), Timeout: 5},
+		// The code-write nudges (hook_write_to_edit, hook_edit_batch). They return at once while both are off. A
+		// PreToolUse deny's reason is shown to Claude, and additionalContext is added beside the tool result
+		// (code.claude.com/docs/en/hooks, read 2026-11-24).
+		{Event: "PreToolUse", Matcher: "Write|Edit|MultiEdit", Command: build(hooks.EventCodeWrite), Timeout: 5},
 	}
 	if largeOutput || rewrite {
 		s = append(s, setup.HookSpec{Event: "PreToolUse", Matcher: "Bash", Command: build(hooks.EventLargeOutput), Timeout: 5})

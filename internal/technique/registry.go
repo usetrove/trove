@@ -46,6 +46,15 @@ const coldWarnTokens = 120
 // keeps the phrase and this in step.
 const routineSteerTokens = 30
 
+// writeToEditTokens and editBatchTokens are the most hook_write_to_edit's deny reason and hook_edit_batch's note
+// cost each time they are sent: the text (at most 280 bytes with the numbers filled in) plus up to 68 bytes of
+// Claude Code's wrapper, at 3.5 bytes per token, rounded up. A test in internal/optimize keeps the texts and these in
+// step.
+const (
+	writeToEditTokens = 100
+	editBatchTokens   = 100
+)
+
 const (
 	urlRTK       = "https://github.com/rtk-ai/rtk"
 	urlHeadroom  = "https://github.com/headroomlabs-ai/headroom"
@@ -177,6 +186,18 @@ var registry = []Technique{
 		Subscription: true, AddsText: true, OverheadNote: "the subagent and skill descriptions are in every request; shown by `trove tasks plan agents|explore`",
 		Licence: "Trove project",
 		Note:    "files written with consent through the Fixer, never over a user's file; the subagent's effort field does not override CLAUDE_CODE_EFFORT_LEVEL (code.claude.com/docs/en/sub-agents, 2026-11-24); a session A/B declines the routine agents in the off arm, and gives the Explore override the main model back there"},
+	{ID: "B26", Class: ClassBehavior, Title: "Deny once a Write that rewrites a large file to change a few lines: use Edit", Names: []string{"hook_write_to_edit"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierBehavior,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(writeToEditTokens),
+		OverheadNote: "the deny reason, shown to Claude (PreToolUse permissionDecisionReason, code.claude.com/docs/en/hooks, 2026-11-24), at most about 100 tokens per deny (estimated)",
+		Licence:      "Trove project",
+		Note:         "off by default, explicit opt-in, never named by an Autopilot policy; judges a Write on a file of at least 300 lines whose content differs in at most 10% of lines (both placeholders), diffed in memory; once per file per session, and the same Write sent again goes through; saving estimated from the Write's size against the changed lines; guardrails: the same Write sent again, Edit failures and failing tests right after"},
+	{ID: "B27", Class: ClassBehavior, Title: "Suggest one Write or a sed on the third Edit to a file in one turn", Names: []string{"hook_edit_batch"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierBehavior, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(editBatchTokens),
+		OverheadNote: "a note added beside the Edit's result (PreToolUse additionalContext, code.claude.com/docs/en/hooks, 2026-11-24), at most about 100 tokens per note (estimated)",
+		Licence:      "Trove project",
+		Note:         "off by default, explicit opt-in, never named by an Autopilot policy; never denies; its shadow count carries the Edit input already spent on that file in that turn, an upper bound and not a saving; guardrails: Edit failures and failing tests right after"},
 	{ID: "B12", Class: ClassGuard, Title: "Autopilot: promotion and rollback at session boundaries", Names: []string{"autopilot"},
 		Layers: []Layer{LayerConfig, LayerToolBoundary, LayerRequest}, Route: RouteNative, Status: StatusBuilt,
 		Subscription: true, Overhead: none(), Licence: "Trove project", Note: "a controller, not a saving of its own"},

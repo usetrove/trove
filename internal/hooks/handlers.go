@@ -275,6 +275,16 @@ func (h *handler) largeOutput(in Input, key string) ([]byte, error) {
 	return h.preTool(in, key)
 }
 
+// codeWrite is pre_tool_code_write: the engine's hook_write_to_edit and hook_edit_batch decide; this renders a
+// deny or a note and counts it.
+func (h *handler) codeWrite(in Input, key string) ([]byte, error) {
+	switch in.ToolName {
+	case "Write", "Edit", "MultiEdit":
+		return h.preTool(in, key)
+	}
+	return nil, nil
+}
+
 // postOutput is post_tool_output. For Bash, Grep and Glob it runs the engine's
 // tool-output optimizers and, if one in "on" state shortened the text, replaces
 // what the model sees with updatedToolOutput in the tool's own response shape.

@@ -94,8 +94,9 @@ func TestHooksInstallAndUninstallKeepUserHooks(t *testing.T) {
 	}
 
 	pre := hookCommandsIn(t, hookClaudeSettings(home), "PreToolUse")
-	if len(pre) != 3 || pre[0] != "Bash|/home/me/no-rm.sh" || !strings.HasPrefix(pre[1], "Read|") || !strings.Contains(pre[1], "hook pre_tool_repeat_read") ||
-		!strings.HasPrefix(pre[2], "Agent|Task|") || !strings.Contains(pre[2], "hook pre_tool_subagent") {
+	if len(pre) != 4 || pre[0] != "Bash|/home/me/no-rm.sh" || !strings.HasPrefix(pre[1], "Read|") || !strings.Contains(pre[1], "hook pre_tool_repeat_read") ||
+		!strings.HasPrefix(pre[2], "Agent|Task|") || !strings.Contains(pre[2], "hook pre_tool_subagent") ||
+		!strings.HasPrefix(pre[3], "Write|Edit|MultiEdit|") || !strings.Contains(pre[3], "hook pre_tool_code_write") {
 		t.Fatalf("PreToolUse = %v", pre)
 	}
 	end := hookCommandsIn(t, hookClaudeSettings(home), "SessionEnd")
@@ -191,7 +192,7 @@ func TestHooksLargeOutputIsOptIn(t *testing.T) {
 	if code := h.run("hooks", "install", "--yes", "--large-output"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
-	if got := hookCommandsIn(t, hookClaudeSettings(home), "PreToolUse"); len(got) != 3 || !strings.HasPrefix(got[2], "Bash|") {
+	if got := hookCommandsIn(t, hookClaudeSettings(home), "PreToolUse"); len(got) != 4 || !strings.HasPrefix(got[3], "Bash|") {
 		t.Fatalf("Claude PreToolUse = %v", got)
 	}
 	if got := hookCommandsIn(t, codexHooksFile(home), "PreToolUse"); len(got) != 1 || !strings.Contains(got[0], "pre_tool_large_output") {

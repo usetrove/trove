@@ -52,10 +52,13 @@ const (
 	// EventTestResult runs after Bash (PostToolUse and PostToolUseFailure) and records the exit code of an
 	// allowlisted test command, the test-pass signal. It never changes anything.
 	EventTestResult = "post_tool_test_result"
+	// EventCodeWrite runs before Write, Edit and MultiEdit: hook_write_to_edit may deny a Write once, and
+	// hook_edit_batch may add a note to an Edit.
+	EventCodeWrite = "pre_tool_code_write"
 )
 
 // Events lists every event name.
-var Events = []string{EventPreRead, EventPostRead, EventPostEdit, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch, EventPostRun, EventSubagent, EventTestResult, EventPromptSubmit, EventModelSwitch, EventPostModelSwitch, EventCompactCheck, EventSubagentRecord}
+var Events = []string{EventPreRead, EventPostRead, EventPostEdit, EventReset, EventSessionEnd, EventLargeOutput, EventPostOutput, EventPostFetch, EventPostRun, EventSubagent, EventTestResult, EventPromptSubmit, EventModelSwitch, EventPostModelSwitch, EventCompactCheck, EventSubagentRecord, EventCodeWrite}
 
 const (
 	// maxHashBytes is the largest file the repeat-read hook will hash. Bigger
@@ -240,6 +243,8 @@ func run(dir, event, agent string, e Env) ([]byte, *blockExit) {
 		out, err = h.reset(in, key)
 	case EventLargeOutput:
 		out, err = h.largeOutput(in, key)
+	case EventCodeWrite:
+		out, err = h.codeWrite(in, key)
 	case EventPostOutput:
 		out, err = h.postOutput(in, key)
 	case EventPostFetch:

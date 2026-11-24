@@ -137,7 +137,7 @@ func Run(ctx context.Context, o Options) (Report, error) {
 	}
 	now := o.Now().UTC().Format(time.RFC3339)
 	rep.Capabilities.Entries = append(rep.Capabilities.Entries, CodexDocs(ctx, o, now), CursorDocs(now), GeminiDocs(ctx, o, now),
-		ClaudePromptDocs(ver, now))
+		ClaudePromptDocs(ver, now), ClaudeCodeWriteDocs(ver, "Write", now), ClaudeCodeWriteDocs(ver, "Edit", now))
 	if !o.Live {
 		for _, t := range o.Tools {
 			rep.Capabilities.Entries = append(rep.Capabilities.Entries, hooks.Capability{

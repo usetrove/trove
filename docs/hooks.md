@@ -29,6 +29,7 @@ trove hooks install --rewrite   # also install the hooks that rewrite tool input
 | `user_prompt_cold_check` | Claude Code `UserPromptSubmit` | The cold-resume guard (`hook_cold_resume`, off by default; see [below](#cold-resume-guard)). When a large session's prompt cache has expired, it warns about what the next prompt will cost, or stops the first prompt after a cold resume once. Then, for a prompt the guard let through, the routine steer (`hook_routine_steer`, off by default; see [below](#routine-steer)). Returns at once while both are off. |
 | `pre_model_switch` | Claude Code `PreModelSwitch` | The model-switch guard (`hook_model_switch`, off by default; see [below](#model-switch-and-cold-compact-guards)). Adds what switching a large, warm session to another model costs to Claude Code's own confirmation. Never blocks or asks. |
 | `post_model_switch` | Claude Code `PostModelSwitch` | Records that a switch the model-switch guard warned about went ahead, and updates whether the routine steer may act on the session's new model. Prints nothing. |
+| `pre_tool_code_write` | Claude Code `PreToolUse` on `Write`, `Edit`, `MultiEdit` | The code-write nudges (`hook_write_to_edit`, `hook_edit_batch`, both off by default; see [below](#code-write-nudges)). Denies once a Write that rewrites a large file to change a few lines, or adds a note on the third Edit to a file in one turn. Returns at once while both are off. |
 | `pre_compact_cold_check` | Claude Code `PreCompact`, matcher `manual` | The cold-compact guard (`hook_cold_compact`, off by default). Stops a manual `/compact` once when the cache has expired and the history is large. The existing `session_reset` entry on `PreCompact` is unchanged. |
 | `pre_tool_large_output` (optional, `--large-output`) | `PreToolUse` on `Bash` | For a known-noisy command (`go test ./...`, `npm test`, bare `pytest`, `make`, verbose builds) adds a hint to use `trove_run`. Never blocks. Only fires when the MCP server is registered. |
 | `post_tool_run` (installed with `--large-output` or `--rewrite`) | `PostToolUse` on `mcp__trove__trove_run` | Counts, once per session, that the agent used `trove_run`. It is how the guardrail for the hint above sees whether the hint is followed. Changes nothing. Run `trove hooks install` again if your hooks were installed with v0.3.0 or earlier; `trove hooks status` says when it is missing. |
@@ -387,6 +388,50 @@ the session carries the line again as cached input, and that cost is inside what
   - the live check no longer passing.
 - **Never turns the steer on:** a clean result reports the figures, and you decide. T2 needs a benchmark verdict
   before Autopilot may switch anything on.
+
+## Code-write nudges
+
+Two T2 techniques that cut the output tokens an agent spends writing code. Both are off by default. Each is turned
+on, and its guardrails apply, on its own. No Autopilot policy may name either.
+
+```toml
+[optimizers]
+hook_write_to_edit = "shadow"   # off (default) | shadow | on
+hook_edit_batch    = "shadow"   # off (default) | shadow | on
+```
+
+**`hook_write_to_edit` (B26)** acts on a `Write` to an existing file of at least 300 lines whose new content differs
+from the file on disk in at most 10% of lines (both are placeholders, not set by a benchmark). It denies the call
+once, with a reason Claude sees: "Use Edit for targeted changes". How it works:
+- The file is read and diffed in memory only. The comparison counts lines as multisets, so a moved block counts as
+  unchanged; it can only undercount a change.
+- The session ledger keeps a hash of the path, the estimated saving and a hash of the denied content, never the
+  path, the file or the Write.
+- Sending the same `Write` again goes through and is counted (`overridden`). A file is denied at most once per
+  session.
+- New files, files over 2 MiB and relative paths are never judged.
+- The saving is estimated as the Write's size minus the changed lines on both sides plus a 300-byte allowance for
+  the Edit call itself.
+
+**`hook_edit_batch` (B27)** adds a note (`additionalContext`) on the third `Edit` or `MultiEdit` to the same file
+under one prompt. The note suggests one `Write` or a single `sed` when the remaining changes are mechanical. It never
+denies. Its count carries the Edit input already spent on that file in that turn. That figure is an upper bound on
+what batching could save, not a saving, so no saving is claimed for it.
+
+Both rely on two verified behaviours (code.claude.com/docs/en/hooks, read 2026-11-24):
+- `permissionDecisionReason` with `"deny"` is "shown to Claude".
+- PreToolUse `additionalContext` is "added to Claude's context alongside the tool result". The page gives no example
+  of it without a `permissionDecision`; its field table only excludes `"defer"`.
+
+Each message costs at most about 100 tokens per use (estimated), declared in the registry and charged.
+
+Guardrails (each sets the nudge back to shadow; the thresholds are placeholders):
+- **Retries** (`code_write_retry`, `hook_write_to_edit` only): the agent sent the same Write again after more than
+  `measure.refetch_rate_percent` of denies, beyond chance.
+- **Edit failures** (`code_edit_failures`): Edit and MultiEdit calls failed more often in sessions where the nudge
+  acted than in the rest, by more than 10 points, beyond chance (from `history_tool_calls.error`).
+- **Failing tests right after** (`code_tests_after`): the first allowlisted test run within 15 minutes of the nudge
+  failed more often than test runs in sessions where it did not act, by more than 10 points, beyond chance.
 
 ## Model-switch and cold-compact guards
 

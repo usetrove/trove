@@ -64,6 +64,21 @@ func ClaudePromptDocs(version, now string) hooks.Capability {
 		Evidence: "documentation only (not run): decision \"block\" rejects the prompt and its reason is shown to the user, not added to context; the prompt cannot be replaced; it also fires on turns Claude Code starts itself and on print-mode runs, and no documented field tells either apart"}
 }
 
+// codeWriteDocsEvidence is what the code-write nudges rely on.
+const codeWriteDocsEvidence = "documentation only (not run): PreToolUse permissionDecision \"deny\" blocks the call and its permissionDecisionReason is shown to Claude; additionalContext is added to Claude's context alongside the tool result; tool_input has file_path and content (Write) or file_path, old_string, new_string, replace_all (Edit); hook input carries prompt_id"
+
+// ClaudeCodeWriteDocs is what Claude Code's documentation says the code-write nudges (hook_write_to_edit,
+// hook_edit_batch) may do on Write and Edit.
+//
+// Read 2026-11-24 at code.claude.com/docs/en/hooks: for "deny", permissionDecisionReason is "shown to Claude";
+// additionalContext is a "String added to Claude's context alongside the tool result" (ignored only with "defer");
+// the page shows it only beside "allow", so its use with no decision rests on that table. Neither nudge rewrites
+// input or output, so both stay untested here.
+func ClaudeCodeWriteDocs(version, tool, now string) hooks.Capability {
+	return hooks.Capability{Agent: "claude", AgentVersion: version, Tool: tool, Method: "docs", ProbedAt: now,
+		InputRewrite: hooks.CapUntested, OutputRewrite: hooks.CapUntested, Evidence: codeWriteDocsEvidence}
+}
+
 // agentVersion asks an installed agent for its version; "" when it is not installed.
 func agentVersion(ctx context.Context, o Options, binary string) string {
 	if o.Exec == nil {
