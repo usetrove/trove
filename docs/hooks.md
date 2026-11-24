@@ -25,6 +25,7 @@ trove hooks install --rewrite   # also install the hooks that rewrite tool input
 | `session_end_receipt` | `SessionEnd` | Moves the hook counters into the database, runs the hook guardrail, writes the session receipt, refreshes the snapshot the other hooks read, then writes the session's features and, if stale, the repo's ([features.md](features.md)). |
 | `post_tool_test_result` | Claude Code `PostToolUse` and `PostToolUseFailure` on `Bash` | The test-pass signal. When the command is exactly one of the project's test commands in `.trove/commands.toml` (an entry named `test`, or starting or ending with `test-`, `test_`, `-test`, `_test`; arguments compared after splitting on whitespace), it records the exit code and a hash of the command in `test_runs`. A successful call counts as exit 0; a failure's code is read from the first line of its error (`Exit code N`). Interrupted runs and failures without that line are not recorded. Never prints anything and never changes the call. The session roll-up carries the last status (pass, fail or none) and the run and failure counts. |
 | `pre_tool_subagent` | `PreToolUse` on `Agent` (`Task` before Claude Code v2.1.63; checked 2026-11-17) | Does nothing unless a scout is installed and this session is in the "off" arm of its A/B trial; then it declines a call to the scout subagent with a short message asking the agent to do the work directly. See docs/tasks.md. |
+| `user_prompt_cold_check` | Claude Code `UserPromptSubmit` | The cold-resume guard (`hook_cold_resume`, off by default; see [below](#cold-resume-guard)). When a large session's prompt cache has expired, it warns about what the next prompt will cost, or stops the first prompt after a cold resume once. Returns at once while the guard is off. |
 | `pre_tool_large_output` (optional, `--large-output`) | `PreToolUse` on `Bash` | For a known-noisy command (`go test ./...`, `npm test`, bare `pytest`, `make`, verbose builds) adds a hint to use `trove_run`. Never blocks. Only fires when the MCP server is registered. |
 | `post_tool_run` (installed with `--large-output` or `--rewrite`) | `PostToolUse` on `mcp__trove__trove_run` | Counts, once per session, that the agent used `trove_run`. It is how the guardrail for the hint above sees whether the hint is followed. Changes nothing. Run `trove hooks install` again if your hooks were installed with v0.3.0 or earlier; `trove hooks status` says when it is missing. |
 
@@ -181,14 +182,106 @@ The last probe result on this repo's development machine is `docs/hook-capabilit
   snapshot the hooks read. The kill switch (`trove optimize off`, `TROVE_OPTIMIZE=off`) and a guardrail
   rollback lower the state immediately. A session that started before the hooks were installed stays off.
 
+## Cold-resume guard
+
+Coming back to a large session after its prompt cache expired makes the next request write the whole context to
+the cache again. On a subscription that shows up as a jump in the 5-hour and weekly meters; on an API key, as a
+large cache-write bill. `hook_cold_resume` (technique B21, T1 guard) says what continuing will cost before it happens
+and, in `ask` mode, gives you one chance to `/clear` instead.
+
+```toml
+[optimizers]
+hook_cold_resume = "shadow"     # off (default) | shadow | on
+
+[optimize]
+cold_resume_action = "warn"     # what "on" does: warn | ask
+cold_resume_min_tokens = 150000 # act from this many tokens written to the cache again...
+cold_resume_min_week_pct = 3.0  # ...or from this estimated share of the weekly limit (low end of its range)
+```
+
+The state, action and thresholds are pinned when a session starts, so a change applies to new sessions (rule 5).
+Autopilot never turns the guard on: it changes what you see, not what is sent. Its guardrail can still lower it.
+
+| Mode | What happens on a prompt the guard acts on | Recorded |
+|---|---|---|
+| `off` | nothing | nothing |
+| `shadow` | nothing you can see | `would_block` (after a cold resume) or `would_advise` (after an idle gap) |
+| `on`, `warn` | a `systemMessage` with the cost; the prompt goes through | `advised` |
+| `on`, `ask` | the first prompt after a cold resume is stopped once, with the cost, two options and a note; after an idle gap, a warning as above | `blocked`, then `overridden` or `cleared` |
+
+**When it acts.** It acts at most once per session, even across a resume: an empty marker file named by the hashed
+session key, kept 30 days, records that it did. It acts in two cases:
+
+- **The first prompt after a cold resume.** At `SessionStart` with `source` `resume` or `fork`, Claude Code says
+  whether the cache has likely expired (`prompt_cache_likely_expired`). It also gives the tokens the first request
+  will re-send (`context_tokens`) and its own cost estimate (`estimated_cache_write_usd`). `session_reset` arms the
+  guard with those numbers, and the next prompt is checked.
+- **A prompt after an idle gap** in the same session. The newest main-conversation request in the transcript must
+  be older than the cache lifetime in effect. The lifetime comes from the status line's report (`prompt_cache.ttl`,
+  from the spool) when there is one. Otherwise it comes from that request's 5-minute or 1-hour cache write. With
+  neither, it is one hour, the longer one, so the guard calls a cache cold late rather than early. The rebuild size
+  is that request's input, cache-read and cache-write tokens. This case is **only ever warned about**, even in
+  `ask` mode: `UserPromptSubmit` also fires for turns Claude Code starts itself (a `/loop` iteration, a scheduled
+  task, a background subagent reporting back, a message from another session), and nothing in the input says
+  which a prompt is.
+
+**What it shows.** Each figure is labeled:
+
+- The tokens.
+- About $X at API prices: Claude Code's estimate after a resume, Trove's own (pricing table, at the cache lifetime
+  in effect) after an idle gap.
+- The share of your 5-hour and weekly limits, with its 90% range and basis ("estimated from API prices" or
+  "estimated from your meter", see [limit-fit.md](limit-fit.md)). With no limit fit yet, no share is shown.
+
+In `ask` mode the reason offers two options:
+
+- Send the prompt again to continue. Claude Code shows it under `Original prompt:`, and Trove will not stop the
+  session again.
+- `/clear`, which costs nothing, then paste the note.
+
+The note holds your last three typed prompts (300 bytes each), up to ten edited file names and the end of the last
+reply. It is at most 1,500 bytes, built in memory from the transcript's last 1 MiB, and is only ever in the hook's
+reply: nothing writes it to disk (rule 7). Tool output, lines Claude Code wrote itself, slash-command wrappers and
+subagent text are left out.
+
+**Before `ask` can stop anything**, the installed Claude Code version must pass `trove hooks verify --prompt-block`
+in your own session. It stores a `UserPromptSubmit` entry with `block: yes` in the capability record. Until then
+`ask` acts as `warn`. The reason: nothing documented lets a hook tell an unwatched `claude -p` run from an
+interactive session, and a stopped prompt there would end the run. The check needs three things:
+
+- You saw the first prompt stopped.
+- The hook saw `CLAUDE_CODE_ENTRYPOINT=cli` in the interactive session.
+- It saw a different value under `-p`.
+
+The variable is observed, not documented, and the check records it as such. At run time the guard stops a prompt
+only when the variable says `cli`. Run the check again after updating Claude Code (`trove doctor` warns when the
+recorded version differs).
+
+**What it costs.** Nothing reaches the model on its own: a block's `reason` is "not added to context" (verified),
+and a warning is a `systemMessage`, "shown to the user". Whether a `systemMessage` also reaches the model is not
+documented, and `trove hooks verify --prompt-block --saw-system` records the answer. The note costs its tokens
+once, if you paste it (at most about 450, estimated); the registry declares 450 per use and `trove report` subtracts
+it from every cleared session.
+
+The hook reads the snapshot and the session journal, and the transcript's tail from the end, parsing only the newest
+lines. Measured on the Windows dev machine (`TestColdResumeTiming`): a warm prompt passes in p50 2.2 ms, p95 5 ms
+inside the process. Acting on a 1 MiB transcript, note included, takes p95 65 ms. The safety net is 250 ms and the
+install sets a 5 s timeout (the event's default is 30 s). Starting the `trove` process adds its usual cost to every
+prompt, even with the guard off (see "How it stays fast").
+
+**Guardrail** `cold_resume_override`: of the prompts it stopped, the share you sent again. The guard goes back to
+shadow when that share is above 50% beyond chance, with at least 20 blocks (same sequential test as the rules
+above). Stopping a prompt you then send anyway did not help you. The 50% is a placeholder, not set by a benchmark.
+`trove report` shows what followed: see [measurement.md](measurement.md#cold-resume-guard).
+
 ## Measurement
 
 Each decision is one row in `hook_events`: hook, kind, bytes, estimated tokens, hashed session key.
 
 | Kind | Meaning | Label |
 |---|---|---|
-| `blocked` | the read was denied | measured count |
-| `would_block` | shadow mode: it would have been denied | measured count |
+| `blocked` | the read was denied (for `hook_cold_resume`: a prompt was stopped) | measured count |
+| `would_block` | shadow mode: it would have been denied (or stopped) | measured count |
 | `advised` / `would_advise` | a hint was added / would have been | measured count |
 | `reread_anyway` | the agent retried a denied read | measured count |
 | `rewritten` / `would_rewrite` | an input or output was changed / would have been | measured count |
@@ -196,6 +289,11 @@ Each decision is one row in `hook_events`: hook, kind, bytes, estimated tokens, 
 | `fetched_back` | the agent fetched back an output a hook trimmed | measured count |
 | `extra_read` | the agent read more of a file after `hook_read_limit` limited a read of it (once per file) | measured count |
 | `adopted` | the agent used `trove_run` (once per session) | measured count |
+| `overridden` | you sent a prompt again after the cold-resume guard stopped one | measured count |
+| `cleared` | the session ended with `/clear` after the cold-resume guard stopped a prompt | measured count |
+
+For `hook_cold_resume` the tokens column holds the rebuild size: Claude Code's `context_tokens` after a resume,
+the last request's prompt tokens after an idle gap.
 
 Tokens saved is **estimated** (file size ÷ bytes per token, lower for line-limited reads) and counts only
 blocks the agent did not retry. Bytes per token starts at 3.5. Once your history holds at least 20 clean
@@ -368,7 +466,30 @@ ignore a replaced output whose shape does not match. It needs an API key and cos
    `extra_read`.
 4. Record the Claude Code version and date here.
 
+### Live check of the cold-resume guard (manual)
+
+Not run yet. It needs a Claude Code version that passes `trove hooks verify --prompt-block`, a large session and a
+wait longer than its cache lifetime. Use a throwaway data dir.
+
+1. `TROVE_DATA_DIR=/tmp/trove-probe trove hooks verify --prompt-block` and follow its steps (one interactive
+   session, one `claude -p` run). Record the result and the version here. If `block` is not `yes`, stop: `ask`
+   stays a warning on that version.
+2. Set `hook_cold_resume = "on"` and `cold_resume_action = "ask"`, `trove hooks install`, then build a session of
+   at least 150,000 tokens and exit.
+3. After more than the cache lifetime (one hour on a subscription), `claude --resume` it and send a prompt. Check:
+   it is stopped once, the reason shows the tokens and the costs with their labels, and the note reads sensibly.
+   Note whether the prompt went back to the input box (not documented).
+4. Send it again: it goes through, and `hook_events` has `blocked` then `overridden`. Repeat with a `/clear`
+   instead: `blocked` then `cleared`.
+5. `claude -p --resume <id> "continue"` on a cold session: it must go through with no block.
+
 ## Known gaps
+
+- The cold-resume guard never stops a prompt after a mid-session idle gap, only warns, because self-started turns
+  look the same. After a block, a turn Claude Code starts itself would count as `overridden`. The first prompt
+  after a resume could itself be a self-started turn (for example a message from another session); it is stopped
+  once like a typed one. Whether `--resume` keeps the session id is not documented, so the once-per-session marker
+  is kept for 30 days by hashed key. The hour-after comparison in `trove report` is not randomized.
 
 - The test-pass signal reaches the session roll-up only for sessions the gateway saw (subscription sessions have
   no `sessions` row yet). Test runs are stored under the base session key, so an idle-gap
