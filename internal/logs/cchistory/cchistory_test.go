@@ -372,3 +372,89 @@ func TestToolInputSizeOnly(t *testing.T) {
 		t.Errorf("input text in event: %s", b)
 	}
 }
+
+func userLine(extra, content string) string {
+	return `{"type":"user","sessionId":"s","timestamp":"2026-10-20T10:00:00.000Z"` + extra + `,"message":{"role":"user","content":` + content + `}}`
+}
+
+const boundary = `{"type":"system","subtype":"compact_boundary","sessionId":"s","compactMetadata":{"trigger":"manual"}}`
+
+// Each request records what came right before it, and a compaction boundary marks only the next request.
+func TestPhaseAndCompaction(t *testing.T) {
+	u := `{"input_tokens":1,"output_tokens":1}`
+	body := strings.Join([]string{
+		usageLine("r1", "", u, `[]`), // start of file
+		userLine("", `"SECRET prompt"`),
+		usageLine("r2", "", u, `[{"type":"tool_use","id":"t1","name":"Read","input":{}}]`),
+		userLine("", `[{"type":"tool_result","tool_use_id":"t1","content":"x"}]`),
+		userLine(`,"isMeta":true`, `"SECRET meta note"`), // written by Claude Code: changes nothing
+		usageLine("r3", "", u, `[]`),
+		boundary,
+		userLine(`,"isCompactSummary":true`, `"SECRET summary"`),
+		usageLine("r4", "", u, `[]`),
+		userLine("", `[{"type":"text","text":"SECRET typed"}]`),
+		usageLine("r5", "", u, `[]`),
+		usageLine("r6", "", u, `[]`), // a second request with nothing in between keeps the phase
+	}, "\n") + "\n"
+	evs, end, _ := parseFile(t, write(t, "x.jsonl", body), logs.Checkpoint{}, old)
+	want := []struct {
+		phase     string
+		compacted bool
+	}{
+		{logs.PhaseOther, false}, {logs.PhasePrompt, false}, {logs.PhaseToolResult, false},
+		{logs.PhaseCompact, true}, {logs.PhasePrompt, false}, {logs.PhasePrompt, false},
+	}
+	if len(evs) != len(want) {
+		t.Fatalf("got %d events", len(evs))
+	}
+	for i, w := range want {
+		if evs[i].Phase != w.phase || evs[i].Compacted != w.compacted {
+			t.Errorf("request %d: phase %q compacted %v, want %q %v", i+1, evs[i].Phase, evs[i].Compacted, w.phase, w.compacted)
+		}
+	}
+	if end.Phase != logs.PhasePrompt || end.Compacted {
+		t.Errorf("checkpoint carry: %+v", end)
+	}
+}
+
+// The phase and a pending compaction survive a checkpoint, both at the end of a pass and when a pass
+// rewinds to a held request.
+func TestPhaseCarriesAcrossPasses(t *testing.T) {
+	u := `{"input_tokens":1,"output_tokens":1}`
+	first := usageLine("r1", "", u, `[{"type":"tool_use","id":"t1","name":"Read","input":{}}]`) + "\n" +
+		userLine("", `[{"type":"tool_result","tool_use_id":"t1","content":"x"}]`) + "\n" + boundary + "\n"
+	p := write(t, "x.jsonl", first)
+	_, cp, _ := parseFile(t, p, logs.Checkpoint{}, old)
+	if cp.Phase != logs.PhaseToolResult || !cp.Compacted {
+		t.Fatalf("carry after first pass: %+v", cp)
+	}
+	f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
+	_, _ = f.WriteString(usageLine("r2", "", u, `[{"type":"tool_use","id":"t2","name":"Read","input":{}}]`) + "\n")
+	_ = f.Close()
+	// The file is active and r2's call has no result: the pass holds r2 and rewinds to it.
+	evs, cp2, _ := parseFile(t, p, cp, time.Now)
+	if len(evs) != 0 || cp2.Offset != cp.Offset || cp2.Phase != logs.PhaseToolResult || !cp2.Compacted {
+		t.Fatalf("held pass: %d events, %+v", len(evs), cp2)
+	}
+	evs, _, _ = parseFile(t, p, cp2, old)
+	if len(evs) != 1 || evs[0].Phase != logs.PhaseToolResult || !evs[0].Compacted {
+		t.Fatalf("r2 after the checkpoint: %+v", evs)
+	}
+}
+
+func TestAgentKeyAndTextBytes(t *testing.T) {
+	u := `{"input_tokens":1,"output_tokens":1}`
+	body := usageLine("r1", `,"agentId":"a1b2SECRET"`, u, `[{"type":"text","text":"héllo"}]`) + "\n" +
+		usageLine("r1", `,"agentId":"a1b2SECRET"`, u, `[{"type":"text","text":"abc"},{"type":"text","text":7}]`) + "\n" +
+		usageLine("r2", "", u, `[]`) + "\n"
+	evs, _, _ := parseFile(t, write(t, "x.jsonl", body), logs.Checkpoint{}, old)
+	if len(evs) != 2 {
+		t.Fatalf("got %d events", len(evs))
+	}
+	if evs[0].AgentKey == "" || strings.Contains(evs[0].AgentKey, "SECRET") || evs[1].AgentKey != "" {
+		t.Errorf("agent keys: %q %q", evs[0].AgentKey, evs[1].AgentKey)
+	}
+	if evs[0].TextBytes != int64(len("héllo")+len("abc")) {
+		t.Errorf("text bytes = %d", evs[0].TextBytes)
+	}
+}

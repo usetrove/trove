@@ -41,7 +41,7 @@ import (
 )
 
 // ParserVersion changes when the parser's output for the same input changes.
-const ParserVersion = 2
+const ParserVersion = 3
 
 const (
 	maxLine    = 16 << 20 // lines longer than this are skipped and counted
@@ -168,7 +168,13 @@ type line struct {
 	Entrypoint    json.RawMessage `json:"entrypoint"`
 	Effort        json.RawMessage `json:"effort"`
 	PerTurnEffort json.RawMessage `json:"perTurnEffort"`
-	Message       *struct {
+	// Also observed, not documented: a subagent's id, a system line's subtype ("compact_boundary"
+	// marks a compaction), and flags on user lines that Claude Code wrote itself.
+	AgentID          json.RawMessage `json:"agentId"`
+	Subtype          json.RawMessage `json:"subtype"`
+	IsMeta           json.RawMessage `json:"isMeta"`
+	IsCompactSummary json.RawMessage `json:"isCompactSummary"`
+	Message          *struct {
 		ID      string          `json:"id"`
 		Model   string          `json:"model"`
 		Usage   *usage          `json:"usage"`
@@ -260,7 +266,11 @@ type block struct {
 	IsError   bool            `json:"is_error"`
 	Content   json.RawMessage `json:"content"`
 	Input     json.RawMessage `json:"input"`
+	Text      json.RawMessage `json:"text"`
 }
+
+// isTrue reports whether raw is the JSON literal true.
+func isTrue(raw json.RawMessage) bool { return string(raw) == "true" }
 
 // bashCommand returns a Bash tool_use's command, or "" when there is none or it
 // is longer than logs.MaxCommandBytes.
@@ -285,12 +295,19 @@ type pending struct {
 	startLines  int64
 	startStats  logs.Stats
 	open        int // tool calls still waiting for a result
+	// carry is the parser state just before this request, restored if the pass rewinds to it.
+	carryPhase     string
+	carryCompacted bool
 }
 
 type pass struct {
 	events []*pending
 	byReq  map[string]*pending
 	byTool map[string]*toolRef
+	// phase is what the next new request follows; compacted is set by a compaction boundary and
+	// cleared by the next request.
+	phase     string
+	compacted bool
 }
 
 type toolRef struct {
@@ -322,7 +339,10 @@ func (s *Source) Parse(ctx context.Context, f logs.File, cp logs.Checkpoint, emi
 		return cp, st, err
 	}
 
-	ps := &pass{byReq: map[string]*pending{}, byTool: map[string]*toolRef{}}
+	ps := &pass{byReq: map[string]*pending{}, byTool: map[string]*toolRef{}, phase: cp.Phase, compacted: cp.Compacted}
+	if ps.phase == "" {
+		ps.phase = logs.PhaseOther
+	}
 	r := bufio.NewReaderSize(file, 1<<20)
 	offset, lines := cp.Offset, cp.Lines
 	turns := cp.Turns
@@ -371,10 +391,11 @@ func (s *Source) Parse(ctx context.Context, f logs.File, cp logs.Checkpoint, emi
 			}
 		}
 	}
-	end := logs.Checkpoint{Offset: offset, Lines: lines, Turns: turns}
+	end := logs.Checkpoint{Offset: offset, Lines: lines, Turns: turns, Phase: ps.phase, Compacted: ps.compacted}
 	if cut < len(ps.events) {
 		p := ps.events[cut]
-		end = logs.Checkpoint{Offset: p.startOffset, Lines: p.startLines, Turns: p.ev.Turn - 1}
+		end = logs.Checkpoint{Offset: p.startOffset, Lines: p.startLines, Turns: p.ev.Turn - 1,
+			Phase: p.carryPhase, Compacted: p.carryCompacted}
 		keep := st.FormatVersion
 		st = p.startStats
 		if st.FormatVersion == "" {
@@ -391,7 +412,7 @@ func (s *Source) handle(ps *pass, data []byte, start, lineNo int64, st *logs.Sta
 	const prefix = `{"type":"`
 	if bytes.HasPrefix(data, []byte(prefix)) {
 		rest := data[len(prefix):]
-		if !bytes.HasPrefix(rest, []byte(`assistant"`)) && !bytes.HasPrefix(rest, []byte(`user"`)) {
+		if !bytes.HasPrefix(rest, []byte(`assistant"`)) && !bytes.HasPrefix(rest, []byte(`user"`)) && !bytes.HasPrefix(rest, []byte(`system"`)) {
 			st.Unknown++
 			return
 		}
@@ -412,6 +433,11 @@ func (s *Source) handle(ps *pass, data []byte, start, lineNo int64, st *logs.Sta
 		s.assistant(ps, &l, start, lineNo, st, turns)
 	case "user":
 		s.user(ps, &l)
+	case "system":
+		if rawString(l.Subtype) == "compact_boundary" {
+			ps.compacted = true
+		}
+		st.Unknown++ // still not a line the usage figures come from
 	default:
 		st.Unknown++
 	}
@@ -451,10 +477,17 @@ func (s *Source) assistant(ps *pass, l *line, start, lineNo int64, st *logs.Stat
 			TS:         ts.UnixMilli(),
 			Model:      m.Model,
 			Sidechain:  l.IsSidechain,
+			Phase:      ps.phase,
+			Compacted:  ps.compacted,
+		}
+		if a := rawString(l.AgentID); a != "" {
+			ev.AgentKey = logs.Hash("cc-agent", a)
 		}
 		snap := *st
 		snap.Lines-- // the line that starts this request is re-read if the pass rewinds
-		p = &pending{ev: ev, startOffset: start, startLines: lineNo, startStats: snap}
+		p = &pending{ev: ev, startOffset: start, startLines: lineNo, startStats: snap,
+			carryPhase: ps.phase, carryCompacted: ps.compacted}
+		ps.compacted = false
 		ps.byReq[id] = p
 		ps.events = append(ps.events, p)
 	}
@@ -464,6 +497,10 @@ func (s *Source) assistant(ps *pass, l *line, start, lineNo int64, st *logs.Stat
 	var blocks []block
 	if len(m.Content) > 0 && m.Content[0] == '[' && json.Unmarshal(m.Content, &blocks) == nil {
 		for _, b := range blocks {
+			if b.Type == "text" {
+				p.ev.TextBytes += int64(len(rawString(b.Text)))
+				continue
+			}
 			if b.Type != "tool_use" || b.Name == "" {
 				continue
 			}
@@ -480,12 +517,31 @@ func (s *Source) assistant(ps *pass, l *line, start, lineNo int64, st *logs.Stat
 }
 
 func (s *Source) user(ps *pass, l *line) {
-	if l.Message == nil || len(l.Message.Content) == 0 || l.Message.Content[0] != '[' {
+	if l.Message == nil || len(l.Message.Content) == 0 {
 		return
 	}
+	// The phase of the next request: a line Claude Code wrote itself (isMeta) changes nothing; a
+	// compaction summary, a tool result or a typed prompt each set it.
+	meta, summary := isTrue(l.IsMeta), isTrue(l.IsCompactSummary)
 	var blocks []block
-	if json.Unmarshal(l.Message.Content, &blocks) != nil {
+	switch c := l.Message.Content; {
+	case c[0] == '"':
+	case c[0] == '[' && json.Unmarshal(c, &blocks) == nil:
+	default:
 		return
+	}
+	text, tool := l.Message.Content[0] == '"', false
+	for _, b := range blocks {
+		text = text || b.Type == "text"
+		tool = tool || b.Type == "tool_result"
+	}
+	switch {
+	case summary:
+		ps.phase = logs.PhaseCompact
+	case tool:
+		ps.phase = logs.PhaseToolResult
+	case text && !meta:
+		ps.phase = logs.PhasePrompt
 	}
 	for _, b := range blocks {
 		if b.Type != "tool_result" {

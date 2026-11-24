@@ -216,7 +216,7 @@ func (in *Ingester) source(name string) Source {
 }
 
 func (in *Ingester) loadCheckpoints(ctx context.Context) (map[string]checkpointRow, error) {
-	rows, err := in.DB.QueryContext(ctx, `SELECT file_key, size, mtime, offset, lines, turns, parser_version, skipped_lines FROM history_files`)
+	rows, err := in.DB.QueryContext(ctx, `SELECT file_key, size, mtime, offset, lines, turns, parser_version, skipped_lines, carry_phase, carry_compacted FROM history_files`)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (in *Ingester) loadCheckpoints(ctx context.Context) (map[string]checkpointR
 	for rows.Next() {
 		var k string
 		var c checkpointRow
-		if err := rows.Scan(&k, &c.size, &c.mtime, &c.cp.Offset, &c.cp.Lines, &c.cp.Turns, &c.parser, &c.skipped); err != nil {
+		if err := rows.Scan(&k, &c.size, &c.mtime, &c.cp.Offset, &c.cp.Lines, &c.cp.Turns, &c.parser, &c.skipped, &c.cp.Phase, &c.cp.Compacted); err != nil {
 			return nil, err
 		}
 		out[k] = c
@@ -291,8 +291,9 @@ func (in *Ingester) store(ctx context.Context, r result, prevSkipped int64) erro
 	stmt, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO history_requests
 		(request_key, source, session_key, ts, model, input_tokens, cache_write_5m, cache_write_1h, cache_write_other,
 		 cache_read, output_tokens, cost_usd, pricing_status, plan, sidechain, tool_names, tool_result_bytes, errors,
-		 findings, shadow_savings, thinking_tokens, agent_version, entrypoint, effort, turn_effort)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+		 findings, shadow_savings, thinking_tokens, agent_version, entrypoint, effort, turn_effort,
+		 agent_key, phase, compacted, text_bytes)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return err
 	}
@@ -317,7 +318,8 @@ func (in *Ingester) store(ctx context.Context, r result, prevSkipped int64) erro
 			x.PricingStatus, string(x.Plan), boolInt(x.Sidechain), names, bytes, errs,
 			nullJSON(x.Findings), nullJSON(x.ShadowSavings), nullInt(x.Thinking),
 			nullStr(CleanVersion(x.AgentVersion)), nullStr(CleanEntrypoint(x.Entrypoint)),
-			nullStr(CleanEffort(x.Effort)), nullStr(CleanEffort(x.TurnEffort))); err != nil {
+			nullStr(CleanEffort(x.Effort)), nullStr(CleanEffort(x.TurnEffort)),
+			x.AgentKey, nullStr(CleanPhase(x.Phase)), boolInt(x.Compacted), x.TextBytes); err != nil {
 			return err
 		}
 		if _, err := delTools.ExecContext(ctx, x.RequestKey); err != nil {
@@ -335,13 +337,15 @@ func (in *Ingester) store(ctx context.Context, r result, prevSkipped int64) erro
 	}
 	now := time.Now()
 	if _, err := tx.ExecContext(ctx, `INSERT INTO history_files
-		(file_key, source, size, mtime, offset, parser_version, format_version, lines, turns, skipped_lines, updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?)
+		(file_key, source, size, mtime, offset, parser_version, format_version, lines, turns, skipped_lines, updated_at,
+		 carry_phase, carry_compacted)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(file_key) DO UPDATE SET size=excluded.size, mtime=excluded.mtime, offset=excluded.offset,
 		  parser_version=excluded.parser_version, format_version=excluded.format_version, lines=excluded.lines,
-		  turns=excluded.turns, skipped_lines=excluded.skipped_lines, updated_at=excluded.updated_at`,
+		  turns=excluded.turns, skipped_lines=excluded.skipped_lines, updated_at=excluded.updated_at,
+		  carry_phase=excluded.carry_phase, carry_compacted=excluded.carry_compacted`,
 		r.file.Key, r.file.Source, r.file.Size, r.file.MTime, r.cp.Offset, in.Versions[r.file.Source], r.stats.FormatVersion,
-		r.cp.Lines, r.cp.Turns, prevSkipped+r.stats.Skipped, now.UnixMilli()); err != nil {
+		r.cp.Lines, r.cp.Turns, prevSkipped+r.stats.Skipped, now.UnixMilli(), CleanPhase(r.cp.Phase), boolInt(r.cp.Compacted)); err != nil {
 		return err
 	}
 	return tx.Commit()

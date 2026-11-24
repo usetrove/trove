@@ -38,3 +38,12 @@ func CleanEffort(e string) string {
 	}
 	return ""
 }
+
+// CleanPhase returns p when it is one of the Phase constants, else "".
+func CleanPhase(p string) string {
+	switch p {
+	case PhasePrompt, PhaseToolResult, PhaseCompact, PhaseOther:
+		return p
+	}
+	return ""
+}

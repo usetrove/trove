@@ -245,6 +245,8 @@ Checkpoints for reading your agents' own session logs (read-only), so each file 
 | `turns` | Turns found |
 | `skipped_lines` | Lines that could not be parsed (counted, not stored) |
 | `updated_at` | When this checkpoint was written |
+| `carry_phase` | What came before the next unread request (a code such as tool_result), carried to the next read |
+| `carry_compacted` | 1 when a compaction boundary was read and no request has followed it yet |
 
 **Retention:** kept: a checkpoint of a path hash and offsets, so that history already purged is not read again. Removed by `trove data delete`.
 
@@ -279,6 +281,10 @@ One row per provider request found in an agent's session log (estimates, since t
 | `entrypoint` | How the agent was started, for example cli or sdk-cli (observed in the log, not documented) |
 | `effort` | Effort setting: low, medium, high, xhigh or max |
 | `turn_effort` | Effort for this turn, which can differ from the setting (observed in the log, not documented) |
+| `agent_key` | Hash of the subagent's id; empty for the main conversation |
+| `phase` | What came right before the request: prompt, tool_result, compact or other |
+| `compacted` | 1 when a compaction came since the agent's previous request |
+| `text_bytes` | Size of the response's visible text; the text is not stored |
 
 **Retention:** deleted after `retention_days`.
 

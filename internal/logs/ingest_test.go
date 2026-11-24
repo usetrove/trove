@@ -340,3 +340,40 @@ func (f *fakeSource) Parse(_ context.Context, _ logs.File, cp logs.Checkpoint, e
 	emit(f.ev)
 	return logs.Checkpoint{Offset: 1, Lines: 1, Turns: 1}, logs.Stats{}, nil
 }
+
+// The parser's carry (phase, pending compaction) is stored with the checkpoint, so a request appended
+// after a scan still gets the right phase.
+func TestScanCarriesPhaseThroughTheDatabase(t *testing.T) {
+	in, db := newIngester(t)
+	proj := historyDir(t)
+	p := copyFixture(t, proj, "sess-1.jsonl") // ends after a tool result
+	ctx := context.Background()
+	f, _ := os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
+	_, _ = f.WriteString(`{"type":"system","subtype":"compact_boundary","sessionId":"sess-1"}` + "\n")
+	_ = f.Close()
+	if _, err := in.Scan(ctx, logs.Options{Roots: []string{proj}}); err != nil {
+		t.Fatal(err)
+	}
+	var phase string
+	var compacted int
+	if err := db.QueryRow(`SELECT carry_phase, carry_compacted FROM history_files`).Scan(&phase, &compacted); err != nil {
+		t.Fatal(err)
+	}
+	if phase != logs.PhaseToolResult || compacted != 1 {
+		t.Fatalf("carry stored: %q %d", phase, compacted)
+	}
+	f, _ = os.OpenFile(p, os.O_APPEND|os.O_WRONLY, 0)
+	_, _ = f.WriteString(`{"type":"assistant","sessionId":"sess-1","requestId":"req_C","timestamp":"2026-10-20T11:00:00.000Z","version":"2.1.302","message":{"id":"m","model":"claude-sonnet-5-5","content":[{"type":"text","text":"abcd"}],"usage":{"input_tokens":1,"output_tokens":1}}}` + "\n")
+	_ = f.Close()
+	if _, err := in.Scan(ctx, logs.Options{Roots: []string{proj}}); err != nil {
+		t.Fatal(err)
+	}
+	var text int64
+	var agent string
+	if err := db.QueryRow(`SELECT phase, compacted, text_bytes, agent_key FROM history_requests WHERE ts = (SELECT MAX(ts) FROM history_requests)`).Scan(&phase, &compacted, &text, &agent); err != nil {
+		t.Fatal(err)
+	}
+	if phase != logs.PhaseToolResult || compacted != 1 || text != 4 || agent != "" {
+		t.Errorf("appended request: phase %q compacted %d text %d agent %q", phase, compacted, text, agent)
+	}
+}

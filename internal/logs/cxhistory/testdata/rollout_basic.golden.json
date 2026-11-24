@@ -2,7 +2,9 @@
   "end": {
     "Offset": 2263,
     "Lines": 11,
-    "Turns": 2
+    "Turns": 2,
+    "Phase": "",
+    "Compacted": false
   },
   "events": [
     {
@@ -25,6 +27,10 @@
       "Entrypoint": "",
       "Effort": "",
       "TurnEffort": "",
+      "AgentKey": "",
+      "Phase": "",
+      "Compacted": false,
+      "TextBytes": 0,
       "Tools": [
         {
           "Name": "shell",
@@ -55,6 +61,10 @@
       "Entrypoint": "",
       "Effort": "",
       "TurnEffort": "",
+      "AgentKey": "",
+      "Phase": "",
+      "Compacted": false,
+      "TextBytes": 0,
       "Tools": null
     }
   ],

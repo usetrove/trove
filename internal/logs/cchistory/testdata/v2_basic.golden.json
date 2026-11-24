@@ -2,7 +2,9 @@
   "end": {
     "Offset": 2680,
     "Lines": 9,
-    "Turns": 2
+    "Turns": 2,
+    "Phase": "tool_result",
+    "Compacted": false
   },
   "events": [
     {
@@ -25,6 +27,10 @@
       "Entrypoint": "cli",
       "Effort": "medium",
       "TurnEffort": "high",
+      "AgentKey": "",
+      "Phase": "prompt",
+      "Compacted": false,
+      "TextBytes": 0,
       "Tools": [
         {
           "Name": "Read",
@@ -55,6 +61,10 @@
       "Entrypoint": "sdk-cli",
       "Effort": "",
       "TurnEffort": "",
+      "AgentKey": "",
+      "Phase": "tool_result",
+      "Compacted": false,
+      "TextBytes": 13,
       "Tools": null
     }
   ],
