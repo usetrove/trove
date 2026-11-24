@@ -20,7 +20,7 @@ import (
 // runProbeHook runs a probe hook (`trove hook probe_pre|probe_post`). It returns
 // false when args are not a probe event.
 func runProbeHook(args []string, stdin io.Reader, stdout io.Writer) bool {
-	if len(args) == 0 || (args[0] != "probe_pre" && args[0] != "probe_post") {
+	if len(args) == 0 || (args[0] != "probe_pre" && args[0] != "probe_post" && args[0] != "probe_prompt") {
 		return false
 	}
 	getenv := os.Getenv
@@ -34,6 +34,10 @@ func runProbeHook(args []string, stdin io.Reader, stdout io.Writer) bool {
 				return os.Getenv(k)
 			}
 		}
+	}
+	if args[0] == "probe_prompt" {
+		hookprobe.PromptHookMain(stdin, stdout, getenv)
+		return true
 	}
 	hookprobe.HookMain(strings.TrimPrefix(args[0], "probe_"), stdin, stdout, getenv)
 	return true
@@ -119,19 +123,30 @@ func runHooksProbe(ctx context.Context, a *App, fl hooksProbeFlags) error {
 }
 
 // mergeCapabilities replaces the stored entries of every agent that was probed
-// and keeps the rest.
+// and keeps the rest. A prompt-block result from the user's own session is kept
+// over the documentation-only entry every probe writes: the probe never tests it.
 func mergeCapabilities(old, fresh hooks.Capabilities) hooks.Capabilities {
 	probed := map[string]bool{}
 	for _, e := range fresh.Entries {
 		probed[e.Agent] = true
 	}
 	var out hooks.Capabilities
+	kept := map[string]bool{}
 	for _, e := range old.Entries {
-		if !probed[e.Agent] {
+		switch {
+		case !probed[e.Agent]:
 			out.Entries = append(out.Entries, e)
+		case e.Tool == hookcaps.ToolPrompt && (e.Method == "live" || e.Method == "session"):
+			out.Entries = append(out.Entries, e)
+			kept[e.Agent] = true
 		}
 	}
-	out.Entries = append(out.Entries, fresh.Entries...)
+	for _, e := range fresh.Entries {
+		if e.Tool == hookcaps.ToolPrompt && e.Method == "docs" && kept[e.Agent] {
+			continue
+		}
+		out.Entries = append(out.Entries, e)
+	}
 	return out
 }
 

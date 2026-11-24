@@ -13,10 +13,13 @@ import (
 )
 
 type hooksVerifyFlags struct {
-	finish    bool
-	tools     []string
-	sawOutput []string
-	cancel    bool
+	finish      bool
+	tools       []string
+	sawOutput   []string
+	cancel      bool
+	promptBlock bool
+	sawBlock    string
+	sawSystem   string
 }
 
 func newHooksVerify(a *App) *cobra.Command {
@@ -38,6 +41,9 @@ func newHooksVerify(a *App) *cobra.Command {
 	c.Flags().BoolVar(&fl.cancel, "cancel", false, "remove a prepared session and its settings file")
 	c.Flags().StringSliceVar(&fl.tools, "tools", hookprobe.DefaultTools, "tools to test")
 	c.Flags().StringSliceVar(&fl.sawOutput, "saw-output", nil, "with --finish: tools whose reply contained the replacement text, as Tool or Tool=no (for example Bash,Read=no)")
+	c.Flags().BoolVar(&fl.promptBlock, "prompt-block", false, "check instead whether a stopped prompt reaches you and print-mode runs can be told apart (for hook_cold_resume's ask mode)")
+	c.Flags().StringVar(&fl.sawBlock, "saw-block", "", "with --prompt-block --finish: yes if your first prompt was stopped with the TROVE_PROBE_BLOCK_ text, else no")
+	c.Flags().StringVar(&fl.sawSystem, "saw-system", "", "with --prompt-block --finish: yes if the model's reply to the second prompt contained TROVE_PROBE_SYS_, else no")
 	return c
 }
 
@@ -54,6 +60,9 @@ func runHooksVerify(a *App, fl hooksVerifyFlags) error {
 	dir, _, err := loadConfig(a)
 	if err != nil {
 		return err
+	}
+	if fl.promptBlock {
+		return runPromptVerify(a, dir, fl)
 	}
 	state := filepath.Join(dir, "hooks", "verify")
 	switch {
