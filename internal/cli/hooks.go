@@ -115,6 +115,10 @@ func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.H
 		// fails, with "Exit code N" in its error (code.claude.com/docs/en/hooks, read 2026-11-17), so both are needed.
 		{Event: "PostToolUse", Matcher: "Bash", Command: build(hooks.EventTestResult), Timeout: 5},
 		{Event: "PostToolUseFailure", Matcher: "Bash", Command: build(hooks.EventTestResult), Timeout: 5},
+		// The cold-resume guard (hook_cold_resume). It returns at once while the guard is off. UserPromptSubmit has
+		// no matcher and a default timeout of 30 s (code.claude.com/docs/en/hooks, read 2026-11-23); 5 s is far
+		// above the hook's own 250 ms safety net.
+		{Event: "UserPromptSubmit", Command: build(hooks.EventPromptSubmit), Timeout: 5},
 	}
 	if largeOutput || rewrite {
 		s = append(s, setup.HookSpec{Event: "PreToolUse", Matcher: "Bash", Command: build(hooks.EventLargeOutput), Timeout: 5})

@@ -148,6 +148,17 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook user_prompt_cold_check",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

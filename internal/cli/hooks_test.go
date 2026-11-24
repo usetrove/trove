@@ -108,9 +108,17 @@ func TestHooksInstallAndUninstallKeepUserHooks(t *testing.T) {
 			t.Errorf("%s = %v", ev, got)
 		}
 	}
+	// The cold-resume guard: one UserPromptSubmit hook with no matcher (the event has none).
+	if got := hookCommandsIn(t, hookClaudeSettings(home), "UserPromptSubmit"); len(got) != 1 || !strings.HasPrefix(got[0], "|") ||
+		!strings.Contains(got[0], "hook user_prompt_cold_check") {
+		t.Errorf("UserPromptSubmit = %v", got)
+	}
 	cx := hookCommandsIn(t, codexHooksFile(home), "SessionEnd")
 	if len(cx) != 1 || !strings.Contains(cx[0], "--agent codex") {
 		t.Fatalf("codex SessionEnd = %v", cx)
+	}
+	if got := hookCommandsIn(t, codexHooksFile(home), "UserPromptSubmit"); len(got) != 0 {
+		t.Errorf("the cold-resume guard reads Claude Code's resume fields, so Codex gets no prompt hook: %v", got)
 	}
 	if got := hookCommandsIn(t, codexHooksFile(home), "PreToolUse"); len(got) != 0 {
 		t.Fatalf("codex has no file-read tool to hook, and large-output is off: %v", got)
