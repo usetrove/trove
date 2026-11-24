@@ -9,7 +9,12 @@
 //     lines are used; every other type is counted and ignored.
 //   - An API response is written as several "assistant" lines, one per content
 //     block, each repeating the same usage. Lines are merged by requestId so
-//     tokens are counted once.
+//     tokens are counted once; the last line's usage wins, in case an earlier
+//     line carried a partial streamed figure.
+//   - Token detail and context (checked 2026-11-23 on v2.1.307-2.1.331; see the
+//     "Token detail" section of docs/logs.md): thinking tokens, the agent
+//     version, entrypoint and effort. Entrypoint and both effort fields are not
+//     documented and are labelled observed.
 //   - Tool results arrive on later "user" lines and are matched by tool_use_id.
 //
 // Only counts, sizes, hashes and tool names are kept. Text is read in memory to
@@ -36,7 +41,7 @@ import (
 )
 
 // ParserVersion changes when the parser's output for the same input changes.
-const ParserVersion = 1
+const ParserVersion = 2
 
 const (
 	maxLine    = 16 << 20 // lines longer than this are skipped and counted
@@ -158,7 +163,12 @@ type line struct {
 	Version     string `json:"version"`
 	RequestID   string `json:"requestId"`
 	IsSidechain bool   `json:"isSidechain"`
-	Message     *struct {
+	// Observed on v2.1.307-2.1.331 but not documented (docs/logs.md). Raw so that a changed type
+	// costs only the field, never the line.
+	Entrypoint    json.RawMessage `json:"entrypoint"`
+	Effort        json.RawMessage `json:"effort"`
+	PerTurnEffort json.RawMessage `json:"perTurnEffort"`
+	Message       *struct {
 		ID      string          `json:"id"`
 		Model   string          `json:"model"`
 		Usage   *usage          `json:"usage"`
@@ -177,6 +187,69 @@ type usage struct {
 		Eph5m int64 `json:"ephemeral_5m_input_tokens"`
 		Eph1h int64 `json:"ephemeral_1h_input_tokens"`
 	} `json:"cache_creation"`
+	// output_tokens_details is documented as nullable; raw so a changed shape costs only the field.
+	Details json.RawMessage `json:"output_tokens_details"`
+}
+
+// thinking returns output_tokens_details.thinking_tokens, or nil when the line does not carry it.
+func (u *usage) thinking() *int64 {
+	if len(u.Details) == 0 || u.Details[0] != '{' {
+		return nil
+	}
+	var d struct {
+		Thinking *int64 `json:"thinking_tokens"`
+	}
+	if json.Unmarshal(u.Details, &d) != nil || d.Thinking == nil || *d.Thinking < 0 {
+		return nil
+	}
+	return d.Thinking
+}
+
+// rawString returns raw as a string when it is a JSON string, else "".
+func rawString(raw json.RawMessage) string {
+	if len(raw) == 0 || raw[0] != '"' {
+		return ""
+	}
+	var s string
+	if json.Unmarshal(raw, &s) != nil {
+		return ""
+	}
+	return s
+}
+
+// applyUsage sets ev's token counts from u. It runs for every line of a request, so the last line
+// wins: a request's usage only grows while it streams, and the last line written carries the final
+// figures (on the versions checked every line carried the same figures).
+func applyUsage(ev *logs.Event, u *usage) {
+	ev.Input, ev.CacheRead, ev.Output = u.Input, u.CacheRead, u.Output
+	ev.ServiceTier = u.ServiceTier
+	if u.Speed != "" && u.Speed != "standard" {
+		ev.ServiceTier = u.Speed // e.g. "fast": priced as its own tier, or left unpriced
+	}
+	ev.CacheWrite5m, ev.CacheWrite1h, ev.CacheWriteNA = 0, 0, 0
+	if u.Split != nil {
+		ev.CacheWrite5m, ev.CacheWrite1h = u.Split.Eph5m, u.Split.Eph1h
+	}
+	if rest := u.CacheCreation - ev.CacheWrite5m - ev.CacheWrite1h; rest > 0 {
+		ev.CacheWriteNA = rest // total with no (or a partial) TTL split
+	}
+	ev.Thinking = u.thinking()
+}
+
+// applyContext sets the per-request context fields from l, keeping earlier values when l has none.
+func applyContext(ev *logs.Event, l *line) {
+	if v := logs.CleanVersion(l.Version); v != "" {
+		ev.AgentVersion = v
+	}
+	if v := logs.CleanEntrypoint(rawString(l.Entrypoint)); v != "" {
+		ev.Entrypoint = v
+	}
+	if v := logs.CleanEffort(rawString(l.Effort)); v != "" {
+		ev.Effort = v
+	}
+	if v := logs.CleanEffort(rawString(l.PerTurnEffort)); v != "" {
+		ev.TurnEffort = v
+	}
 }
 
 type block struct {
@@ -370,28 +443,14 @@ func (s *Source) assistant(ps *pass, l *line, start, lineNo int64, st *logs.Stat
 			return
 		}
 		*turns++
-		u := m.Usage
 		ev := logs.Event{
-			Source:      logs.SourceClaudeCode,
-			SessionKey:  session.ClaudeCodeKey(l.SessionID),
-			RequestKey:  logs.Hash(logs.SourceClaudeCode, id),
-			Turn:        *turns,
-			TS:          ts.UnixMilli(),
-			Model:       m.Model,
-			Sidechain:   l.IsSidechain,
-			CacheRead:   u.CacheRead,
-			Output:      u.Output,
-			Input:       u.Input,
-			ServiceTier: u.ServiceTier,
-		}
-		if u.Speed != "" && u.Speed != "standard" {
-			ev.ServiceTier = u.Speed // e.g. "fast": priced as its own tier, or left unpriced
-		}
-		if u.Split != nil {
-			ev.CacheWrite5m, ev.CacheWrite1h = u.Split.Eph5m, u.Split.Eph1h
-		}
-		if rest := u.CacheCreation - ev.CacheWrite5m - ev.CacheWrite1h; rest > 0 {
-			ev.CacheWriteNA = rest // total with no (or a partial) TTL split
+			Source:     logs.SourceClaudeCode,
+			SessionKey: session.ClaudeCodeKey(l.SessionID),
+			RequestKey: logs.Hash(logs.SourceClaudeCode, id),
+			Turn:       *turns,
+			TS:         ts.UnixMilli(),
+			Model:      m.Model,
+			Sidechain:  l.IsSidechain,
 		}
 		snap := *st
 		snap.Lines-- // the line that starts this request is re-read if the pass rewinds
@@ -399,6 +458,8 @@ func (s *Source) assistant(ps *pass, l *line, start, lineNo int64, st *logs.Stat
 		ps.byReq[id] = p
 		ps.events = append(ps.events, p)
 	}
+	applyUsage(&p.ev, m.Usage)
+	applyContext(&p.ev, l)
 	// Merge tool_use blocks; the same call can appear on only one line, but be safe.
 	var blocks []block
 	if len(m.Content) > 0 && m.Content[0] == '[' && json.Unmarshal(m.Content, &blocks) == nil {
@@ -413,7 +474,7 @@ func (s *Source) assistant(ps *pass, l *line, start, lineNo int64, st *logs.Stat
 				ps.byTool[b.ID] = &toolRef{p: p, idx: len(p.ev.Tools)}
 				p.open++
 			}
-			p.ev.Tools = append(p.ev.Tools, logs.ToolCall{Name: b.Name, Command: bashCommand(b)})
+			p.ev.Tools = append(p.ev.Tools, logs.ToolCall{Name: b.Name, InputBytes: int64(len(b.Input)), Command: bashCommand(b)})
 		}
 	}
 }

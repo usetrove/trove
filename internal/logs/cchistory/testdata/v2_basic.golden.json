@@ -1,6 +1,6 @@
 {
   "end": {
-    "Offset": 2387,
+    "Offset": 2680,
     "Lines": 9,
     "Turns": 2
   },
@@ -20,9 +20,15 @@
       "CacheRead": 1000,
       "Output": 50,
       "ServiceTier": "standard",
+      "Thinking": 40,
+      "AgentVersion": "2.1.302",
+      "Entrypoint": "cli",
+      "Effort": "medium",
+      "TurnEffort": "high",
       "Tools": [
         {
           "Name": "Read",
+          "InputBytes": 43,
           "ResultBytes": 31,
           "ResultHash": "dd2163d8e5b390f3",
           "Error": false
@@ -44,6 +50,11 @@
       "CacheRead": 1300,
       "Output": 20,
       "ServiceTier": "standard",
+      "Thinking": null,
+      "AgentVersion": "2.1.302",
+      "Entrypoint": "sdk-cli",
+      "Effort": "",
+      "TurnEffort": "",
       "Tools": null
     }
   ],

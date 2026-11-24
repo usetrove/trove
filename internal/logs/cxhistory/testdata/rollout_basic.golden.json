@@ -20,9 +20,15 @@
       "CacheRead": 800,
       "Output": 50,
       "ServiceTier": "",
+      "Thinking": null,
+      "AgentVersion": "",
+      "Entrypoint": "",
+      "Effort": "",
+      "TurnEffort": "",
       "Tools": [
         {
           "Name": "shell",
+          "InputBytes": 0,
           "ResultBytes": 32,
           "ResultHash": "236b49891f3d5f81",
           "Error": false
@@ -44,6 +50,11 @@
       "CacheRead": 1000,
       "Output": 70,
       "ServiceTier": "",
+      "Thinking": null,
+      "AgentVersion": "",
+      "Entrypoint": "",
+      "Effort": "",
+      "TurnEffort": "",
       "Tools": null
     }
   ],

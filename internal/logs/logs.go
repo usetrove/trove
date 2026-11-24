@@ -55,12 +55,24 @@ type Event struct {
 	Output       int64
 	ServiceTier  string
 
+	// Thinking is the part of Output the model spent on reasoning. It is already inside Output and must
+	// never be added to it. nil means the log did not say (unknown), which is not the same as 0.
+	Thinking *int64
+
+	// Per-request context, checked against strict patterns so no free text gets through. Empty means
+	// the log did not carry a recognizable value.
+	AgentVersion string // agent version that wrote the line, e.g. "2.1.331"
+	Entrypoint   string // how the agent was started, e.g. "cli" or "sdk-cli" (observed, not documented)
+	Effort       string // effort setting for the request: low | medium | high | xhigh | max
+	TurnEffort   string // effort for this turn, which can differ from Effort (observed, not documented)
+
 	Tools []ToolCall
 }
 
 // ToolCall is one tool use and, when its result was seen, the result's size.
 type ToolCall struct {
 	Name        string
+	InputBytes  int64  // byte size of the call's input JSON as logged; the input itself is never kept
 	ResultBytes int64  // 0 when no result was seen
 	ResultHash  string // hash of the result, for duplicate detection; never the text
 	Error       bool
