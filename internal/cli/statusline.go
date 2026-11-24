@@ -86,9 +86,9 @@ func statusLine(a *App, format string, in claudeInput, now time.Time) statusOutp
 		return statusOutput{Line: "Trove: database problem, run `trove doctor`", Error: err.Error(), LimitSample: recordLimitSample(db, dir, in, now)}
 	}
 	if status.Saved.Value >= 0.01 {
-		// Savings as a share of the 5-hour limit, from the saved plan-limit fit (one small file read;
+		// Savings as a share of the 5-hour limit, from the saved API-price scales (one tiny file read;
 		// no fit means no percentage).
-		status.SavedLimit = limitfit.ReadCache(dir).PercentUSD(status.Saved.Value)
+		status.SavedLimit = limitfit.ReadScales(dir).PercentUSD(status.Saved.Value)
 	}
 	color := format != report.FormatShell && !a.NoColor && a.Getenv("NO_COLOR") == ""
 	line := report.RenderStatus(status, format, color) + autopilotSuffix(dir)

@@ -34,7 +34,7 @@ import (
 var hooksKept = map[string]bool{"config.json": true, "capabilities.json": true}
 
 var (
-	dataDeleteFiles = []string{"contribute.json", "gateway.log", limitfit.CacheFile}
+	dataDeleteFiles = []string{"contribute.json", "gateway.log", limitfit.CacheFile, limitfit.ScaleFile}
 	dataDeleteDirs  = []string{"recovery", store.LimitSpoolDir}
 	dataDeleteGlobs = []string{"hooks.log*", "contribute.json.*", ".limitfit-*.json"}
 )

@@ -31,6 +31,9 @@ Nothing appears until there is enough data (see [Gates](#gates)).
 
 Only the last 8 weeks are used. Nothing new is stored in the database. The fit is saved as `limitfit.json` in the
 data folder (numbers only, permissions 0600), so the status line and Autopilot never query or fit.
+The status line reads only `limitfit-scale.json`, which holds just the two dollar scales. Reading the
+full fit with its bootstrap rounds took about 5 ms per run on the development machine (Windows 11);
+the scales take about 0.5 ms (`BenchmarkReadCache`).
 It is recomputed by `trove report` and at session end, but only when a newer meter reading arrived
 or the saved fit is a day old.
 

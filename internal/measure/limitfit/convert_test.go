@@ -168,3 +168,36 @@ func TestLoadAndRefresh(t *testing.T) {
 		t.Errorf("a fresh fit should not be recomputed")
 	}
 }
+
+// The status line reads the saved fit on every run when there are savings; it must stay cheap.
+func BenchmarkReadCache(b *testing.B) {
+	d, _ := baseSim(1).run()
+	dir := b.TempDir()
+	if err := WriteCache(dir, Compute(d)); err != nil {
+		b.Fatal(err)
+	}
+	if fi, err := os.Stat(filepath.Join(dir, CacheFile)); err == nil {
+		b.ReportMetric(float64(fi.Size()), "bytes")
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if ReadScales(dir).PercentUSD(10) == nil {
+			b.Fatal("no estimate")
+		}
+	}
+}
+
+func TestScalesMatchTheFullFit(t *testing.T) {
+	dir := t.TempDir()
+	if ReadScales(dir) != nil {
+		t.Fatal("missing scales should read as nil")
+	}
+	r := fitted()
+	if err := WriteCache(dir, *r); err != nil {
+		t.Fatal(err)
+	}
+	full, slim := r.PercentUSD(10), ReadScales(dir).PercentUSD(10)
+	if *full.FiveHour != *slim.FiveHour || *full.Week != *slim.Week {
+		t.Errorf("full %+v %+v, slim %+v %+v", full.FiveHour, full.Week, slim.FiveHour, slim.Week)
+	}
+}
