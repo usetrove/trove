@@ -27,6 +27,7 @@ var retentionRules = []retentionRule{
 	{"requests", `DELETE FROM requests WHERE ts < ?`, []string{"ts"}, false},
 	{"sessions", `DELETE FROM sessions WHERE COALESCE(ended_at, started_at) < ?`, []string{"started_at", "ended_at"}, false},
 	{"session_pins", `DELETE FROM session_pins WHERE pinned_at < ?`, []string{"pinned_at"}, false},
+	{"history_tool_calls", `DELETE FROM history_tool_calls WHERE ts < ?`, []string{"ts"}, false},
 	{"history_requests", `DELETE FROM history_requests WHERE ts < ?`, []string{"ts"}, false},
 	{"experiment_assignments", `DELETE FROM experiment_assignments WHERE assigned_at < ?`, []string{"assigned_at"}, false},
 	{"session_features", `DELETE FROM session_features WHERE recorded_at < ?`, []string{"recorded_at"}, false},

@@ -274,6 +274,27 @@ One row per provider request found in an agent's session log (estimates, since t
 | `errors` | Count of errors |
 | `findings` | JSON: waste patterns as names and counts |
 | `shadow_savings` | JSON: estimated savings as numbers |
+| `thinking_tokens` | Output tokens spent on thinking, already counted in `output_tokens`; empty when the log did not say |
+| `agent_version` | Agent version that wrote the request, for example 2.1.331 |
+| `entrypoint` | How the agent was started, for example cli or sdk-cli (observed in the log, not documented) |
+| `effort` | Effort setting: low, medium, high, xhigh or max |
+| `turn_effort` | Effort for this turn, which can differ from the setting (observed in the log, not documented) |
+
+**Retention:** deleted after `retention_days`.
+
+### `history_tool_calls`
+
+One row per tool call in a `history_requests` row: the tool's name and sizes, never its input or output.
+
+| Column | Meaning |
+|---|---|
+| `request_key` | The `history_requests` row the call belongs to |
+| `idx` | Position of the call in the request |
+| `ts` | Request time |
+| `tool_name` | Tool name (for example Read, Bash) |
+| `input_bytes` | Size of the call's input as logged; the input is not stored |
+| `result_bytes` | Size of the result; empty when no result was seen |
+| `error` | 1 when the result was an error |
 
 **Retention:** deleted after `retention_days`.
 
