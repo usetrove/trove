@@ -2,6 +2,7 @@ package logs_test
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -234,4 +235,108 @@ func TestScanLargeHistoryWithinBudget(t *testing.T) {
 	if sum.Read != 0 || time.Since(start) > 2*time.Second {
 		t.Errorf("unchanged rescan should be near-instant: %+v in %s", sum, time.Since(start))
 	}
+}
+
+// The token detail and context columns, and one tool row per call. A NULL stays NULL (unknown).
+func TestScanStoresTokenDetailAndToolSizes(t *testing.T) {
+	in, db := newIngester(t)
+	proj := historyDir(t)
+	copyFixture(t, proj, "sess-1.jsonl")
+	ctx := context.Background()
+	if _, err := in.Scan(ctx, logs.Options{Roots: []string{proj}}); err != nil {
+		t.Fatal(err)
+	}
+	type row struct {
+		out                    int64
+		thinking               sql.NullInt64
+		ver, entry, eff, turnE sql.NullString
+	}
+	rs, err := db.Query(`SELECT output_tokens, thinking_tokens, agent_version, entrypoint, effort, turn_effort
+		FROM history_requests ORDER BY ts`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []row
+	for rs.Next() {
+		var r row
+		if err := rs.Scan(&r.out, &r.thinking, &r.ver, &r.entry, &r.eff, &r.turnE); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, r)
+	}
+	_ = rs.Close()
+	if len(got) != 2 {
+		t.Fatalf("want 2 rows, got %d", len(got))
+	}
+	a, b := got[0], got[1]
+	if a.out != 50 || a.thinking.Int64 != 40 || !a.thinking.Valid || a.ver.String != "2.1.302" || a.entry.String != "cli" || a.eff.String != "medium" || a.turnE.String != "high" {
+		t.Errorf("request A: %+v", a)
+	}
+	// The fixture's second request has no thinking detail and invalid effort values.
+	if b.thinking.Valid || b.entry.String != "sdk-cli" || b.eff.Valid || b.turnE.Valid {
+		t.Errorf("request B should read unknown where the log did not say: %+v", b)
+	}
+	var name string
+	var idx, inBytes int64
+	var result sql.NullInt64
+	if err := db.QueryRow(`SELECT idx, tool_name, input_bytes, result_bytes FROM history_tool_calls`).Scan(&idx, &name, &inBytes, &result); err != nil {
+		t.Fatal(err)
+	}
+	if idx != 0 || name != "Read" || inBytes != int64(len(`{"file_path":"/home/alice/project/main.go"}`)) || !result.Valid || result.Int64 != 31 {
+		t.Errorf("tool row: %d %s %d %v", idx, name, inBytes, result)
+	}
+}
+
+// A parser upgrade re-reads files from the start; the tool rows must be replaced, not duplicated.
+func TestRereadReplacesToolRows(t *testing.T) {
+	in, db := newIngester(t)
+	proj := historyDir(t)
+	copyFixture(t, proj, "sess-1.jsonl")
+	ctx := context.Background()
+	if _, err := in.Scan(ctx, logs.Options{Roots: []string{proj}}); err != nil {
+		t.Fatal(err)
+	}
+	in.Versions = logs.ParserVersions{logs.SourceClaudeCode: cchistory.ParserVersion + 1}
+	if sum, err := in.Scan(ctx, logs.Options{Roots: []string{proj}}); err != nil || sum.Read != 1 {
+		t.Fatalf("parser change should re-read: %+v %v", sum, err)
+	}
+	if n := count(t, db, `SELECT COUNT(*) FROM history_tool_calls`); n != 1 {
+		t.Errorf("want 1 tool row after re-read, got %d", n)
+	}
+	if n := count(t, db, `SELECT COUNT(*) FROM history_requests`); n != 2 {
+		t.Errorf("want 2 requests after re-read, got %d", n)
+	}
+}
+
+// An event that skipped the parser's cleaners still cannot put free text in the database.
+func TestStoreCleansContextFields(t *testing.T) {
+	db, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	src := &fakeSource{ev: logs.Event{Source: logs.SourceClaudeCode, SessionKey: "c-x", RequestKey: "rk", TS: 1,
+		AgentVersion: "2.1 SECRET", Entrypoint: "/home/alice/SECRET", Effort: "SECRET", TurnEffort: "high"}}
+	in := &logs.Ingester{DB: db, Sources: []logs.Source{src}, Versions: logs.ParserVersions{logs.SourceClaudeCode: 1}}
+	if _, err := in.Scan(context.Background(), logs.Options{Roots: []string{"x"}}); err != nil {
+		t.Fatal(err)
+	}
+	var ver, entry, eff, turn sql.NullString
+	if err := db.QueryRow(`SELECT agent_version, entrypoint, effort, turn_effort FROM history_requests`).Scan(&ver, &entry, &eff, &turn); err != nil {
+		t.Fatal(err)
+	}
+	if ver.Valid || entry.Valid || eff.Valid || turn.String != "high" {
+		t.Errorf("got %v %v %v %v", ver, entry, eff, turn)
+	}
+}
+
+type fakeSource struct{ ev logs.Event }
+
+func (f *fakeSource) Name() string { return logs.SourceClaudeCode }
+func (f *fakeSource) Discover(context.Context, []string) ([]logs.File, error) {
+	return []logs.File{{Source: logs.SourceClaudeCode, Path: "x", Key: "k", Size: 1, MTime: time.Now().UnixMilli()}}, nil
+}
+func (f *fakeSource) Parse(_ context.Context, _ logs.File, cp logs.Checkpoint, emit func(logs.Event)) (logs.Checkpoint, logs.Stats, error) {
+	emit(f.ev)
+	return logs.Checkpoint{Offset: 1, Lines: 1, Turns: 1}, logs.Stats{}, nil
 }

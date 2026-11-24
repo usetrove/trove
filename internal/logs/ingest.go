@@ -291,19 +291,46 @@ func (in *Ingester) store(ctx context.Context, r result, prevSkipped int64) erro
 	stmt, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO history_requests
 		(request_key, source, session_key, ts, model, input_tokens, cache_write_5m, cache_write_1h, cache_write_other,
 		 cache_read, output_tokens, cost_usd, pricing_status, plan, sidechain, tool_names, tool_result_bytes, errors,
-		 findings, shadow_savings)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+		 findings, shadow_savings, thinking_tokens, agent_version, entrypoint, effort, turn_effort)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = stmt.Close() }()
+	// A re-read request replaces its tool rows whole, so a rescan never leaves stale or duplicate calls.
+	delTools, err := tx.PrepareContext(ctx, `DELETE FROM history_tool_calls WHERE request_key = ?`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = delTools.Close() }()
+	addTool, err := tx.PrepareContext(ctx, `INSERT INTO history_tool_calls
+		(request_key, idx, ts, tool_name, input_bytes, result_bytes, error) VALUES (?,?,?,?,?,?,?)`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = addTool.Close() }()
 	for _, x := range rows {
 		names, bytes, errs := toolSummary(x.Tools)
+		// The cleaners run again here so a parser that forgot them still cannot store free text.
 		if _, err := stmt.ExecContext(ctx, x.RequestKey, x.Source, x.SessionKey, x.TS, x.Model, x.Input,
 			x.CacheWrite5m, x.CacheWrite1h, x.CacheWriteNA, x.CacheRead, x.Output, nullFloat(x.CostUSD),
 			x.PricingStatus, string(x.Plan), boolInt(x.Sidechain), names, bytes, errs,
-			nullJSON(x.Findings), nullJSON(x.ShadowSavings)); err != nil {
+			nullJSON(x.Findings), nullJSON(x.ShadowSavings), nullInt(x.Thinking),
+			nullStr(CleanVersion(x.AgentVersion)), nullStr(CleanEntrypoint(x.Entrypoint)),
+			nullStr(CleanEffort(x.Effort)), nullStr(CleanEffort(x.TurnEffort))); err != nil {
 			return err
+		}
+		if _, err := delTools.ExecContext(ctx, x.RequestKey); err != nil {
+			return err
+		}
+		for i, c := range x.Tools {
+			var result any
+			if c.ResultHash != "" { // a result was seen (an empty result still has a hash)
+				result = c.ResultBytes
+			}
+			if _, err := addTool.ExecContext(ctx, x.RequestKey, i, x.TS, c.Name, c.InputBytes, result, boolInt(c.Error)); err != nil {
+				return err
+			}
 		}
 	}
 	now := time.Now()
@@ -352,6 +379,20 @@ func nullJSON(j json.RawMessage) any {
 		return nil
 	}
 	return string(j)
+}
+
+func nullInt(p *int64) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+func nullStr(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func boolInt(b bool) int {
