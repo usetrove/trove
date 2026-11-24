@@ -292,8 +292,8 @@ func (in *Ingester) store(ctx context.Context, r result, prevSkipped int64) erro
 		(request_key, source, session_key, ts, model, input_tokens, cache_write_5m, cache_write_1h, cache_write_other,
 		 cache_read, output_tokens, cost_usd, pricing_status, plan, sidechain, tool_names, tool_result_bytes, errors,
 		 findings, shadow_savings, thinking_tokens, agent_version, entrypoint, effort, turn_effort,
-		 agent_key, phase, compacted, text_bytes)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+		 agent_key, phase, compacted, text_bytes, fast_mode)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return err
 	}
@@ -319,7 +319,8 @@ func (in *Ingester) store(ctx context.Context, r result, prevSkipped int64) erro
 			nullJSON(x.Findings), nullJSON(x.ShadowSavings), nullInt(x.Thinking),
 			nullStr(CleanVersion(x.AgentVersion)), nullStr(CleanEntrypoint(x.Entrypoint)),
 			nullStr(CleanEffort(x.Effort)), nullStr(CleanEffort(x.TurnEffort)),
-			x.AgentKey, nullStr(CleanPhase(x.Phase)), boolInt(x.Compacted), x.TextBytes); err != nil {
+			x.AgentKey, nullStr(CleanPhase(x.Phase)), boolInt(x.Compacted), x.TextBytes,
+			boolInt(strings.EqualFold(x.ServiceTier, "fast"))); err != nil {
 			return err
 		}
 		if _, err := delTools.ExecContext(ctx, x.RequestKey); err != nil {

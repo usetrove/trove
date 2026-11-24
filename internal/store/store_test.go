@@ -142,7 +142,7 @@ func TestSchemaIsMetadataOnly(t *testing.T) {
 		"history_requests": {"request_key", "source", "session_key", "ts", "model", "input_tokens", "cache_write_5m",
 			"cache_write_1h", "cache_write_other", "cache_read", "output_tokens", "cost_usd", "pricing_status", "plan",
 			"sidechain", "tool_names", "tool_result_bytes", "errors", "findings", "shadow_savings", "thinking_tokens",
-			"agent_version", "entrypoint", "effort", "turn_effort", "agent_key", "phase", "compacted", "text_bytes"},
+			"agent_version", "entrypoint", "effort", "turn_effort", "agent_key", "phase", "compacted", "text_bytes", "fast_mode"},
 		"history_tool_calls": {"request_key", "idx", "ts", "tool_name", "input_bytes", "result_bytes", "error"},
 		"fixes": {"change_id", "fix_id", "kind", "agent", "path_hash", "applied_at", "reverted_at", "est_tokens",
 			"est_usd", "label"},

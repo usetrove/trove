@@ -285,6 +285,7 @@ One row per provider request found in an agent's session log (estimates, since t
 | `phase` | What came right before the request: prompt, tool_result, compact or other |
 | `compacted` | 1 when a compaction came since the agent's previous request |
 | `text_bytes` | Size of the response's visible text; the text is not stored |
+| `fast_mode` | 1 when the request ran in fast mode |
 
 **Retention:** deleted after `retention_days`.
 
