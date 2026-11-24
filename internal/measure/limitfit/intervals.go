@@ -43,6 +43,7 @@ type Request struct {
 	Tokens  [NTypes]int64
 	USD     float64 // API list price (estimated); meaningful only when Priced
 	Priced  bool
+	Unsplit bool // a cache write the log gave no 5m/1h split for: its type is unknown
 }
 
 // Interval is the meter's movement between two readings in one reset window, with this machine's
@@ -107,6 +108,7 @@ const (
 	whyTooLong  = "too_long"
 	whyDropped  = "meter_dropped"
 	whyTooSmall = "too_small" // the window reset before the meter moved enough
+	whyUnsplit  = "unsplit_cache_write"
 )
 
 const resetTolerance = 60_000 // ms: two readings belong to one window when their reset times are this close
@@ -199,6 +201,8 @@ func BuildIntervals(samples []Sample, reqs []Request, meter string, historyThrou
 			q := sorted[ri]
 			if !metered[q.Session] {
 				cur.Clean, cur.Why = false, whyUnknown
+			} else if q.Unsplit {
+				cur.Clean, cur.Why = false, whyUnsplit
 			}
 			cur.add(Family(q.Model), q.Tokens)
 			cur.USD += q.USD
