@@ -297,6 +297,39 @@ Verified 2026-10-29 / 2026-10-30. Re-check when either agent changes.
   `is_interrupt: false`. The hook recorded exit 0 and 1 under one command hash, and both reached `test_runs`. The
   redacted failure payload is `internal/hooks/testdata/recorded/2.1.326/bash_post_failure.json`.
 
+- Prompt submission and resume, for the cold-resume guard (read 2026-11-23 at `code.claude.com/docs/en/hooks`,
+  `/hooks-guide`, `/statusline`, `/prompt-caching`, `/env-vars` and `/headless`):
+  - `UserPromptSubmit` input is the common fields plus `prompt` and, when the session has a custom title,
+    `session_title`. Common `prompt_id` is "Absent until the first user input". There is no matcher: "always
+    fires on every occurrence".
+  - It blocks with `decision: "block"`; `reason` is "Shown to the user when `decision` is `"block"`. Not added to
+    context". By default the block message "ends with `Original prompt:` and the submitted prompt"
+    (`suppressOriginalPrompt: true` leaves it out). Exit 2 blocks too, with stderr "treated the same way as
+    `reason`". The hook "can't replace the prompt". Trove blocks with JSON and always exits 0.
+  - `hookSpecificOutput.additionalContext` is "added to Claude's context alongside the submitted prompt";
+    `systemMessage` is a "Warning message shown to the user". The page does not say whether `systemMessage` also
+    reaches the model on this event. `additionalContext`, `systemMessage` and plain stdout are each capped at 10,000
+    characters; longer text is saved to a file and replaced by its path and a 2,000-character preview.
+  - Default timeouts: 600 s for command hooks, which "Claude Code lowers … to 30 on `UserPromptSubmit`". `SessionEnd`
+    hooks "share a 1.5-second budget", raised to a longer per-hook `timeout` up to 60 s.
+  - It "Also fires on turns Claude Code starts on its own": "A session-scoped scheduled task firing, including a
+    `/loop` iteration", "A background subagent reporting back to the session that started it", "A message another
+    session sends to your main conversation". No input field tells these apart from a typed prompt.
+  - `SessionStart` with `source` `"resume"` (from `--resume`, `--continue` or `/resume`) or `"fork"`, when the
+    transcript has a response and Claude Code is v2.1.251 or later, adds `seconds_since_last_response`,
+    `context_tokens` ("Tokens the first request of the resumed session re-sends as its prompt"),
+    `prompt_cache_likely_expired` ("`true` when the last response is older than the session's prompt cache lifetime
+    or a later compaction replaced the cached conversation") and `estimated_cache_write_usd`. `SessionStart` cannot
+    block.
+  - The status line's `prompt_cache` has `warm`, `ttl` (`"5m"` or `"1h"`) and `expires_at`. The main conversation's
+    cache lasts one hour on a subscription within its included usage and five minutes on an API key, usage credits
+    or a cloud provider; `promptCacheTtl` or `CLAUDE_CODE_PROMPT_CACHE_TTL` changes it.
+  - Not documented: whether a blocked prompt goes back to the input box (only an interrupt is said to keep it
+    out), whether `--resume` keeps the session id, and any way for a hook to tell an unwatched `claude -p` run from an
+    interactive session. `CLAUDECODE=1` marks every subprocess Claude Code starts, whatever the mode. Because of
+    the last point the guard never blocks until a live check or the user's own session records that it can
+    (`UserPromptSubmit` in `hook-capabilities.json`, `block`).
+
 ### Live check of the test-pass signal (manual)
 
 Steps 1-4 were run on 2.1.326 on 2026-11-17 (passing and failing runs; the interrupt in step 3 and step 5 were

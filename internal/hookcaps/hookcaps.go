@@ -27,7 +27,13 @@ const (
 const (
 	RewriteInput  = "input"
 	RewriteOutput = "output"
+	// PromptBlock is not a rewrite: it is whether a UserPromptSubmit hook may block a prompt the user typed,
+	// telling it apart from a run nobody watches (`claude -p`). Only the cold-resume guard asks for it.
+	PromptBlock = "block"
 )
+
+// ToolPrompt is the Tool of an entry about the UserPromptSubmit event rather than a tool.
+const ToolPrompt = "UserPromptSubmit"
 
 // Version is the schema version of the stored record.
 const Version = 1
@@ -39,6 +45,9 @@ type Capability struct {
 	Tool          string `json:"tool"`
 	InputRewrite  string `json:"input_rewrite"`
 	OutputRewrite string `json:"output_rewrite"`
+	// Block is set only on a ToolPrompt entry: "yes" when a live check or the user's own session saw a
+	// UserPromptSubmit block reach a typed prompt and Trove tell an unwatched print-mode run apart.
+	Block string `json:"block,omitempty"`
 	// Method is "live" (Trove ran an agent session on the user's API key and it showed
 	// the model the rewritten value), "session" (the user ran the test in their own
 	// session with `trove hooks verify`; the output result is what they reported) or
@@ -91,6 +100,8 @@ func (c Capabilities) Supports(agent, tool, kind string) bool {
 			return e.InputRewrite == Yes
 		case RewriteOutput:
 			return e.OutputRewrite == Yes
+		case PromptBlock:
+			return e.Block == Yes
 		}
 	}
 	return false

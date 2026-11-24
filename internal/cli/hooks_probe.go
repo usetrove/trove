@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/usetrove/trove/internal/gateway/auth"
+	"github.com/usetrove/trove/internal/hookcaps"
 	"github.com/usetrove/trove/internal/hooks"
 	hookprobe "github.com/usetrove/trove/internal/hooks/probe"
 )
@@ -143,6 +144,10 @@ func RenderProbe(rep hookprobe.Report) string {
 	}
 	fmt.Fprintf(&b, "Hook capabilities, Claude Code %s, %s\n\n", rep.AgentVersion, mode)
 	for _, e := range rep.Capabilities.Entries {
+		if e.Tool == hookcaps.ToolPrompt {
+			fmt.Fprintf(&b, "%s %s: block a typed prompt %s [%s]\n    %s\n", e.Agent, e.Tool, orUntested(e.Block), e.Method, e.Evidence)
+			continue
+		}
 		fmt.Fprintf(&b, "%s %s: rewrite input %s, rewrite output %s [%s]\n    %s\n", e.Agent, e.Tool, e.InputRewrite, e.OutputRewrite, e.Method, e.Evidence)
 	}
 	for _, n := range rep.Notes {
@@ -194,6 +199,13 @@ func hookRewritesCheck(a *App, dir string, optimizerState func(string) string) c
 		}
 	}
 	return check{name, statusOK, d, ""}
+}
+
+func orUntested(s string) string {
+	if s == "" {
+		return hookcaps.Untested
+	}
+	return s
 }
 
 func capReason(c hooks.Capabilities, tool string) string {

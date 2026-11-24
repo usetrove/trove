@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/usetrove/trove/internal/hookcaps"
 	"github.com/usetrove/trove/internal/hooks"
 )
 
@@ -217,6 +218,29 @@ func TestDocsOnlyAgentsAreRecordedButUnlockNothing(t *testing.T) {
 	}
 	if e, _ := c.Find("codex", "Bash"); e.OutputRewrite != hooks.CapNo {
 		t.Errorf("Codex documents no output replacement, got %q", e.OutputRewrite)
+	}
+}
+
+// The cold-resume guard may block a prompt only after a real session showed it reaches a typed prompt and print-mode
+// runs can be told apart; the documented entry is recorded for every probe, live or not, and unlocks nothing.
+func TestPromptBlockIsRecordedFromTheDocsAndUnlocksNothing(t *testing.T) {
+	for _, live := range []bool{false, true} {
+		o := opts(&fakeAgent{version: "2.1.999"})
+		o.Live = live
+		rep, err := Run(context.Background(), o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		e, ok := rep.Capabilities.Find("claude", hookcaps.ToolPrompt)
+		if !ok {
+			t.Fatalf("live=%v: no UserPromptSubmit entry", live)
+		}
+		if e.Method != "docs" || e.Block != hooks.CapUntested || e.InputRewrite != hooks.CapNo || e.AgentVersion != "2.1.999" {
+			t.Errorf("live=%v: %+v", live, e)
+		}
+		if rep.Capabilities.Supports("claude", hookcaps.ToolPrompt, hookcaps.PromptBlock) {
+			t.Errorf("live=%v: blocking counts from documentation alone", live)
+		}
 	}
 }
 

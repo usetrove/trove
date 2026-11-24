@@ -34,6 +34,17 @@
       },
       {
         "agent": "claude",
+        "agent_version": "",
+        "tool": "UserPromptSubmit",
+        "input_rewrite": "no",
+        "output_rewrite": "no",
+        "block": "untested",
+        "method": "docs",
+        "evidence": "documentation only (not run): decision \"block\" rejects the prompt and its reason is shown to the user, not added to context; the prompt cannot be replaced; it also fires on turns Claude Code starts itself and on print-mode runs, and no documented field tells either apart",
+        "probed_at": "2026-11-23T00:00:00Z"
+      },
+      {
+        "agent": "claude",
         "agent_version": "2.1.319",
         "tool": "Bash",
         "input_rewrite": "yes",

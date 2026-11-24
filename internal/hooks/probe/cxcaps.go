@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/usetrove/trove/internal/hookcaps"
 	"github.com/usetrove/trove/internal/hooks"
 )
 
@@ -47,6 +48,20 @@ func GeminiDocs(ctx context.Context, o Options, now string) hooks.Capability {
 	return hooks.Capability{Agent: "gemini", AgentVersion: agentVersion(ctx, o, "gemini"), Tool: "Bash", Method: "docs", ProbedAt: now,
 		InputRewrite: hooks.CapUntested, OutputRewrite: hooks.CapUntested,
 		Evidence: "documentation only (not run): BeforeTool hookSpecificOutput.tool_input merges into the arguments; AfterTool decision \"deny\" replaces the result with reason"}
+}
+
+// ClaudePromptDocs is what Claude Code's documentation says about blocking a prompt, for the cold-resume guard.
+//
+// Read 2026-11-23 at code.claude.com/docs/en/hooks: UserPromptSubmit `decision: "block"` rejects the prompt and its
+// `reason` is "Shown to the user… Not added to context"; the hook cannot replace the prompt. It "also fires on turns
+// Claude Code starts on its own" (scheduled tasks and /loop, a background subagent reporting back, a message from
+// another session), and no input field tells those apart from a typed prompt. Nothing documented tells an unwatched
+// `claude -p` run from an interactive one (code.claude.com/docs/en/env-vars and /headless, same day). So blocking
+// stays untested until a live check or the user's own session sees it work.
+func ClaudePromptDocs(version, now string) hooks.Capability {
+	return hooks.Capability{Agent: "claude", AgentVersion: version, Tool: hookcaps.ToolPrompt, Method: "docs", ProbedAt: now,
+		InputRewrite: hooks.CapNo, OutputRewrite: hooks.CapNo, Block: hooks.CapUntested,
+		Evidence: "documentation only (not run): decision \"block\" rejects the prompt and its reason is shown to the user, not added to context; the prompt cannot be replaced; it also fires on turns Claude Code starts itself and on print-mode runs, and no documented field tells either apart"}
 }
 
 // agentVersion asks an installed agent for its version; "" when it is not installed.
