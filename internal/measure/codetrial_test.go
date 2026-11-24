@@ -30,7 +30,7 @@ func TestCodeTrialByArmReadsFinishedSessions(t *testing.T) {
 	}
 	req("r1", "k-on", time.Minute, "claude-opus-5-5")
 	tool("r1", 0, "Write", 700)
-	tool("r1", 1, "Read", 99999) // not code
+	tool("r1", 1, "Read", 99999)                          // not code
 	req("r2", "k-on~1", 2*time.Minute, "claude-opus-5-5") // a gateway split of the same session
 	tool("r2", 0, "Edit", 350)
 	req("r3", "k-off", time.Minute, "claude-opus-5-5")
