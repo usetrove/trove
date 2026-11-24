@@ -42,6 +42,12 @@ Sections, in order:
      Rows that could not be split show `-`. `--json`: `output_mix`.
    - Both appear only when there is Claude Code history in the period. The output section
      appears only when some of it could be split.
+   - **Plan limits (your estimate, not official weights).** How your tokens move Claude Code's
+     5-hour and weekly meters, learned from the meter and your own history. It shows weights per
+     token type with 90% intervals, model-family multipliers, the share of movement from elsewhere,
+     the waste and savings above in % of each limit, and how much more data the next tier needs.
+     Everything is estimated. See [limit-fit.md](limit-fit.md). Appears once the status line has
+     recorded the meter. `--json`: `plan_limits`.
 3. **Biggest leaks.** Up to five, ranked by estimated dollars, each with what to do. For a leak an
    optimizer can remove, the action is the exact `[optimizers]` line to add, once Trove offers it.
    During the baseline nothing is offered, and the report says so.
