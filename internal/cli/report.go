@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/usetrove/trove/internal/mcp"
 	"github.com/usetrove/trove/internal/mcp/install"
@@ -147,7 +148,7 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 		}
 	}
 	r, err := report.Build(context.Background(), db, report.Inputs{Config: cfg, Now: now, Prices: tbl, KillSwitch: on, HistoryPlanEvidence: planEvidence, Recoverable: registered, SchemaTokens: schemaTokens,
-		RepoKey: repoKeyFor(context.Background(), db, ""), LimitFit: limitFit}, p)
+		RepoKey: repoKeyFor(context.Background(), db, ""), LimitFit: limitFit, ClaudeModelSetting: claudeModelSetting(a)}, p)
 	if err != nil {
 		return r, fmt.Errorf("cannot read recorded usage: %v. Run `trove doctor` for details", err)
 	}
@@ -175,4 +176,29 @@ func trimNL(s string) string {
 		s = s[:len(s)-1]
 	}
 	return s
+}
+
+// claudeModelSetting reads `model` from the user's Claude Code settings (~/.claude/settings.json, or
+// $CLAUDE_CONFIG_DIR/settings.json), read-only. "" when it is unset or anything goes wrong: only the opusplan finding
+// depends on it, and that finding is then left out.
+func claudeModelSetting(a *App) string {
+	dir := a.Getenv("CLAUDE_CONFIG_DIR")
+	if dir == "" {
+		home, err := a.HomeDir()
+		if err != nil {
+			return ""
+		}
+		dir = filepath.Join(home, ".claude")
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "settings.json")) //nolint:gosec // the user's own Claude Code settings
+	if err != nil {
+		return ""
+	}
+	var s struct {
+		Model string `json:"model"`
+	}
+	if json.Unmarshal(b, &s) != nil {
+		return ""
+	}
+	return s.Model
 }

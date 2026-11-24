@@ -80,10 +80,10 @@ func pct(part, whole int64) float64 {
 }
 
 // buildLedgers runs both ledgers over the period. Either result is nil when there is nothing to show.
-func buildLedgers(ctx context.Context, db *store.DB, w measure.Window) (*Rebuilds, *OutputMix, error) {
+func buildLedgers(ctx context.Context, db *store.DB, w measure.Window) (*Rebuilds, *OutputMix, []analyze.RebuildEntry, error) {
 	reqs, err := measure.HistoryLedger(ctx, db, w)
 	if err != nil || len(reqs) == 0 {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	from, to := w.From.UnixMilli(), w.To.UnixMilli()
 	var writes int64
@@ -92,10 +92,11 @@ func buildLedgers(ctx context.Context, db *store.DB, w measure.Window) (*Rebuild
 			writes += r.CacheWrite5m + r.CacheWrite1h + r.CacheWriteNA
 		}
 	}
-	rb := rebuildsFrom(analyze.SummarizeRebuilds(analyze.RebuildLedger(reqs), from, to, writes))
+	rebuilds := analyze.RebuildLedger(reqs)
+	rb := rebuildsFrom(analyze.SummarizeRebuilds(rebuilds, from, to, writes))
 	entries, ratios := analyze.OutputLedger(reqs)
 	om := outputFrom(analyze.SummarizeOutput(entries, ratios, from, to))
-	return rb, om, nil
+	return rb, om, rebuilds, nil
 }
 
 func rebuildsFrom(s analyze.RebuildSummary) *Rebuilds {

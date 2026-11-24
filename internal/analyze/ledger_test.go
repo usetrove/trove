@@ -285,3 +285,26 @@ func TestRebuildJustOverFactor(t *testing.T) {
 		t.Errorf("got %+v", got)
 	}
 }
+
+func TestOpusSonnetToggles(t *testing.T) {
+	big := int64(100000)
+	reqs := []LedgerRequest{
+		{SessionKey: "s1", TS: 1000, Model: "claude-opus-5-5", CacheRead: big, CacheWrite1h: 100},
+		{SessionKey: "s1", TS: 2000, Model: "claude-sonnet-5-5", CacheWrite1h: big},                // opus -> sonnet
+		{SessionKey: "s1", TS: 3000, Model: "claude-opus-5-5", CacheWrite5m: big, CacheWrite1h: 0}, // sonnet -> opus
+		{SessionKey: "s2", TS: 1000, Model: "claude-sonnet-5-5", CacheRead: big},
+		{SessionKey: "s2", TS: 2000, Model: "claude-haiku-5-5", CacheWrite1h: big}, // not opus/sonnet
+		{SessionKey: "s3", TS: 1000, Model: "claude-opus-5-5", CacheRead: big},
+		{SessionKey: "s3", TS: 9000, Model: "claude-sonnet-5-5", CacheWrite1h: big}, // outside the window
+	}
+	for i := range reqs {
+		reqs[i].Plan = "subscription"
+	}
+	p := OpusSonnetToggles(RebuildLedger(reqs), 0, 5000)
+	if p.Switches != 2 || p.Sessions != 1 || p.Tokens != 2*big || len(p.Entries) != 2 {
+		t.Fatalf("%+v", p)
+	}
+	if p.Entries[0].FromModel != "claude-opus-5-5" || p.Entries[0].Write1h != big || p.Entries[1].Write1h != 0 {
+		t.Errorf("entries %+v", p.Entries)
+	}
+}

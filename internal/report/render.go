@@ -113,6 +113,9 @@ func Render(r Report, o Options) string {
 	if r.PlanLimits != nil {
 		renderPlanLimits(&b, r.PlanLimits, o)
 	}
+	if r.Opusplan != nil {
+		renderOpusplan(&b, r.Opusplan, o)
+	}
 	if r.ColdResume != nil {
 		renderColdResume(&b, r.ColdResume, o)
 	}

@@ -111,6 +111,12 @@ type RebuildEntry struct {
 	TTLMS        int64  `json:"ttl_ms"`             // the TTL the idle check used
 	TTLEstimated bool   `json:"ttl_estimated"`      // TTL from the documented default, not seen in the log
 	Model        string `json:"model"`
+	// FromModel is the previous request's model, for CauseModel only.
+	FromModel string `json:"from_model,omitempty"`
+	// Write1h is the part of CacheWrite with a 1-hour lifetime (the rest is 5-minute or unsplit), for pricing.
+	Write1h int64 `json:"-"`
+	// Session is the hashed session key, for counting per session; it is not in the JSON.
+	Session string `json:"-"`
 }
 
 // RebuildLedger returns one entry per request whose cache write was a rebuild, plus each main
@@ -126,7 +132,7 @@ func RebuildLedger(reqs []LedgerRequest) []RebuildEntry {
 			prev, ttl = nil, 0
 		}
 		cw := r.cacheWrite()
-		e := RebuildEntry{TS: r.TS, CacheWrite: cw, Model: r.Model}
+		e := RebuildEntry{TS: r.TS, CacheWrite: cw, Model: r.Model, Write1h: r.CacheWrite1h, Session: r.SessionKey}
 		if prev == nil {
 			if cw > RebuildMinTokens {
 				e.Cause = CauseSubagent
@@ -144,6 +150,9 @@ func RebuildLedger(reqs []LedgerRequest) []RebuildEntry {
 			}
 			if cw > RebuildMinTokens && cw > RebuildFactor*e.NewContent {
 				e.Cause = classify(prev, r, e.GapMS, e.TTLMS)
+				if e.Cause == CauseModel {
+					e.FromModel = prev.Model
+				}
 				out = append(out, e)
 			}
 		}
@@ -298,4 +307,38 @@ func ratio(a, b int64) float64 {
 		return 0
 	}
 	return float64(int64(float64(a)/float64(b)*10000+0.5)) / 10000
+}
+
+// PlanToggles is the part of the model-change rebuilds that switched between the Opus and Sonnet families in
+// either direction: what the `opusplan` setting does each time plan mode is turned on or off
+// (code.claude.com/docs/en/prompt-caching: "each plan-mode toggle is a model switch and starts a fresh cache").
+// It is measured from the log, but a /model switch between those families looks the same, so it is an upper bound
+// on what opusplan caused.
+type PlanToggles struct {
+	Switches int
+	Sessions int
+	Tokens   int64
+	Entries  []RebuildEntry // the switches, for pricing
+}
+
+// OpusSonnetToggles totals the Opus<->Sonnet model-change rebuilds with from <= TS < to.
+func OpusSonnetToggles(entries []RebuildEntry, from, to int64) PlanToggles {
+	var p PlanToggles
+	sessions := map[string]bool{}
+	for _, e := range entries {
+		if e.Cause != CauseModel || e.TS < from || e.TS >= to {
+			continue
+		}
+		a, _, _, ok1 := modelVersion(e.FromModel)
+		b, _, _, ok2 := modelVersion(e.Model)
+		if !ok1 || !ok2 || !((a == "opus" && b == "sonnet") || (a == "sonnet" && b == "opus")) {
+			continue
+		}
+		p.Switches++
+		p.Tokens += e.CacheWrite
+		p.Entries = append(p.Entries, e)
+		sessions[e.Session] = true
+	}
+	p.Sessions = len(sessions)
+	return p
 }

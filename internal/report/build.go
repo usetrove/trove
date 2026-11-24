@@ -51,6 +51,9 @@ type Inputs struct {
 	Providers []recommend.Provider
 	// LimitFit is the per-user fit of Claude Code's plan-usage meters (limitfit.Refresh), or nil.
 	LimitFit *limitfit.Result
+	// ClaudeModelSetting is the `model` in the user's Claude Code settings (~/.claude/settings.json), read by the
+	// caller; "" when unset or unreadable. Only "opusplan" changes anything: it turns on the plan-mode finding.
+	ClaudeModelSetting string
 }
 
 // Build assembles the report for p. It reads only through the measurement layer.
@@ -84,9 +87,11 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	r.Headline.Spend, r.Headline.Tokens, r.Requests = sumTotals(byAgent)
 	if hist != nil {
 		r.History = &hist.h
-		if r.Rebuilds, r.OutputMix, err = buildLedgers(ctx, db, w); err != nil {
+		var rebuilds []analyze.RebuildEntry
+		if r.Rebuilds, r.OutputMix, rebuilds, err = buildLedgers(ctx, db, w); err != nil {
 			return r, err
 		}
+		r.Opusplan = opusplanFrom(rebuilds, w, in)
 		r.Requests += hist.otherReqs
 		r.Headline.Tokens.Value += hist.otherTok
 		r.Headline.Tokens.N = r.Requests
