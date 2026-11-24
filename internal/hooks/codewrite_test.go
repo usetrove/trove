@@ -32,6 +32,7 @@ type preToolReply struct {
 }
 
 func TestCodeWriteDeniesASmallRewriteOnceAndCountsTheRetry(t *testing.T) {
+	noCallClock(t)
 	r := newRig(t, nil)
 	r.snapshot(Snapshot{States: map[string]string{config.OptimizerHookWriteToEdit: "on"}})
 	r.start()
@@ -58,6 +59,7 @@ func TestCodeWriteDeniesASmallRewriteOnceAndCountsTheRetry(t *testing.T) {
 }
 
 func TestCodeWriteShadowChangesNothing(t *testing.T) {
+	noCallClock(t)
 	r := newRig(t, map[string]string{config.OptimizerHookWriteToEdit: "shadow", config.OptimizerHookEditBatch: "shadow"})
 	r.start()
 	old := codeSource(400)
@@ -76,6 +78,7 @@ func TestCodeWriteShadowChangesNothing(t *testing.T) {
 }
 
 func TestCodeWriteNotesTheThirdEditOfATurn(t *testing.T) {
+	noCallClock(t)
 	r := newRig(t, nil)
 	r.snapshot(Snapshot{States: map[string]string{config.OptimizerHookEditBatch: "on"}})
 	r.start()
@@ -101,6 +104,7 @@ func TestCodeWriteNotesTheThirdEditOfATurn(t *testing.T) {
 }
 
 func TestCodeWriteIsInertWhenOff(t *testing.T) {
+	noCallClock(t)
 	r := newRig(t, nil)
 	r.start()
 	old := codeSource(400)
