@@ -13,6 +13,7 @@ import (
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/hooks"
+	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/report"
@@ -123,6 +124,8 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 	// The status line's plan-usage samples, also for users who run the status line without the hooks.
 	// Best effort: a problem here must not stop the report.
 	_, _ = db.IngestLimitSpool(context.Background(), dir)
+	// The plan-limit fit, recomputed only when a newer meter reading arrived (best effort, fails open).
+	limitFit := limitfit.Refresh(context.Background(), db, dir, now)
 	if _, serr := os.Stat(filepath.Join(dir, "hooks")); serr == nil {
 		// Bring the hooks' counters and guardrail up to date first. Best effort:
 		// a problem here must not stop the report.
@@ -144,7 +147,7 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 		}
 	}
 	r, err := report.Build(context.Background(), db, report.Inputs{Config: cfg, Now: now, Prices: tbl, KillSwitch: on, HistoryPlanEvidence: planEvidence, Recoverable: registered, SchemaTokens: schemaTokens,
-		RepoKey: repoKeyFor(context.Background(), db, "")}, p)
+		RepoKey: repoKeyFor(context.Background(), db, ""), LimitFit: limitFit}, p)
 	if err != nil {
 		return r, fmt.Errorf("cannot read recorded usage: %v. Run `trove doctor` for details", err)
 	}

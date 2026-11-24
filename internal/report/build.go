@@ -12,6 +12,7 @@ import (
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/external"
 	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/optimize/suggest"
 	"github.com/usetrove/trove/internal/pricing"
@@ -48,6 +49,8 @@ type Inputs struct {
 	// Provider supplies the recommender's suggestions. Nil means the open local
 	// one; a hosted provider (opt-in, later) is composed in front by the caller.
 	Providers []recommend.Provider
+	// LimitFit is the per-user fit of Claude Code's plan-usage meters (limitfit.Refresh), or nil.
+	LimitFit *limitfit.Result
 }
 
 // Build assembles the report for p. It reads only through the measurement layer.
@@ -212,6 +215,7 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 			r.Tools.SchemaTokens = &measure.Figure{Value: float64(in.SchemaTokens), Label: measure.Estimated}
 		}
 	}
+	r.PlanLimits = planLimitsFrom(in.LimitFit, r.Headline)
 	return r, nil
 }
 

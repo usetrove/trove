@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/report"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -83,6 +84,11 @@ func statusLine(a *App, format string, in claudeInput, now time.Time) statusOutp
 	status, err := report.BuildStatus(context.Background(), db, cfg, now, in.SessionID)
 	if err != nil {
 		return statusOutput{Line: "Trove: database problem, run `trove doctor`", Error: err.Error(), LimitSample: recordLimitSample(db, dir, in, now)}
+	}
+	if status.Saved.Value >= 0.01 {
+		// Savings as a share of the 5-hour limit, from the saved plan-limit fit (one small file read;
+		// no fit means no percentage).
+		status.SavedLimit = limitfit.ReadCache(dir).PercentUSD(status.Saved.Value)
 	}
 	color := format != report.FormatShell && !a.NoColor && a.Getenv("NO_COLOR") == ""
 	line := report.RenderStatus(status, format, color) + autopilotSuffix(dir)

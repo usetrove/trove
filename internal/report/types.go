@@ -56,6 +56,9 @@ type Report struct {
 	// docs/analyze.md, "History ledgers"). Nil when there is nothing to show.
 	Rebuilds  *Rebuilds  `json:"cache_rebuilds,omitempty"`
 	OutputMix *OutputMix `json:"output_mix,omitempty"`
+	// PlanLimits is the per-user estimate of how tokens move Claude Code's plan-usage meters (see
+	// docs/limit-fit.md). Nil when the meter has never been seen.
+	PlanLimits *PlanLimits `json:"plan_limits,omitempty"`
 	// Tools is how the Trove MCP tools are doing. Nil when the server is not
 	// registered and no agent has used them.
 	Tools *Tools `json:"trove_tools,omitempty"`

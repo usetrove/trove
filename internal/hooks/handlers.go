@@ -17,6 +17,7 @@ import (
 	"github.com/usetrove/trove/internal/features"
 	"github.com/usetrove/trove/internal/mcp/install"
 	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/store"
 	"github.com/usetrove/trove/internal/tasks"
@@ -433,6 +434,9 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	}
 	// The status line's plan-usage samples. Best effort: a spool left behind is picked up next time.
 	_, _ = db.IngestLimitSpool(ctx, dir)
+	// Refit the plan-usage meters when a newer reading arrived, for the status line and Autopilot.
+	// Best effort and cached: a stale or missing fit only means no percentages are shown.
+	_ = limitfit.Refresh(ctx, db, dir, now)
 	// Retention must not depend on the gateway running: subscription users never start it. Once a day
 	// across all processes, best effort (an old row surviving a day is never worth failing a hook for).
 	_, _ = db.PurgeIfDue(ctx, cfg.RetentionDays, now)

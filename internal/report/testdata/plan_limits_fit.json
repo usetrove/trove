@@ -1,0 +1,210 @@
+{
+  "label": "estimated",
+  "five_hour": {
+    "meter": "five_hour",
+    "tier": "fit",
+    "clean_intervals": 112,
+    "windows": 31,
+    "trimmed": 9,
+    "need_intervals": 0,
+    "need_windows": 0,
+    "hours_per_interval": 0,
+    "pct_per_api_usd": {
+      "point": 0.52,
+      "lo": 0.44,
+      "hi": 0.61
+    },
+    "outside_share_pct": {
+      "point": 9,
+      "lo": 5,
+      "hi": 14
+    },
+    "weights": [
+      {
+        "type": "input",
+        "point": 2.1,
+        "lo": 0.8,
+        "hi": 3
+      },
+      {
+        "type": "output",
+        "point": 12,
+        "lo": 10,
+        "hi": 14
+      },
+      {
+        "type": "cache_read",
+        "point": 0.25,
+        "lo": 0.24,
+        "hi": 0.27
+      },
+      {
+        "type": "cache_write_5m",
+        "point": 2.4,
+        "lo": 2.1,
+        "hi": 2.8
+      },
+      {
+        "type": "cache_write_1h",
+        "point": 3.9,
+        "lo": 3.7,
+        "hi": 4.1
+      }
+    ],
+    "input_determined": true,
+    "ratios_to_input": [
+      {
+        "type": "input",
+        "point": 1,
+        "lo": 1,
+        "hi": 1
+      },
+      {
+        "type": "output",
+        "point": 5.7,
+        "lo": 4,
+        "hi": 9
+      },
+      {
+        "type": "cache_read",
+        "point": 0.12,
+        "lo": 0.09,
+        "hi": 0.2
+      },
+      {
+        "type": "cache_write_5m",
+        "point": 1.1,
+        "lo": 0.8,
+        "hi": 1.6
+      },
+      {
+        "type": "cache_write_1h",
+        "point": 1.9,
+        "lo": 1.4,
+        "hi": 2.6
+      }
+    ],
+    "reference_family": "sonnet",
+    "families": [
+      {
+        "family": "haiku",
+        "separate": false,
+        "point": 1,
+        "lo": 1,
+        "hi": 1
+      },
+      {
+        "family": "opus",
+        "separate": true,
+        "point": 1.8,
+        "lo": 1.6,
+        "hi": 2.1
+      },
+      {
+        "family": "sonnet",
+        "separate": true,
+        "point": 1,
+        "lo": 1,
+        "hi": 1
+      }
+    ],
+    "regime_since": 1791547200000,
+    "label": "estimated",
+    "basis": "estimated from your meter"
+  },
+  "seven_day": {
+    "meter": "seven_day",
+    "tier": "fit",
+    "clean_intervals": 30,
+    "windows": 2,
+    "trimmed": 0,
+    "need_intervals": 0,
+    "need_windows": 0,
+    "hours_per_interval": 0,
+    "pct_per_api_usd": {
+      "point": 0.041,
+      "lo": 0.035,
+      "hi": 0.05
+    },
+    "outside_share_pct": {
+      "point": 11,
+      "lo": 6,
+      "hi": 16
+    },
+    "weights": [
+      {
+        "type": "input",
+        "point": 0.168,
+        "lo": 0.064,
+        "hi": 0.24
+      },
+      {
+        "type": "output",
+        "point": 0.96,
+        "lo": 0.8,
+        "hi": 1.12
+      },
+      {
+        "type": "cache_read",
+        "point": 0.02,
+        "lo": 0.0192,
+        "hi": 0.0216
+      },
+      {
+        "type": "cache_write_5m",
+        "point": 0.192,
+        "lo": 0.168,
+        "hi": 0.22399999999999998
+      },
+      {
+        "type": "cache_write_1h",
+        "point": 0.312,
+        "lo": 0.29600000000000004,
+        "hi": 0.32799999999999996
+      }
+    ],
+    "input_determined": false,
+    "reference_family": "sonnet",
+    "families": [
+      {
+        "family": "haiku",
+        "separate": false,
+        "point": 1,
+        "lo": 1,
+        "hi": 1
+      },
+      {
+        "family": "opus",
+        "separate": true,
+        "point": 1.8,
+        "lo": 1.6,
+        "hi": 2.1
+      },
+      {
+        "family": "sonnet",
+        "separate": true,
+        "point": 1,
+        "lo": 1,
+        "hi": 1
+      }
+    ],
+    "borrows_5h_profile": true,
+    "label": "estimated",
+    "basis": "estimated from your meter"
+  },
+  "waste": {
+    "five_hour_pct": {
+      "point": 0.4992,
+      "lo": 0.4224,
+      "hi": 0.5856,
+      "basis": "api_prices"
+    },
+    "seven_day_pct": {
+      "point": 0.03936,
+      "lo": 0.033600000000000005,
+      "hi": 0.048,
+      "basis": "api_prices"
+    },
+    "label": "estimated"
+  }
+}

@@ -110,6 +110,9 @@ func Render(r Report, o Options) string {
 	if r.OutputMix != nil {
 		renderOutputMix(&b, r.OutputMix, o)
 	}
+	if r.PlanLimits != nil {
+		renderPlanLimits(&b, r.PlanLimits, o)
+	}
 
 	b.WriteString("\n" + heading("Biggest leaks (estimated, overlapping, not additive)"))
 	if len(r.Leaks) == 0 {

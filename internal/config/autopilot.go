@@ -294,6 +294,24 @@ type AutopilotPlanItem struct {
 	Sessions  int    `json:"shadow_sessions"`
 	NetTokens int64  `json:"est_net_tokens"` // estimated
 	Reason    string `json:"reason"`
+	// Limit is the estimated net saving per shadow session as percent of Claude Code's plan limits
+	// (internal/measure/limitfit). Display only: no Autopilot decision reads it. Nil without a fit.
+	Limit *AutopilotLimitShare `json:"est_limit_pct_per_session,omitempty"`
+}
+
+// AutopilotLimitShare is a saving as percent of the 5-hour and weekly limits, each with its 90%
+// interval and basis ("fit" or "api_prices"). Estimated.
+type AutopilotLimitShare struct {
+	FiveHour *PercentRange `json:"five_hour,omitempty"`
+	Week     *PercentRange `json:"seven_day,omitempty"`
+}
+
+// PercentRange is a percentage with its interval and where it came from.
+type PercentRange struct {
+	Point float64 `json:"point"`
+	Lo    float64 `json:"lo"`
+	Hi    float64 `json:"hi"`
+	Basis string  `json:"basis"`
 }
 
 // Record appends an event, keeping the newest AutopilotHistoryMax.

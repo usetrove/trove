@@ -3,13 +3,16 @@ package autopilot
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/experiment"
 	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/optimize"
+	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/store"
 	"github.com/usetrove/trove/internal/technique"
 )
@@ -244,6 +247,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 		}
 	}
 	plan := p.Plan(combinedRows(p.planNames(), byName, hookShadow), f.Entries, baselineDone, blocked, unavailable)
+	annotateLimits(plan, limitfit.ReadCache(dir), now)
 	if !samePlan(plan, f.Plan) {
 		f.Plan, f.PlannedMS = plan, now.UnixMilli()
 		changed = true
@@ -266,15 +270,36 @@ func orOff(s string) string {
 }
 
 func samePlan(a, b []config.AutopilotPlanItem) bool {
-	if len(a) != len(b) {
-		return false
+	return reflect.DeepEqual(a, b)
+}
+
+// annotateLimits adds each item's estimated net saving per shadow session as percent of the plan
+// limits, from the saved fit. Display only: nothing Autopilot decides reads it (PRINCIPLES.md rule 6).
+func annotateLimits(plan []config.AutopilotPlanItem, fit *limitfit.Result, now time.Time) {
+	if fit == nil {
+		return
 	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
+	tbl, err := pricing.Default()
+	if err != nil {
+		tbl = nil // only the type fit can convert then
+	}
+	conv := func(s *limitfit.Share) *config.PercentRange {
+		if s == nil {
+			return nil
+		}
+		return &config.PercentRange{Point: s.Point, Lo: s.Lo, Hi: s.Hi, Basis: s.Basis}
+	}
+	for i := range plan {
+		it := &plan[i]
+		if it.NetTokens <= 0 || it.Sessions <= 0 {
+			continue
+		}
+		d := fit.ContextDelta(it.NetTokens / int64(it.Sessions))
+		limitfit.PriceDelta(tbl, &d, now)
+		if e := fit.Percent(d); e != nil {
+			it.Limit = &config.AutopilotLimitShare{FiveHour: conv(e.FiveHour), Week: conv(e.Week)}
 		}
 	}
-	return true
 }
 
 // permissive is the setup the conflict check assumes: Autopilot asks only whether

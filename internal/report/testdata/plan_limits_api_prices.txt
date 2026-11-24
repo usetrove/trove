@@ -1,0 +1,17 @@
+Plan limits (your estimate, not official weights)
+  5-hour limit, estimated from API prices: $1 of API-equivalent usage is about
+  0.52% (0.44 to 0.61%) of 5h, from 18 clean intervals over 3 windows.
+  Weights per token type: needs 22 more clean intervals and 1 more 5-hour window
+  (about 20 hours of use with the status line on).
+  Not explained by this machine's Claude Code: 9% (5 to 14%) of the meter's
+  movement. That is claude.ai, Cowork, other devices, and calls Claude Code does
+  not log, such as compaction summaries.
+  Weekly limit, estimated from API prices: $1 of API-equivalent usage is about
+  0.041% (0.035 to 0.05%) of the week, from 12 clean intervals over 1 window.
+  Weights per token type: needs 28 more clean intervals and 1 more weekly window
+  (about 84 hours of use with the status line on).
+  Waste found in these terms: about 0.5% of 5h (0.42 to 0.59%), 0.039% of the
+  week (0.034 to 0.048%) (estimated from API prices).
+  Numbers in brackets are 90% intervals. These are estimates for your account
+  from Claude Code's own meter, not official weights.
+
