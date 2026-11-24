@@ -59,6 +59,9 @@ type Report struct {
 	// PlanLimits is the per-user estimate of how tokens move Claude Code's plan-usage meters (see
 	// docs/limit-fit.md). Nil when the meter has never been seen.
 	PlanLimits *PlanLimits `json:"plan_limits,omitempty"`
+	// ColdResume is what the cold-resume guard (hook_cold_resume) did and what followed. Nil when it did nothing in
+	// the period.
+	ColdResume *measure.ColdResume `json:"cold_resume,omitempty"`
 	// Tools is how the Trove MCP tools are doing. Nil when the server is not
 	// registered and no agent has used them.
 	Tools *Tools `json:"trove_tools,omitempty"`

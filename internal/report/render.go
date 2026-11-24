@@ -113,6 +113,9 @@ func Render(r Report, o Options) string {
 	if r.PlanLimits != nil {
 		renderPlanLimits(&b, r.PlanLimits, o)
 	}
+	if r.ColdResume != nil {
+		renderColdResume(&b, r.ColdResume, o)
+	}
 
 	b.WriteString("\n" + heading("Biggest leaks (estimated, overlapping, not additive)"))
 	if len(r.Leaks) == 0 {

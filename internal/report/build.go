@@ -216,6 +216,9 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 		}
 	}
 	r.PlanLimits = planLimitsFrom(in.LimitFit, r.Headline)
+	if r.ColdResume, err = measure.ColdResumeSummary(ctx, db, w); err != nil {
+		return r, err
+	}
 	return r, nil
 }
 

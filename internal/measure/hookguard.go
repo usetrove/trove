@@ -104,6 +104,9 @@ const (
 	RuleHookExtraRead = "hook_extra_read"
 	// RuleHookUnusedAdvice: in sessions where hook_large_output suggested trove_run, the agent did not use it.
 	RuleHookUnusedAdvice = "hook_unused_advice"
+	// RuleColdResumeOverride: the user sent the prompt again after the cold-resume guard stopped it, so stopping it
+	// did not help them.
+	RuleColdResumeOverride = "cold_resume_override"
 )
 
 // Placeholder limits for the rules that are not a plain "share the agent undid". They are not tuned by any
@@ -119,6 +122,9 @@ const (
 	// MinAdoptionPercent is the share of sessions where hook_large_output gave its hint in which the agent must
 	// then use trove_run, or the hint is only a cost. Below it the hook goes back to shadow.
 	MinAdoptionPercent = 10
+	// ColdResumeOverrideLimitPercent: the cold-resume guard is rolled back when users send the stopped prompt again
+	// more often than this ("most of the time"). A placeholder, not set by any benchmark.
+	ColdResumeOverrideLimitPercent = 50
 )
 
 // hookRule says how one hook optimizer is judged: of the events in the
@@ -135,6 +141,8 @@ type hookRule struct {
 	// sessions that were advised, numerator counts the sessions among them where the advice was followed,
 	// and the rest are the bad ones. It can only run when the hook that records adoption is installed.
 	adoption bool
+	// actor is who undid the action in the rollback reason; "" means "the agent".
+	actor string
 }
 
 func countsOf(format string) func(bad, acted int) string {
@@ -161,6 +169,9 @@ var hookRules = []hookRule{
 			return fmt.Sprintf("did not use trove_run in %d of %d sessions where Trove suggested it", bad, acted)
 		},
 		limit: func(config.Measure) int { return 100 - MinAdoptionPercent }},
+	{optimizer: config.OptimizerHookColdResume, rule: RuleColdResumeOverride, denominator: "blocked", numerator: "overridden", actor: "you",
+		what:  countsOf("sent the prompt again after %d of %d prompts it stopped"),
+		limit: func(config.Measure) int { return ColdResumeOverrideLimitPercent }},
 }
 
 // HookGuardOptions says what the guardrail can see in this install.
@@ -242,10 +253,14 @@ func EvaluateHooksWith(ctx context.Context, db *store.DB, m config.Measure, now 
 		if !seqRateExceeds(bad, acted, threshold) {
 			continue
 		}
+		actor := r.actor
+		if actor == "" {
+			actor = "the agent"
+		}
 		ev := Event{At: now.UTC(), Optimizer: r.optimizer, Rule: r.rule, Observed: rate, Threshold: threshold,
 			SampleOn: acted, Reference: RefNone,
-			Reason: fmt.Sprintf("Trove set %s back to shadow because the agent %s (%.0f%%, limit %d%%). This is measured from the hook's own counts; re-enable it deliberately if you disagree.",
-				r.optimizer, r.what(bad, acted), rate*100, limitPercent)}
+			Reason: fmt.Sprintf("Trove set %s back to shadow because %s %s (%.0f%%, limit %d%%). This is measured from the hook's own counts; re-enable it deliberately if you disagree.",
+				r.optimizer, actor, r.what(bad, acted), rate*100, limitPercent)}
 		if err := recordRollback(ctx, db, ev); err != nil {
 			return events, err
 		}

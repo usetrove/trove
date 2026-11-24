@@ -33,7 +33,7 @@ const mcpSnippetTokens = 70
 const verbositySteerTokens = 85
 
 // coldResumeNoteTokens is the most the cold-resume guard's note can cost if the user pastes it after /clear: its
-// 1,500-character cap at 3.5 bytes per token, rounded up. A test in internal/hooks keeps the cap and this in step.
+// 1,500-byte cap at 3.5 bytes per token, rounded up. Tests in internal/hooks and internal/measure keep them in step.
 const coldResumeNoteTokens = 450
 
 const (
