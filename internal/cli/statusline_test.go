@@ -102,7 +102,7 @@ func TestStatusLineReadsClaudeCodeInputAndIsFast(t *testing.T) {
 		return strings.TrimSpace(h.out.String()), d
 	}
 	line, _ := run(full)
-	for _, want := range []string{"/ $1,500", "% used", "of month", "session ~$3.20", "saved ~$"} {
+	for _, want := range []string{"/ $1,500", "% used", "of month", "session ~$3.20", "saved ~$", " · 5h 23% · wk 41%"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("status line lacks %q: %q", want, line)
 		}
@@ -293,7 +293,7 @@ func TestStatusLineSampleWithoutDatabaseOrTable(t *testing.T) {
 	h := newHarness(t, nil)
 	dir := h.app.Getenv("TROVE_DATA_DIR")
 	full := statusFixture(t, "all.json")
-	if out := statusJSON(t, h, full); out.LimitSample != sampleNoDataDir || out.Line != "Trove: no usage yet" {
+	if out := statusJSON(t, h, full); out.LimitSample != sampleNoDataDir || out.Line != "Trove: no usage yet · 5h 23% · wk 41%" {
 		t.Errorf("no data folder: %+v", out)
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
@@ -303,7 +303,7 @@ func TestStatusLineSampleWithoutDatabaseOrTable(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if out := statusJSON(t, h, full); out.LimitSample != sampleSpooled || out.Line != "Trove: no usage yet" {
+	if out := statusJSON(t, h, full); out.LimitSample != sampleSpooled || out.Line != "Trove: no usage yet · 5h 23% · wk 41%" {
 		t.Errorf("no database: %+v", out)
 	}
 	if _, err := os.Stat(filepath.Join(dir, store.DBFileName)); !os.IsNotExist(err) {
@@ -360,6 +360,48 @@ func TestReportIngestsTheStatusLineSpool(t *testing.T) {
 	}
 	if pct != 23.5 || resets != 4102444800000 || seven != 41.2 || warm != 1 || ttl != 3600 || model != "claude-opus-5-5" || version != "2.1.290" {
 		t.Errorf("stored %v %v %v %v %v %q %q", pct, resets, seven, warm, ttl, model, version)
+	}
+}
+
+// The meter is in --json with its label and source, and shown even before Trove has any usage of its own.
+func TestStatusLinePlanUsageJSON(t *testing.T) {
+	h := newHarness(t, nil)
+	h.out.Reset()
+	h.app.In = strings.NewReader(statusFixture(t, "all.json"))
+	if code := h.run("status-line", "--format", "claude", "--json"); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	var v struct {
+		Line      string `json:"line"`
+		PlanUsage struct {
+			Source   string `json:"source"`
+			FiveHour struct {
+				UsedPercent float64   `json:"used_percent"`
+				Label       string    `json:"label"`
+				ResetsAt    time.Time `json:"resets_at"`
+			} `json:"five_hour"`
+			SevenDay struct {
+				UsedPercent float64 `json:"used_percent"`
+				Label       string  `json:"label"`
+			} `json:"seven_day"`
+		} `json:"plan_usage"`
+	}
+	if err := json.Unmarshal(h.out.Bytes(), &v); err != nil {
+		t.Fatalf("%v: %s", err, h.out)
+	}
+	p := v.PlanUsage
+	if v.Line != "Trove: no usage yet · 5h 23% · wk 41%" || p.Source != "claude_code" ||
+		p.FiveHour.UsedPercent != 23.5 || p.FiveHour.Label != "measured" || !p.FiveHour.ResetsAt.Equal(time.Unix(4102444800, 0)) ||
+		p.SevenDay.UsedPercent != 41.2 || p.SevenDay.Label != "measured" {
+		t.Errorf("got %+v", v)
+	}
+
+	// No meter in the input: no plan_usage key and nothing added to the line.
+	h.out.Reset()
+	h.app.In = strings.NewReader(statusFixture(t, "none.json"))
+	h.run("status-line", "--format", "claude", "--json")
+	if strings.Contains(h.out.String(), "plan_usage") || strings.Contains(h.out.String(), "5h") {
+		t.Errorf("no meter was sent, yet: %s", h.out)
 	}
 }
 

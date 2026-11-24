@@ -16,6 +16,8 @@ import (
 type statusOutput struct {
 	Line   string         `json:"line"`
 	Status *report.Status `json:"status,omitempty"`
+	// PlanUsage is Claude Code's subscription meter from the status line input (claude format only).
+	PlanUsage *report.PlanUsage `json:"plan_usage,omitempty"`
 	// LimitSample says what happened to Claude Code's plan-usage meter: written, unchanged, or why it
 	// was skipped. Empty when the input carried no meter.
 	LimitSample string `json:"limit_sample,omitempty"`
@@ -51,7 +53,13 @@ func newStatusLine(a *App) *cobra.Command {
 // runStatusLine never fails the agent's status bar: any problem becomes a short
 // line telling the user what to run, with exit code 0.
 func runStatusLine(a *App, format string) error {
-	out := statusLine(a, format, readClaudeInput(a, format), time.Now())
+	in, now := readClaudeInput(a, format), time.Now()
+	out := statusLine(a, format, in, now)
+	// Claude Code's plan-usage meter, shown whatever state Trove itself is in: it is the agent's number.
+	if u := report.CurrentPlanUsage(in.planUsage(), now); u != nil {
+		out.PlanUsage = u
+		out.Line += " · " + report.RenderPlanUsage(*u)
+	}
 	return a.emit(out, out.Line)
 }
 
