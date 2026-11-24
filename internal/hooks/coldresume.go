@@ -754,17 +754,24 @@ func coldMarkerPath(dir, key string) (string, bool) {
 	return filepath.Join(coldMarkerDir(dir), key), true
 }
 
-func coldFired(dir, key string) bool {
+func coldFired(dir, key string) bool { return guardFired(dir, key, "") }
+
+func markColdFired(dir, key string) error { return markGuardFired(dir, key, "") }
+
+// guardFired and markGuardFired are the markers of one rebuild guard; suffix tells the guards apart ("" for the
+// cold-resume guard, ".switch", ".compact"), so each acts once a session on its own.
+func guardFired(dir, key, suffix string) bool {
 	p, ok := coldMarkerPath(dir, key)
 	if !ok {
 		return true // a key that cannot be a file name: never act, rather than risk acting twice
 	}
-	_, err := os.Stat(p)
+	_, err := os.Stat(p + suffix)
 	return err == nil
 }
 
-func markColdFired(dir, key string) error {
+func markGuardFired(dir, key, suffix string) error {
 	p, ok := coldMarkerPath(dir, key)
+	p += suffix
 	if !ok {
 		return fmt.Errorf("session key is not usable as a marker name")
 	}

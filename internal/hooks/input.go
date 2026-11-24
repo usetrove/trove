@@ -43,6 +43,14 @@ type Input struct {
 	ContextTokens            *int64   `json:"context_tokens"`
 	PromptCacheLikelyExpired *bool    `json:"prompt_cache_likely_expired"`
 	EstimatedCacheWriteUSD   *float64 `json:"estimated_cache_write_usd"`
+	// PreModelSwitch and PostModelSwitch (read 2026-11-24): the models, whether the current model's cache is
+	// likely warm and its lifetime. context_tokens, estimated_cache_write_usd and source share the fields above.
+	FromModel       string `json:"from_model"`
+	ToModel         string `json:"to_model"`
+	PromptCacheWarm *bool  `json:"prompt_cache_warm"`
+	CacheTTL        string `json:"cache_ttl"`
+	// Trigger is PreCompact's "manual" (/compact) or "auto".
+	Trigger string `json:"trigger"`
 }
 
 // ToolInput is the tool's arguments. The named fields are the ones Trove reads.
