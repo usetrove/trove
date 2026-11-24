@@ -1,0 +1,786 @@
+{
+  "period": {
+    "name": "month",
+    "label": "this month (since Oct 1)",
+    "from": "2026-10-01",
+    "to": "2026-10-29"
+  },
+  "state": "small",
+  "requests": 13,
+  "headline": {
+    "spend_usd": {
+      "value": 0.13,
+      "label": "estimated",
+      "n": 13
+    },
+    "tokens": {
+      "value": 371650,
+      "label": "measured",
+      "n": 13
+    },
+    "waste_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "waste_percent": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "savings_usd": {
+      "value": 0,
+      "label": "estimated",
+      "n": 0
+    },
+    "measured_note": "not enough data yet to compare sessions with and without an optimizer. The dollar savings above are estimates."
+  },
+  "spend": {
+    "by_agent": [
+      {
+        "key": "claude_code (history)",
+        "requests": 13,
+        "input_uncached_tokens": 650,
+        "cache_write_tokens": 282000,
+        "cache_read_tokens": 82000,
+        "output_tokens": 7000,
+        "cost_usd": {
+          "value": 0.13,
+          "label": "estimated",
+          "n": 13
+        }
+      }
+    ],
+    "by_model": [
+      {
+        "key": "claude-sonnet-5-5",
+        "requests": 7,
+        "input_uncached_tokens": 350,
+        "cache_write_tokens": 131000,
+        "cache_read_tokens": 52000,
+        "output_tokens": 5500,
+        "cost_usd": {
+          "value": 0.07,
+          "label": "estimated",
+          "n": 7
+        }
+      },
+      {
+        "key": "claude-haiku-5-5",
+        "requests": 3,
+        "input_uncached_tokens": 150,
+        "cache_write_tokens": 87000,
+        "cache_read_tokens": 0,
+        "output_tokens": 1200,
+        "cost_usd": {
+          "value": 0.03,
+          "label": "estimated",
+          "n": 3
+        }
+      },
+      {
+        "key": "claude-opus-5",
+        "requests": 3,
+        "input_uncached_tokens": 150,
+        "cache_write_tokens": 64000,
+        "cache_read_tokens": 30000,
+        "output_tokens": 300,
+        "cost_usd": {
+          "value": 0.03,
+          "label": "estimated",
+          "n": 3
+        }
+      }
+    ]
+  },
+  "leaks": null,
+  "optimizers": {
+    "baseline": {
+      "active": true,
+      "days_elapsed": 60,
+      "days_needed": 7,
+      "sessions_seen": 0,
+      "sessions_needed": 20
+    },
+    "kill_switch": false,
+    "rows": [
+      {
+        "name": "model_router",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "effort_tool_turns",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "volatile_prefix_mover",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "noise_normalizer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "output_trimmer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "duplicate_result_collapser",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "verbosity_steer",
+        "configured": "off",
+        "effective": "off"
+      },
+      {
+        "name": "cache_breakpoints",
+        "configured": "off",
+        "effective": "off"
+      }
+    ],
+    "guardrail_events": []
+  },
+  "recommendations": [],
+  "notes": [
+    "Only 13 requests so far, so these numbers are rough. They firm up as you use your agent."
+  ],
+  "history": {
+    "requests": 13,
+    "sessions": 3,
+    "excluded_sessions": 0,
+    "files": 0,
+    "skipped_lines": 0,
+    "plan": "api_key",
+    "value_usd": {
+      "value": 0.13,
+      "label": "estimated",
+      "n": 13
+    },
+    "basis": "spend",
+    "gateway_seen": false,
+    "not_available": {
+      "cache_miss": "needs consecutive request bodies to compare prefixes",
+      "context_file_weight": "needs the prompt text",
+      "long_session_drift": "not yet implemented for history",
+      "noisy_output": "needs tool output text, which is not stored",
+      "unused_tool_schemas": "needs the tool definitions sent with each request"
+    }
+  },
+  "cache_rebuilds": {
+    "count": {
+      "value": 8,
+      "label": "measured",
+      "n": 8
+    },
+    "cache_write_tokens": {
+      "value": 243000,
+      "label": "measured",
+      "n": 8
+    },
+    "share_of_cache_writes_pct": {
+      "value": 86.170213,
+      "label": "measured",
+      "n": 8
+    },
+    "by_cause": [
+      {
+        "cause": "idle_expired",
+        "count": {
+          "value": 1,
+          "label": "estimated",
+          "n": 1
+        },
+        "cache_write_tokens": {
+          "value": 36000,
+          "label": "estimated",
+          "n": 1
+        },
+        "share_pct": {
+          "value": 14.81,
+          "label": "estimated",
+          "n": 1
+        }
+      },
+      {
+        "cause": "model_changed",
+        "count": {
+          "value": 1,
+          "label": "estimated",
+          "n": 1
+        },
+        "cache_write_tokens": {
+          "value": 37000,
+          "label": "estimated",
+          "n": 1
+        },
+        "share_pct": {
+          "value": 15.23,
+          "label": "estimated",
+          "n": 1
+        }
+      },
+      {
+        "cause": "subagent_start",
+        "count": {
+          "value": 1,
+          "label": "estimated",
+          "n": 1
+        },
+        "cache_write_tokens": {
+          "value": 22000,
+          "label": "estimated",
+          "n": 1
+        },
+        "share_pct": {
+          "value": 9.05,
+          "label": "estimated",
+          "n": 1
+        }
+      },
+      {
+        "cause": "compaction",
+        "count": {
+          "value": 1,
+          "label": "estimated",
+          "n": 1
+        },
+        "cache_write_tokens": {
+          "value": 25000,
+          "label": "estimated",
+          "n": 1
+        },
+        "share_pct": {
+          "value": 10.29,
+          "label": "estimated",
+          "n": 1
+        }
+      },
+      {
+        "cause": "version_changed",
+        "count": {
+          "value": 1,
+          "label": "estimated",
+          "n": 1
+        },
+        "cache_write_tokens": {
+          "value": 25000,
+          "label": "estimated",
+          "n": 1
+        },
+        "share_pct": {
+          "value": 10.29,
+          "label": "estimated",
+          "n": 1
+        }
+      },
+      {
+        "cause": "effort_changed",
+        "count": {
+          "value": 1,
+          "label": "estimated",
+          "n": 1
+        },
+        "cache_write_tokens": {
+          "value": 31000,
+          "label": "estimated",
+          "n": 1
+        },
+        "share_pct": {
+          "value": 12.76,
+          "label": "estimated",
+          "n": 1
+        }
+      },
+      {
+        "cause": "fast_mode_changed",
+        "count": {
+          "value": 1,
+          "label": "estimated",
+          "n": 1
+        },
+        "cache_write_tokens": {
+          "value": 32000,
+          "label": "estimated",
+          "n": 1
+        },
+        "share_pct": {
+          "value": 13.17,
+          "label": "estimated",
+          "n": 1
+        }
+      },
+      {
+        "cause": "unexplained",
+        "count": {
+          "value": 1,
+          "label": "estimated",
+          "n": 1
+        },
+        "cache_write_tokens": {
+          "value": 35000,
+          "label": "estimated",
+          "n": 1
+        },
+        "share_pct": {
+          "value": 14.4,
+          "label": "estimated",
+          "n": 1
+        }
+      }
+    ],
+    "session_starts": {
+      "value": 1,
+      "label": "measured",
+      "n": 1
+    },
+    "session_start_tokens": {
+      "value": 30000,
+      "label": "measured",
+      "n": 1
+    },
+    "threshold_factor": 3,
+    "threshold_min_tokens": 20000,
+    "idle_with_default_ttl": 0
+  },
+  "output_mix": {
+    "total": {
+      "key": "total",
+      "requests": 13,
+      "output_tokens": {
+        "value": 7000,
+        "label": "measured",
+        "n": 13
+      },
+      "thinking_tokens": {
+        "value": 3300,
+        "label": "estimated",
+        "n": 13
+      },
+      "text_tokens": {
+        "value": 2375,
+        "label": "estimated",
+        "n": 13
+      },
+      "tool_input_tokens": {
+        "value": 625,
+        "label": "estimated",
+        "n": 13
+      },
+      "unsplit_tokens": {
+        "value": 700,
+        "label": "measured",
+        "n": 13
+      }
+    },
+    "by_phase": [
+      {
+        "key": "prompt",
+        "requests": 5,
+        "output_tokens": {
+          "value": 4500,
+          "label": "measured",
+          "n": 5
+        },
+        "thinking_tokens": {
+          "value": 2900,
+          "label": "estimated",
+          "n": 5
+        },
+        "text_tokens": {
+          "value": 1375,
+          "label": "estimated",
+          "n": 5
+        },
+        "tool_input_tokens": {
+          "value": 225,
+          "label": "estimated",
+          "n": 5
+        },
+        "unsplit_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 5
+        }
+      },
+      {
+        "key": "tool_result",
+        "requests": 7,
+        "output_tokens": {
+          "value": 1800,
+          "label": "measured",
+          "n": 7
+        },
+        "thinking_tokens": {
+          "value": 400,
+          "label": "estimated",
+          "n": 7
+        },
+        "text_tokens": {
+          "value": 1000,
+          "label": "estimated",
+          "n": 7
+        },
+        "tool_input_tokens": {
+          "value": 400,
+          "label": "estimated",
+          "n": 7
+        },
+        "unsplit_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 7
+        }
+      },
+      {
+        "key": "unknown",
+        "requests": 1,
+        "output_tokens": {
+          "value": 700,
+          "label": "measured",
+          "n": 1
+        },
+        "thinking_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 1
+        },
+        "text_tokens": {
+          "value": 0,
+          "label": "estimated",
+          "n": 1
+        },
+        "tool_input_tokens": {
+          "value": 0,
+          "label": "estimated",
+          "n": 1
+        },
+        "unsplit_tokens": {
+          "value": 700,
+          "label": "measured",
+          "n": 1
+        }
+      }
+    ],
+    "by_model": [
+      {
+        "key": "claude-sonnet-5-5",
+        "requests": 7,
+        "output_tokens": {
+          "value": 5500,
+          "label": "measured",
+          "n": 7
+        },
+        "thinking_tokens": {
+          "value": 2800,
+          "label": "estimated",
+          "n": 7
+        },
+        "text_tokens": {
+          "value": 1375,
+          "label": "estimated",
+          "n": 7
+        },
+        "tool_input_tokens": {
+          "value": 625,
+          "label": "estimated",
+          "n": 7
+        },
+        "unsplit_tokens": {
+          "value": 700,
+          "label": "measured",
+          "n": 7
+        }
+      },
+      {
+        "key": "claude-haiku-5-5",
+        "requests": 3,
+        "output_tokens": {
+          "value": 1200,
+          "label": "measured",
+          "n": 3
+        },
+        "thinking_tokens": {
+          "value": 500,
+          "label": "measured",
+          "n": 3
+        },
+        "text_tokens": {
+          "value": 700,
+          "label": "estimated",
+          "n": 3
+        },
+        "tool_input_tokens": {
+          "value": 0,
+          "label": "estimated",
+          "n": 3
+        },
+        "unsplit_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 3
+        }
+      },
+      {
+        "key": "claude-opus-5",
+        "requests": 3,
+        "output_tokens": {
+          "value": 300,
+          "label": "measured",
+          "n": 3
+        },
+        "thinking_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 3
+        },
+        "text_tokens": {
+          "value": 300,
+          "label": "estimated",
+          "n": 3
+        },
+        "tool_input_tokens": {
+          "value": 0,
+          "label": "estimated",
+          "n": 3
+        },
+        "unsplit_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 3
+        }
+      }
+    ],
+    "by_effort": [
+      {
+        "key": "high",
+        "requests": 6,
+        "output_tokens": {
+          "value": 3400,
+          "label": "measured",
+          "n": 6
+        },
+        "thinking_tokens": {
+          "value": 2000,
+          "label": "measured",
+          "n": 6
+        },
+        "text_tokens": {
+          "value": 1275,
+          "label": "estimated",
+          "n": 6
+        },
+        "tool_input_tokens": {
+          "value": 125,
+          "label": "estimated",
+          "n": 6
+        },
+        "unsplit_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 6
+        }
+      },
+      {
+        "key": "medium",
+        "requests": 6,
+        "output_tokens": {
+          "value": 2900,
+          "label": "measured",
+          "n": 6
+        },
+        "thinking_tokens": {
+          "value": 1300,
+          "label": "estimated",
+          "n": 6
+        },
+        "text_tokens": {
+          "value": 1100,
+          "label": "estimated",
+          "n": 6
+        },
+        "tool_input_tokens": {
+          "value": 500,
+          "label": "estimated",
+          "n": 6
+        },
+        "unsplit_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 6
+        }
+      },
+      {
+        "key": "unknown",
+        "requests": 1,
+        "output_tokens": {
+          "value": 700,
+          "label": "measured",
+          "n": 1
+        },
+        "thinking_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 1
+        },
+        "text_tokens": {
+          "value": 0,
+          "label": "estimated",
+          "n": 1
+        },
+        "tool_input_tokens": {
+          "value": 0,
+          "label": "estimated",
+          "n": 1
+        },
+        "unsplit_tokens": {
+          "value": 700,
+          "label": "measured",
+          "n": 1
+        }
+      }
+    ],
+    "by_version": [
+      {
+        "key": "2.1.330",
+        "requests": 8,
+        "output_tokens": {
+          "value": 5900,
+          "label": "measured",
+          "n": 8
+        },
+        "thinking_tokens": {
+          "value": 3300,
+          "label": "estimated",
+          "n": 8
+        },
+        "text_tokens": {
+          "value": 1975,
+          "label": "estimated",
+          "n": 8
+        },
+        "tool_input_tokens": {
+          "value": 625,
+          "label": "estimated",
+          "n": 8
+        },
+        "unsplit_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 8
+        }
+      },
+      {
+        "key": "unknown",
+        "requests": 1,
+        "output_tokens": {
+          "value": 700,
+          "label": "measured",
+          "n": 1
+        },
+        "thinking_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 1
+        },
+        "text_tokens": {
+          "value": 0,
+          "label": "estimated",
+          "n": 1
+        },
+        "tool_input_tokens": {
+          "value": 0,
+          "label": "estimated",
+          "n": 1
+        },
+        "unsplit_tokens": {
+          "value": 700,
+          "label": "measured",
+          "n": 1
+        }
+      },
+      {
+        "key": "2.1.329",
+        "requests": 3,
+        "output_tokens": {
+          "value": 300,
+          "label": "measured",
+          "n": 3
+        },
+        "thinking_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 3
+        },
+        "text_tokens": {
+          "value": 300,
+          "label": "estimated",
+          "n": 3
+        },
+        "tool_input_tokens": {
+          "value": 0,
+          "label": "estimated",
+          "n": 3
+        },
+        "unsplit_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 3
+        }
+      },
+      {
+        "key": "2.1.331",
+        "requests": 1,
+        "output_tokens": {
+          "value": 100,
+          "label": "measured",
+          "n": 1
+        },
+        "thinking_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 1
+        },
+        "text_tokens": {
+          "value": 100,
+          "label": "estimated",
+          "n": 1
+        },
+        "tool_input_tokens": {
+          "value": 0,
+          "label": "estimated",
+          "n": 1
+        },
+        "unsplit_tokens": {
+          "value": 0,
+          "label": "measured",
+          "n": 1
+        }
+      }
+    ],
+    "carried_thinking_tokens": {
+      "value": 2600,
+      "label": "estimated",
+      "n": 10
+    },
+    "carried_share_of_input_pct": {
+      "value": 0.961183,
+      "label": "estimated",
+      "n": 10
+    },
+    "bytes_per_token": [
+      {
+        "family": "sonnet",
+        "bytes_per_token": 3.5,
+        "calibrated": false,
+        "requests": 0
+      }
+    ]
+  }
+}

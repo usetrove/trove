@@ -81,6 +81,9 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	r.Headline.Spend, r.Headline.Tokens, r.Requests = sumTotals(byAgent)
 	if hist != nil {
 		r.History = &hist.h
+		if r.Rebuilds, r.OutputMix, err = buildLedgers(ctx, db, w); err != nil {
+			return r, err
+		}
 		r.Requests += hist.otherReqs
 		r.Headline.Tokens.Value += hist.otherTok
 		r.Headline.Tokens.N = r.Requests

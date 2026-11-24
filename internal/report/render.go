@@ -104,6 +104,12 @@ func Render(r Report, o Options) string {
 		b.WriteString("\n" + heading("History usage by model (API-equivalent value, not a bill)"))
 		b.WriteString(spendTable("Model", r.History.ByModel, o))
 	}
+	if r.Rebuilds != nil {
+		renderRebuilds(&b, r.Rebuilds, o)
+	}
+	if r.OutputMix != nil {
+		renderOutputMix(&b, r.OutputMix, o)
+	}
 
 	b.WriteString("\n" + heading("Biggest leaks (estimated, overlapping, not additive)"))
 	if len(r.Leaks) == 0 {

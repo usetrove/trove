@@ -52,6 +52,10 @@ type Report struct {
 	// History is the part of the figures that came from agents' local session
 	// logs. Nil when there is none.
 	History *History `json:"history,omitempty"`
+	// Rebuilds and OutputMix are the rebuild and output ledgers over Claude Code history (see
+	// docs/analyze.md, "History ledgers"). Nil when there is nothing to show.
+	Rebuilds  *Rebuilds  `json:"cache_rebuilds,omitempty"`
+	OutputMix *OutputMix `json:"output_mix,omitempty"`
 	// Tools is how the Trove MCP tools are doing. Nil when the server is not
 	// registered and no agent has used them.
 	Tools *Tools `json:"trove_tools,omitempty"`
