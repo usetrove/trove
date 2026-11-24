@@ -5,6 +5,14 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ## [Unreleased]
 
 ### Added
+- `hook_routine_steer` (B24, T2, off by default): on a routine prompt ("yes", "continue", "run the tests", "commit"), the `UserPromptSubmit` hook adds "Answer directly without deliberating." as `additionalContext`, to cut thinking on turns that need little.
+  - It acts on Claude Opus 5.5 only. The phrase is documented as unreliable on Haiku 5.5 and Fable 5.2, and Sonnet 5.5 waits for a trial of its own. A session on any other model, or whose model is unknown, is left alone silently.
+  - Routine prompts are decided by a new deterministic classifier, `internal/routine`, in memory. The prompt is never stored.
+  - Each steered prompt is charged at most about 30 tokens (estimated).
+  - Cache safety: it changes no request parameter, and its text goes beside the new prompt. It sends nothing until `trove hooks verify --prompt-context` sees, in your own session, that the text lands after the cached prefix and that the turns before and after read their whole previous prompt from the cache. Shadow mode only counts.
+  - `trove autopilot trial hook_routine_steer` runs a session A/B. It is judged on thinking tokens per routine turn (measured) and its share of the limits (estimated), with guardrails test failure rate, turns per session and re-prompts. Autopilot never turns it on.
+  - Migration 0028 adds the `hook_events` kinds `steered`, `would_steer`, `reprompted` and `turn_end`.
+  - Verified on platform.claude.com (adaptive-thinking, effort, prompt-caching) and code.claude.com (hooks, hooks-guide) on 2026-11-24. See docs/hooks.md, "Routine steer".
 - Autopilot settings policy `settings-v1` (plan 4.5, technique C1, T1): with its own yes (`trove autopilot settings on`), Autopilot sets `subagentPromptCacheTtl` to `"1h"` in `~/.claude/settings.json` only when your Claude Code history shows it pays, and removes it when it stops paying.
   - The evidence comes from the rebuild ledger: subagent rebuilds after pauses of 5 to 60 minutes on the five-minute lifetime, and their size (measured). The net is those avoided rewrites minus the one-hour premium on every other subagent write. It is estimated from your plan-limit meter when the fit has per-type weights and the history is mostly subscription, otherwise from API list prices, and always says which.
   - It sets the value only with at least 100 subagent requests in 5 sessions over 30 days and 5 such rebuilds, and only when the net is clearly positive: at API prices 25% and $1 better (the `cache_ttl` thresholds), on the meter the whole 90% interval. It never overrides the setting in any settings file, the `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`, `FORCE_PROMPT_CACHING_5M`, `ENABLE_PROMPT_CACHING_1H` or `DISABLE_PROMPT_CACHING*` variables, or a subagent's own frontmatter `cacheTtl`.

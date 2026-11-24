@@ -25,9 +25,9 @@ trove hooks install --rewrite   # also install the hooks that rewrite tool input
 | `session_end_receipt` | `SessionEnd` | Moves the hook counters into the database, runs the hook guardrail, writes the session receipt, refreshes the snapshot the other hooks read, then writes the session's features and, if stale, the repo's ([features.md](features.md)). |
 | `post_tool_test_result` | Claude Code `PostToolUse` and `PostToolUseFailure` on `Bash` | The test-pass signal. When the command is exactly one of the project's test commands in `.trove/commands.toml` (an entry named `test`, or starting or ending with `test-`, `test_`, `-test`, `_test`; arguments compared after splitting on whitespace), it records the exit code and a hash of the command in `test_runs`. A successful call counts as exit 0; a failure's code is read from the first line of its error (`Exit code N`). Interrupted runs and failures without that line are not recorded. Never prints anything and never changes the call. The session roll-up carries the last status (pass, fail or none) and the run and failure counts. |
 | `pre_tool_subagent` | `PreToolUse` on `Agent` (`Task` before Claude Code v2.1.63; checked 2026-11-17) | Does nothing unless a scout is installed and this session is in the "off" arm of its A/B trial; then it declines a call to the scout subagent with a short message asking the agent to do the work directly. See docs/tasks.md. |
-| `user_prompt_cold_check` | Claude Code `UserPromptSubmit` | The cold-resume guard (`hook_cold_resume`, off by default; see [below](#cold-resume-guard)). When a large session's prompt cache has expired, it warns about what the next prompt will cost, or stops the first prompt after a cold resume once. Returns at once while the guard is off. |
+| `user_prompt_cold_check` | Claude Code `UserPromptSubmit` | The cold-resume guard (`hook_cold_resume`, off by default; see [below](#cold-resume-guard)). When a large session's prompt cache has expired, it warns about what the next prompt will cost, or stops the first prompt after a cold resume once. Then, for a prompt the guard let through, the routine steer (`hook_routine_steer`, off by default; see [below](#routine-steer)). Returns at once while both are off. |
 | `pre_model_switch` | Claude Code `PreModelSwitch` | The model-switch guard (`hook_model_switch`, off by default; see [below](#model-switch-and-cold-compact-guards)). Adds what switching a large, warm session to another model costs to Claude Code's own confirmation. Never blocks or asks. |
-| `post_model_switch` | Claude Code `PostModelSwitch` | Records that a switch the model-switch guard warned about went ahead. Prints nothing. |
+| `post_model_switch` | Claude Code `PostModelSwitch` | Records that a switch the model-switch guard warned about went ahead, and updates whether the routine steer may act on the session's new model. Prints nothing. |
 | `pre_compact_cold_check` | Claude Code `PreCompact`, matcher `manual` | The cold-compact guard (`hook_cold_compact`, off by default). Stops a manual `/compact` once when the cache has expired and the history is large. The existing `session_reset` entry on `PreCompact` is unchanged. |
 | `pre_tool_large_output` (optional, `--large-output`) | `PreToolUse` on `Bash` | For a known-noisy command (`go test ./...`, `npm test`, bare `pytest`, `make`, verbose builds) adds a hint to use `trove_run`. Never blocks. Only fires when the MCP server is registered. |
 | `post_tool_run` (installed with `--large-output` or `--rewrite`) | `PostToolUse` on `mcp__trove__trove_run` | Counts, once per session, that the agent used `trove_run`. It is how the guardrail for the hint above sees whether the hint is followed. Changes nothing. Run `trove hooks install` again if your hooks were installed with v0.3.0 or earlier; `trove hooks status` says when it is missing. |
@@ -276,6 +276,116 @@ prompt, even with the guard off (see "How it stays fast").
 shadow when that share is above 50% beyond chance, with at least 20 blocks (same sequential test as the rules
 above). Stopping a prompt you then send anyway did not help you. The 50% is a placeholder, not set by a benchmark.
 `trove report` shows what followed: see [measurement.md](measurement.md#cold-resume-guard).
+
+## Routine steer
+
+`hook_routine_steer` (B24, T2, added 2026-11-24) cuts thinking on turns that need little. When you send a routine
+prompt such as "yes", "continue", "run the tests" or "commit", it adds the line "Answer directly without
+deliberating." to that prompt's context through `UserPromptSubmit` `additionalContext`. It runs in the
+`user_prompt_cold_check` hook, after the cold-resume guard. If the guard stops the prompt, the steer adds nothing.
+
+```toml
+[optimizers]
+hook_routine_steer = "shadow"   # off (default) | shadow | on
+```
+
+**What was verified, and where (read 2026-11-24).**
+- platform.claude.com/docs/en/build-with-claude/adaptive-thinking (served as "Steering thinking"),
+  `/build-with-claude/effort` and `/build-with-claude/prompt-caching`:
+  - On Opus 5.5 "Adaptive thinking is always on and can't be turned off, so effort is the primary control." The same
+    holds for Fable 5.2. Haiku 5.5's thinking is "on by default" and can be disabled at high effort or below. The
+    page makes no always-on statement for Sonnet 5.5.
+  - "The resolved effort value is rendered into the prompt, so changing it between requests can invalidate cache
+    breakpoints." This is why the steer never touches effort.
+  - Per-message steering, appending "Answer directly without deliberating.", works "without touching the system
+    prompt or changing any request parameters between turns" and leaves "earlier cache breakpoints intact". The page
+    adds: "treat it like any other prompt change: measure before you ship" and "Steering Claude to think less often
+    might reduce quality on tasks that benefit from reasoning."
+  - "On Claude Haiku 5.5 and Claude Fable 5.2, the discouraging phrase doesn't reliably reduce thinking." Asking
+    Sonnet 5.5 to think less in the system prompt is not reliable either, and nothing is said about the
+    per-message phrase on Sonnet.
+- code.claude.com/docs/en/hooks and `/hooks-guide`:
+  - `additionalContext` is "String added to Claude's context alongside the submitted prompt". It must sit inside
+    `hookSpecificOutput`, or it is "silently ignore[d]".
+  - Claude Code wraps it in a system reminder "at the point where the hook fired". It is saved in the transcript and
+    replayed on resume rather than recomputed. Strings over 10,000 characters are replaced by a file path.
+  - The `UserPromptSubmit` input has `prompt` but no model. Only `SessionStart` sends `model`, and `PostModelSwitch`
+    sends `to_model`.
+  - Neither page says outright that the text lands inside the new user turn, after the cached prefix.
+
+**Models.** Only `claude-opus-5-5`, including its `[1m]` variant, is steered. The model is pinned at every
+`SessionStart` and updated at every `PostModelSwitch`, whatever started the switch, as a fixed word. A session on
+any other model, or one whose model Claude Code did not send, is left alone silently: nothing is recorded and the
+prompt goes through untouched (rule 4). Sonnet 5.5 is added only if a trial of its own shows the phrase works there.
+
+**What counts as routine.** `internal/routine` decides, in memory, from the prompt text. It is a pure function, so a
+replayed prompt gets the same label. A prompt is routine only when all of it, after normalising case, spacing and
+end punctuation, is a sequence of listed phrases: confirmations, "continue" and the like, running tests, builds,
+linters and formatters, and committing or pushing. Each of these makes a prompt not routine:
+- a qualifier ("yes but fix the race first");
+- a question mark, a number, a path, code or markup, or a slash command;
+- a second line;
+- more than 8 words or 80 bytes.
+
+The classifier also reads a prompt as a correction ("no", "try again", "that didn't work", "you forgot ..."). The
+prompt is never stored, logged or hashed; only the label leaves memory.
+
+**Cache safety.** The steer changes no request parameter and touches nothing already sent. Its text goes beside the
+new prompt, at the end of the conversation, and stays in the transcript, so every later turn's prefix is byte for
+byte the one before. Because the documentation does not say this outright, `on` and the trial's "on" arm only record
+`would_steer` until `trove hooks verify --prompt-context` passes on the installed Claude Code version.
+
+That check runs in a session you start yourself. The test hook adds a marker plus about 300 tokens of padding to the
+second of four short prompts. It passes only when all of these hold:
+- the text sits after turn 1's last request and before turn 2's first in the transcript;
+- turn 2's first request read all of turn 1's prompt from the cache (within 50 tokens), so adding the text broke
+  nothing;
+- turn 3's first request read all of turn 2's prompt, text included, so the text stays put.
+
+The test hook records line positions and token counts only. Shadow mode works without the check.
+
+**Overhead (rule 15).** At most about 30 tokens per steered prompt (estimated): the 37-byte phrase plus up to 68 bytes
+of Claude Code's wrapper, at 3.5 bytes per token. Each `steered` event is charged that figure. Every later request of
+the session carries the line again as cached input, and that cost is inside what the trial measures.
+
+**Modes.**
+- `shadow` counts routine prompts on Opus 5.5 (`would_steer`) and changes nothing.
+- `on` steers every routine prompt on Opus 5.5 once the live check has passed. It is an explicit opt-in.
+- The trial (`trove autopilot trial hook_routine_steer`) needs all of these to start:
+  - the steer in `shadow`;
+  - the live check passed;
+  - at least 20 routine prompts counted;
+  - A/B on;
+  - your yes to a consent text.
+
+  Each new session then gets an arm from a hash of its key. The "on" arm is steered. The "off" arm only counts its
+  routine prompts, so the two arms are compared turn for turn.
+- The kill switch and a guardrail rollback apply at once. A state change waits for the next session (rule 5).
+
+**Events** (`hook_events`, migration 0028):
+- `steered` and `would_steer`;
+- `turn_end`: the next prompt after a routine one, which closes the routine turn;
+- `reprompted`: that next prompt read as a correction.
+
+**Outcome and guardrails.**
+- **Outcome:** thinking tokens per routine turn (measured). These are the `thinking_tokens` the history parser reads
+  from Claude Code's log, summed over the main-conversation requests between a routine prompt and the next prompt.
+  A turn with no thinking figure is left out, not counted as zero. Each session contributes its mean.
+- **Share of the limits:** the difference is also shown as a share of the 5-hour and weekly limits per routine turn,
+  from the limit fit (estimated, as output tokens on Opus 5.5).
+- **Verdict:** the sequential, always-valid test the rollback checks use, tuned for a 25% effect.
+- **Stops (`rolled_back`):**
+  - the test_fail_rate guardrail;
+  - sessions coming out worse in the hook trial's comparison, which includes turns per session and tokens per
+    session;
+  - more thinking per routine turn with the steer;
+  - the re-prompt guardrail: corrections after a steered turn beyond the off arm's rate plus 10 points, at every
+    look.
+- **Ends (`off`):**
+  - switching the steer on for everyone;
+  - the live check no longer passing.
+- **Never turns the steer on:** a clean result reports the figures, and you decide. T2 needs a benchmark verdict
+  before Autopilot may switch anything on.
 
 ## Model-switch and cold-compact guards
 
@@ -544,6 +654,20 @@ ignore a replaced output whose shape does not match. It needs an API key and cos
    `extra_read`.
 4. Record the Claude Code version and date here.
 
+### Live check of the routine steer (manual)
+
+Not run yet. Use a throwaway data dir.
+
+1. `TROVE_DATA_DIR=/tmp/trove-probe trove hooks verify --prompt-context` and follow its steps: one session on Opus
+   5.5, four short prompts within a few minutes. Record the result, the version and the four token figures here. If
+   `context` is not `yes`, stop: the steer records only on that version.
+2. Check that the finished check says the session's model was one the steer acts on. If it does not, SessionStart's
+   `model` field is not in the form the allowlist expects, and the steer would stay off silently.
+3. Set `hook_routine_steer = "on"`, `trove hooks install`, start a session on Opus 5.5 and send "yes" after a reply
+   that asks a question. Check that the transcript has the line after the prompt, that the next turn's
+   `cache_read_input_tokens` covers the previous prompt, and that `hook_events` has `steered` then `turn_end`.
+4. Switch to Haiku 5.5 with `/model` and send "yes": nothing is added and nothing is recorded.
+
 ### Live check of the cold-resume guard (manual)
 
 Not run yet. It needs a Claude Code version that passes `trove hooks verify --prompt-block`, a large session and a
@@ -562,6 +686,17 @@ wait longer than its cache lifetime. Use a throwaway data dir.
 5. `claude -p --resume <id> "continue"` on a cold session: it must go through with no block.
 
 ## Known gaps
+
+- The routine steer has not run in a real session yet (see the live check above). Some details rest on transcripts
+  as they are observed to be, not as documented:
+  - where Claude Code writes the `additionalContext` line in the transcript;
+  - that `thinking_tokens` is in the log for Opus 5.5.
+
+  Without `thinking_tokens` in the log the trial cannot measure anything and keeps running until its time limit.
+  `UserPromptSubmit` also fires on turns Claude Code starts itself (a `/loop` iteration, a subagent reporting back);
+  their text is never routine, so they only close a routine turn. A routine prompt that Claude Code expands (a
+  custom slash command) is never seen as routine, because it starts with a slash. The correction list is English
+  only, so re-prompts in other languages are not counted.
 
 - The model-switch guard cannot tell a plan-mode toggle from a `/model` switch, and the opusplan finding counts both.
   The cold-compact guard's session_reset neighbour still forgets the session's reads when a `/compact` is stopped,

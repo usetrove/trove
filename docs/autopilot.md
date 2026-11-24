@@ -134,6 +134,24 @@ rule set on, because T2 needs a benchmark verdict before Autopilot may; the user
 a time. `trove autopilot trial <rule set> --stop` ends it at once. The numbers (sessions per arm, days) are the trial
 policy's placeholders.
 
+### The routine steer's trial (added 2026-11-24)
+
+`trove autopilot trial hook_routine_steer` trials Trove's own T2 technique B24 the same way. Its autopilot.json entry
+is the optimizer's own name, not `ext_<tool>`. It starts only when all of these hold:
+- the steer runs in `shadow` and has counted at least 20 routine prompts on Opus 5.5;
+- `trove hooks verify --prompt-context` has passed;
+- A/B is on;
+- the user agreed to its own consent text.
+
+The hooks assign the arms at SessionStart. The "on" arm is steered and the "off" arm only counted, so the trial
+compares routine turn with routine turn.
+
+It is judged on thinking tokens per routine turn (measured) and on that difference as a share of the limits
+(estimated), with the sequential always-valid tests the rollback checks use. Beside the usual guardrails it stops on
+re-prompts: the prompt after a routine turn being a correction more often than in the off arm, by more than 10
+points. It ends if the steer is switched on everywhere or the live check stops passing. Like a rule-set trial it never
+turns anything on. See [hooks.md](hooks.md#routine-steer).
+
 ## Settings policy (a third, separate yes; added 2026-11-24, plan 4.5)
 
 `trove autopilot settings on` asks for agreement to `settings-v1`, the only policy that edits a file outside
