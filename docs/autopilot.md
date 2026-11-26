@@ -4,6 +4,12 @@ Status: **first version built, thresholds not validated.** See "What is built" b
 not. Autopilot applies optimizations automatically after one consent, without giving up the rules in `PRINCIPLES.md`.
 Every number named here is a placeholder to be set from a measured benchmark, not a claim.
 
+**What a user gets on day one** (the optimize policy, added 2026-11-24): one yes in `trove setup`, and from the next
+session three guards warn before, or stop once, the actions that make Claude Code send a large context again. Every
+other saving is tested in shadow on the user's own sessions and is turned on only by evidence. Anything that hurts is
+rolled back. `trove status` shows all of it, each figure labeled measured or estimated. See
+[The optimize policy](#the-optimize-policy).
+
 ## Why
 
 Today every optimizer is `off` by default and the user moves each one to `shadow` and then `on` ([optimize.md](optimize.md)).
@@ -12,20 +18,70 @@ manual steps: the user opts in once, to a named policy, and Trove does the rest.
 
 ## What the user consents to
 
-One screen at setup, in plain English:
+One screen at setup, in plain English: **turn on the optimize policy?** The screen lists every item the yes covers,
+in the groups below, and says that every item is measured and rolled back if it hurts. Saying no is "just show me
+reports" (no state changes). `trove setup --autopilot` agrees for scripts; `--yes` alone never does.
 
-> Trove will watch your usage, test savings in the background without changing anything, and turn on only the
-> ones that are proven safe for your sessions. It can undo everything with `trove undo`. Nothing leaves your machine.
-
-Choices: **Turn on Autopilot**, or **Just show me reports** (today's behavior).
-
-The consent record stores the policy name, the policy version, the date and the paths enabled. It stores no
+The consent record (`autopilot.json`) stores the policy name and version, the date and each item's state. It stores no
 prompt text and no credentials.
 
 ### Rule 6 wording
 
-`PRINCIPLES.md` rule 6 now reads: every optimization is opt-in, one at a time or by agreeing once to a named policy.
+`PRINCIPLES.md` rule 6 reads: every optimization is opt-in, one at a time or by agreeing once to a named policy.
 Autopilot is that policy. The project owner approved the change on 2026-11-13.
+
+On 2026-11-24 the owner approved one exception: a named policy may switch on, at the next session boundary and
+without shadow evidence, a **T1 guard that never changes a request** (it only warns the user, or stops one prompt
+once). It is still measured and rolled back by its own guardrail. The optimize policy uses it for three guards and
+for nothing else.
+
+## The optimize policy
+
+Policy `optimize-v1`, added 2026-11-24. It is what `trove setup`, `/trove:setup` and `trove autopilot on` offer. A user
+on a lossless policy keeps it until they run `trove autopilot on` again and say yes to the new list.
+
+| Group | Items | What happens |
+|---|---|---|
+| On at the next session boundary | `hook_cold_resume` in **ask** mode (B21), `hook_model_switch` (B22), `hook_cold_compact` (B23) | On for every session that starts after the yes. They never change what is sent to the model. Each has its own guardrail (the user overriding it), which rolls it back. After the cool-down it is on again, at most twice |
+| Shadow first, promoted by evidence | `noise_normalizer`, `duplicate_result_collapser` (T1) | The lossless v1 rule: enough shadow sessions and net saving after its own cost |
+| | `cache_ttl_subagents` (C1) | The settings policy's own rules (see below). The optimize yes includes that policy |
+| | `effort_routine_prompts`, `thinking_clear` (B28, B29; T3, API key through the gateway only) | Held in shadow until a benchmark verdict clears them. After that: a session A/B on the user's own traffic, judged on API-equivalent cost |
+| | `hook_routine_steer` (B24, T2), `task_routine_agents` and `task_explore` (B25, T3), Ponytail (W9, T2) | Held in shadow until a benchmark verdict clears them. Their trials start from their own commands, so Autopilot then names the command (`trove autopilot trial ...`, `trove tasks apply ...`) |
+| Shadow only | `hook_write_to_edit`, `hook_edit_batch` (B26, B27) | Estimated in shadow and never turned on by Autopilot |
+
+None of the T2 and T3 items has a benchmark verdict today, so none of them leaves shadow. The consent screen says so.
+
+**Cold-resume ask mode.** The policy runs the guard in ask mode (`cold_resume_ask` in `autopilot.json`). Ask still
+acts as a warning until a live check, or the user's own session, shows that a stop reaches a typed prompt (see
+[hooks.md](hooks.md#cold-resume-guard)). A user who sets `hook_cold_resume` in `config.toml` takes the guard over, and
+their own `cold_resume_action` applies.
+
+**What a trial is judged on.** A trial under the optimize policy is judged on the bill:
+- **API key** (any traffic through the gateway): API-equivalent cost per session at list prices. The gateway's
+  comparison already uses this; a hook trial now uses each session's priced usage (sessions with an unpriced request
+  are left out, never counted as zero).
+- **Subscription** (no gateway): the share of the 5-hour plan limit per session, from the user's own
+  [limit fit](limit-fit.md). Labeled **estimated**: the sessions are measured, and their weight in the limit is the fit's
+  estimate. Until a fit exists, the trial is judged on tokens per session (measured), as before.
+
+The existing guardrails apply on top: `test_fail_rate` with the margins in `thresholds.toml`, turns, tool errors, and
+each technique's own guardrail. Promotion of the lossless items still reads their estimated net tokens. The planner
+shows that figure as a share of the limits (display only).
+
+**What the user sees.** `trove status` (and the "Optimize policy" section of `trove report`) lists each item by group
+with its state, its reason and its figures, each labeled:
+- guards: what they stopped, warned about and what the user did next (measured), the rebuilds avoided when the user
+  cleared the session (estimated), and the 5-hour meter in the hour after a stop against shadow (measured, not
+  randomized);
+- shadow items: shadow sessions and the estimated net tokens, with the share of the 5-hour limit when a fit exists
+  (estimated);
+- the setting: the last estimate (estimated);
+- every rollback in the last 30 days, with its reason.
+
+**Lossless trials under the optimize policy.** `trove autopilot trials on` is still a second yes. The policy name stays
+`optimize-v1` and the five trial candidates are added; `trials off` removes them again. A user who agreed to trials
+under `lossless-v2` loses them when moving to the optimize policy, because v3 names more candidates; `trials on`
+brings them back with a new yes.
 
 ## Paths by login type
 
@@ -173,7 +229,7 @@ every rule-set trial it never turns Ponytail on; the user decides.
 ## Settings policy (a third, separate yes; added 2026-11-24, plan 4.5)
 
 `trove autopilot settings on` asks for agreement to `settings-v1`, the only policy that edits a file outside
-`~/.trove`. It names one setting: `subagentPromptCacheTtl` in `~/.claude/settings.json`, the prompt cache lifetime of
+`~/.trove`. The optimize policy's yes includes it, and its consent screen says so. It names one setting: `subagentPromptCacheTtl` in `~/.claude/settings.json`, the prompt cache lifetime of
 subagents, workflows, compaction, session titles and the other requests outside the main conversation (technique C1,
 T1 `cache_control`, fix kind `cache_ttl_subagents`). `--yes` agrees without a prompt and `--json` needs it. `trove setup`,
 `--autopilot` and the other agreements never give it. `trove autopilot settings off` withdraws it.
@@ -253,7 +309,8 @@ Build order:
 ## Open questions
 
 1. Rule 6 wording (above). Who approves the change, and does it also need a note in `PRIVACY.md`?
-2. Which optimizers are eligible for automatic promotion on day one, and which stay manual?
+2. Which optimizers are eligible for automatic promotion on day one, and which stay manual? (Answered for the
+   optimize policy on 2026-11-24; see [The optimize policy](#the-optimize-policy).)
 3. How long is the shadow window for a user with very few sessions?
 4. Does a subscription user on the plugin path get the same promotion logic, given that hook-side savings are
    estimated from sizes and cannot be measured from provider usage fields?
@@ -280,23 +337,35 @@ Version 1 of the policy is named `lossless-v1`.
 | When it runs | hourly in the gateway; at session end in the hooks (`hooks.Maintain`) |
 | Commands | `trove autopilot [on\|off\|pause\|resume]`, and one more consent step in `trove setup` (`--autopilot` for scripts; `--yes` alone does not agree to it) |
 | Status line | adds ` · autopilot learning` or ` · autopilot N on`; no saving figure |
-| Short help | `trove --help` lists 8 commands; `trove advanced` lists the rest, which still work |
+| Short help | `trove --help` lists 9 commands (`status` added 2026-11-24); `trove advanced` lists the rest, which still work |
 | Receipt line | `trove receipts` and the session-end notice name the optimizers that were on, from the session's pin (`Receipt.On`) |
 | Weekly summary | `trove report` and `trove autopilot` show the last 7 days: what is on, what is collecting evidence, rollbacks and every change (`autopilot.Summarize`); `--json` has an `autopilot` object. No saving figure is stated |
 | Notifications | a desktop notice, once each, when an optimizer is turned on or rolled back; only with `[notifications] desktop = true`, and old events are never replayed (`autopilot.Announce`) |
-| Plugin | `/trove:setup` offers Autopilot with the consent points and runs `autopilot on --yes` only on a yes; `/trove:status` shows `autopilot` |
+| Plugin | `/trove:setup` offers the optimize policy with its list and runs `autopilot on --yes` only on a yes; `/trove:status` shows `autopilot` |
+| Optimize policy (2026-11-24) | `PolicyOptimize`, `DecideFor` (direct guards, held and shadow-only items), `VerdictBlocker` in `internal/autopilot/autopilot.go`; `Enable` records the settings policy and ask mode; `Config.ColdResumeAction` |
+| Trials judged on the bill | `BillWeigher` (advance.go) and `experiment.AnalyzeHookTrialBy`: API-equivalent cost, or % of the 5-hour limit from the fit |
+| `trove status` | what the optimize policy turned on, measured and rolled back, each figure labeled (`BuildPolicyView`, policyview.go); the same view in `trove report` |
 | Shadow planner | each check writes advice for every optimizer (`would turn on`, `needs your choice`, `collecting`, `not worth it`) into `autopilot.json`; it changes no state and no request (`internal/autopilot/planner.go`) |
 | Planner advice in % of the plan limits | each item's estimated net saving per shadow session, as a share of the 5-hour and weekly limits from the per-user fit ([limit-fit.md](limit-fit.md)), with its interval and basis. Display only: no decision reads it (`annotateLimits` in `internal/autopilot/advance.go`) |
 | Conflict check | before it promotes an optimizer, Autopilot asks the technique registry whether something already on (a built-in the user set, or a wrapped tool such as RTK) cannot run beside it; if so it is held back with the reason, and the planner says `blocked` (`internal/technique`, `autopilot.blockedBy`) |
 | Prerequisite check | before it promotes an optimizer, and at every check after, Autopilot reads the user's real setup (channels used, MCP server registered, custom agents, the stored hook probe record) and asks the technique registry whether the optimizer can really act there. One that cannot is held back as "not available in your setup", and a promotion is undone (back to shadow) if what it needs goes away, for example the hook probe no longer covers it after a Claude Code update (`autopilot.Setup`, `technique.HookNeeds`, `internal/hookcaps`) |
 
-Eligible on day one: `noise_normalizer` and `duplicate_result_collapser`, which are lossless and leave the cached
-prefix alone. `output_trimmer`, `cache_breakpoints` and `volatile_prefix_mover` are not eligible.
+Eligible on day one under `lossless-v1`: `noise_normalizer` and `duplicate_result_collapser`, which are lossless and
+leave the cached prefix alone. `output_trimmer`, `cache_breakpoints` and `volatile_prefix_mover` are not eligible. The
+optimize policy's list is in [The optimize policy](#the-optimize-policy).
 
 The defaults are `MinSessions` 10, `MinNetTokens` 2000 over 30 days, cool-down 7 days, at most 2 tries. They are
 placeholders. `trove autopilot` says so each time it shows them.
 
 ## Known gaps
+
+- **Optimize policy: a held item's trial is not started by Autopilot.** Once a benchmark verdict clears the routine
+  steer, the routine subagents, the Explore override or Ponytail, Autopilot only names the command that starts the
+  trial on the user's own sessions. Starting it automatically needs those trials' start checks moved into Autopilot.
+- **Optimize policy: the guards' saving is not a figure.** They have no shadow estimate (`NoSavingEstimate`). What
+  they did is counted, and tokens avoided are estimated only when the user clears a session after a stop.
+- **Optimize policy: the bill outcome is untested on real traffic.** It is unit-tested only. A subscriber's trial
+  falls back to tokens per session until the limit fit exists.
 
 - **Thresholds are not validated.** No benchmark has run. Do not describe them as tuned.
 - **Hook-side states and rule 5 (checked, not a gap).** The hooks read a snapshot that is rewritten when any

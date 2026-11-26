@@ -15,7 +15,7 @@ func TestSettingsPolicyNeedsItsOwnYes(t *testing.T) {
 	if code := h.run("autopilot", "settings", "on", "--yes"); code != 1 || !strings.Contains(h.err.String(), "trove autopilot on") {
 		t.Fatalf("settings while Autopilot is off: exit %d, stderr %q", code, h.err)
 	}
-	h.run("autopilot", "on", "--yes")
+	onLossless(t, h)
 	h.out.Reset()
 	if code := h.run("autopilot", "settings", "on"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)

@@ -15,6 +15,7 @@ import (
 var everydayCommands = map[string]bool{
 	"setup":     true, // find agents, offer Autopilot
 	"autopilot": true, // on, off, pause, resume, or see what it is doing
+	"status":    true, // what the optimize policy turned on, measured and rolled back
 	"report":    true, // also what plain `trove` prints
 	"fix":       true, // config fixes with a diff and undo
 	"undo":      true,

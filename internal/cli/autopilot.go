@@ -27,6 +27,74 @@ changing anything, and turn on only the ones that prove safe for your sessions.
 
 Undo it any time with ` + "`trove autopilot off`" + ` (or ` + "`trove undo`" + ` for everything).`
 
+// optimizeItems says, in plain English, what each item of the optimize policy does. It is the text the user agrees
+// to, so every name the policy names must have a line here (TestOptimizeConsentNamesEveryItem).
+var optimizeItems = map[string]string{
+	config.OptimizerHookColdResume:   "Cold-resume guard (ask mode): when you resume a large session whose cache has expired, it stops the first prompt once and says what continuing will cost; send it again to go ahead. It only warns until Trove has checked that a stop reaches you",
+	config.OptimizerHookModelSwitch:  "Model-switch guard: adds what a switch will cost on a large, warm context to Claude Code's own confirmation",
+	config.OptimizerHookColdCompact:  "Cold-compact guard: stops a manual /compact once when the cache has expired and the history is large; run it again to go ahead",
+	"noise_normalizer":               "Remove colour codes, progress frames and repeated blank lines from tool output (lossless)",
+	"duplicate_result_collapser":     "Replace a repeated identical tool result with a pointer (lossless, gateway only)",
+	"effort_routine_prompts":         "Low effort for the turn after a routine prompt (API key through the gateway only)",
+	"thinking_clear":                 "Clear old thinking in very long sessions (API key through the gateway only)",
+	config.OptimizerHookRoutineSteer: "Ask for a direct answer on routine prompts",
+	"task_routine_agents":            "Routine subagents for tests and lint on a cheaper model",
+	"task_explore":                   "The Explore subagent on a cheaper model",
+	"ext_ponytail":                   "Ponytail rules, which ask the agent to write less code (needs `trove external install ponytail`)",
+	config.OptimizerHookWriteToEdit:  "Write-to-Edit nudge",
+	config.OptimizerHookEditBatch:    "Edit-batch nudge",
+}
+
+// optimizeConsent is what `trove setup` and `trove autopilot on` ask, in plain words. The lists come from the policy,
+// so the words cannot drift from what the code does.
+func optimizeConsent(p autopilot.Policy) string {
+	line := func(n string) string { return "    - " + optimizeItems[n] + "\n" }
+	var direct, first, gated, shadow strings.Builder
+	for _, n := range p.Direct {
+		direct.WriteString(line(n))
+	}
+	for _, n := range append(append([]string{}, p.Eligible...), p.Probation...) {
+		if autopilot.VerdictBlocker(n) != "" {
+			gated.WriteString(line(n))
+		} else {
+			first.WriteString(line(n))
+		}
+	}
+	first.WriteString("    - The subagent cache lifetime: one Claude Code setting (subagentPromptCacheTtl in ~/.claude/settings.json),\n" +
+		"      set to one hour only when your history shows it pays. It is backed up and `trove undo` reverses it\n")
+	for _, n := range p.Held {
+		gated.WriteString(line(n))
+	}
+	for _, n := range p.ShadowOnly {
+		shadow.WriteString(line(n))
+	}
+	return fmt.Sprintf(optimizeConsentFmt, direct.String(), first.String(), gated.String(), strings.TrimSuffix(shadow.String(), "\n"))
+}
+
+const optimizeConsentFmt = `Turn on the optimize policy? Your one yes covers the list below and nothing else.
+Every item is measured, and is rolled back on its own if it hurts.
+
+On from your next session. These are guards: they never change what is sent to the model.
+%s
+Watched in shadow first (estimates only, nothing changed), and turned on only when your own sessions
+show it pays:
+%s
+Also watched in shadow, but each changes what the agent is told or which model runs, so it also needs
+a benchmark verdict before it is tried on half of your sessions. None has a verdict yet:
+%s
+Shadow only. Trove estimates these and never turns them on:
+%s
+
+  - How it is judged: the share of your plan limit each session uses (subscription; tokens per session
+    until Trove has fitted your plan-limit meter), or its cost at API prices (API key), plus guardrails
+    for failing tests, extra turns and tool errors.
+  - Changes reach only sessions that start afterwards, never one in progress.
+  - Anything you set yourself in config.toml is left exactly as you set it.
+  - It never touches your login, and nothing leaves your machine.
+  - The thresholds are placeholders, not yet validated by a benchmark.
+
+Undo it any time with ` + "`trove autopilot off`" + ` (or ` + "`trove undo`" + ` for everything).`
+
 // trialCandidates says, in plain English, what each trial candidate changes. It is the text the user agrees to,
 // so every name in a policy's Probation list must have a line here (TestTrialsConsentNamesEveryCandidate).
 var trialCandidates = map[string]string{
@@ -175,33 +243,34 @@ func runAutopilot(a *App, verb string, yes bool) error {
 	case "":
 	case "on":
 		cur, _ := config.LoadAutopilot(dir)
-		if cur.Active() {
-			changed = "Autopilot is already on."
+		if cur.Active() && cur.IsOptimize() {
+			changed = "Autopilot is already on, with the optimize policy."
 			break
 		}
+		// A user on a lossless policy agreed to less. The optimize policy is a new yes, never a quiet upgrade.
 		if !yes {
 			if a.JSON {
-				return fmt.Errorf("Autopilot needs your agreement. Run `trove autopilot on --yes` to agree without a prompt.")
+				return fmt.Errorf("The optimize policy needs your agreement. Run `trove autopilot on --yes` to agree without a prompt.")
 			}
-			_, _ = fmt.Fprint(a.Out, autopilotConsent+"\n\n")
-			if !a.confirm("Turn on Autopilot?") {
-				return a.emit(autopilotStatusJSON{Changed: "Autopilot not turned on."}, "Autopilot not turned on. Nothing was changed.")
+			if cur.Active() {
+				_, _ = fmt.Fprintf(a.Out, "Autopilot is on with the %s policy. The optimize policy covers more, listed below, and needs a new yes.\n\n", cur.Policy)
+			}
+			_, _ = fmt.Fprint(a.Out, optimizeConsent(autopilot.PolicyOptimize())+"\n\n")
+			if !a.confirm("Turn on the optimize policy?") {
+				return a.emit(autopilotStatusJSON{Changed: "Optimize policy not turned on."}, "Optimize policy not turned on. Nothing was changed.")
 			}
 		}
-		if err := ensureConfigFile(dir); err != nil {
+		if err := enableOptimize(a, dir); err != nil {
 			return err
 		}
-		if _, err := autopilot.Enable(dir, autopilot.DefaultPolicy(), time.Now()); err != nil {
-			return fmt.Errorf("cannot turn on Autopilot: %v. Check that %s is writable.", err, dir)
-		}
-		changed = "Autopilot is on. It starts in shadow mode and changes nothing yet."
+		changed = optimizeOnText
 	case "trials on":
 		cur, _ := config.LoadAutopilot(dir)
 		if !cur.Enabled {
 			return fmt.Errorf("Autopilot is not on. Run `trove autopilot on` first, then `trove autopilot trials on`.")
 		}
 		tp := autopilot.TrialPolicy()
-		if cur.Policy == tp.Name {
+		if cur.Policy == tp.Name || (cur.IsOptimize() && cur.HasTrials()) {
 			changed = "Trials are already on."
 			break
 		}
@@ -303,7 +372,7 @@ func runAutopilotStatus(a *App, dir, changed string) error {
 	if err != nil {
 		return err
 	}
-	p := autopilot.PolicyFor(f.Policy)
+	p := autopilot.PolicyOf(f)
 	st := autopilotStatusJSON{Enabled: f.Enabled, Paused: f.Paused, Policy: f.Policy, Trials: f.HasTrials(), Changed: changed}
 	st.Summary = autopilot.Summarize(f, time.Now(), 7)
 	for _, n := range f.Names() {
@@ -393,26 +462,46 @@ func renderAutopilot(s autopilotStatusJSON) string {
 // not agree to it, as with the status line.
 func autopilotStep(a *App, dir string, flag bool) (string, error) {
 	cur, _ := config.LoadAutopilot(dir)
-	if cur.Active() {
-		return "Autopilot is on (see `trove autopilot`).\n\n", nil
+	if cur.Active() && cur.IsOptimize() {
+		return "The optimize policy is on (see `trove status`).\n\n", nil
+	}
+	if cur.Active() && !flag {
+		return "Autopilot is on with the " + cur.Policy + " policy. `trove autopilot on` offers the optimize policy, which covers more.\n\n", nil
 	}
 	if !a.JSON && !flag {
-		_, _ = fmt.Fprint(a.Out, autopilotConsent+"\n\n")
+		_, _ = fmt.Fprint(a.Out, optimizeConsent(autopilot.PolicyOptimize())+"\n\n")
 	}
 	consent := flag
 	if !consent && !a.JSON {
-		consent = a.confirm("Turn on Autopilot?")
+		consent = a.confirm("Turn on the optimize policy?")
 	}
 	if !consent {
-		return "Autopilot not turned on. Turn it on any time with `trove autopilot on`.\n\n", nil
+		return "Optimize policy not turned on. Turn it on any time with `trove autopilot on`.\n\n", nil
 	}
-	if err := ensureConfigFile(dir); err != nil {
+	if err := enableOptimize(a, dir); err != nil {
 		return "", err
 	}
-	if _, err := autopilot.Enable(dir, autopilot.DefaultPolicy(), time.Now()); err != nil {
-		return "", fmt.Errorf("cannot turn on Autopilot: %v. Check that %s is writable.", err, dir)
+	return optimizeOnText + "\n\n", nil
+}
+
+// optimizeOnText is what the user sees once they agreed.
+const optimizeOnText = "The optimize policy is on. The three guards start with your next session; everything else starts in shadow " +
+	"and changes nothing until your own sessions show it pays. See what it does with `trove status`."
+
+// enableOptimize records the agreement to the optimize policy and rewrites the snapshot the hooks read, so the next
+// session that starts has the guards. Sessions already running keep what they started with (rule 5).
+func enableOptimize(a *App, dir string) error {
+	if err := ensureConfigFile(dir); err != nil {
+		return err
 	}
-	return "Autopilot is on. It starts in shadow mode and changes nothing yet.\n\n", nil
+	if _, err := autopilot.Enable(dir, autopilot.PolicyOptimize(), time.Now()); err != nil {
+		return fmt.Errorf("cannot turn on the optimize policy: %v. Check that %s is writable.", err, dir)
+	}
+	// Best effort: without it the hooks pick the guards up after the next session ends.
+	if cfg, err := config.Load(dir, a.Getenv); err == nil {
+		_ = syncHooks(a, dir, cfg)
+	}
+	return nil
 }
 
 // autopilotStepFor runs autopilotStep and records the outcome in the setup report.

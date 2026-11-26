@@ -24,7 +24,7 @@ func TestTrialsNeedAutopilotOnFirst(t *testing.T) {
 // refuses rather than guessing.
 func TestTrialsNeedTheirOwnExplicitYes(t *testing.T) {
 	h := newHarness(t, nil)
-	h.run("autopilot", "on", "--yes")
+	onLossless(t, h)
 	h.out.Reset()
 	if code := h.run("autopilot", "trials", "on"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
@@ -55,7 +55,7 @@ func TestTrialsNeedTheirOwnExplicitYes(t *testing.T) {
 
 func TestTrialsOnListsTheCandidatesInShadowAndOffRemovesThem(t *testing.T) {
 	h := newHarness(t, nil)
-	h.run("autopilot", "on", "--yes")
+	onLossless(t, h)
 	if code := h.run("autopilot", "trials", "on", "--yes"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
@@ -109,15 +109,16 @@ func TestTrialsOnListsTheCandidatesInShadowAndOffRemovesThem(t *testing.T) {
 	}
 }
 
-// Withdrawing Autopilot altogether withdraws trials, and agreeing to Autopilot again is a v1 agreement.
+// Withdrawing Autopilot altogether withdraws trials, and agreeing to Autopilot again is an agreement to the optimize
+// policy alone, with no trials.
 func TestAutopilotOffEndsTrialsAndOnStartsOverAtV1(t *testing.T) {
 	h := newHarness(t, nil)
-	h.run("autopilot", "on", "--yes")
+	onLossless(t, h)
 	h.run("autopilot", "trials", "on", "--yes")
 	h.run("autopilot", "off")
 	h.run("autopilot", "on", "--yes")
 	f, _ := config.LoadAutopilot(apDir(h))
-	if f.Policy != config.AutopilotPolicy || len(f.Trials()) != 0 {
+	if f.Policy != config.AutopilotPolicyOptimize || f.HasTrials() || len(f.Trials()) != 0 {
 		t.Errorf("policy %q after off then on", f.Policy)
 	}
 	if _, there := f.Entries["hook_repeat_read"]; there {
@@ -127,7 +128,7 @@ func TestAutopilotOffEndsTrialsAndOnStartsOverAtV1(t *testing.T) {
 
 func TestStatusSaysWhetherTrialsAreOnAndWhatOneNeeds(t *testing.T) {
 	h := newHarness(t, nil)
-	h.run("autopilot", "on", "--yes")
+	onLossless(t, h)
 	h.out.Reset()
 	h.run("autopilot")
 	if !strings.Contains(h.out.String(), "Trials") || !strings.Contains(h.out.String(), "are off") {
@@ -152,7 +153,7 @@ func TestStatusSaysWhetherTrialsAreOnAndWhatOneNeeds(t *testing.T) {
 
 func TestAnOptimizerOnTrialIsShownAsOnTrial(t *testing.T) {
 	h := newHarness(t, nil)
-	h.run("autopilot", "on", "--yes")
+	onLossless(t, h)
 	h.run("autopilot", "trials", "on", "--yes")
 	f, _ := config.LoadAutopilot(apDir(h))
 	f.Entries["hook_repeat_read"] = config.AutopilotEntry{State: config.AutopilotProbation, SinceMS: time.Now().UnixMilli(), Reason: "trial running: 3 sessions with it on and 4 with it off so far, each side needs 20"}
@@ -168,7 +169,7 @@ func TestAnOptimizerOnTrialIsShownAsOnTrial(t *testing.T) {
 
 func TestTrialsRejectAnUnknownSubAction(t *testing.T) {
 	h := newHarness(t, nil)
-	h.run("autopilot", "on", "--yes")
+	onLossless(t, h)
 	if code := h.run("autopilot", "trials", "maybe"); code != 1 || !strings.Contains(h.err.String(), "trials on") {
 		t.Errorf("exit %d, stderr %q", code, h.err)
 	}

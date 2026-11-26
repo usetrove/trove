@@ -78,9 +78,13 @@ func runReport(a *App, pf periodFlags) error {
 		return err
 	}
 	r.Autopilot = autopilotSummary(a)
+	r.OptimizePolicy = optimizePolicyView(a)
 	text := trimNL(report.Render(r, report.Options{Width: a.termWidth(), Color: a.Color()}))
 	if ap := r.Autopilot.Text(); ap != "" {
 		text += "\n\n" + ap
+	}
+	if op := r.OptimizePolicy.Text(); op != "" {
+		text += "\n\n" + op
 	}
 	err = a.emit(r, text)
 	// Only the default period is shared, so every upload covers the same span.

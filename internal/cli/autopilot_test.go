@@ -4,11 +4,26 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/usetrove/trove/internal/autopilot"
 	"github.com/usetrove/trove/internal/config"
 )
 
 func apDir(h *harness) string { return h.app.Getenv("TROVE_DATA_DIR") }
+
+// onLossless records an agreement to the first lossless policy, as `trove autopilot on` gave before the optimize
+// policy, for the tests of what such a user can still do (trials, the settings policy, rule-set trials).
+func onLossless(t *testing.T, h *harness) {
+	t.Helper()
+	dir := apDir(h)
+	if err := ensureConfigFile(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := autopilot.Enable(dir, autopilot.DefaultPolicy(), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestAutopilotNeedsAnExplicitYes(t *testing.T) {
 	// No terminal input: a prompt can never be answered, so nothing is turned on.
@@ -19,7 +34,7 @@ func TestAutopilotNeedsAnExplicitYes(t *testing.T) {
 	if f, _ := config.LoadAutopilot(apDir(h)); f.Enabled {
 		t.Fatal("Autopilot turned on without anyone saying yes")
 	}
-	if !strings.Contains(h.out.String(), "Nothing was changed") || !strings.Contains(h.out.String(), "Only lossless optimizers") {
+	if !strings.Contains(h.out.String(), "Nothing was changed") || !strings.Contains(h.out.String(), "Turn on the optimize policy?") {
 		t.Errorf("the consent text or the refusal is missing:\n%s", h.out)
 	}
 
@@ -89,7 +104,7 @@ func TestAutopilotStatusJSON(t *testing.T) {
 	if err := json.Unmarshal(h.out.Bytes(), &st); err != nil {
 		t.Fatalf("%v: %s", err, h.out)
 	}
-	if !st.Enabled || st.Policy != config.AutopilotPolicy || len(st.Optimizers) != 2 {
+	if !st.Enabled || st.Policy != config.AutopilotPolicyOptimize || len(st.Optimizers) != len(autopilot.PolicyOptimize().Names()) {
 		t.Errorf("status %+v", st)
 	}
 	if !strings.Contains(st.Thresholds, "not yet validated") {
@@ -117,7 +132,7 @@ func TestSetupAutopilotIsItsOwnConsent(t *testing.T) {
 	if f, _ := config.LoadAutopilot(apDir(h)); f.Enabled {
 		t.Fatal("--yes alone turned Autopilot on")
 	}
-	if !strings.Contains(h.out.String(), "Autopilot not turned on") {
+	if !strings.Contains(h.out.String(), "Optimize policy not turned on") {
 		t.Errorf("setup did not offer Autopilot:\n%s", h.out)
 	}
 
@@ -154,7 +169,7 @@ func TestHelpShowsOnlyTheEverydayCommands(t *testing.T) {
 			visible = append(visible, c.Name())
 		}
 	}
-	want := []string{"advanced", "autopilot", "doctor", "fix", "report", "setup", "undo", "uninstall"}
+	want := []string{"advanced", "autopilot", "doctor", "fix", "report", "setup", "status", "undo", "uninstall"}
 	if strings.Join(visible, ",") != strings.Join(want, ",") {
 		t.Errorf("visible commands %v, want %v", visible, want)
 	}
@@ -243,7 +258,7 @@ func TestReportShowsAutopilotOnlyAfterTheUserAgreed(t *testing.T) {
 			Learning []string `json:"learning"`
 		} `json:"autopilot"`
 	}
-	if err := json.Unmarshal(h.out.Bytes(), &r); err != nil || r.Autopilot == nil || r.Autopilot.Days != 7 || len(r.Autopilot.Learning) != 2 {
+	if err := json.Unmarshal(h.out.Bytes(), &r); err != nil || r.Autopilot == nil || r.Autopilot.Days != 7 || len(r.Autopilot.Learning) != len(autopilot.PolicyOptimize().Names())-3 {
 		t.Errorf("report --json lacks the autopilot summary: %v %s", err, h.out)
 	}
 }

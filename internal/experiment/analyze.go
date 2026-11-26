@@ -40,6 +40,11 @@ const (
 	// per session. See AnalyzeHookTrial. The name only says "tokens"; it is not a credential.
 	MetricTokens = "tokens_per_session" //nolint:gosec // G101: a metric name
 	MetricTurns  = "turns"
+	// MetricLimitPct and MetricAPICost are the optimize policy's headlines for a hook trial (AnalyzeHookTrialBy):
+	// percent of the 5-hour plan limit per session for a subscriber, from the limit fit (estimated), and
+	// API-equivalent cost per session at list prices for API-key traffic.
+	MetricLimitPct = "pct_5h_limit_per_session"
+	MetricAPICost  = "api_cost_per_session"
 	// MetricOutputPerTurn is output tokens per turn: what a rule set that asks for shorter replies should move.
 	// It is reported, never used to decide a status, so it cannot change the verdict of any other optimizer.
 	MetricOutputPerTurn = "output_tokens_per_turn" //nolint:gosec // G101: a metric name
@@ -392,6 +397,9 @@ func analyzeAll(ctx context.Context, db *store.DB, optimizer string, x config.Ex
 		}
 		mr := MetricResult{Metric: sp.metric, Kind: kind, Value: est, Low: lo, High: hi, Label: measure.Measured,
 			NOn: nOn, NOff: nOff, Strata: used, UnadjustedValue: est, UnadjustedLow: lo, UnadjustedHigh: hi}
+		if sp.metric == MetricLimitPct {
+			mr.Label = measure.Estimated // the sessions are measured; their weight in the limits is the fit's estimate
+		}
 		if sp.adjust {
 			keys, w := strata(on, off, minStratum)
 			if cupedUsable(onP, offP, keys) {
@@ -452,10 +460,15 @@ func decide(res *Result, x config.Experiment) {
 	if res.Headline == MetricTokens {
 		more, less, what = "use %s more tokens", "use %s fewer tokens", "tokens used"
 	}
+	lbl := "measured"
+	if res.Headline == MetricLimitPct {
+		more, less, what = "use %s more of the 5-hour limit", "use %s less of the 5-hour limit", "share of the limit used"
+		lbl = "estimated from your meter"
+	}
 	switch {
 	case c.Low > 0 && c.Value >= costLimit:
 		res.Status = CostsMore
-		res.Reason = fmt.Sprintf("with it on, sessions "+more+" (measured, 95%% range %s to %s) than the same kind of sessions without it", pct(c.Value), pct(c.Low), pct(c.High))
+		res.Reason = fmt.Sprintf("with it on, sessions "+more+" ("+lbl+", 95%% range %s to %s) than the same kind of sessions without it", pct(c.Value), pct(c.Low), pct(c.High))
 	default:
 		for _, o := range res.Outcomes {
 			limit := outLimit
@@ -471,10 +484,10 @@ func decide(res *Result, x config.Experiment) {
 		switch {
 		case c.High < 0:
 			res.Status = Saves
-			res.Reason = fmt.Sprintf("with it on, sessions "+less+" (measured, 95%% range %s to %s); %s", pct(-c.Value), pct(-c.High), pct(-c.Low), measure.TextNoRegression)
+			res.Reason = fmt.Sprintf("with it on, sessions "+less+" ("+lbl+", 95%% range %s to %s); %s", pct(-c.Value), pct(-c.High), pct(-c.Low), measure.TextNoRegression)
 		default:
 			res.Status = NoClearEffect
-			res.Reason = fmt.Sprintf("no clear difference in "+what+" yet (measured change %s, 95%% range %s to %s)", signed(c.Value), signed(c.Low), signed(c.High))
+			res.Reason = fmt.Sprintf("no clear difference in "+what+" yet ("+lbl+" change %s, 95%% range %s to %s)", signed(c.Value), signed(c.Low), signed(c.High))
 		}
 	}
 }

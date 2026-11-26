@@ -2,7 +2,7 @@
 
 <img src="docs/assets/trove-banner.svg" alt="Trove: the efficiency layer for AI coding agents" width="720">
 
-Find the tokens your agent wastes, fix them with changes you approve one at a time, and check that your results did not suffer.
+Say yes once. From your next session Trove warns you before costly cache rebuilds, tests every other saving on your own sessions, and keeps only what your own usage shows works.
 
 ![Release](https://img.shields.io/github/v/release/usetrove/trove?style=flat-square) ![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square) ![Go](https://img.shields.io/badge/Go-1.27.3%2B-00ADD8?style=flat-square) ![Platforms](https://img.shields.io/badge/macOS%20%7C%20Linux-supported-brightgreen?style=flat-square) ![Status](https://img.shields.io/badge/status-pre--release-orange?style=flat-square)
 
@@ -12,13 +12,22 @@ Find the tokens your agent wastes, fix them with changes you approve one at a ti
 
 ---
 
-Trove reads the session history your agent already keeps on disk and finds where tokens go to waste: repeated reads, bloated context, cache breakers, unused tool definitions. It proposes fixes, shows you the exact change, and only applies it when you say yes. Then it measures whether the change helped.
+### What you get on day one
+
+Run `/trove:setup` in Claude Code (or `trove setup` in a terminal) and answer one question: **turn on the optimize policy?** It shows the whole list first. If you say yes, this is what happens from your next session:
+
+- **Three guards are on.** Some actions make Claude Code send a large session's whole context again, and you pay for all of it. Trove warns you before three of them, or stops the action once: resuming a session whose cache has expired, switching model on a large context, and a manual `/compact` on a cold cache. The guards never change what is sent to the model. Trove counts what each one did (measured).
+- **Everything else is tested first.** The other savings start in **shadow**: Trove estimates what each would save on your own sessions and changes nothing. One is turned on only when your own evidence shows it pays. For a subscription that means the share of your plan limit each session uses; for an API key it means the cost at API prices. Changes to what the agent is told, or to which model runs, also need a benchmark verdict first. None has one yet.
+- **Anything that hurts is rolled back.** Every change is measured once it is on, and goes back to shadow by itself if a guardrail trips: failing tests, extra turns, tool errors, or a cost that goes up.
+- **You can see all of it.** `trove status` shows what the policy turned on, what it measured and what it rolled back. `trove report` shows where your tokens went. Every number is labeled measured or estimated.
+
+Prefer to approve each change yourself? Say no. Trove still reads the session history your agent keeps on disk and finds where tokens go to waste: repeated reads, bloated context, cache breakers, unused tool definitions. It shows you the exact change for each fix and applies it only when you say yes (`trove fix`).
 
 One small program. No account. Nothing to sign up for.
 
 - **Local-first.** Everything lives in `~/.trove`. Nothing is sent anywhere unless you opt in.
 - **Honest numbers.** Every figure is labeled **measured** (counted from usage the provider reported) or **estimated** (derived from list prices or an assumption). Dollar figures are estimates, not invoices.
-- **Proves before acting.** Every optimization is opt-in, estimated in shadow mode first, measured once on, and rolled back if its guardrails trip.
+- **Proves before acting.** Every optimization is opt-in: one at a time, or through the one yes to the optimize policy. Each is estimated in shadow first, measured once it is on, and rolled back if its guardrails trip. The only exception is the three guards, which go on from your next session because they never change what is sent to the model.
 - **Works with** Claude Code, on a subscription plan or with your own API keys. See [Supported agents](#supported-agents) for exactly what works where.
 
 ## Get started
@@ -116,14 +125,14 @@ Once it is set up there is nothing to run day to day:
 
 1. **Install and add the plugin** (the two steps above).
 2. **Start Claude Code.** On the first session Trove reads your existing history (read-only, metadata only) and shows a report: what you spent, the waste it found, and what it would suggest.
-3. **Run `/trove:setup` once.** It shows one screen, in plain English, and asks you to choose **Turn on Autopilot** or **Just show me reports**. It also offers optional extras (a status line, Trove's MCP tools, a scout subagent) and shows what each costs in tokens first. **Nothing is switched on until you say yes.**
-4. **Use Claude Code as normal.** With Autopilot on, each optimization starts in **shadow**, where it runs on a copy and only records what it would have saved, after paying for its own overhead. It is promoted only if it clears the bar over enough of your own sessions, and only at the start of a new session, never in the middle of one. Once on, it is measured, and it drops back to shadow by itself if the net saving goes negative, outcomes get worse, or errors rise. If anything fails inside Trove, your original request is forwarded unchanged.
+3. **Run `/trove:setup` once.** It shows the optimize policy's list in plain English and asks one question: turn it on, or just show reports. It also offers optional extras (a status line, Trove's MCP tools, a scout subagent) and shows what each costs in tokens first. **Nothing is switched on until you say yes.**
+4. **Use Claude Code as normal.** With the optimize policy on, the three guards act from your next session. Every other optimization starts in **shadow**: it runs on a copy and only records what it would have saved, after paying for its own overhead. It is promoted only if it clears the bar over enough of your own sessions, and only at the start of a new session, never in the middle of one. Once on, it is measured, and it drops back to shadow by itself if the net saving goes negative, outcomes get worse, or errors rise. If anything fails inside Trove, your original request is forwarded unchanged.
 5. **Glance at it now and then.** A status line, a one-line receipt when a session ends, and a weekly summary. You are only interrupted when a decision is needed, such as a rollback.
 
 Most people need three commands: `/trove:setup` once, `trove` for the report, and `trove status` to see what is on. To step back, use `trove autopilot pause`, `trove autopilot off`, `trove undo` or `trove uninstall`. The other commands are optional: finer control (`trove fix`, `trove hooks install`, `trove mcp install`), the API-key gateway, and developer tools (`trove bench`, `trove stress`).
 
 > [!NOTE]
-> Autopilot is a first version: how much shadow evidence it needs before turning an optimizer on (10 shadow sessions and 2,000 estimated net tokens) is a placeholder not yet validated by a benchmark. For trials, the sessions needed on each side come from the `launch-1` and `launch-3` benchmarks for safe (T1) and routing (T3) changes; behavioural (T2) changes still use placeholders, and the riskier optimizations need a separate, second yes (`trove autopilot trials on`). The plugin has run on real Claude Code only inside the benchmark (`launch-3`, Claude Code 2.1.319), where its hooks acted in 2 of 30 sessions; it has not yet been checked across everyday use. See [Supported agents](#supported-agents) and [Measured results](#measured-results).
+> Autopilot is a first version. The optimize policy was added on 2026-11-24 and has not yet run across everyday use. How much shadow evidence it needs before turning an optimizer on (10 shadow sessions and 2,000 estimated net tokens) is a placeholder not yet validated by a benchmark. For trials, the sessions needed on each side come from the `launch-1` and `launch-3` benchmarks for safe (T1) and routing (T3) changes; behavioural (T2) changes still use placeholders, and the riskier optimizations need a separate, second yes (`trove autopilot trials on`). The plugin has run on real Claude Code only inside the benchmark (`launch-3`, Claude Code 2.1.319), where its hooks acted in 2 of 30 sessions; it has not yet been checked across everyday use. See [Supported agents](#supported-agents) and [Measured results](#measured-results).
 
 ## How it works
 

@@ -81,6 +81,7 @@ func NewRoot(a *App) *cobra.Command {
 		newShare(a),
 		newDoctor(a),
 		newAutopilot(a),
+		newStatus(a),
 		newTechniques(a),
 		newPricing(a),
 		newOptimize(a),

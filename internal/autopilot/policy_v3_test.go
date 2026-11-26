@@ -225,8 +225,8 @@ func TestAV3CandidateWithGoodShadowEvidenceStartsATrialOneAtATime(t *testing.T) 
 	_ = technique.CapMCPServer
 }
 
-// The cold-resume guard changes what the user sees, not what is sent, so only the user turns it on: no policy may
-// name it (decided 2026-11-23, docs/hooks.md). Its guardrail can still lower it to shadow.
+// The cold-resume guard changes what the user sees, not what is sent: no lossless policy may name it (decided
+// 2026-11-23, docs/hooks.md). Only the optimize policy does, as a direct guard (2026-11-24, TestDecideDirect).
 func TestNoPolicyPromotesTheColdResumeGuard(t *testing.T) {
 	for _, p := range []Policy{DefaultPolicy(), PolicyV2(), PolicyV3(), TrialPolicy()} {
 		for _, n := range p.Names() {
@@ -237,7 +237,7 @@ func TestNoPolicyPromotesTheColdResumeGuard(t *testing.T) {
 	}
 }
 
-// Neither rebuild guard may be named by a policy either (decided 2026-11-24, docs/hooks.md).
+// Neither rebuild guard may be named by a lossless policy either; the optimize policy names both as direct guards.
 func TestNoPolicyPromotesTheRebuildGuards(t *testing.T) {
 	for _, p := range []Policy{DefaultPolicy(), PolicyV2(), PolicyV3(), TrialPolicy()} {
 		for _, n := range p.Names() {
@@ -248,7 +248,8 @@ func TestNoPolicyPromotesTheRebuildGuards(t *testing.T) {
 	}
 }
 
-// The routine steer is T2 with no benchmark verdict: no policy may name it; only the user starts its trial.
+// The routine steer is T2 with no benchmark verdict: no lossless policy may name it; the optimize policy holds it in
+// shadow (TestNothingBeyondT1LeavesShadowWithoutAVerdict), and only the user starts its trial.
 func TestNoPolicyPromotesTheRoutineSteer(t *testing.T) {
 	for _, p := range []Policy{DefaultPolicy(), PolicyV2(), PolicyV3(), TrialPolicy()} {
 		for _, n := range p.Names() {
@@ -259,7 +260,8 @@ func TestNoPolicyPromotesTheRoutineSteer(t *testing.T) {
 	}
 }
 
-// The code-write nudges are T2 with no benchmark verdict: no policy may name them; only the user turns them on.
+// The code-write nudges are T2 with no benchmark verdict: no lossless policy may name them; the optimize policy keeps
+// them in shadow only. Only the user turns them on.
 func TestNoPolicyPromotesTheCodeWriteNudges(t *testing.T) {
 	for _, p := range []Policy{DefaultPolicy(), PolicyV2(), PolicyV3(), TrialPolicy()} {
 		for _, n := range p.Names() {

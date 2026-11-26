@@ -90,6 +90,8 @@ type Report struct {
 	// Autopilot is what Autopilot did in the last week. Nil unless the user agreed to it.
 	// It states no saving figure, so nothing in it needs a measured or estimated label.
 	Autopilot *autopilot.Summary `json:"autopilot,omitempty"`
+	// OptimizePolicy is what the optimize policy turned on, measured and rolled back. Nil unless the user agreed to it.
+	OptimizePolicy *autopilot.PolicyView `json:"optimize_policy,omitempty"`
 	// Upstreams is capacity and cost per OpenAI-compatible server (self-hosted or
 	// open-weight). Empty when no such traffic was recorded.
 	Upstreams []measure.UpstreamRow `json:"upstreams,omitempty"`

@@ -39,7 +39,7 @@ func TestTrialsConsentNamesEveryCandidateAndQuotesThePolicysNumbers(t *testing.T
 // A user who agreed to v2 keeps exactly v2 until they agree again, and the upgrade is a new yes that says what it adds.
 func TestMovingFromV2ToV3NeedsANewYesAndKeepsWhatWasAlreadyKept(t *testing.T) {
 	h := newHarness(t, nil)
-	h.run("autopilot", "on", "--yes")
+	onLossless(t, h)
 	// Put the file in the state a v0.3.0 user is in: v2 consent, one trial candidate already kept.
 	if _, err := autopilot.EnableTrials(apDir(h), autopilot.PolicyV2(), time.Now()); err != nil {
 		t.Fatal(err)

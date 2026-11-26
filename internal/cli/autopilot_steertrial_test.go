@@ -19,9 +19,7 @@ import (
 func TestAutopilotSteerTrialCommand(t *testing.T) {
 	h := newHarness(t, nil)
 	dir := apDir(h)
-	if code := h.run("autopilot", "on", "--yes"); code != 0 {
-		t.Fatalf("on: %s", h.err)
-	}
+	onLossless(t, h) // under the optimize policy the steer starts in shadow by itself (TestOptimizePolicyRunsTheSteerInShadow)
 	trials := func() []string { f, _ := config.LoadAutopilot(dir); return f.RuleTrials() }
 	setState := func(s string) {
 		t.Helper()

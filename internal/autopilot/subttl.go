@@ -385,6 +385,15 @@ func EnableSettings(dir string, now time.Time) (config.AutopilotFile, error) {
 	if err != nil {
 		return f, err
 	}
+	if _, err := enableSettingsIn(&f, now); err != nil {
+		return f, err
+	}
+	return f, config.SaveAutopilot(dir, f)
+}
+
+// enableSettingsIn records the agreement to the settings policy in f, which is not saved. The optimize policy's
+// own yes covers it, so Enable calls this too.
+func enableSettingsIn(f *config.AutopilotFile, now time.Time) (*config.AutopilotFile, error) {
 	if !f.Enabled {
 		return f, fmt.Errorf("Autopilot is not on. Run `trove autopilot on` first")
 	}
@@ -396,7 +405,7 @@ func EnableSettings(dir string, now time.Time) (config.AutopilotFile, error) {
 		f.Settings[SubTTLName] = config.AutopilotSetting{AutopilotEntry: config.AutopilotEntry{State: config.AutopilotShadow, SinceMS: now.UnixMilli(),
 			Reason: "collecting estimates", Attempts: st.Attempts}}
 	}
-	return f, config.SaveAutopilot(dir, f)
+	return f, nil
 }
 
 // DisableSettings withdraws the agreement. Autopilot's own change, if any, is taken back at the next session
