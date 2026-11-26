@@ -311,19 +311,22 @@ unit = "chars"
 limit = 30000
 setting_key = "bashOutputMaxChars"
 docs_version = "2.1.314"
-doc_url = "https://code.claude.com/docs/en/settings-reference.md"
-verified_on = "2026-11-13"
-notes = "Successful Bash or PowerShell output Claude receives inline; the rest is saved to a file."
+doc_url = "https://code.claude.com/docs/en/tools-reference.md"
+verified_on = "2026-11-25"
+persisted = true
+preview_chars = 2000
+notes = "Successful Bash or PowerShell output Claude receives inline. Past it Claude Code saves the whole output to a file and Claude gets the path and a preview of up to the first 2,000 characters (tools-reference, Output limits, read 2026-11-25). A failure is cut to a head-and-tail excerpt of about 10,000 characters instead; failures are never rewritten, so that case is not modelled."
 
 [[output_cap]]
 tool = "mcp"
-unit = "tokens"
-limit = 25000
-setting_key = "MAX_MCP_OUTPUT_TOKENS"
+unit = "chars"
+limit = 50000
 docs_version = "2.1.314"
-doc_url = "https://code.claude.com/docs/en/env-vars.md"
-verified_on = "2026-11-13"
-notes = "A tool that declares anthropic/maxResultSizeChars uses that limit for text instead, so this is the default case only."
+doc_url = "https://code.claude.com/docs/en/mcp.md"
+verified_on = "2026-11-25"
+persisted = true
+preview_chars = 0
+notes = "A successful text result longer than 50,000 characters is saved to a file whatever its token count, and the conversation gets a message naming the path (mcp, MCP output limits and warnings, read 2026-11-25). The 25,000-token MAX_MCP_OUTPUT_TOKENS limit is higher than 50,000 characters at Trove's 3.5 bytes per token, so the character limit is the one that binds by default. A tool that declares anthropic/maxResultSizeChars uses its own limit, so this is the default case only."
 
 [[output_cap]]
 tool = "Read"

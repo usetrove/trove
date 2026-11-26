@@ -58,13 +58,38 @@ func outputCapBytes(tool string, bytesPerToken float64) (int64, bool) {
 	return oc.Limit, true
 }
 
-// cappedSaving is the bytes a rewrite really keeps out of the context: what the
-// agent would have passed on (before, cut at the cap) minus what it passes on now
-// (after, cut at the same cap). A tool with no cap is counted whole. It is never
-// negative.
-func cappedSaving(tool string, before, after int, bytesPerToken float64) int {
-	if c, ok := outputCapBytes(tool, bytesPerToken); ok {
-		before, after = min(before, int(c)), min(after, int(c))
+// seenBytes is how many bytes of an n-byte output the model sees once the agent
+// has applied its cap: all of it under the cap; past it, the cap itself where the
+// agent cuts the output, or only its short preview where the agent saves the output
+// to a file instead (Claude Code does that for Bash and MCP results). A tool with no
+// cap is seen whole.
+func seenBytes(tool string, n int, bytesPerToken float64) int {
+	c := builtinCaps()
+	key := capTool(tool)
+	if c == nil || key == "" {
+		return n
 	}
-	return max(before-after, 0)
+	oc, ok := c.OutputCap(settings.ClaudeCode, key)
+	if !ok {
+		return n
+	}
+	limit := oc.Limit
+	if oc.Unit == settings.CapTokens {
+		limit = int64(float64(oc.Limit) * bytesPerToken)
+	}
+	switch {
+	case int64(n) <= limit:
+		return n
+	case oc.Persisted:
+		return int(min(int64(n), oc.PreviewChars))
+	}
+	return int(limit)
+}
+
+// cappedSaving is the bytes a rewrite really keeps out of the context: what the
+// model would have seen of the output before (seenBytes) minus what it sees of
+// the rewritten one. It is never negative: a rewrite of an output the agent would
+// have saved to a file, leaving only a short preview, saves nothing.
+func cappedSaving(tool string, before, after int, bytesPerToken float64) int {
+	return max(seenBytes(tool, before, bytesPerToken)-seenBytes(tool, after, bytesPerToken), 0)
 }

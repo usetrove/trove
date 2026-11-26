@@ -17,7 +17,7 @@ func TestOutputCapBytes(t *testing.T) {
 	}{
 		{"Bash", 30000},
 		{"PowerShell", 30000},
-		{"mcp__github__search", int64(25000 * DefaultBytesPerToken)},
+		{"mcp__github__search", 50000},
 		{"Read", int64(25000 * DefaultBytesPerToken)},
 		{"Grep", 0}, // no verified cap: nothing is limited
 		{"", 0},
@@ -37,8 +37,12 @@ func TestCappedSaving(t *testing.T) {
 		want          int
 	}{
 		{"under the cap is unchanged", "Bash", 20000, 5000, 15000},
-		{"agent would have cut 100k to 30k, trimmed to 5k", "Bash", 100000, 5000, 25000},
+		// Past 30,000 characters Claude Code saves Bash output to a file and shows a 2,000-character preview.
+		{"agent would have shown a 2k preview, trimmed to 5k: nothing saved", "Bash", 100000, 5000, 0},
+		{"agent would have shown a 2k preview, trimmed to 1k", "Bash", 100000, 1000, 1000},
 		{"both over the cap: nothing was saved", "Bash", 100000, 40000, 0},
+		{"MCP past 50,000 characters becomes a path: nothing to save", "mcp__x__y", 60000, 3000, 0},
+		{"MCP under its limit counts whole", "mcp__x__y", 40000, 3000, 37000},
 		{"no cap for an unknown tool", "Grep", 100000, 5000, 95000},
 		{"growth is never a saving", "Bash", 1000, 2000, 0},
 	} {
@@ -53,9 +57,9 @@ func TestToolOutputSavingsStopAtAgentCap(t *testing.T) {
 	e := toolEngine(t, 100, toolStub{name: "x", outFn: shorten})
 	in := ToolOutput{Parts: []Part{{Text: strings.Repeat("a", 100000)}}}
 	_, reps := e.TransformToolOutput(context.Background(), ToolCall{Name: "Bash"}, in, stateOf(config.StateShadow))
-	// 100,000 -> 5 bytes, but the agent would only have shown 30,000.
-	if len(reps) != 1 || reps[0].BytesRemoved != 30000-5 {
-		t.Fatalf("Bash savings = %+v, want %d bytes", reps, 30000-5)
+	// 100,000 -> 5 bytes, but the agent would only have shown its 2,000-character preview.
+	if len(reps) != 1 || reps[0].BytesRemoved != 2000-5 {
+		t.Fatalf("Bash savings = %+v, want %d bytes", reps, 2000-5)
 	}
 	_, reps = e.TransformToolOutput(context.Background(), ToolCall{Name: "Grep"}, in, stateOf(config.StateShadow))
 	if len(reps) != 1 || reps[0].BytesRemoved != 100000-5 {

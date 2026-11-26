@@ -28,6 +28,10 @@ type OutputCap struct {
 	DocURL      string `toml:"doc_url" json:"doc_url"`
 	VerifiedOn  string `toml:"verified_on" json:"verified_on"` // YYYY-MM-DD
 	Notes       string `toml:"notes" json:"notes,omitempty"`
+	// Persisted is true when output past the limit is not cut there but saved to a file: the model then sees
+	// only the file's path and the first PreviewChars characters (0: the path alone).
+	Persisted    bool  `toml:"persisted" json:"persisted,omitempty"`
+	PreviewChars int64 `toml:"preview_chars" json:"preview_chars,omitempty"`
 }
 
 // Validate rejects a cap Trove must not use in an estimate.
