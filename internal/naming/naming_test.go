@@ -39,7 +39,8 @@ var allowed = []struct {
 	{regexp.MustCompile(`^bench/(tasks|results|cache)/`), "benchmark data and generated output"},
 }
 
-var skipDirs = map[string]bool{".git": true, "dist": true, "node_modules": true, "__pycache__": true, ".pytest_cache": true, "trovebench.egg-info": true}
+// trove-plan is the local, git-ignored build plan (it is not shipped), so its file names are not product names.
+var skipDirs = map[string]bool{".git": true, "dist": true, "node_modules": true, "__pycache__": true, ".pytest_cache": true, "trovebench.egg-info": true, "trove-plan": true}
 
 func repoRoot(t *testing.T) string {
 	t.Helper()
