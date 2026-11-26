@@ -58,6 +58,7 @@ func (h *handler) postRead(in Input, key string) ([]byte, error) {
 		return nil, nil
 	}
 	h.featRead(in, key)
+	h.ckCall(in, key, ckRead)
 	st := h.session(key, in)
 	ol := st.Pins[config.OptimizerHookReadOutline]
 	h.recover = h.snap.TroveRun && ol != "" && ol != stateOff
@@ -169,6 +170,9 @@ func (h *handler) reset(in Input, key string) ([]byte, error) {
 				_ = h.emit(key, n, KindArmOff, 0, 0)
 			}
 		}
+		if v := st.Pins[config.OptimizerHookSessionCheckpoint]; v != "" && v != stateOff && h.agent == AgentClaude {
+			startCkJournal(h.dir, key) // the per-call hooks record for the session checkpoint only while it exists
+		}
 		// Tuned values are pinned with the states, so they cannot change mid-session
 		// (rule 5). The repo is the hash of the working directory; none is pinned
 		// when the directory is unknown or the repo has no applied tuning.
@@ -185,13 +189,32 @@ func (h *handler) reset(in Input, key string) ([]byte, error) {
 	if in.Event == "PreCompact" || in.Event == "PostCompact" || (in.Event == "SessionStart" && in.Source != "" && in.Source != "startup") {
 		st.do(op{T: "clear"})
 	}
+	if in.Event == "SessionStart" && (in.Source == "compact" || in.Source == "clear") && st.Pins[pinCkFill] != "" && st.Pins[pinCkFill] != "0" {
+		st.do(op{T: "pin", N: pinCkFill, V: "0"}) // the context is small again; milestones count from here
+	}
 	if err := st.save(h.dir, key); err != nil {
 		return nil, err
+	}
+	if in.Event == "PreCompact" {
+		// Last, so the reset itself is saved first. Best effort: a note that is not saved costs only the restore.
+		if err := h.checkpoint(in, key, "precompact"); err != nil {
+			logf(h.dir, EventReset, "session checkpoint: %v", err)
+		}
 	}
 	if in.Event != "SessionStart" || !h.ruleTrialAgent() {
 		return nil, nil
 	}
-	return ruleTrialContext(st.Pins), nil
+	var texts []string
+	if t := ruleTrialText(st.Pins); t != "" {
+		texts = append(texts, t)
+	}
+	if t := h.ckRestore(in, key, st); t != "" {
+		texts = append(texts, t)
+	}
+	if len(texts) == 0 {
+		return nil, nil
+	}
+	return sessionContextJSON(strings.Join(texts, "\n\n")), nil
 }
 
 func (h *handler) ruleTrialAgent() bool { return h.agent == "" || h.agent == AgentClaude }
@@ -200,6 +223,15 @@ func (h *handler) ruleTrialAgent() bool { return h.agent == "" || h.agent == Age
 // "on" arm of, or nil. The pin decides, so a session keeps its arm when the trial ends mid-way (rule 5). A tool
 // Trove does not ship, or any error, adds nothing (rule 4).
 func ruleTrialContext(pins map[string]string) []byte {
+	t := ruleTrialText(pins)
+	if t == "" {
+		return nil
+	}
+	return sessionContextJSON(t)
+}
+
+// ruleTrialText is the text ruleTrialContext adds, or "".
+func ruleTrialText(pins map[string]string) string {
 	var names []string
 	for n, v := range pins {
 		if config.IsRuleTrial(n) && v == stateOn {
@@ -213,10 +245,7 @@ func ruleTrialContext(pins map[string]string) []byte {
 			texts = append(texts, m)
 		}
 	}
-	if len(texts) == 0 {
-		return nil
-	}
-	return sessionContextJSON(strings.Join(texts, "\n\n"))
+	return strings.Join(texts, "\n\n")
 }
 
 // subagent is pre_tool_subagent. In the "off" arm of a scout trial it declines a call to the scout subagent, so
@@ -295,6 +324,9 @@ func (h *handler) postOutput(in Input, key string) ([]byte, error) {
 	case "Bash", "Grep", "Glob":
 	default:
 		return nil, nil
+	}
+	if in.ToolName != "Bash" {
+		h.ckCall(in, key, ckOther) // Bash is counted once, by post_tool_test_result, which also sees failures
 	}
 	keys, texts, ok := responseTexts(in.ToolResponse)
 	if !ok || interrupted(in.ToolResponse) {
@@ -439,6 +471,12 @@ func (h *handler) postRun(in Input, key string) error {
 func (h *handler) sessionEnd(in Input, key string) error {
 	defer func() { _ = os.Remove(sessionPath(h.dir, key)) }()
 	defer func() { _ = os.Remove(featPath(h.dir, key)) }()
+	defer func() { _ = os.Remove(ckJournalPath(h.dir, key)) }()
+	// First, while the transcript is complete and before the database work uses the time budget. Best effort.
+	if err := h.checkpoint(in, key, "session_end"); err != nil {
+		logf(h.dir, EventSessionEnd, "session checkpoint: %v", err)
+	}
+	sweepBoundaries(h.dir, h.now())
 	h.coldSessionEnd(in, key) // before Maintain, so its count is ingested now
 	h.sweepOldSessions()
 	ctx, cancel := context.WithTimeout(context.Background(), endDeadline-250*time.Millisecond)

@@ -72,6 +72,7 @@ func (h *handler) postEdit(in Input, key string) error {
 		if in.ToolInput.FilePath != "" {
 			h.feat(key, "E "+hex64(in.ToolInput.FilePath))
 		}
+		h.ckCall(in, key, ckEdit)
 	}
 	return nil
 }

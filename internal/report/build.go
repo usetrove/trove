@@ -242,6 +242,9 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	if r.ColdCompact, err = measure.GuardSummary(ctx, db, w, config.OptimizerHookColdCompact); err != nil {
 		return r, err
 	}
+	if r.Checkpoint, err = measure.CheckpointSummary(ctx, db, w); err != nil {
+		return r, err
+	}
 	return r, nil
 }
 

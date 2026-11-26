@@ -55,6 +55,12 @@ const (
 	editBatchTokens   = 100
 )
 
+// sessionCheckpointTokens is the most hook_session_checkpoint adds at one /compact or /clear: its 2,000-byte cap
+// plus up to 68 bytes of Claude Code's wrapper, at 3.5 bytes per token, rounded up. A test in internal/hooks keeps
+// hooks.RestoreTokens, the cap and this in step.
+const sessionCheckpointTokens = 600
+
+
 const (
 	urlRTK       = "https://github.com/rtk-ai/rtk"
 	urlHeadroom  = "https://github.com/headroomlabs-ai/headroom"
@@ -198,6 +204,12 @@ var registry = []Technique{
 		OverheadNote: "a note added beside the Edit's result (PreToolUse additionalContext, code.claude.com/docs/en/hooks, 2026-11-24), at most about 100 tokens per note (estimated)",
 		Licence:      "Trove project",
 		Note:         "off by default, explicit opt-in, never named by an Autopilot policy; never denies; its shadow count carries the Edit input already spent on that file in that turn, an upper bound and not a saving; guardrails: Edit failures and failing tests right after"},
+	{ID: "B31", Class: ClassBehavior, Title: "Keep a session note across /compact and /clear, and add it back fenced as recovered data", Names: []string{"hook_session_checkpoint"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierBehavior, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(sessionCheckpointTokens),
+		OverheadNote: "the restored note as SessionStart additionalContext after /compact or /clear (code.claude.com/docs/en/hooks, 2026-11-26), at most 2,000 bytes, about 600 tokens with Claude Code's wrapper (estimated), once per boundary; the one-line pointer used without the recovery store is about 70 tokens",
+		Licence:      "Trove project",
+		Note:         "off by default, explicit opt-in; no Autopilot policy names it; notes are kept only in the recovery store with recovery.session_checkpoints on (0600, 8 KB each, 1 MB total, 3 days), built from the transcript tail and .git/HEAD with no model call; on is a session A/B split by a hash of the session key; measured on the 20 tool calls after each boundary: re-reads of unchanged files, repeated failed commands, calls to the first edit; guardrails: those windows against sessions without the restore, and failing tests right after a restore"},
 	{ID: "B28", Class: ClassEffort, Title: "Low effort for the turn after a routine prompt, with per-message effort", Names: []string{"effort_routine_prompts"},
 		Layers: []Layer{LayerRequest}, Route: RouteNative, Status: StatusPartial, Effect: tierBehavior, NoSavingEstimate: true,
 		Overhead: none(), Licence: "Trove project",

@@ -217,7 +217,10 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 
 func validKind(k string) bool {
 	switch k {
-	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindOverridden, KindCleared, KindArmOn, KindArmOff, KindTestRun, KindSubagentStart, KindSubagentStop:
+	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindOverridden, KindCleared, KindArmOn, KindArmOff, KindTestRun, KindSubagentStart, KindSubagentStop,
+		// The routine steer's kinds (migration 0028) and the session checkpoint's (migration 0030).
+		KindSteered, KindWouldSteer, KindReprompted, KindTurnEnd,
+		KindCheckpointed, KindRestored, KindPointed, KindWouldRestore, KindRereadUnchanged, KindRepeatFailure, KindRecovered:
 		return true
 	}
 	return false

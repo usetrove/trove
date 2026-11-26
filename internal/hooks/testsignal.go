@@ -21,11 +21,16 @@ var exitLine = regexp.MustCompile(`^Exit code (\d{1,3})\s*$`)
 // an interrupted run, or a failure without an exit code is left out: no result is better than a
 // wrong one. It never prints anything, so it changes nothing the agent sees.
 func (h *handler) testResult(in Input, key string) error {
-	if in.ToolName != "Bash" || in.Cwd == "" || strings.TrimSpace(in.ToolInput.Command) == "" {
+	if in.ToolName != "Bash" || strings.TrimSpace(in.ToolInput.Command) == "" {
 		return nil
 	}
 	code, ok := exitCodeOf(in)
-	if !ok {
+	if ok && code != 0 {
+		h.ckCall(in, key, ckFail) // every Bash call reaches this hook once; the session checkpoint counts it
+	} else {
+		h.ckCall(in, key, ckOther)
+	}
+	if !ok || in.Cwd == "" {
 		return nil
 	}
 	id, ok := matchTestCommand(in.Cwd, in.ToolInput.Command)

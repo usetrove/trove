@@ -128,6 +128,9 @@ func Render(r Report, o Options) string {
 	if r.ColdCompact != nil {
 		renderColdCompact(&b, r.ColdCompact, o)
 	}
+	if r.Checkpoint != nil {
+		renderCheckpoint(&b, r.Checkpoint, o)
+	}
 
 	b.WriteString("\n" + heading("Biggest leaks (estimated, overlapping, not additive)"))
 	if len(r.Leaks) == 0 {

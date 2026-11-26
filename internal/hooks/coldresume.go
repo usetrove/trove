@@ -206,6 +206,10 @@ func (h *handler) promptSubmit(in Input, key string) ([]byte, error) {
 		logf(h.dir, EventPromptSubmit, "routine steer: %v", err)
 		steer = ""
 	}
+	// The session checkpoint's fill milestones. It adds nothing to the reply.
+	if err := h.ckFill(in, key); err != nil {
+		logf(h.dir, EventPromptSubmit, "session checkpoint: %v", err)
+	}
 	return promptReply(cold, steer), nil
 }
 
@@ -409,6 +413,12 @@ type contentBlock struct {
 	Text  string          `json:"text"`
 	Name  string          `json:"name"`
 	Input json.RawMessage `json:"input"`
+	// ID is a tool_use block's id; ToolUseID and IsError are a tool_result's link to it and its error flag (the
+	// Messages API content-block shape, which Claude Code transcripts carry). Only the session checkpoint reads
+	// them, to tell which test commands last failed.
+	ID        string `json:"id"`
+	ToolUseID string `json:"tool_use_id"`
+	IsError   bool   `json:"is_error"`
 }
 
 // scanTranscriptTail calls fn for each main-conversation line in the last coldTranscriptTail bytes of a transcript.

@@ -131,8 +131,8 @@ func Main(e Env) (code int) {
 		deadline = endDeadline
 	case EventPostOutput, EventPostRead:
 		deadline = postDeadline // both may store the full output before replacing it
-	case EventPromptSubmit, EventCompactCheck:
-		deadline = postDeadline // read up to 1 MiB of the transcript
+	case EventPromptSubmit, EventCompactCheck, EventReset:
+		deadline = postDeadline // read up to 1 MiB of the transcript (session_reset: the session checkpoint at PreCompact)
 	}
 	type result struct {
 		out   []byte

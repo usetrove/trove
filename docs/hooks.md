@@ -21,7 +21,7 @@ trove hooks install --rewrite   # also install the hooks that rewrite tool input
 | `pre_tool_repeat_read` | Claude Code `PreToolUse` on `Read` | If the session already read this file range and the file is unchanged (same modification time, size and content hash), denies the call once with a short message naming the earlier prompt, so the agent reuses what it has. |
 | `post_tool_read_record` | Claude Code `PostToolUse` on `Read` | Records the read, but only after it succeeded. A read that was denied or failed is never taken for one that happened. |
 | `post_tool_edit_record` | Claude Code `PostToolUse` on `Edit`, `Write`, `MultiEdit`, `NotebookEdit` | Records that a file was edited, for the session features ([features.md](features.md)). Never prints anything and never changes the call. |
-| `session_reset` | `SessionStart`, Claude Code `PreCompact` | Pins the optimizer states for the session. Forgets earlier reads after a compaction or resume, because the agent no longer has those files in context. During a rule-set trial (`trove autopilot trial <rule set>`), it assigns the session an arm, and in the "on" arm returns the rule set's text as SessionStart `additionalContext`. It does this at startup and again after a resume, `/clear` or compaction, for Claude Code only (see [autopilot.md](autopilot.md)). |
+| `session_reset` | `SessionStart`, Claude Code `PreCompact` | Pins the optimizer states for the session. With `hook_session_checkpoint` on, saves a note at `PreCompact` and adds it back after `/compact` or `/clear` (see [below](#session-checkpoint)). Forgets earlier reads after a compaction or resume, because the agent no longer has those files in context. During a rule-set trial (`trove autopilot trial <rule set>`), it assigns the session an arm, and in the "on" arm returns the rule set's text as SessionStart `additionalContext`. It does this at startup and again after a resume, `/clear` or compaction, for Claude Code only (see [autopilot.md](autopilot.md)). |
 | `session_end_receipt` | `SessionEnd` | Moves the hook counters into the database, runs the hook guardrail, writes the session receipt, refreshes the snapshot the other hooks read, then writes the session's features and, if stale, the repo's ([features.md](features.md)). |
 | `post_tool_test_result` | Claude Code `PostToolUse` and `PostToolUseFailure` on `Bash` | The test-pass signal. When the command is exactly one of the project's test commands in `.trove/commands.toml` (an entry named `test`, or starting or ending with `test-`, `test_`, `-test`, `_test`; arguments compared after splitting on whitespace), it records the exit code and a hash of the command in `test_runs`. A successful call counts as exit 0; a failure's code is read from the first line of its error (`Exit code N`). Interrupted runs and failures without that line are not recorded. Never prints anything and never changes the call. The session roll-up carries the last status (pass, fail or none) and the run and failure counts. |
 | `pre_tool_subagent` | `PreToolUse` on `Agent` (`Task` before Claude Code v2.1.63; checked 2026-11-17) | Does nothing unless a scout, routine agents or an Explore override is installed and this session is in the "off" arm of that feature's A/B trial. Then it declines a call to the scout, `trove-test-runner` or `trove-lint-fixer` with a short message asking the agent to do the work directly. For Trove's Explore, it sets the call's model to the main conversation's model instead. See docs/tasks.md. |
@@ -480,6 +480,60 @@ uncached input".
   safety net still end in exit 0, and without a stderr to write to it never stops anything. Guardrail
   `cold_compact_override`, same rule as above.
 
+## Session checkpoint
+
+`hook_session_checkpoint` (B31, T2, off by default) keeps the important state of a session across `/compact` and
+`/clear`. It calls no model: everything comes from what the hooks already see.
+
+```toml
+[optimizers]
+hook_session_checkpoint = "shadow"   # off (default) | shadow | on
+
+[recovery]
+session_checkpoints = true           # off (default): no note is kept, only a one-line pointer is added
+```
+
+**Save.** At `PreCompact` (manual and auto), at `SessionEnd`, and the first time the context passes 50, 75 and 90%
+of the model's window since the last boundary (checked on each prompt), it builds a short note from the transcript
+tail and `.git/HEAD`:
+
+- the latest three requests you typed;
+- sentences in the agent's replies that state a choice ("going with", "instead of", "rather than");
+- the files the session edited;
+- the git branch (or the detached commit);
+- test commands whose latest run failed (recognised by their runner: `go test`, `pytest`, `npm test`, ...);
+- the end of the last reply.
+
+Each field is capped. The note is kept in the recovery store, under `recovery/checkpoints`, only when
+`recovery.session_checkpoints` is on: one note per working folder (named by a hash), files 0600 in a 0700 folder,
+at most 8 KB each and 1 MB in total (oldest first), deleted after 3 days. That is the rule 7 exception for the
+recovery store; nothing from the note reaches the database or any other file.
+
+**Restore.** At `SessionStart` with source `compact` or `clear`, it adds the note as `additionalContext` (Claude
+Code wraps it in a system reminder). The note is fenced in `<trove-recovered-checkpoint>` tags and introduced as
+data recorded from the earlier conversation, not instructions. Every recovered text is one line, and an embedded
+fence tag is rewritten, so the note cannot close its fence or start a line of its own. Only a note at most two hours
+old counts; after `/compact` it must be the same session's. The restore is at most 2,000 bytes, about 600 tokens
+with the wrapper (estimated, declared and charged, rule 15), once per boundary.
+
+Without the store, or when it holds no recent note for the folder, the restore is one line that points at git
+(`git status`, `git diff --stat`, `git log`), about 70 tokens.
+
+**Measure.** `on` is a session A/B: a hash of the session key puts about half the sessions in the restore arm, and
+the rest are the comparison (shadow sessions count as without). In both arms the first 20 tool calls after each
+boundary that the hooks see (Read, Edit/Write, Bash, Grep, Glob and MCP tools) are watched for:
+
+- a Read of a file read before the boundary that returned the same content (`reread_unchanged`);
+- a failed Bash command that had failed before the boundary (`repeat_failure`);
+- the call that made the first edit (`recovered`; its position is the "turns to recover").
+
+Only hashes, counts and positions are kept: a per-session journal next to the ledger, a boundary record per folder
+under `hooks/checkpoint` (hashes of reads and failed commands, never a path or command), and `hook_events` rows. `trove
+report` shows both arms. Two guardrails set it back to shadow, with the code-write nudges' sequential test and
+10-point margin (placeholders): windows with a re-read or a repeated failure are more common with the restore than
+without (`checkpoint_windows`), and the first test run after a restore fails more often than test runs elsewhere
+(`checkpoint_tests_after`, the test-pass guardrail). No Autopilot policy names it, so only you turn it on.
+
 ## Measurement
 
 Each decision is one row in `hook_events`: hook, kind, bytes, estimated tokens, hashed session key.
@@ -566,6 +620,14 @@ event it leaves behind); if you did not, it restores your file byte for byte.
 
 Verified 2026-10-29 / 2026-10-30. Re-check when either agent changes.
 
+- Session checkpoint (read on code.claude.com/docs/en/hooks on 2026-11-26): `SessionStart`'s `source` is `startup`,
+  `resume`, `clear`, `compact` or `fork`; it may return `hookSpecificOutput.additionalContext`, which Claude Code wraps
+  in a system reminder; `additionalContext` over 10,000 characters is replaced by a file path and a 2,000-character
+  preview. `PreCompact` carries `trigger` (`manual` or `auto`); `SessionEnd` carries `reason`, which includes `clear`,
+  with a 1.5 s default budget. No hook input reports how full the context is (the status line does, as
+  `context_window.used_percentage`, code.claude.com/docs/en/statusline). Context windows: Opus 5.5, Sonnet 5.5,
+  Haiku 5.5 and Fable 5.2 have 1M tokens by default, other Claude models 200k
+  (platform.claude.com/docs/en/build-with-claude/context-windows, read 2026-11-26).
 - Claude Code (`code.claude.com/docs/en/hooks`): `PreToolUse` input has `session_id`, `prompt_id`, `tool_name`,
   `tool_input` (Read: absolute `file_path`, optional `offset`, `limit`). Deny with exit 2, or
   `hookSpecificOutput.permissionDecision: "deny"` plus `permissionDecisionReason`. A timed-out PreToolUse proceeds.
@@ -732,6 +794,14 @@ wait longer than its cache lifetime. Use a throwaway data dir.
 5. `claude -p --resume <id> "continue"` on a cold session: it must go through with no block.
 
 ## Known gaps
+
+- The session checkpoint has not run in a real session yet. Check that the restored note appears after `/compact`
+  and `/clear`, and that `SessionEnd` with reason `clear` finishes before the new session's `SessionStart` (the
+  docs do not say; if it does not, a `/clear` restores the latest fill or `PreCompact` note, or the pointer). Its
+  "choices stated" are found by wording, so a decision worded otherwise is only in the end of the last reply. Test
+  commands are recognised by their runner, so a custom script is not listed. Context fill is read from the last
+  request in the transcript, because no hook input reports it. Hook-only sessions have no confounder tag yet; the
+  `restored` and `pointed` rows are the per-session record.
 
 - The routine steer has not run in a real session yet (see the live check above). Some details rest on transcripts
   as they are observed to be, not as documented:

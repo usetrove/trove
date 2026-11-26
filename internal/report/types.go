@@ -68,6 +68,9 @@ type Report struct {
 	// nothing in the period.
 	ModelSwitch *measure.ColdResume `json:"model_switch,omitempty"`
 	ColdCompact *measure.ColdResume `json:"cold_compact,omitempty"`
+	// Checkpoint is what the session checkpoint (hook_session_checkpoint) saved and restored, and its comparison of
+	// the 20 tool calls after /compact or /clear with and without the restore. Nil when it recorded nothing.
+	Checkpoint *measure.CheckpointWindows `json:"session_checkpoint,omitempty"`
 	// Opusplan is the plan-mode finding for users whose model setting is opusplan. Nil otherwise, or with no
 	// Opus<->Sonnet switch in the period.
 	Opusplan *Opusplan `json:"opusplan,omitempty"`

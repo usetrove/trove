@@ -64,6 +64,9 @@ type Snapshot struct {
 	// trimmer writes to (config [recovery]); zero means the defaults.
 	RecoveryMaxMB   int `json:"recovery_max_mb,omitempty"`
 	RecoveryTTLDays int `json:"recovery_ttl_days,omitempty"`
+	// Checkpoints is recovery.session_checkpoints: hook_session_checkpoint may keep its session notes in the
+	// recovery store. False means it keeps no text and restores a one-line pointer.
+	Checkpoints bool `json:"checkpoints,omitempty"`
 	// RepoSalt and Tuning carry per-repo optimizer tuning (internal/tuning). A
 	// session that starts in a repo pins that repo's applied values; the repo is
 	// found by hashing the hook's working directory under RepoSalt, so no path is
@@ -133,7 +136,7 @@ func WriteSnapshot(dir string, s Snapshot) error {
 // (measure.Overrides) and whether the MCP server is registered.
 func BuildSnapshot(cfg config.Config, rolledBack map[string]string, troveRun bool, now time.Time) Snapshot {
 	s := Snapshot{V: snapshotVersion, States: map[string]string{}, RolledBack: []string{}, TroveRun: troveRun, UpdatedAt: now.Unix(),
-		RecoveryMaxMB: cfg.Recovery.MaxMB, RecoveryTTLDays: cfg.Recovery.TTLDays, Trial: hookTrials(cfg),
+		RecoveryMaxMB: cfg.Recovery.MaxMB, RecoveryTTLDays: cfg.Recovery.TTLDays, Checkpoints: cfg.Recovery.SessionCheckpoints, Trial: hookTrials(cfg),
 		ColdResume: ColdResumeSettings{Action: cfg.Optimize.ColdResumeAction, MinTokens: cfg.Optimize.ColdResumeMinTokens,
 			MinWeekPct: cfg.Optimize.ColdResumeMinWeekPct}}
 	for _, n := range OptimizerNames {
@@ -153,6 +156,7 @@ var OptimizerNames = []string{
 	config.OptimizerHookOutputDedup, config.OptimizerHookReadOutline,
 	config.OptimizerHookColdResume, config.OptimizerHookModelSwitch, config.OptimizerHookColdCompact,
 	config.OptimizerHookRoutineSteer, config.OptimizerHookWriteToEdit, config.OptimizerHookEditBatch,
+	config.OptimizerHookSessionCheckpoint,
 }
 
 // State is the state a hook acts in right now for the named optimizer. pinned

@@ -286,5 +286,13 @@ func EvaluateHooksWith(ctx context.Context, db *store.DB, m config.Measure, now 
 		skip[e.Optimizer] = true
 	}
 	more, err := evaluateCodeWrites(ctx, db, m, now, skip)
+	events = append(events, more...)
+	if err != nil {
+		return events, err
+	}
+	for _, e := range more {
+		skip[e.Optimizer] = true
+	}
+	more, err = evaluateCheckpoint(ctx, db, m, now, skip)
 	return append(events, more...), err
 }

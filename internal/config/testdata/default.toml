@@ -148,6 +148,11 @@ allow_unproven = false
 max_mb = 200
 # Days an output is kept (1 to 365).
 ttl_days = 7
+# Let hook_session_checkpoint keep a short note of each session's state (your
+# latest requests, files changed, branch, failing test commands) here, so it can
+# be added back after /compact or /clear. Notes are capped at 8 KB each and
+# expire after 3 days. Off: nothing is kept and only a one-line pointer is added.
+session_checkpoints = false
 
 [contribute]
 # Where "trove contribute enable" sends the anonymous summary you approved.

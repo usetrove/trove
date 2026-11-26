@@ -303,6 +303,11 @@ const (
 	// OptimizerHookEditBatch adds a note on the third Edit to the same file in one turn, suggesting one Write or a
 	// single sed when the edits are mechanical (T2, technique B27). It never denies.
 	OptimizerHookEditBatch = "hook_edit_batch"
+	// OptimizerHookSessionCheckpoint keeps a short note of the session's state (task, files changed, branch,
+	// failing tests) at PreCompact, SessionEnd and context-fill milestones, and adds it back, fenced as recovered
+	// data, at SessionStart after /compact or /clear (T2, technique B31). The note is kept only in the recovery
+	// store and only when recovery.session_checkpoints is true; without it the restore is a one-line pointer.
+	OptimizerHookSessionCheckpoint = "hook_session_checkpoint"
 	// OptimizerNoiseNormalizer is lossless; it also runs in hooks on tool output.
 	OptimizerNoiseNormalizer = "noise_normalizer"
 	// OptimizerInflightDedup is a behavior of the gateway itself: when identical requests
@@ -532,6 +537,11 @@ allow_unproven = false
 max_mb = 200
 # Days an output is kept (1 to 365).
 ttl_days = 7
+# Let hook_session_checkpoint keep a short note of each session's state (your
+# latest requests, files changed, branch, failing test commands) here, so it can
+# be added back after /compact or /clear. Notes are capped at 8 KB each and
+# expire after 3 days. Off: nothing is kept and only a one-line pointer is added.
+session_checkpoints = false
 
 [contribute]
 # Where "trove contribute enable" sends the anonymous summary you approved.
@@ -908,6 +918,10 @@ type Recovery struct {
 	MaxMB int `toml:"max_mb"`
 	// TTLDays is how long an output is kept.
 	TTLDays int `toml:"ttl_days"`
+	// SessionCheckpoints lets hook_session_checkpoint keep its session notes (the latest request texts, files
+	// changed, branch, failing test commands) in the recovery store, under recovery/checkpoints. Off by default:
+	// without it the optimizer writes no text anywhere and restores only a one-line pointer.
+	SessionCheckpoints bool `toml:"session_checkpoints"`
 }
 
 // validTaskName accepts the shape of a task type name. Which names exist is
