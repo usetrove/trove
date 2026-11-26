@@ -13,6 +13,7 @@ import (
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/fixer"
+	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/setup"
 	"github.com/usetrove/trove/internal/tasks"
 )
@@ -36,7 +37,8 @@ func newTasks(a *App) *cobra.Command {
 			"  trove tasks plan  explore   show a project Explore subagent that replaces the built-in one (cheaper model, low effort)\n" +
 			"  trove tasks plan  subagent-model --model M   set model M in your own subagent files that name none\n" +
 			"  trove tasks apply <feature>    write the files (asked first; backed up; `trove undo` reverses it)\n" +
-			"  trove tasks remove <feature>   remove what Trove wrote for a feature (your own files are never touched)\n\n" +
+			"  trove tasks remove <feature>   remove what Trove wrote for a feature (your own files are never touched)\n" +
+			"  trove tasks stagger            shadow only: whether same-type subagents started together each wrote the shared prefix\n\n" +
 			"Files are written to the project's .claude folder, between sessions only. Trove never overwrites an agent or command\n" +
 			"file you wrote. The cascade needs your test command (--test-cmd, or test_cmd under [tasks] in config.toml) and tells you\n" +
 			"which model finished and why. Savings are not claimed: `trove report` compares your sessions once enough exist.",
@@ -69,8 +71,32 @@ func newTasks(a *App) *cobra.Command {
 	remove.Flags().StringVar(&fl.project, "project", "", "project folder (default: the current folder)")
 	flags(plan)
 	flags(apply)
-	c.AddCommand(plan, apply, remove)
+	stagger := &cobra.Command{Use: "stagger", Short: "Shadow only: what holding same-type sibling subagents would have saved", Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error { return runTasksStagger(cmd.Context(), a) }}
+	c.AddCommand(plan, apply, remove, stagger)
 	return c
+}
+
+// runTasksStagger shows the sibling stagger's shadow (docs/sibling-stagger.md). It reads the database only;
+// nothing is ever held.
+func runTasksStagger(ctx context.Context, a *App) error {
+	dir, _, err := loadConfig(a)
+	if err != nil {
+		return err
+	}
+	db, err := openExisting(dir)
+	if err != nil {
+		return err
+	}
+	if db == nil {
+		return a.emit(measure.StaggerShadow{Label: measure.Measured, WindowMs: measure.StaggerWindow.Milliseconds(), CapMs: measure.StaggerCap.Milliseconds()}, "No data yet. Run Claude Code with Trove's hooks installed, then `trove logs scan`.")
+	}
+	defer func() { _ = db.Close() }()
+	s, err := measure.LoadStaggerShadow(ctx, db)
+	if err != nil {
+		return err
+	}
+	return a.emit(s, "Sibling stagger (shadow only, nothing is held): "+s.Text)
 }
 
 // tasksOptions merges config values with flags; flags win.

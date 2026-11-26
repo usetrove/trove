@@ -142,3 +142,58 @@ func TestExploreOffArmRestoresTheMainModel(t *testing.T) {
 		t.Errorf("a call that names a model must go through, got %q", out)
 	}
 }
+
+// An Agent call is recorded as a spawn with hashed ids only, the call goes through untouched (the hook prints
+// nothing for an unpinned session), and a repeated delivery of the same call is stored once.
+func TestSubagentSpawnIsRecordedAndChangesNothing(t *testing.T) {
+	r := newRig(t, nil)
+	const secret = "SECRET-TASK-PROMPT"
+	call := func(id, typ string) string {
+		return fmt.Sprintf(`{"session_id":%q,"hook_event_name":"PreToolUse","tool_name":"Agent","tool_use_id":%q,"tool_input":{"subagent_type":%q,"prompt":%q,"description":%q}}`,
+			sessionID, id, typ, secret, secret)
+	}
+	for _, in := range []string{call("toolu_1", "Explore"), call("toolu_2", "Explore"), call("toolu_2", "Explore"),
+		call("toolu_3", "my-private-agent"), call("", "Explore")} {
+		if out, code := r.run(EventSubagent, in); out != "" || code != 0 {
+			t.Fatalf("the spawn record must print nothing and exit 0, got %q %d", out, code)
+		}
+	}
+	spool, err := os.ReadFile(filepath.Join(hooksDir(r.dir), spoolName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leak := range []string{secret, "my-private-agent", "toolu_"} {
+		if strings.Contains(string(spool), leak) {
+			t.Fatalf("the spool holds %q:\n%s", leak, spool)
+		}
+	}
+	db, err := store.Open(r.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := IngestSpool(context.Background(), db, r.dir); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	rows, err := db.Query(`SELECT tool_key, agent_type, type_key FROM subagent_spawns WHERE session_key = ?`, r.key())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var k, typ, tk string
+		if err := rows.Scan(&k, &typ, &tk); err != nil {
+			t.Fatal(err)
+		}
+		got[k] = typ + "/" + tk
+	}
+	_ = rows.Close()
+	want := map[string]string{
+		logs.Hash("cc-tool", "toolu_1"): "Explore/" + logs.Hash("cc-agent-type", "Explore"),
+		logs.Hash("cc-tool", "toolu_2"): "Explore/" + logs.Hash("cc-agent-type", "Explore"),
+		logs.Hash("cc-tool", "toolu_3"): "user/" + logs.Hash("cc-agent-type", "my-private-agent"),
+	}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("spawns:\n got %v\nwant %v", got, want)
+	}
+}

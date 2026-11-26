@@ -54,3 +54,21 @@ func agentKey(id string) string {
 	}
 	return logs.Hash("cc-agent", id)
 }
+
+// KindSubagentSpawn is one Agent (formerly Task) call seen by PreToolUse. It goes to subagent_spawns. It is the
+// shadow of the sibling stagger (docs/sibling-stagger.md): the analysis groups same-type spawns that come close
+// together and reads from the history whether the later siblings wrote or read the shared prefix. Nothing is
+// held; the hook only records.
+const KindSubagentSpawn = "subagent_spawn"
+
+// recordSpawn stores the hashed call id, the agent type label and the hashed raw type. The raw type, the prompt
+// and the description are never stored. A failure to record is dropped: it must never touch the call (rule 4).
+func (h *handler) recordSpawn(in Input, key string) {
+	id := strings.TrimSpace(in.ToolUseID)
+	if id == "" || len(id) > 200 {
+		return
+	}
+	typ := in.ToolInput.SubagentType
+	_ = record(h.dir, event{T: h.now().UnixMilli(), Key: key, Kind: KindSubagentSpawn, Hook: tasks.AgentTypeLabel(typ),
+		Agent: logs.Hash("cc-tool", id), TypeKey: logs.Hash("cc-agent-type", typ)})
+}

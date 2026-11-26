@@ -64,6 +64,8 @@ type event struct {
 	// Agent is the hashed subagent id and Status the STATUS word, for KindSubagentStart and KindSubagentStop only.
 	Agent  string `json:"a,omitempty"`
 	Status string `json:"st,omitempty"`
+	// TypeKey is the hashed subagent_type, for KindSubagentSpawn only (Agent then holds the hashed tool_use_id).
+	TypeKey string `json:"ty,omitempty"`
 }
 
 const (
@@ -166,6 +168,11 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 		return 0, err
 	}
 	defer func() { _ = subStop.Close() }()
+	spawn, err := tx.PrepareContext(ctx, `INSERT OR IGNORE INTO subagent_spawns (session_key, tool_key, ts, agent_type, type_key) VALUES (?,?,?,?,?)`)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = spawn.Close() }()
 	n := 0
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
@@ -197,6 +204,16 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 			n++
 			continue
 		}
+		if e.Kind == KindSubagentSpawn {
+			if e.Agent == "" {
+				continue
+			}
+			if _, err := spawn.ExecContext(ctx, e.Key, e.Agent, e.T, e.Hook, e.TypeKey); err != nil {
+				return 0, err
+			}
+			n++
+			continue
+		}
 		if e.Kind == KindTestRun {
 			if _, err := test.ExecContext(ctx, e.T, e.Key, e.Hook, e.Exit); err != nil {
 				return 0, err
@@ -217,7 +234,7 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 
 func validKind(k string) bool {
 	switch k {
-	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindOverridden, KindCleared, KindArmOn, KindArmOff, KindTestRun, KindSubagentStart, KindSubagentStop,
+	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindOverridden, KindCleared, KindArmOn, KindArmOff, KindTestRun, KindSubagentStart, KindSubagentStop, KindSubagentSpawn,
 		// The routine steer's kinds (migration 0028) and the session checkpoint's (migration 0030).
 		KindSteered, KindWouldSteer, KindReprompted, KindTurnEnd,
 		KindCheckpointed, KindRestored, KindPointed, KindWouldRestore, KindRereadUnchanged, KindRepeatFailure, KindRecovered:

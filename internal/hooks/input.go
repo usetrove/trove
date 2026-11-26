@@ -21,6 +21,9 @@ type Input struct {
 	Event     string `json:"hook_event_name"`
 	Cwd       string `json:"cwd"` // a common input field (code.claude.com/docs/en/hooks, checked 2026-11-05); only hashed, never stored
 	ToolName  string `json:"tool_name"`
+	// ToolUseID is the call's id, a PreToolUse field (code.claude.com/docs/en/hooks.md, read 2026-11-24). Only
+	// its hash is stored.
+	ToolUseID string `json:"tool_use_id"`
 	// TranscriptPath is the session's transcript file (a common input field, seen live 2026-11-18 on Claude Code
 	// 2.1.327). Only the model of the newest main-thread reply is read from it, in memory; it is never stored.
 	TranscriptPath string `json:"transcript_path"`
