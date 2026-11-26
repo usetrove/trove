@@ -44,7 +44,7 @@ Last checked against the code and schema version 17 on 2026-11-06.
 | `recovery/checkpoints/` | Session notes for `hook_session_checkpoint`: your latest request texts, choices the agent stated, files changed, branch and failing test commands, one note per working folder (named by a hash). **Contains text from your session.** Only with `recovery.session_checkpoints = true`; owner-only files | 3 days, 8 KB per note, 1 MB cap, then deleted |
 | `hooks/checkpoint/` | Per-folder boundary records for `hook_session_checkpoint`: hashes of files read and of failed commands, sizes and times. No text, path or command | 3 days |
 | `contribute.json` | Whether sharing is on, your random install id, the date of the last upload | Kept until you disable and delete it; removed by `trove data delete` and `--purge-data` |
-| `autopilot.json` | Whether you agreed to Autopilot, the policy name, and for each optimizer Autopilot manages: its state (off, shadow, candidate, on, rolled_back), the time it entered that state, a short plain-English reason and a try count; the last 50 state changes; the planner's latest advice per optimizer (verdict, shadow session count, estimated net tokens, a reason); the time of the last desktop notice; and, under the settings policy, the setting's state, reason, the id of the fix Autopilot applied and its last estimate (requests, sessions, rebuild and read counts, net in dollars or percent of the 5-hour limit, basis and label). No prompts, paths or credentials | Kept until you run `trove autopilot off`; removed by `--purge-data`. Written only by `trove autopilot`, `trove setup` (with your yes) and Autopilot's own evaluation |
+| `autopilot.json` | Whether you agreed to Autopilot, the policy name, and for each optimizer Autopilot manages: its state (off, shadow, candidate, on, rolled_back), the time it entered that state, a short plain-English reason and a try count; the last 50 state changes; the planner's latest advice per optimizer (verdict, shadow session count, estimated net tokens, a reason); the time of the last desktop notice; and, under the settings policy, the setting's state, reason, the id of the fix Autopilot applied and its last estimate (requests, sessions, rebuild and read counts, net in dollars or percent of the 5-hour limit, basis and label); under the optimize policy, whether it runs the cold-resume guard in ask mode (`cold_resume_ask`). No prompts, paths or credentials | Kept until you run `trove autopilot off`; removed by `--purge-data`. Written only by `trove autopilot`, `trove setup` (with your yes) and Autopilot's own evaluation |
 | `gateway.json` | Process id and loopback address of a running gateway | Removed when the gateway stops |
 | `gateway.log` | Gateway service output on macOS | Kept until deleted |
 
@@ -372,6 +372,23 @@ reply is read in memory for its first `STATUS:` line and never stored.
 | `started_at` | When the subagent started (0 when only its stop was seen) |
 | `stopped_at` | When it stopped (0 while running or when the stop was not seen) |
 | `status` | done, failed, unsure or unknown, from the first `STATUS:` line of its reply |
+
+**Retention:** deleted after `retention_days`.
+
+### `subagent_spawns`
+
+One row per Agent (formerly Task) call that Claude Code's PreToolUse hook saw. It is the shadow of the sibling
+stagger ([sibling-stagger.md](sibling-stagger.md)): `trove tasks stagger` groups same-type calls made close together
+and checks in the history whether the later ones wrote or read the shared prefix. The call's prompt and description
+are never stored.
+
+| Column | Meaning |
+|---|---|
+| `session_key` | Hash of the session id |
+| `tool_key` | Hash of the call's `tool_use_id` |
+| `ts` | When the hook saw the call |
+| `agent_type` | Trove's own `trove-*` names and Claude Code's built-in names as they are; any other name is stored as `user` |
+| `type_key` | Hash of the raw agent type, so two of your own agent types are told apart without storing their names |
 
 **Retention:** deleted after `retention_days`.
 
