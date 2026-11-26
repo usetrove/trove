@@ -146,12 +146,20 @@ func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.H
 		// PostToolUse can replace what the model sees (updatedToolOutput). Which
 		// tools honour it on the installed version is probed, not assumed:
 		// `trove hooks probe` and `trove doctor`.
-		s = append(s, setup.HookSpec{Event: "PostToolUse", Matcher: "Bash|Grep|Glob", Command: build(hooks.EventPostOutput), Timeout: 5})
+		s = append(s, setup.HookSpec{Event: "PostToolUse", Matcher: PostOutputMatcher, Command: build(hooks.EventPostOutput), Timeout: 5})
 		// Counts fetch-backs of trimmed output, which is what stops the trimmer if it is too aggressive.
 		s = append(s, setup.HookSpec{Event: "PostToolUse", Matcher: "mcp__trove__trove_fetch_full", Command: build(hooks.EventPostFetch), Timeout: 5})
 	}
 	return s
 }
+
+// PostOutputMatcher is the tools post_tool_output runs for on Claude Code: Bash, PowerShell, Grep and Glob by
+// exact name, and every MCP tool (for hook_output_preview; Trove's own are left alone by the handler). It has
+// characters outside the exact-match set, so Claude Code reads it as an unanchored JavaScript regular expression;
+// the anchors keep "Bash" from matching other tools whose names contain it (code.claude.com/docs/en/hooks,
+// Matcher patterns and Match MCP tools, read 2026-11-25). An install made by an older release with the matcher
+// "Bash|Grep|Glob" is updated by `trove hooks install --rewrite`.
+const PostOutputMatcher = "^(?:Bash|PowerShell|Grep|Glob)$|^mcp__"
 
 // codexSpecs leaves out repeat-read: Codex's hook page names no file-read tool to
 // match (checked 2026-10-30), so there is nothing to hook.

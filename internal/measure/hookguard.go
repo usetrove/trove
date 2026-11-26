@@ -37,6 +37,12 @@ type HookStats struct {
 	// ("estimated"). It says nothing about whether the agent needed them: judge
 	// that with the A/B comparison, not with this number.
 	TokensRewritten *Figure `json:"tokens_rewritten,omitempty"`
+	// TokensFetchedBack is the tokens the agent put back into the context by fetching shortened output with
+	// trove_fetch_full (estimated, from the size of each reply). TokensNet is TokensRewritten minus it: the
+	// saving net of expansions, which can be negative. Both are nil until something was rewritten. Neither counts
+	// the extra turn a fetch takes; the A/B comparison is the test of that.
+	TokensFetchedBack *Figure `json:"tokens_fetched_back,omitempty"`
+	TokensNet         *Figure `json:"tokens_net,omitempty"`
 	// Reissued counts quieted commands the agent ran again as first written;
 	// FetchedBack counts trimmed outputs it fetched back with trove_fetch_full.
 	Reissued    int `json:"reissued,omitempty"`
@@ -64,7 +70,8 @@ func HookTotals(ctx context.Context, db *store.DB, since time.Time) ([]HookStats
 		COALESCE(SUM(CASE WHEN kind = 'reread_anyway' THEN tokens END), 0),
 		SUM(kind = 'rewritten'), SUM(kind = 'would_rewrite'),
 		COALESCE(SUM(CASE WHEN kind = 'rewritten' THEN tokens END), 0),
-		SUM(kind = 'reissued'), SUM(kind = 'fetched_back'), SUM(kind = 'extra_read'), SUM(kind = 'adopted')
+		SUM(kind = 'reissued'), SUM(kind = 'fetched_back'), SUM(kind = 'extra_read'), SUM(kind = 'adopted'),
+		COALESCE(SUM(CASE WHEN kind = 'fetched_back' THEN tokens END), 0)
 		FROM hook_events WHERE ts >= ? GROUP BY hook ORDER BY hook`, since.UnixMilli())
 	if err != nil {
 		return nil, err
@@ -73,9 +80,9 @@ func HookTotals(ctx context.Context, db *store.DB, since time.Time) ([]HookStats
 	var out []HookStats
 	for rows.Next() {
 		var s HookStats
-		var blockedTok, rereadTok, rewriteTok int64
+		var blockedTok, rereadTok, rewriteTok, fetchedTok int64
 		if err := rows.Scan(&s.Hook, &s.Blocked, &s.WouldBlock, &s.Advised, &s.WouldAdvise, &s.RereadAnyway, &s.Sessions, &blockedTok, &rereadTok,
-			&s.Rewritten, &s.WouldRewrite, &rewriteTok, &s.Reissued, &s.FetchedBack, &s.ExtraRead, &s.Adopted); err != nil {
+			&s.Rewritten, &s.WouldRewrite, &rewriteTok, &s.Reissued, &s.FetchedBack, &s.ExtraRead, &s.Adopted, &fetchedTok); err != nil {
 			return nil, err
 		}
 		saved := blockedTok - rereadTok // a retried block put the file back, so it saved nothing
@@ -85,6 +92,8 @@ func HookTotals(ctx context.Context, db *store.DB, since time.Time) ([]HookStats
 		s.TokensSaved = Figure{Value: float64(saved), Label: Estimated, N: s.Blocked}
 		if s.Rewritten > 0 {
 			s.TokensRewritten = &Figure{Value: float64(rewriteTok), Label: Estimated, N: s.Rewritten}
+			s.TokensFetchedBack = &Figure{Value: float64(fetchedTok), Label: Estimated, N: s.FetchedBack}
+			s.TokensNet = &Figure{Value: float64(rewriteTok - fetchedTok), Label: Estimated, N: s.Rewritten}
 		}
 		if s.Blocked > 0 {
 			s.RereadRate = &Figure{Value: 100 * float64(s.RereadAnyway) / float64(s.Blocked), Label: Measured, N: s.Blocked}
@@ -163,6 +172,10 @@ var hookRules = []hookRule{
 		limit: func(m config.Measure) int { return max(1, m.RefetchRatePercent/trimmerLimitDivisor) }},
 	{optimizer: config.OptimizerHookOutputDedup, rule: RuleHookFetchBack, denominator: "rewritten", numerator: "fetched_back",
 		what: countsOf("fetched back %d of %d outputs collapsed as repeats")},
+	// A preview hides most of an output, so it is judged as strictly as the trimmer.
+	{optimizer: config.OptimizerHookOutputPreview, rule: RuleHookFetchBack, denominator: "rewritten", numerator: "fetched_back",
+		what:  countsOf("fetched back %d of %d outputs shortened to a preview"),
+		limit: func(m config.Measure) int { return max(1, m.RefetchRatePercent/trimmerLimitDivisor) }},
 	{optimizer: config.OptimizerHookReadLimit, rule: RuleHookExtraRead, denominator: "rewritten", numerator: "extra_read",
 		what:  countsOf("read more of the file after %d of %d limited reads"),
 		limit: func(m config.Measure) int { return min(100, m.RefetchRatePercent*extraReadLimitFactor) }},

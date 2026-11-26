@@ -98,7 +98,14 @@ func planHooks(agent, path string, specs []HookSpec, base string) (*Edit, error)
 				return nil, fmt.Errorf("hooks.%s in %s is not a list, so Trove left it alone. Fix it or add the hook by hand (see docs/hooks.md)", s.Event, path)
 			}
 		}
-		if hasHandler(groups, s.Command) {
+		if i, ok := findHandler(groups, s.Command); ok {
+			// Already installed. If Trove's own group has an older matcher (a release that hooked fewer tools),
+			// bring it up to date; a group the user added handlers to is left exactly as it is.
+			if g, changed := withMatcher(groups[i], s.Matcher); changed {
+				groups[i] = g
+				events[s.Event], _ = json.Marshal(groups)
+				shown = append(shown, fmt.Sprintf("hooks.%s: matcher of %s set to %q", s.Event, s.Command[len(base):], s.Matcher))
+			}
 			continue
 		}
 		group := struct {
@@ -156,18 +163,51 @@ func handlerCommand(h json.RawMessage) string {
 }
 
 func hasHandler(groups []json.RawMessage, command string) bool {
-	for _, grp := range groups {
+	_, ok := findHandler(groups, command)
+	return ok
+}
+
+// findHandler returns the index of the first group holding a handler with this command.
+func findHandler(groups []json.RawMessage, command string) (int, bool) {
+	for i, grp := range groups {
 		_, hs, ok := groupHandlers(grp)
 		if !ok {
 			continue
 		}
 		for _, h := range hs {
 			if handlerCommand(h) == command {
-				return true
+				return i, true
 			}
 		}
 	}
-	return false
+	return 0, false
+}
+
+// withMatcher returns the group with its matcher set to matcher, keeping every other key. It changes only a group
+// that holds a single handler (Trove's own): a group the user put other handlers in keeps its matcher, because
+// changing it would change when their hooks run.
+func withMatcher(group json.RawMessage, matcher string) (json.RawMessage, bool) {
+	g, hs, ok := groupHandlers(group)
+	if !ok || len(hs) != 1 {
+		return group, false
+	}
+	var cur string
+	if raw, has := g["matcher"]; has && json.Unmarshal(raw, &cur) != nil {
+		return group, false
+	}
+	if cur == matcher {
+		return group, false
+	}
+	if matcher == "" {
+		delete(g, "matcher")
+	} else {
+		g["matcher"], _ = json.Marshal(matcher)
+	}
+	out, err := json.Marshal(g)
+	if err != nil {
+		return group, false
+	}
+	return out, true
 }
 
 // stripHookGroups removes Trove's handlers (commands starting with base) and

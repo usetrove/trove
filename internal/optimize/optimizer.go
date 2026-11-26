@@ -94,6 +94,9 @@ type Session struct {
 	// scales estimates; it never changes what an optimizer does.
 	BytesPerToken  float64
 	BytesPerTokenN int
+	// Passthrough lists the tools whose whole output must reach the model (optimize.preview_passthrough): a tool
+	// name, or a prefix ending in "*". hook_output_preview never acts on them.
+	Passthrough []string
 }
 
 // bytesPerToken is the ratio this session's estimates use.

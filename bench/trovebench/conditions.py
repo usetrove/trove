@@ -49,6 +49,7 @@ HOOK_OPTIMIZERS = (
     "hook_large_output",
     "hook_output_dedup",
     "hook_read_outline",
+    "hook_output_preview",
 )
 HOOKS_ON = ("hook_repeat_read", "hook_read_limit", "hook_quiet_commands", "noise_normalizer")
 
@@ -67,7 +68,9 @@ PLUGIN_ON = HOOKS_ON + ("hook_output_dedup", "hook_read_outline", "hook_large_ou
 # Hooks that need Trove's MCP server: hook_large_output's hint names trove_run, and hook_output_dedup and
 # hook_read_outline shorten output only when it can be fetched back with trove_fetch_full (otherwise they are
 # clamped to shadow). Their solo conditions register the MCP server, as the plugin does (plan item 10.6).
-MCP_HOOKS = ("hook_large_output", "hook_output_dedup", "hook_read_outline")
+# hook_output_preview (B30, added 2026-11-25) shortens long tool output to a preview the agent can expand with
+# trove_fetch_full, so it needs the server too.
+MCP_HOOKS = ("hook_large_output", "hook_output_dedup", "hook_read_outline", "hook_output_preview")
 HOOK_ALONE = ("hook_repeat_read", "hook_read_limit", "hook_quiet_commands") + MCP_HOOKS
 _HOOK_UNMEASURABLE: dict[str, str] = {}
 

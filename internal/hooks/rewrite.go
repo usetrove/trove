@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 
 	"github.com/usetrove/trove/internal/optimize"
@@ -36,7 +37,10 @@ var responseKeys = []string{"stdout", "stderr", "content"}
 
 // responseTexts returns the text fields of a tool_response in a fixed order and
 // whether the response is an object. A bare string response yields one text with
-// an empty key. ok is false for a shape this adapter does not know.
+// an empty key. An MCP result given as a list of content blocks, bare or under
+// "content", yields one text per block, keyed "#i" or "content#i". ok is false for
+// a shape this adapter does not know, and for a block list with anything but text
+// in it (an image must reach the model as it is).
 func responseTexts(raw json.RawMessage) (keys, texts []string, ok bool) {
 	if len(raw) == 0 {
 		return nil, nil, false
@@ -45,9 +49,26 @@ func responseTexts(raw json.RawMessage) (keys, texts []string, ok bool) {
 	if json.Unmarshal(raw, &s) == nil {
 		return []string{""}, []string{s}, true
 	}
+	if t, ok := blockTexts(raw); ok {
+		for i, x := range t {
+			keys, texts = append(keys, blockKey("", i)), append(texts, x)
+		}
+		return keys, texts, len(keys) > 0
+	}
 	var m map[string]json.RawMessage
 	if json.Unmarshal(raw, &m) != nil {
 		return nil, nil, false
+	}
+	if _, has := m["structuredContent"]; has {
+		return nil, nil, false // the model may see the structured copy too; leave both alone
+	}
+	if v, has := m["content"]; has {
+		if t, ok := blockTexts(v); ok {
+			for i, x := range t {
+				keys, texts = append(keys, blockKey("content", i)), append(texts, x)
+			}
+			return keys, texts, len(keys) > 0
+		}
 	}
 	for _, k := range responseKeys {
 		var t string
@@ -56,6 +77,64 @@ func responseTexts(raw json.RawMessage) (keys, texts []string, ok bool) {
 		}
 	}
 	return keys, texts, len(keys) > 0
+}
+
+// mcpBlock is one MCP content block. Only "text" blocks are ever rewritten.
+type mcpBlock struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// blockTexts reads a JSON array of MCP content blocks. ok is false unless it is a
+// non-empty array of text blocks only.
+func blockTexts(raw json.RawMessage) ([]string, bool) {
+	var blocks []json.RawMessage
+	if json.Unmarshal(raw, &blocks) != nil || len(blocks) == 0 {
+		return nil, false
+	}
+	out := make([]string, len(blocks))
+	for i, b := range blocks {
+		var c mcpBlock
+		if json.Unmarshal(b, &c) != nil || c.Type != "text" {
+			return nil, false
+		}
+		out[i] = c.Text
+	}
+	return out, true
+}
+
+// blockKey names block i of the block list at field (or of the bare list when field is "").
+func blockKey(field string, i int) string { return field + "#" + strconv.Itoa(i) }
+
+// splitBlockKey reverses blockKey. ok is false for a plain field key.
+func splitBlockKey(key string) (field string, i int, ok bool) {
+	at := strings.LastIndexByte(key, '#')
+	if at < 0 {
+		return key, 0, false
+	}
+	n, err := strconv.Atoi(key[at+1:])
+	return key[:at], n, err == nil && n >= 0
+}
+
+// withBlockTexts sets the text of the listed blocks in a block list, keeping every
+// other field of each block.
+func withBlockTexts(raw json.RawMessage, at map[int]string) (json.RawMessage, bool) {
+	var blocks []map[string]json.RawMessage
+	if json.Unmarshal(raw, &blocks) != nil {
+		return raw, false
+	}
+	for i, t := range at {
+		if i >= len(blocks) {
+			return raw, false
+		}
+		b, err := json.Marshal(t)
+		if err != nil {
+			return raw, false
+		}
+		blocks[i]["text"] = b
+	}
+	out, err := json.Marshal(blocks)
+	return out, err == nil
 }
 
 // withResponseTexts returns raw with the text fields named by keys replaced by
@@ -67,6 +146,30 @@ func withResponseTexts(raw json.RawMessage, keys, texts []string) (json.RawMessa
 	if keys[0] == "" {
 		b, err := json.Marshal(texts[0])
 		return b, err == nil
+	}
+	if field, _, isBlock := splitBlockKey(keys[0]); isBlock {
+		at := map[int]string{}
+		for i, k := range keys {
+			f, n, ok := splitBlockKey(k)
+			if !ok || f != field {
+				return raw, false
+			}
+			at[n] = texts[i]
+		}
+		if field == "" {
+			return withBlockTexts(raw, at)
+		}
+		var m map[string]json.RawMessage
+		if json.Unmarshal(raw, &m) != nil {
+			return raw, false
+		}
+		list, ok := withBlockTexts(m[field], at)
+		if !ok {
+			return raw, false
+		}
+		m[field] = list
+		out, err := json.Marshal(m)
+		return out, err == nil
 	}
 	var m map[string]json.RawMessage
 	if json.Unmarshal(raw, &m) != nil {

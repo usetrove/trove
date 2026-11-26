@@ -18,6 +18,7 @@ hook_quiet_commands = "off"
 hook_large_output = "on"
 hook_output_dedup = "off"
 hook_read_outline = "off"
+hook_output_preview = "off"
 
 [measure]
 baseline_days = 0

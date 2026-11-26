@@ -115,6 +115,7 @@ func runHooksProbe(ctx context.Context, a *App, fl hooksProbeFlags) error {
 		APIKeyAuth: apiKey,
 		Claude:     fl.claude, Live: fl.live, MaxUSD: fl.maxUSD, Model: fl.model, Tools: fl.tools, RecordDir: fl.recordDir,
 		HookCommand: func(mode string) string { return shellQuote(bin) + " hook probe_" + mode },
+		TroveBin:    bin,
 	})
 	if err != nil {
 		return err

@@ -34,7 +34,7 @@ CLAMP = (10, 200)
 # Tier of each benchmark condition, from the technique registry (internal/technique): T1 safe, T2 behavioural,
 # T3 routing. A bundle takes the strictest tier it contains.
 T1 = {"noise_normalizer", "duplicate_result_collapser", "output_trimmer", "hook_repeat_read", "hook_read_limit",
-      "hook_quiet_commands", "hook_large_output", "hook_output_dedup", "hook_read_outline", "volatile_prefix_mover",
+      "hook_quiet_commands", "hook_large_output", "hook_output_dedup", "hook_read_outline", "hook_output_preview", "volatile_prefix_mover",
       "cache_breakpoints"}
 T2 = {"verbosity_steer"}
 T3 = {"model_router", "effort_tool_turns", "effort_routine_prompts", "thinking_clear"}

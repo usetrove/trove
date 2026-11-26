@@ -24,7 +24,7 @@ trove hooks install --rewrite   # also install the hooks that rewrite tool input
 | `session_reset` | `SessionStart`, Claude Code `PreCompact` | Pins the optimizer states for the session. With `hook_session_checkpoint` on, saves a note at `PreCompact` and adds it back after `/compact` or `/clear` (see [below](#session-checkpoint)). Forgets earlier reads after a compaction or resume, because the agent no longer has those files in context. During a rule-set trial (`trove autopilot trial <rule set>`), it assigns the session an arm, and in the "on" arm returns the rule set's text as SessionStart `additionalContext`. It does this at startup and again after a resume, `/clear` or compaction, for Claude Code only (see [autopilot.md](autopilot.md)). |
 | `session_end_receipt` | `SessionEnd` | Moves the hook counters into the database, runs the hook guardrail, writes the session receipt, refreshes the snapshot the other hooks read, then writes the session's features and, if stale, the repo's ([features.md](features.md)). |
 | `post_tool_test_result` | Claude Code `PostToolUse` and `PostToolUseFailure` on `Bash` | The test-pass signal. When the command is exactly one of the project's test commands in `.trove/commands.toml` (an entry named `test`, or starting or ending with `test-`, `test_`, `-test`, `_test`; arguments compared after splitting on whitespace), it records the exit code and a hash of the command in `test_runs`. A successful call counts as exit 0; a failure's code is read from the first line of its error (`Exit code N`). Interrupted runs and failures without that line are not recorded. Never prints anything and never changes the call. The session roll-up carries the last status (pass, fail or none) and the run and failure counts. |
-| `pre_tool_subagent` | `PreToolUse` on `Agent` (`Task` before Claude Code v2.1.63; checked 2026-11-17) | Does nothing unless a scout, routine agents or an Explore override is installed and this session is in the "off" arm of that feature's A/B trial. Then it declines a call to the scout, `trove-test-runner` or `trove-lint-fixer` with a short message asking the agent to do the work directly. For Trove's Explore, it sets the call's model to the main conversation's model instead. See docs/tasks.md. |
+| `pre_tool_subagent` | `PreToolUse` on `Agent` (`Task` before Claude Code v2.1.63; checked 2026-11-17) | Does nothing unless a scout, routine agents or an Explore override is installed and this session is in the "off" arm of that feature's A/B trial. Then it declines a call to the scout, `trove-test-runner` or `trove-lint-fixer` with a short message asking the agent to do the work directly. For Trove's Explore, it sets the call's model to the main conversation's model instead. See docs/tasks.md. Also records each call (hashed ids, agent type label, time) in `subagent_spawns` for the sibling-stagger shadow ([sibling-stagger.md](sibling-stagger.md)); it holds nothing. |
 | `subagent_record` | `SubagentStart` and `SubagentStop`, no matcher (fields checked 2026-11-24) | Records one `subagent_runs` row per subagent run: hashed session and agent ids, the agent type (Trove's and built-in names; any other name as `user`), start and stop times, and the STATUS word of the reply, read in memory. Never prints anything and never stores the reply. Feeds the per-agent figures in docs/tasks.md. |
 | `user_prompt_cold_check` | Claude Code `UserPromptSubmit` | The cold-resume guard (`hook_cold_resume`, off by default; see [below](#cold-resume-guard)). When a large session's prompt cache has expired, it warns about what the next prompt will cost, or stops the first prompt after a cold resume once. Then, for a prompt the guard let through, the routine steer (`hook_routine_steer`, off by default; see [below](#routine-steer)). Returns at once while both are off. |
 | `pre_model_switch` | Claude Code `PreModelSwitch` | The model-switch guard (`hook_model_switch`, off by default; see [below](#model-switch-and-cold-compact-guards)). Adds what switching a large, warm session to another model costs to Claude Code's own confirmation. Never blocks or asks. |
@@ -55,6 +55,7 @@ been **seen to honour it** (see "What your agent version allows" below).
 | `noise_normalizer` | `PostToolUse` on `Bash`, `Grep`, `Glob` (`post_tool_output`) | Lossless clean-up of the output (the same code the gateway runs). |
 | `hook_output_dedup` | `PostToolUse` on `Bash`, `Grep` and `Glob` (`post_tool_output`) | When an output (200 bytes or more, not an error) is byte-identical to one earlier in the session, replaces it with `[Trove: identical to an output earlier in this session (prompt #N, … ago); full output sha256:<id>]`. Only hashes are kept in the session ledger; there is no time-based expiry, and compaction or a resumed session forgets them. The repeat is written to the recovery store first and `trove_fetch_full` returns it. Needs the Trove MCP server and the recovery store, like the trimmer; otherwise it stays in shadow. `Read` is left out until a live probe confirms its output shape. |
 | `hook_read_outline` | `PostToolUse` on `Read` (`post_tool_read_record`) | When a `Read` without offset or limit returns 40 KB or more of a file the outliner knows (Go, Python, JS/TS, Rust, Java, Kotlin, C#, Swift) with at least 3 declarations, replaces `tool_response.file.content` with the file's outline (the same outliner as `trove_read`) and a note saying how to read a section with offset and limit. Every other response field is kept. The full text goes to the recovery store first and `trove_fetch_full` returns it; a second full `Read` of the same file goes through whole (and is not denied by `hook_repeat_read`), so a file is outlined at most once a session. Needs the Trove MCP server and the recovery store, and stays in shadow until `trove hooks probe` has seen `Read` honour `updatedToolOutput` on the installed version (the response shape is the one recorded from Claude Code 2.1.318). If `hook_read_limit` is on, it limits large reads first and this one has nothing to do. |
+| `hook_output_preview` | `PostToolUse` on `Bash`, `PowerShell`, `Grep` and MCP tools (`post_tool_output`) | Replaces a successful output of 6,000 bytes or more with a preview of at most 2,000 bytes: a header naming the line and byte counts and the output's id, the first and last lines, and every line that reports an error, a warning, an exit status or a summary. Runs of left-out lines become `[… N lines …]` and long lines are clipped. The whole output goes to the recovery store first and `trove_fetch_full` returns it. It never touches an error result, `Read`, `Glob` (at most 100 paths), Trove's own tools, a tool in `optimize.preview_passthrough`, output the trimmer already shortened, output whose preview would not be at most half its size, or output past Claude Code's own inline limit (Bash 30,000 characters, MCP 50,000), which Claude Code already saves to a file with its own preview. It also skips a shell command whose first step prints a file (`cat`, `sed`, `head`, `tail`, `nl`, `bat`, `less`, `more`, `type`, `Get-Content`, `git show`, `git diff`, `git blame`): the agent asked for that text and would fetch it back. Needs the Trove MCP server and the recovery store; MCP, PowerShell and Grep output stay in shadow until `trove hooks probe` has seen them honour `updatedToolOutput`. For Grep that means the probe's `GrepContent` case: the plain `Grep` case returns a file list, and a replaced file list says nothing about a replaced text (the documentation gives no shape for a content-mode result, code.claude.com/docs/en/hooks and /tools-reference, read 2026-11-26). `Glob` is left out on purpose: Claude Code caps it at 100 files (tools-reference, read 2026-11-26), which is rarely past the 6,000-byte floor, and a path list has no lines worth keeping over others. |
 | `output_trimmer` | `PostToolUse` on `Bash` only | In large test and build output keeps failures, stack traces, their context and the first and last lines, and replaces the rest with `[Trove: N lines trimmed; full output sha256:<id>]`. The full output is written to the recovery store **before** the shortened text is sent, and `trove_fetch_full` returns it. Needs the Trove MCP server registered; without it, or if the store cannot be opened, nothing is trimmed. |
 
 `updatedInput` replaces the **whole** input object, so the hook sends every field it received with only the one
@@ -63,7 +64,24 @@ rewritten call, and a hook never approves what you would have been asked about. 
 the tool's own response shape (for Bash, the object with `stdout`, `stderr`, `interrupted`, `isImage`, with
 only the text changed), because Claude Code silently ignores a value that does not match. Output of an
 interrupted command, output in a shape Trove does not recognise, and `Grep`/`Glob` results that are file lists
-are left exactly as they are.
+are left exactly as they are. An MCP result is replaced only when it is a string or a list of text blocks (bare or
+under `content`); a result with an image or a `structuredContent` copy in it is left alone.
+
+`post_tool_output` is installed on Claude Code with the matcher `^(?:Bash|PowerShell|Grep|Glob)$|^mcp__`, a regular
+expression because it has characters outside the exact-match set (code.claude.com/docs/en/hooks, "Matcher patterns",
+read 2026-11-25). An install from an earlier release has `Bash|Grep|Glob`; running `trove hooks install --rewrite`
+again updates the matcher of Trove's own group, and leaves a group you added your own handler to as it is.
+
+### Passthrough: tools whose whole output must reach the model
+
+```toml
+[optimize]
+preview_passthrough = ["mcp__github__get_file_contents", "mcp__db__*"]
+```
+
+An entry is a tool name or a prefix ending in `*`. `hook_output_preview` never shortens those tools' output. Trove's
+own tools always pass through. The hooks read the list from the settings Trove refreshes when a session ends and
+when you run `trove hooks install`, so an edit applies from the next of those.
 
 ### Guardrails for rewrites
 
@@ -74,10 +92,17 @@ Each rewriting optimizer is watched by what the agent does next, from the hook's
 | `hook_quiet_commands` | the agent ran the same command again exactly as first written (`reissued`). It is counted once per command and the command is not quieted a second time, so the agent never has to run it twice to get its output. | `hook_rerun` |
 | `hook_output_dedup` | the agent called `trove_fetch_full` for an output the hook collapsed as a repeat (`fetched_back`), counted once per output by the same `post_tool_fetch` hook. | `hook_fetch_back` | Uses `measure.refetch_rate_percent` (25% by default). |
 | `hook_read_outline` | the agent needed the whole file after all (`extra_read`): a second full `Read` of an outlined file, or `trove_fetch_full` of its full text, counted once per outlined file between them. A `Read` with offset and limit is how an outline is meant to be used and is never counted. | `hook_extra_read` |
+| `hook_output_preview` | the agent called `trove_fetch_full` for an output the hook shortened to a preview (`fetched_back`), counted once per output by the `post_tool_fetch` hook. | `hook_fetch_back` | Half of `measure.refetch_rate_percent` (12% by default), like the trimmer, because it hides most of the output. A placeholder, not tuned by a benchmark. |
 | `output_trimmer` | the agent called `trove_fetch_full` for an output the hook trimmed (`fetched_back`). A `PostToolUse` hook on `mcp__trove__trove_fetch_full` (`post_tool_fetch`, installed with `--rewrite`) does the counting, and only for ids this session's trimming produced, so fetches of `trove_run` output do not count against it. | `hook_fetch_back` | The limit for this one is half of `measure.refetch_rate_percent` (12% by default), because it hides text. 
 | `hook_repeat_read` | a blocked read the agent retried (`reread_anyway`) | `hook_reread` |
 | `hook_read_limit` | the agent read more of a file after its first read was limited (`extra_read`): a later `Read` of the same file that reaches past line 400. It is counted once per file, and a read inside the first 400 lines is not counted. Reading the rest is what the note asks for, so this rule is looser: the limit is twice `measure.refetch_rate_percent` (50% by default). | `hook_extra_read` |
 | `hook_large_output` | the hint to use `trove_run` was given in a session and the agent never used it. A `PostToolUse` hook on `mcp__trove__trove_run` (`post_tool_run`, installed with `--large-output` or `--rewrite`) counts one `adopted` event per session. The rule compares sessions: it needs 20 sessions where the hint was given and rolls the hook back when fewer than 10 percent of them used `trove_run` (`measure.MinAdoptionPercent`). Codex sessions are not judged (its hooks cannot see `trove_run`), and the rule does not run at all unless the counter hook is installed, so an install from before it existed is not rolled back for something it could not count: `trove hooks status` says so and `trove hooks install` adds it. | `hook_unused_advice` |
+
+Each `fetched_back` event also carries the size of what the fetch put back into the context (estimated from the
+reply's size; a reply in a shape Trove does not know counts whole, JSON and all, so an unknown shape can only lower the
+figure). `trove report` shows each rewriting hook's tokens removed, the tokens fetched back, and the saving net of
+those, which can be negative. The figure does not include the extra turn a fetch takes; the A/B comparison is the test
+of that.
 
 Once at least `measure.min_sessions` (20) actions are counted and the share that did not help is above
 `measure.refetch_rate_percent` (25%, or the stricter or looser limit in the table) beyond chance, by a sequential
@@ -137,7 +162,8 @@ itself in only one of them:
   what the model was shown, so the output result is **what you report** about the model's reply, and it is stored as
   `method: session` with that said in the evidence. A tool you do not answer for keeps its output result untested.
 - **`trove hooks probe --live --max-usd 0.25`** (or `go run ./scripts/hookprobe --live --max-usd 0.25`) runs one tiny
-  `claude -p` session per tool (Bash, Read, Grep, Glob) in a throwaway folder. Because Trove starts those requests, it is
+  `claude -p` session per tool (Bash, Read, Grep, Grep in `output_mode: "content"`, Glob, PowerShell on Windows, and one
+  MCP tool) in a throwaway folder. Because Trove starts those requests, it is
   **refused unless there is evidence Claude Code uses your own API key** (the same non-credential signals `trove setup`
   uses; `ANTHROPIC_API_KEY` for the script), and never runs on a Claude.ai login (Free, Pro, Max, Ultra, Team,
   Enterprise). It checks that
@@ -205,7 +231,10 @@ cold_resume_min_week_pct = 3.0  # ...or from this estimated share of the weekly 
 ```
 
 The state, action and thresholds are pinned when a session starts, so a change applies to new sessions (rule 5).
-Autopilot never turns the guard on: it changes what you see, not what is sent. Its guardrail can still lower it.
+No lossless Autopilot policy names the guard. The optimize policy (added 2026-11-24, see
+[autopilot.md](autopilot.md#the-optimize-policy)) switches it on in ask mode for the next session after you agree to
+it, with no shadow period: it changes what you see, not what is sent (the rule 6 amendment). Set `hook_cold_resume`
+in `config.toml` to take it over, action included. Its guardrail can still lower it.
 
 | Mode | What happens on a prompt the guard acts on | Recorded |
 |---|---|---|
@@ -392,7 +421,8 @@ the session carries the line again as cached input, and that cost is inside what
 ## Code-write nudges
 
 Two T2 techniques that cut the output tokens an agent spends writing code. Both are off by default. Each is turned
-on, and its guardrails apply, on its own. No Autopilot policy may name either.
+on, and its guardrails apply, on its own. Only the optimize policy names them, and only in shadow: it estimates
+them and never turns either on.
 
 ```toml
 [optimizers]
@@ -437,7 +467,8 @@ Guardrails (each sets the nudge back to shadow; the thresholds are placeholders)
 
 Two more actions make the next request reprocess the whole context. Both guards use the cold-resume guard's
 thresholds (`optimize.cold_resume_min_tokens`, `optimize.cold_resume_min_week_pct`) and its modes. Both are pinned per
-session, act once per session, are never turned on by Autopilot, and are measured with their own guardrail.
+session, act once per session, and are measured with their own guardrail. Only the optimize policy turns them on,
+for the next session after you agree to it (see [autopilot.md](autopilot.md#the-optimize-policy)).
 
 ```toml
 [optimizers]

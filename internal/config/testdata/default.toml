@@ -49,6 +49,10 @@ cold_resume_action = "warn"
 # most 100), whichever is reached first.
 cold_resume_min_tokens = 150000
 cold_resume_min_week_pct = 3.0
+# Tools whose whole output always reaches the model: hook_output_preview never
+# shortens them. A tool name ("Bash") or a prefix ending in * ("mcp__github__*").
+# Trove's own tools always pass through. Changes apply once a session ends.
+preview_passthrough = []
 
 [budget]
 # Budget period: "daily", "weekly" or "monthly".

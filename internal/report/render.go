@@ -651,7 +651,15 @@ func hooksLines(stats []measure.HookStats) []string {
 				l += fmt.Sprintf("; the agent ran %d quieted commands again as first written (measured)", s.Reissued)
 			}
 			if s.FetchedBack > 0 {
-				l += fmt.Sprintf("; the agent fetched back %d trimmed outputs (measured)", s.FetchedBack)
+				l += fmt.Sprintf("; the agent fetched back %d shortened outputs (measured)", s.FetchedBack)
+				if s.TokensFetchedBack != nil && s.TokensNet != nil && s.TokensFetchedBack.Value > 0 {
+					l += fmt.Sprintf(", putting about %s tokens back (estimated)", FormatTokens(s.TokensFetchedBack.Value))
+					if net := s.TokensNet.Value; net >= 0 {
+						l += fmt.Sprintf("; net of those, about %s tokens kept out (estimated)", FormatTokens(net))
+					} else {
+						l += fmt.Sprintf("; net of those, about %s tokens more than without it (estimated)", FormatTokens(-net))
+					}
+				}
 			}
 		default:
 			l += "no activity"

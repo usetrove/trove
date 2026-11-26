@@ -49,6 +49,8 @@ type Config struct {
 	// trials names the optimizers Autopilot has on trial (see AutopilotProbation), for readers that assign
 	// each session an arm themselves.
 	trials []string
+	// coldAsk is true when the optimize policy runs the cold-resume guard in ask mode (see ColdResumeAction).
+	coldAsk bool
 }
 
 // Contribute holds the setting for the optional anonymous summary upload (see
@@ -197,6 +199,11 @@ type Optimize struct {
 	// weekly limit. Either one is enough. Pinned per session.
 	ColdResumeMinTokens  int64   `toml:"cold_resume_min_tokens"`
 	ColdResumeMinWeekPct float64 `toml:"cold_resume_min_week_pct"`
+	// PreviewPassthrough lists the tools whose whole output must always reach the model: hook_output_preview
+	// never shortens them. An entry is a tool name ("Bash", "mcp__github__get_file") or a prefix ending in "*"
+	// ("mcp__github__*"). Trove's own MCP tools always pass through. The hooks see a change once their settings
+	// are refreshed: when a session ends, or at `trove hooks install`.
+	PreviewPassthrough []string `toml:"preview_passthrough"`
 }
 
 // Actions for hook_cold_resume.
@@ -283,6 +290,10 @@ const (
 	// OptimizerHookReadOutline replaces a very large full Read of a source file with its outline. Like the
 	// output trimmer it needs the Trove MCP server and the recovery store before "on" takes effect.
 	OptimizerHookReadOutline = "hook_read_outline"
+	// OptimizerHookOutputPreview replaces a long Bash, PowerShell, Grep or MCP tool output with a short preview
+	// (first and last lines, errors, warnings, summary lines); the whole output stays fetchable. Like the output
+	// trimmer it needs the Trove MCP server and the recovery store before "on" takes effect.
+	OptimizerHookOutputPreview = "hook_output_preview"
 	// OptimizerHookColdResume warns, or asks once, before a prompt that would write a large session's whole
 	// context to the cache again because the cache expired (UserPromptSubmit, docs/hooks.md). It changes no
 	// request; optimize.cold_resume_action says which.
@@ -357,7 +368,7 @@ func Default() Config {
 		Upstreams:  Upstreams{Anthropic: "https://api.anthropic.com", OpenAI: "https://api.openai.com"},
 		Optimizers: map[string]string{},
 		Optimize: Optimize{CustomAgents: []string{}, BudgetMS: 25, Verbosity: VerbosityConcise,
-			ColdResumeAction: ColdResumeWarn, ColdResumeMinTokens: 150000, ColdResumeMinWeekPct: 3},
+			ColdResumeAction: ColdResumeWarn, ColdResumeMinTokens: 150000, ColdResumeMinWeekPct: 3, PreviewPassthrough: []string{}},
 		Budget: Budget{Period: "monthly", CapUSD: 0, WarnAtPercent: 80},
 		Measure: Measure{
 			BaselineDays: 7, BaselineSessions: 20, MinSessions: 20,
@@ -438,6 +449,10 @@ cold_resume_action = "warn"
 # most 100), whichever is reached first.
 cold_resume_min_tokens = 150000
 cold_resume_min_week_pct = 3.0
+# Tools whose whole output always reaches the model: hook_output_preview never
+# shortens them. A tool name ("Bash") or a prefix ending in * ("mcp__github__*").
+# Trove's own tools always pass through. Changes apply once a session ends.
+preview_passthrough = []
 
 [budget]
 # Budget period: "daily", "weekly" or "monthly".
@@ -636,6 +651,11 @@ func (c Config) Validate() error {
 	}
 	if v := c.Optimize.ColdResumeMinWeekPct; !(v > 0 && v <= 100) {
 		add("optimize.cold_resume_min_week_pct is %v; use a percentage above 0 and at most 100 (default 3).", v)
+	}
+	for _, t := range c.Optimize.PreviewPassthrough {
+		if !validPassthrough(t) {
+			add("optimize.preview_passthrough contains %q; use a tool name such as \"Bash\" or \"mcp__github__get_file\", or a prefix ending in * such as \"mcp__github__*\".", t)
+		}
 	}
 	if v := c.Optimize.RouteTo; len(v) > 100 || strings.ContainsAny(v, " \t\r\n\"") {
 		add("optimize.route_to is not a model name; use a model ID such as the one your agent sends, or \"\" to leave model_router idle.")
@@ -922,6 +942,21 @@ type Recovery struct {
 	// changed, branch, failing test commands) in the recovery store, under recovery/checkpoints. Off by default:
 	// without it the optimizer writes no text anywhere and restores only a one-line pointer.
 	SessionCheckpoints bool `toml:"session_checkpoints"`
+}
+
+// validPassthrough accepts a tool name (letters, digits, _ and -) with an optional trailing *. A bare "*" is
+// allowed: it lets every output through, which is the same as leaving hook_output_preview off.
+func validPassthrough(s string) bool {
+	name := strings.TrimSuffix(s, "*")
+	if len(s) == 0 || len(s) > 200 {
+		return false
+	}
+	for _, r := range name {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' && r != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // validTaskName accepts the shape of a task type name. Which names exist is

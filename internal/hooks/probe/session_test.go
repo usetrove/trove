@@ -56,7 +56,9 @@ func TestVerifySessionRunsNothingAndRecordsWhatTheUserSessionDid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(armed.Prompts) != len(DefaultTools) || !strings.Contains(armed.Prompts["Bash"], "echo TROVE_PROBE_SRC") {
+	// Every default case but Grep's text case, which only the live probe tests.
+	_, grepText := armed.Prompts[ToolGrepContent]
+	if len(armed.Prompts) != len(DefaultTools)-1 || grepText || !strings.Contains(armed.Prompts["Bash"], "echo TROVE_PROBE_SRC") {
 		t.Fatalf("%+v", armed)
 	}
 	b, err := os.ReadFile(armed.SettingsPath)

@@ -125,7 +125,7 @@ def test_single_hook_config_matches_golden(hook):
     assert text == golden.read_text(encoding="utf-8"), f"update {golden} if the change is intended"
 
 
-@_pytest.mark.parametrize("hook", ["hook_large_output", "hook_output_dedup", "hook_read_outline"])
+@_pytest.mark.parametrize("hook", ["hook_large_output", "hook_output_dedup", "hook_read_outline", "hook_output_preview"])
 def test_hooks_that_need_the_mcp_server_register_it(hook):
     # plan item 10.6: without the MCP server these are clamped to shadow (or hint at a tool that does not exist)
     c = parse_condition(f"alone:{hook}", "claude_code")

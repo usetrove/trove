@@ -54,7 +54,7 @@
         ]
       },
       {
-        "matcher": "Bash|Grep|Glob",
+        "matcher": "^(?:Bash|PowerShell|Grep|Glob)$|^mcp__",
         "hooks": [
           {
             "type": "command",

@@ -176,6 +176,8 @@ func hasPoint(row optimize.Row, p optimize.Point) bool {
 // toolOutputFixtures are outputs that make each output-only optimizer act when seen twice in a session.
 var toolOutputFixtures = map[string]struct{ tool, input, text string }{
 	config.OptimizerHookOutputDedup: {"Grep", `{}`, strings.Repeat("main.go:12: a search hit\n", 30)},
+	config.OptimizerHookOutputPreview: {"Bash", `{"command":"go build -v ./..."}`,
+		strings.Repeat("github.com/example/project/internal/package_name\n", 200)},
 	config.OptimizerHookReadOutline: {"Read", `{"file_path":"/p/big.go"}`, "package big\n\n" +
 		strings.Repeat("func F() int {\n"+strings.Repeat("\tx := 1 // a line of ordinary code that takes up some room\n", 20)+"\treturn 0\n}\n\n", 40)},
 }

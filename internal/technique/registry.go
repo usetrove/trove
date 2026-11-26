@@ -60,7 +60,6 @@ const (
 // hooks.RestoreTokens, the cap and this in step.
 const sessionCheckpointTokens = 600
 
-
 const (
 	urlRTK       = "https://github.com/rtk-ai/rtk"
 	urlHeadroom  = "https://github.com/headroomlabs-ai/headroom"
@@ -140,6 +139,13 @@ var registry = []Technique{
 		HookNeeds:    []string{"Read:output"},
 		Requires:     []string{CapMCPServer, CapRecoveryStore},
 		Licence:      "Trove project", Note: "full reads of 40 KB or more of a file the outliner knows; the full text is kept locally and a second full Read goes through; stays in shadow until a live probe sees Read honour updatedToolOutput"},
+	{ID: "B30", Class: ClassRecoverable, Title: "Replace a long tool output with a short preview; the whole output stays fetchable", Names: []string{"hook_output_preview"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierRecover,
+		Subscription: true, AddsText: true, Overhead: use(trimmerToolDefTokens), UseOverhead: none(), UseNetted: true,
+		OverheadNote: noticeInCount + "; the four MCP tool definitions it relies on (about 351 tokens) are charged to it as a per-session cost, as they are to B3",
+		HookNeeds:    []string{"Bash:output"},
+		Requires:     []string{CapMCPServer, CapRecoveryStore},
+		Licence:      "Trove project", Note: "Bash, PowerShell, Grep text and MCP tools; at most 2,000 bytes; output past the agent's own inline limit is left to the agent; fetch-backs are charged against its saving"},
 	{ID: "B21", Class: ClassGuard, Title: "Warn, or ask once, before a prompt rebuilds a large session's expired cache", Names: []string{"hook_cold_resume"},
 		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusPartial, Effect: tierLossless, NoSavingEstimate: true,
 		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(coldResumeNoteTokens),
@@ -197,13 +203,13 @@ var registry = []Technique{
 		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(writeToEditTokens),
 		OverheadNote: "the deny reason, shown to Claude (PreToolUse permissionDecisionReason, code.claude.com/docs/en/hooks, 2026-11-24), at most about 100 tokens per deny (estimated)",
 		Licence:      "Trove project",
-		Note:         "off by default, explicit opt-in, never named by an Autopilot policy; judges a Write on a file of at least 300 lines whose content differs in at most 10% of lines (both placeholders), diffed in memory; once per file per session, and the same Write sent again goes through; saving estimated from the Write's size against the changed lines; guardrails: the same Write sent again, Edit failures and failing tests right after"},
+		Note:         "off by default, explicit opt-in; the optimize policy names it in shadow only and never turns it on; judges a Write on a file of at least 300 lines whose content differs in at most 10% of lines (both placeholders), diffed in memory; once per file per session, and the same Write sent again goes through; saving estimated from the Write's size against the changed lines; guardrails: the same Write sent again, Edit failures and failing tests right after"},
 	{ID: "B27", Class: ClassBehavior, Title: "Suggest one Write or a sed on the third Edit to a file in one turn", Names: []string{"hook_edit_batch"},
 		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierBehavior, NoSavingEstimate: true,
 		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(editBatchTokens),
 		OverheadNote: "a note added beside the Edit's result (PreToolUse additionalContext, code.claude.com/docs/en/hooks, 2026-11-24), at most about 100 tokens per note (estimated)",
 		Licence:      "Trove project",
-		Note:         "off by default, explicit opt-in, never named by an Autopilot policy; never denies; its shadow count carries the Edit input already spent on that file in that turn, an upper bound and not a saving; guardrails: Edit failures and failing tests right after"},
+		Note:         "off by default, explicit opt-in; the optimize policy names it in shadow only and never turns it on; never denies; its shadow count carries the Edit input already spent on that file in that turn, an upper bound and not a saving; guardrails: Edit failures and failing tests right after"},
 	{ID: "B31", Class: ClassBehavior, Title: "Keep a session note across /compact and /clear, and add it back fenced as recovered data", Names: []string{"hook_session_checkpoint"},
 		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierBehavior, NoSavingEstimate: true,
 		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(sessionCheckpointTokens),

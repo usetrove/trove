@@ -38,6 +38,12 @@ const (
 // ToolPrompt is the Tool of an entry about the UserPromptSubmit event rather than a tool.
 const ToolPrompt = "UserPromptSubmit"
 
+// ToolGrepContent is the Tool of the entry for Grep in output_mode "content", whose result is text. The "Grep"
+// entry comes from Grep's default mode, which returns a file list: that it honoured a replaced list says nothing
+// about a replaced text, and the text is the only Grep output a hook ever rewrites. So output rewrites of Grep are
+// gated on this entry.
+const ToolGrepContent = "GrepContent"
+
 // Version is the schema version of the stored record.
 const Version = 1
 

@@ -100,3 +100,36 @@ func TestHookGuardrailsAreIndependentPerOptimizer(t *testing.T) {
 		t.Fatalf("rewrite savings must be labelled estimated: %+v", tr.TokensRewritten)
 	}
 }
+
+// A fetch-back puts the output back into the context, so the saving shown is net of it, and can go below zero.
+func TestHookTotalsAreNetOfFetchBacks(t *testing.T) {
+	db := openDB(t)
+	ctx := context.Background()
+	now := t0.Add(24 * time.Hour)
+	ex := func(q string, a ...any) error { _, err := db.ExecContext(ctx, q, a...); return err }
+	for i := 0; i < 10; i++ {
+		hookEvent(t, ex, now, "c-s", config.OptimizerHookOutputPreview, "rewritten", 7000, 2000)
+		hookEvent(t, ex, now, "c-s", config.OptimizerOutputTrimmer, "rewritten", 700, 200)
+	}
+	for i := 0; i < 3; i++ {
+		hookEvent(t, ex, now, "c-s", config.OptimizerHookOutputPreview, "fetched_back", 7700, 2200)
+	}
+	for i := 0; i < 2; i++ {
+		hookEvent(t, ex, now, "c-s", config.OptimizerOutputTrimmer, "fetched_back", 7700, 2200)
+	}
+	stats, err := HookTotals(ctx, db, now.Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	by := map[string]HookStats{}
+	for _, s := range stats {
+		by[s.Hook] = s
+	}
+	p, tr := by[config.OptimizerHookOutputPreview], by[config.OptimizerOutputTrimmer]
+	if p.TokensRewritten.Value != 20000 || p.TokensFetchedBack.Value != 6600 || p.TokensNet.Value != 13400 || p.TokensNet.Label != Estimated {
+		t.Fatalf("preview: %+v %+v %+v", p.TokensRewritten, p.TokensFetchedBack, p.TokensNet)
+	}
+	if tr.TokensNet.Value != 2000-4400 {
+		t.Fatalf("a net loss must show as one, not be floored at zero: %+v", tr.TokensNet)
+	}
+}

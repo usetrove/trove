@@ -107,6 +107,7 @@ var needs = map[string]string{
 	config.OptimizerOutputTrimmer:     CannotRewriteOutput,
 	config.OptimizerHookOutputDedup:   CannotRewriteOutput,
 	config.OptimizerHookReadOutline:   CannotRewriteOutput,
+	config.OptimizerHookOutputPreview: CannotRewriteOutput,
 }
 
 func cannot(in Session, what string) bool {
@@ -194,6 +195,9 @@ type Options struct {
 	// asked on every call (the caller should cache), so a rollback takes effect at
 	// once, as it does for hooks. It only ever lowers a state.
 	RolledBack func() map[string]bool
+	// Passthrough is optimize.preview_passthrough: tools whose whole output always reaches the model, the same list
+	// the hooks adapter uses.
+	Passthrough []string
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
 }
@@ -355,7 +359,8 @@ func (s *Server) session(in Session) optimize.Session {
 	states := s.statesFor(st, in)
 	return optimize.Session{
 		Key: s.keyOf(in), Agent: agentOf(in), TroveRun: in.TroveRun,
-		Ledger: st.ledger(in.Prompts),
+		Ledger:      st.ledger(in.Prompts),
+		Passthrough: s.opts.Passthrough,
 		State: func(name string) string {
 			v := states[name]
 			// The harness said it cannot carry out what this optimizer does: count it

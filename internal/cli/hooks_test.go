@@ -295,7 +295,7 @@ func TestHooksRewriteIsOptInAndCodexGetsInputOnly(t *testing.T) {
 	}
 	var found bool
 	for _, c := range hookCommandsIn(t, hookClaudeSettings(home), "PostToolUse") {
-		found = found || (strings.HasPrefix(c, "Bash|Grep|Glob|") && strings.Contains(c, "post_tool_output"))
+		found = found || (strings.HasPrefix(c, PostOutputMatcher+"|") && strings.Contains(c, "post_tool_output"))
 	}
 	if !found {
 		t.Fatalf("Claude PostToolUse = %v", hookCommandsIn(t, hookClaudeSettings(home), "PostToolUse"))

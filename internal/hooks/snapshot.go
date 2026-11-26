@@ -95,6 +95,8 @@ type Snapshot struct {
 	// ColdResume is how hook_cold_resume acts while it is on (optimize.cold_resume_*). A session pins it when it
 	// starts. The zero value is the defaults.
 	ColdResume ColdResumeSettings `json:"cold_resume,omitempty"`
+	// PreviewPassthrough is optimize.preview_passthrough: tools whose whole output always reaches the model.
+	PreviewPassthrough []string `json:"preview_passthrough,omitempty"`
 }
 
 // ColdResumeSettings are optimize.cold_resume_action, cold_resume_min_tokens and cold_resume_min_week_pct.
@@ -137,8 +139,9 @@ func WriteSnapshot(dir string, s Snapshot) error {
 func BuildSnapshot(cfg config.Config, rolledBack map[string]string, troveRun bool, now time.Time) Snapshot {
 	s := Snapshot{V: snapshotVersion, States: map[string]string{}, RolledBack: []string{}, TroveRun: troveRun, UpdatedAt: now.Unix(),
 		RecoveryMaxMB: cfg.Recovery.MaxMB, RecoveryTTLDays: cfg.Recovery.TTLDays, Checkpoints: cfg.Recovery.SessionCheckpoints, Trial: hookTrials(cfg),
-		ColdResume: ColdResumeSettings{Action: cfg.Optimize.ColdResumeAction, MinTokens: cfg.Optimize.ColdResumeMinTokens,
-			MinWeekPct: cfg.Optimize.ColdResumeMinWeekPct}}
+		ColdResume: ColdResumeSettings{Action: cfg.ColdResumeAction(), MinTokens: cfg.Optimize.ColdResumeMinTokens,
+			MinWeekPct: cfg.Optimize.ColdResumeMinWeekPct},
+		PreviewPassthrough: cfg.Optimize.PreviewPassthrough}
 	for _, n := range OptimizerNames {
 		s.States[n] = cfg.OptimizerState(n)
 		if _, ok := rolledBack[n]; ok {
@@ -153,7 +156,7 @@ var OptimizerNames = []string{
 	config.OptimizerHookRepeatRead, config.OptimizerHookLargeOutput,
 	config.OptimizerHookReadLimit, config.OptimizerHookQuietCommands,
 	config.OptimizerNoiseNormalizer, config.OptimizerOutputTrimmer,
-	config.OptimizerHookOutputDedup, config.OptimizerHookReadOutline,
+	config.OptimizerHookOutputDedup, config.OptimizerHookReadOutline, config.OptimizerHookOutputPreview,
 	config.OptimizerHookColdResume, config.OptimizerHookModelSwitch, config.OptimizerHookColdCompact,
 	config.OptimizerHookRoutineSteer, config.OptimizerHookWriteToEdit, config.OptimizerHookEditBatch,
 	config.OptimizerHookSessionCheckpoint,

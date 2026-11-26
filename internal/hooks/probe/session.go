@@ -82,6 +82,11 @@ func Arm(state string, o ArmOptions) (Armed, error) {
 	a := Armed{State: state, Project: project, Expires: now.Add(SessionTTL).Format(time.RFC3339), Prompts: map[string]string{}}
 	var pre, post []any
 	for i, t := range o.Tools {
+		if t == ToolGrepContent {
+			// A verify session keeps one plan per tool the agent calls, and the Grep case already has Grep's.
+			// Grep's text results are tested by the live probe only.
+			continue
+		}
 		if !toolNameRe.MatchString(t) {
 			return Armed{}, fmt.Errorf("%q is not a tool name Trove can test", t)
 		}

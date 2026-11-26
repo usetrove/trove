@@ -1,0 +1,1802 @@
+[
+{
+"sku": "sku-0001",
+"name": "part 1",
+"qty": 8,
+"bin": "B01"
+},
+{
+"sku": "sku-0002",
+"name": "part 2",
+"qty": 15,
+"bin": "B02"
+},
+{
+"sku": "sku-0003",
+"name": "part 3",
+"qty": 22,
+"bin": "B03"
+},
+{
+"sku": "sku-0004",
+"name": "part 4",
+"qty": 29,
+"bin": "B04"
+},
+{
+"sku": "sku-0005",
+"name": "part 5",
+"qty": 36,
+"bin": "B05"
+},
+{
+"sku": "sku-0006",
+"name": "part 6",
+"qty": 43,
+"bin": "B06"
+},
+{
+"sku": "sku-0007",
+"name": "part 7",
+"qty": 50,
+"bin": "B07"
+},
+{
+"sku": "sku-0008",
+"name": "part 8",
+"qty": 7,
+"bin": "B08"
+},
+{
+"sku": "sku-0009",
+"name": "part 9",
+"qty": 14,
+"bin": "B09"
+},
+{
+"sku": "sku-0010",
+"name": "part 10",
+"qty": 21,
+"bin": "B10"
+},
+{
+"sku": "sku-0011",
+"name": "part 11",
+"qty": 28,
+"bin": "B11"
+},
+{
+"sku": "sku-0012",
+"name": "part 12",
+"qty": 35,
+"bin": "B00"
+},
+{
+"sku": "sku-0013",
+"name": "part 13",
+"qty": 42,
+"bin": "B01"
+},
+{
+"sku": "sku-0014",
+"name": "part 14",
+"qty": 49,
+"bin": "B02"
+},
+{
+"sku": "sku-0015",
+"name": "part 15",
+"qty": 6,
+"bin": "B03"
+},
+{
+"sku": "sku-0016",
+"name": "part 16",
+"qty": 13,
+"bin": "B04"
+},
+{
+"sku": "sku-0017",
+"name": "part 17",
+"qty": 20,
+"bin": "B05"
+},
+{
+"sku": "sku-0018",
+"name": "part 18",
+"qty": 27,
+"bin": "B06"
+},
+{
+"sku": "sku-0019",
+"name": "part 19",
+"qty": 34,
+"bin": "B07"
+},
+{
+"sku": "sku-0020",
+"name": "part 20",
+"qty": 41,
+"bin": "B08"
+},
+{
+"sku": "sku-0021",
+"name": "part 21",
+"qty": 48,
+"bin": "B09"
+},
+{
+"sku": "sku-0022",
+"name": "part 22",
+"qty": 5,
+"bin": "B10"
+},
+{
+"sku": "sku-0023",
+"name": "part 23",
+"qty": 12,
+"bin": "B11"
+},
+{
+"sku": "sku-0024",
+"name": "part 24",
+"qty": 19,
+"bin": "B00"
+},
+{
+"sku": "sku-0025",
+"name": "part 25",
+"qty": 26,
+"bin": "B01"
+},
+{
+"sku": "sku-0026",
+"name": "part 26",
+"qty": 33,
+"bin": "B02"
+},
+{
+"sku": "sku-0027",
+"name": "part 27",
+"qty": 40,
+"bin": "B03"
+},
+{
+"sku": "sku-0028",
+"name": "part 28",
+"qty": 47,
+"bin": "B04"
+},
+{
+"sku": "sku-0029",
+"name": "part 29",
+"qty": 4,
+"bin": "B05"
+},
+{
+"sku": "sku-0030",
+"name": "part 30",
+"qty": 11,
+"bin": "B06"
+},
+{
+"sku": "sku-0031",
+"name": "part 31",
+"qty": 18,
+"bin": "B07"
+},
+{
+"sku": "sku-0032",
+"name": "part 32",
+"qty": 25,
+"bin": "B08"
+},
+{
+"sku": "sku-0033",
+"name": "part 33",
+"qty": 32,
+"bin": "B09"
+},
+{
+"sku": "sku-0034",
+"name": "part 34",
+"qty": 39,
+"bin": "B10"
+},
+{
+"sku": "sku-0035",
+"name": "part 35",
+"qty": 46,
+"bin": "B11"
+},
+{
+"sku": "sku-0036",
+"name": "part 36",
+"qty": 3,
+"bin": "B00"
+},
+{
+"sku": "sku-0037",
+"name": "part 37",
+"qty": 10,
+"bin": "B01"
+},
+{
+"sku": "sku-0038",
+"name": "part 38",
+"qty": 17,
+"bin": "B02"
+},
+{
+"sku": "sku-0039",
+"name": "part 39",
+"qty": 24,
+"bin": "B03"
+},
+{
+"sku": "sku-0040",
+"name": "part 40",
+"qty": 31,
+"bin": "B04"
+},
+{
+"sku": "sku-0041",
+"name": "part 41",
+"qty": 38,
+"bin": "B05"
+},
+{
+"sku": "sku-0042",
+"name": "part 42",
+"qty": 45,
+"bin": "B06"
+},
+{
+"sku": "sku-0043",
+"name": "part 43",
+"qty": 2,
+"bin": "B07"
+},
+{
+"sku": "sku-0044",
+"name": "part 44",
+"qty": 9,
+"bin": "B08"
+},
+{
+"sku": "sku-0045",
+"name": "part 45",
+"qty": 16,
+"bin": "B09"
+},
+{
+"sku": "sku-0046",
+"name": "part 46",
+"qty": 23,
+"bin": "B10"
+},
+{
+"sku": "sku-0047",
+"name": "part 47",
+"qty": 30,
+"bin": "B11"
+},
+{
+"sku": "sku-0048",
+"name": "part 48",
+"qty": 37,
+"bin": "B00"
+},
+{
+"sku": "sku-0049",
+"name": "part 49",
+"qty": 44,
+"bin": "B01"
+},
+{
+"sku": "sku-0050",
+"name": "part 50",
+"qty": 1,
+"bin": "B02"
+},
+{
+"sku": "sku-0051",
+"name": "part 51",
+"qty": 8,
+"bin": "B03"
+},
+{
+"sku": "sku-0052",
+"name": "part 52",
+"qty": 15,
+"bin": "B04"
+},
+{
+"sku": "sku-0053",
+"name": "part 53",
+"qty": 22,
+"bin": "B05"
+},
+{
+"sku": "sku-0054",
+"name": "part 54",
+"qty": 29,
+"bin": "B06"
+},
+{
+"sku": "sku-0055",
+"name": "part 55",
+"qty": 36,
+"bin": "B07"
+},
+{
+"sku": "sku-0056",
+"name": "part 56",
+"qty": 43,
+"bin": "B08"
+},
+{
+"sku": "sku-0057",
+"name": "part 57",
+"qty": 50,
+"bin": "B09"
+},
+{
+"sku": "sku-0058",
+"name": "part 58",
+"qty": 7,
+"bin": "B10"
+},
+{
+"sku": "sku-0059",
+"name": "part 59",
+"qty": 14,
+"bin": "B11"
+},
+{
+"sku": "sku-0060",
+"name": "part 60",
+"qty": 21,
+"bin": "B00"
+},
+{
+"sku": "sku-0061",
+"name": "part 61",
+"qty": 28,
+"bin": "B01"
+},
+{
+"sku": "sku-0062",
+"name": "part 62",
+"qty": 35,
+"bin": "B02"
+},
+{
+"sku": "sku-0063",
+"name": "part 63",
+"qty": 42,
+"bin": "B03"
+},
+{
+"sku": "sku-0064",
+"name": "part 64",
+"qty": 49,
+"bin": "B04"
+},
+{
+"sku": "sku-0065",
+"name": "part 65",
+"qty": 6,
+"bin": "B05"
+},
+{
+"sku": "sku-0066",
+"name": "part 66",
+"qty": 13,
+"bin": "B06"
+},
+{
+"sku": "sku-0067",
+"name": "part 67",
+"qty": 20,
+"bin": "B07"
+},
+{
+"sku": "sku-0068",
+"name": "part 68",
+"qty": 27,
+"bin": "B08"
+},
+{
+"sku": "sku-0069",
+"name": "part 69",
+"qty": 34,
+"bin": "B09"
+},
+{
+"sku": "sku-0070",
+"name": "part 70",
+"qty": 41,
+"bin": "B10"
+},
+{
+"sku": "sku-0071",
+"name": "part 71",
+"qty": 48,
+"bin": "B11"
+},
+{
+"sku": "sku-0072",
+"name": "part 72",
+"qty": 5,
+"bin": "B00"
+},
+{
+"sku": "sku-0073",
+"name": "part 73",
+"qty": 12,
+"bin": "B01"
+},
+{
+"sku": "sku-0074",
+"name": "part 74",
+"qty": 19,
+"bin": "B02"
+},
+{
+"sku": "sku-0075",
+"name": "part 75",
+"qty": 26,
+"bin": "B03"
+},
+{
+"sku": "sku-0076",
+"name": "part 76",
+"qty": 33,
+"bin": "B04"
+},
+{
+"sku": "sku-0077",
+"name": "part 77",
+"qty": 40,
+"bin": "B05"
+},
+{
+"sku": "sku-0078",
+"name": "part 78",
+"qty": 47,
+"bin": "B06"
+},
+{
+"sku": "sku-0079",
+"name": "part 79",
+"qty": 4,
+"bin": "B07"
+},
+{
+"sku": "sku-0080",
+"name": "part 80",
+"qty": 11,
+"bin": "B08"
+},
+{
+"sku": "sku-0081",
+"name": "part 81",
+"qty": 18,
+"bin": "B09"
+},
+{
+"sku": "sku-0082",
+"name": "part 82",
+"qty": 25,
+"bin": "B10"
+},
+{
+"sku": "sku-0083",
+"name": "part 83",
+"qty": 32,
+"bin": "B11"
+},
+{
+"sku": "sku-0084",
+"name": "part 84",
+"qty": 39,
+"bin": "B00"
+},
+{
+"sku": "sku-0085",
+"name": "part 85",
+"qty": 46,
+"bin": "B01"
+},
+{
+"sku": "sku-0086",
+"name": "part 86",
+"qty": 3,
+"bin": "B02"
+},
+{
+"sku": "sku-0087",
+"name": "part 87",
+"qty": 10,
+"bin": "B03"
+},
+{
+"sku": "sku-0088",
+"name": "part 88",
+"qty": 17,
+"bin": "B04"
+},
+{
+"sku": "sku-0089",
+"name": "part 89",
+"qty": 24,
+"bin": "B05"
+},
+{
+"sku": "sku-0090",
+"name": "part 90",
+"qty": 31,
+"bin": "B06"
+},
+{
+"sku": "sku-0091",
+"name": "part 91",
+"qty": 38,
+"bin": "B07"
+},
+{
+"sku": "sku-0092",
+"name": "part 92",
+"qty": 45,
+"bin": "B08"
+},
+{
+"sku": "sku-0093",
+"name": "part 93",
+"qty": 2,
+"bin": "B09"
+},
+{
+"sku": "sku-0094",
+"name": "part 94",
+"qty": 9,
+"bin": "B10"
+},
+{
+"sku": "sku-0095",
+"name": "part 95",
+"qty": 16,
+"bin": "B11"
+},
+{
+"sku": "sku-0096",
+"name": "part 96",
+"qty": 23,
+"bin": "B00"
+},
+{
+"sku": "sku-0097",
+"name": "part 97",
+"qty": 30,
+"bin": "B01"
+},
+{
+"sku": "sku-0098",
+"name": "part 98",
+"qty": 37,
+"bin": "B02"
+},
+{
+"sku": "sku-0099",
+"name": "part 99",
+"qty": 44,
+"bin": "B03"
+},
+{
+"sku": "sku-0100",
+"name": "part 100",
+"qty": 1,
+"bin": "B04"
+},
+{
+"sku": "sku-0101",
+"name": "part 101",
+"qty": 8,
+"bin": "B05"
+},
+{
+"sku": "sku-0102",
+"name": "part 102",
+"qty": 15,
+"bin": "B06"
+},
+{
+"sku": "sku-0103",
+"name": "part 103",
+"qty": 22,
+"bin": "B07"
+},
+{
+"sku": "sku-0104",
+"name": "part 104",
+"qty": 29,
+"bin": "B08"
+},
+{
+"sku": "sku-0105",
+"name": "part 105",
+"qty": 36,
+"bin": "B09"
+},
+{
+"sku": "sku-0106",
+"name": "part 106",
+"qty": 43,
+"bin": "B10"
+},
+{
+"sku": "sku-0107",
+"name": "part 107",
+"qty": 50,
+"bin": "B11"
+},
+{
+"sku": "sku-0108",
+"name": "part 108",
+"qty": 7,
+"bin": "B00"
+},
+{
+"sku": "sku-0109",
+"name": "part 109",
+"qty": 14,
+"bin": "B01"
+},
+{
+"sku": "sku-0110",
+"name": "part 110",
+"qty": 21,
+"bin": "B02"
+},
+{
+"sku": "sku-0111",
+"name": "part 111",
+"qty": 28,
+"bin": "B03"
+},
+{
+"sku": "sku-0112",
+"name": "part 112",
+"qty": 35,
+"bin": "B04"
+},
+{
+"sku": "sku-0113",
+"name": "part 113",
+"qty": 42,
+"bin": "B05"
+},
+{
+"sku": "sku-0114",
+"name": "part 114",
+"qty": 49,
+"bin": "B06"
+},
+{
+"sku": "sku-0115",
+"name": "part 115",
+"qty": 6,
+"bin": "B07"
+},
+{
+"sku": "sku-0116",
+"name": "part 116",
+"qty": 13,
+"bin": "B08"
+},
+{
+"sku": "sku-0117",
+"name": "part 117",
+"qty": 20,
+"bin": "B09"
+},
+{
+"sku": "sku-0118",
+"name": "part 118",
+"qty": 27,
+"bin": "B10"
+},
+{
+"sku": "sku-0119",
+"name": "part 119",
+"qty": 34,
+"bin": "B11"
+},
+{
+"sku": "sku-0120",
+"name": "part 120",
+"qty": 41,
+"bin": "B00"
+},
+{
+"sku": "sku-0121",
+"name": "part 121",
+"qty": 48,
+"bin": "B01"
+},
+{
+"sku": "sku-0122",
+"name": "part 122",
+"qty": 5,
+"bin": "B02"
+},
+{
+"sku": "sku-0123",
+"name": "part 123",
+"qty": 12,
+"bin": "B03"
+},
+{
+"sku": "sku-0124",
+"name": "part 124",
+"qty": 19,
+"bin": "B04"
+},
+{
+"sku": "sku-0125",
+"name": "part 125",
+"qty": 26,
+"bin": "B05"
+},
+{
+"sku": "sku-0126",
+"name": "part 126",
+"qty": 33,
+"bin": "B06"
+},
+{
+"sku": "sku-0127",
+"name": "part 127",
+"qty": 40,
+"bin": "B07"
+},
+{
+"sku": "sku-0128",
+"name": "part 128",
+"qty": 47,
+"bin": "B08"
+},
+{
+"sku": "sku-0129",
+"name": "part 129",
+"qty": 4,
+"bin": "B09"
+},
+{
+"sku": "sku-0130",
+"name": "part 130",
+"qty": 11,
+"bin": "B10"
+},
+{
+"sku": "sku-0131",
+"name": "part 131",
+"qty": 18,
+"bin": "B11"
+},
+{
+"sku": "sku-0132",
+"name": "part 132",
+"qty": 25,
+"bin": "B00"
+},
+{
+"sku": "sku-0133",
+"name": "part 133",
+"qty": 32,
+"bin": "B01"
+},
+{
+"sku": "sku-0134",
+"name": "part 134",
+"qty": 39,
+"bin": "B02"
+},
+{
+"sku": "sku-0135",
+"name": "part 135",
+"qty": 46,
+"bin": "B03"
+},
+{
+"sku": "sku-0136",
+"name": "part 136",
+"qty": 3,
+"bin": "B04"
+},
+{
+"sku": "sku-0137",
+"name": "part 137",
+"qty": 10,
+"bin": "B05"
+},
+{
+"sku": "sku-0138",
+"name": "part 138",
+"qty": 17,
+"bin": "B06"
+},
+{
+"sku": "sku-0139",
+"name": "part 139",
+"qty": 24,
+"bin": "B07"
+},
+{
+"sku": "sku-0140",
+"name": "part 140",
+"qty": 31,
+"bin": "B08"
+},
+{
+"sku": "sku-0141",
+"name": "part 141",
+"qty": 38,
+"bin": "B09"
+},
+{
+"sku": "sku-0142",
+"name": "part 142",
+"qty": 45,
+"bin": "B10"
+},
+{
+"sku": "sku-0143",
+"name": "part 143",
+"qty": 2,
+"bin": "B11"
+},
+{
+"sku": "sku-0144",
+"name": "part 144",
+"qty": 9,
+"bin": "B00"
+},
+{
+"sku": "sku-0145",
+"name": "part 145",
+"qty": 16,
+"bin": "B01"
+},
+{
+"sku": "sku-0146",
+"name": "part 146",
+"qty": 23,
+"bin": "B02"
+},
+{
+"sku": "sku-0147",
+"name": "part 147",
+"qty": 30,
+"bin": "B03"
+},
+{
+"sku": "sku-0148",
+"name": "part 148",
+"qty": 37,
+"bin": "B04"
+},
+{
+"sku": "sku-0149",
+"name": "part 149",
+"qty": 44,
+"bin": "B05"
+},
+{
+"sku": "sku-0150",
+"name": "part 150",
+"qty": 1,
+"bin": "B06"
+},
+{
+"sku": "sku-0151",
+"name": "part 151",
+"qty": 8,
+"bin": "B07"
+},
+{
+"sku": "sku-0152",
+"name": "part 152",
+"qty": 15,
+"bin": "B08"
+},
+{
+"sku": "sku-0153",
+"name": "part 153",
+"qty": 22,
+"bin": "B09"
+},
+{
+"sku": "sku-0154",
+"name": "part 154",
+"qty": 29,
+"bin": "B10"
+},
+{
+"sku": "sku-0155",
+"name": "part 155",
+"qty": 36,
+"bin": "B11"
+},
+{
+"sku": "sku-0156",
+"name": "part 156",
+"qty": 43,
+"bin": "B00"
+},
+{
+"sku": "sku-0157",
+"name": "part 157",
+"qty": 50,
+"bin": "B01"
+},
+{
+"sku": "sku-0158",
+"name": "part 158",
+"qty": 7,
+"bin": "B02"
+},
+{
+"sku": "sku-0159",
+"name": "part 159",
+"qty": 14,
+"bin": "B03"
+},
+{
+"sku": "sku-0160",
+"name": "part 160",
+"qty": 21,
+"bin": "B04"
+},
+{
+"sku": "sku-0161",
+"name": "part 161",
+"qty": 28,
+"bin": "B05"
+},
+{
+"sku": "sku-0162",
+"name": "part 162",
+"qty": 35,
+"bin": "B06"
+},
+{
+"sku": "sku-0163",
+"name": "part 163",
+"qty": 42,
+"bin": "B07"
+},
+{
+"sku": "sku-0164",
+"name": "part 164",
+"qty": 49,
+"bin": "B08"
+},
+{
+"sku": "sku-0165",
+"name": "part 165",
+"qty": 6,
+"bin": "B09"
+},
+{
+"sku": "sku-0166",
+"name": "part 166",
+"qty": 13,
+"bin": "B10"
+},
+{
+"sku": "sku-0167",
+"name": "part 167",
+"qty": 20,
+"bin": "B11"
+},
+{
+"sku": "sku-0168",
+"name": "part 168",
+"qty": 27,
+"bin": "B00"
+},
+{
+"sku": "sku-0169",
+"name": "part 169",
+"qty": 34,
+"bin": "B01"
+},
+{
+"sku": "sku-0170",
+"name": "part 170",
+"qty": 41,
+"bin": "B02"
+},
+{
+"sku": "sku-0171",
+"name": "part 171",
+"qty": 48,
+"bin": "B03"
+},
+{
+"sku": "sku-0172",
+"name": "part 172",
+"qty": 5,
+"bin": "B04"
+},
+{
+"sku": "sku-0173",
+"name": "part 173",
+"qty": 12,
+"bin": "B05"
+},
+{
+"sku": "sku-0174",
+"name": "part 174",
+"qty": 19,
+"bin": "B06"
+},
+{
+"sku": "sku-0175",
+"name": "part 175",
+"qty": 26,
+"bin": "B07"
+},
+{
+"sku": "sku-0176",
+"name": "part 176",
+"qty": 33,
+"bin": "B08"
+},
+{
+"sku": "sku-0177",
+"name": "part 177",
+"qty": 40,
+"bin": "B09"
+},
+{
+"sku": "sku-0178",
+"name": "part 178",
+"qty": 47,
+"bin": "B10"
+},
+{
+"sku": "sku-0179",
+"name": "part 179",
+"qty": 4,
+"bin": "B11"
+},
+{
+"sku": "sku-0180",
+"name": "part 180",
+"qty": 11,
+"bin": "B00"
+},
+{
+"sku": "sku-0181",
+"name": "part 181",
+"qty": 18,
+"bin": "B01"
+},
+{
+"sku": "sku-0182",
+"name": "part 182",
+"qty": 25,
+"bin": "B02"
+},
+{
+"sku": "sku-0183",
+"name": "part 183",
+"qty": 32,
+"bin": "B03"
+},
+{
+"sku": "sku-0184",
+"name": "part 184",
+"qty": 39,
+"bin": "B04"
+},
+{
+"sku": "sku-0185",
+"name": "part 185",
+"qty": 46,
+"bin": "B05"
+},
+{
+"sku": "sku-0186",
+"name": "part 186",
+"qty": 3,
+"bin": "B06"
+},
+{
+"sku": "sku-0187",
+"name": "part 187",
+"qty": 10,
+"bin": "B07"
+},
+{
+"sku": "sku-0188",
+"name": "part 188",
+"qty": 17,
+"bin": "B08"
+},
+{
+"sku": "sku-0189",
+"name": "part 189",
+"qty": 24,
+"bin": "B09"
+},
+{
+"sku": "sku-0190",
+"name": "part 190",
+"qty": 31,
+"bin": "B10"
+},
+{
+"sku": "sku-0191",
+"name": "part 191",
+"qty": 38,
+"bin": "B11"
+},
+{
+"sku": "sku-0192",
+"name": "part 192",
+"qty": 45,
+"bin": "B00"
+},
+{
+"sku": "sku-0193",
+"name": "part 193",
+"qty": 2,
+"bin": "B01"
+},
+{
+"sku": "sku-0194",
+"name": "part 194",
+"qty": 9,
+"bin": "B02"
+},
+{
+"sku": "sku-0195",
+"name": "part 195",
+"qty": 16,
+"bin": "B03"
+},
+{
+"sku": "sku-0196",
+"name": "part 196",
+"qty": 23,
+"bin": "B04"
+},
+{
+"sku": "sku-0197",
+"name": "part 197",
+"qty": 30,
+"bin": "B05"
+},
+{
+"sku": "sku-0198",
+"name": "part 198",
+"qty": 37,
+"bin": "B06"
+},
+{
+"sku": "sku-0199",
+"name": "part 199",
+"qty": 44,
+"bin": "B07"
+},
+{
+"sku": "sku-0200",
+"name": "part 200",
+"qty": 1,
+"bin": "B08"
+},
+{
+"sku": "sku-0201",
+"name": "part 201",
+"qty": 8,
+"bin": "B09"
+},
+{
+"sku": "sku-0202",
+"name": "part 202",
+"qty": 15,
+"bin": "B10"
+},
+{
+"sku": "sku-0203",
+"name": "part 203",
+"qty": 22,
+"bin": "B11"
+},
+{
+"sku": "sku-0204",
+"name": "part 204",
+"qty": 29,
+"bin": "B00"
+},
+{
+"sku": "sku-0205",
+"name": "part 205",
+"qty": 36,
+"bin": "B01"
+},
+{
+"sku": "sku-0206",
+"name": "part 206",
+"qty": 43,
+"bin": "B02"
+},
+{
+"sku": "sku-0207",
+"name": "part 207",
+"qty": 50,
+"bin": "B03"
+},
+{
+"sku": "sku-0208",
+"name": "part 208",
+"qty": 7,
+"bin": "B04"
+},
+{
+"sku": "sku-0209",
+"name": "part 209",
+"qty": 14,
+"bin": "B05"
+},
+{
+"sku": "sku-0210",
+"name": "part 210",
+"qty": 21,
+"bin": "B06"
+},
+{
+"sku": "sku-0211",
+"name": "part 211",
+"qty": 28,
+"bin": "B07"
+},
+{
+"sku": "sku-0212",
+"name": "part 212",
+"qty": 35,
+"bin": "B08"
+},
+{
+"sku": "sku-0213",
+"name": "part 213",
+"qty": 42,
+"bin": "B09"
+},
+{
+"sku": "sku-0214",
+"name": "part 214",
+"qty": 49,
+"bin": "B10"
+},
+{
+"sku": "sku-0215",
+"name": "part 215",
+"qty": 6,
+"bin": "B11"
+},
+{
+"sku": "sku-0216",
+"name": "part 216",
+"qty": 13,
+"bin": "B00"
+},
+{
+"sku": "sku-0217",
+"name": "part 217",
+"qty": -4,
+"bin": "B01"
+},
+{
+"sku": "sku-0218",
+"name": "part 218",
+"qty": 27,
+"bin": "B02"
+},
+{
+"sku": "sku-0219",
+"name": "part 219",
+"qty": 34,
+"bin": "B03"
+},
+{
+"sku": "sku-0220",
+"name": "part 220",
+"qty": 41,
+"bin": "B04"
+},
+{
+"sku": "sku-0221",
+"name": "part 221",
+"qty": 48,
+"bin": "B05"
+},
+{
+"sku": "sku-0222",
+"name": "part 222",
+"qty": 5,
+"bin": "B06"
+},
+{
+"sku": "sku-0223",
+"name": "part 223",
+"qty": 12,
+"bin": "B07"
+},
+{
+"sku": "sku-0224",
+"name": "part 224",
+"qty": 19,
+"bin": "B08"
+},
+{
+"sku": "sku-0225",
+"name": "part 225",
+"qty": 26,
+"bin": "B09"
+},
+{
+"sku": "sku-0226",
+"name": "part 226",
+"qty": 33,
+"bin": "B10"
+},
+{
+"sku": "sku-0227",
+"name": "part 227",
+"qty": 40,
+"bin": "B11"
+},
+{
+"sku": "sku-0228",
+"name": "part 228",
+"qty": 47,
+"bin": "B00"
+},
+{
+"sku": "sku-0229",
+"name": "part 229",
+"qty": 4,
+"bin": "B01"
+},
+{
+"sku": "sku-0230",
+"name": "part 230",
+"qty": 11,
+"bin": "B02"
+},
+{
+"sku": "sku-0231",
+"name": "part 231",
+"qty": 18,
+"bin": "B03"
+},
+{
+"sku": "sku-0232",
+"name": "part 232",
+"qty": 25,
+"bin": "B04"
+},
+{
+"sku": "sku-0233",
+"name": "part 233",
+"qty": 32,
+"bin": "B05"
+},
+{
+"sku": "sku-0234",
+"name": "part 234",
+"qty": 39,
+"bin": "B06"
+},
+{
+"sku": "sku-0235",
+"name": "part 235",
+"qty": 46,
+"bin": "B07"
+},
+{
+"sku": "sku-0236",
+"name": "part 236",
+"qty": 3,
+"bin": "B08"
+},
+{
+"sku": "sku-0237",
+"name": "part 237",
+"qty": 10,
+"bin": "B09"
+},
+{
+"sku": "sku-0238",
+"name": "part 238",
+"qty": 17,
+"bin": "B10"
+},
+{
+"sku": "sku-0239",
+"name": "part 239",
+"qty": 24,
+"bin": "B11"
+},
+{
+"sku": "sku-0240",
+"name": "part 240",
+"qty": 31,
+"bin": "B00"
+},
+{
+"sku": "sku-0241",
+"name": "part 241",
+"qty": 38,
+"bin": "B01"
+},
+{
+"sku": "sku-0242",
+"name": "part 242",
+"qty": 45,
+"bin": "B02"
+},
+{
+"sku": "sku-0243",
+"name": "part 243",
+"qty": 2,
+"bin": "B03"
+},
+{
+"sku": "sku-0244",
+"name": "part 244",
+"qty": 9,
+"bin": "B04"
+},
+{
+"sku": "sku-0245",
+"name": "part 245",
+"qty": 16,
+"bin": "B05"
+},
+{
+"sku": "sku-0246",
+"name": "part 246",
+"qty": 23,
+"bin": "B06"
+},
+{
+"sku": "sku-0247",
+"name": "part 247",
+"qty": 30,
+"bin": "B07"
+},
+{
+"sku": "sku-0248",
+"name": "part 248",
+"qty": 37,
+"bin": "B08"
+},
+{
+"sku": "sku-0249",
+"name": "part 249",
+"qty": 44,
+"bin": "B09"
+},
+{
+"sku": "sku-0250",
+"name": "part 250",
+"qty": 1,
+"bin": "B10"
+},
+{
+"sku": "sku-0251",
+"name": "part 251",
+"qty": 8,
+"bin": "B11"
+},
+{
+"sku": "sku-0252",
+"name": "part 252",
+"qty": 15,
+"bin": "B00"
+},
+{
+"sku": "sku-0253",
+"name": "part 253",
+"qty": 22,
+"bin": "B01"
+},
+{
+"sku": "sku-0254",
+"name": "part 254",
+"qty": 29,
+"bin": "B02"
+},
+{
+"sku": "sku-0255",
+"name": "part 255",
+"qty": 36,
+"bin": "B03"
+},
+{
+"sku": "sku-0256",
+"name": "part 256",
+"qty": 43,
+"bin": "B04"
+},
+{
+"sku": "sku-0257",
+"name": "part 257",
+"qty": 50,
+"bin": "B05"
+},
+{
+"sku": "sku-0258",
+"name": "part 258",
+"qty": 7,
+"bin": "B06"
+},
+{
+"sku": "sku-0259",
+"name": "part 259",
+"qty": 14,
+"bin": "B07"
+},
+{
+"sku": "sku-0260",
+"name": "part 260",
+"qty": 21,
+"bin": "B08"
+},
+{
+"sku": "sku-0261",
+"name": "part 261",
+"qty": 28,
+"bin": "B09"
+},
+{
+"sku": "sku-0262",
+"name": "part 262",
+"qty": 35,
+"bin": "B10"
+},
+{
+"sku": "sku-0263",
+"name": "part 263",
+"qty": 42,
+"bin": "B11"
+},
+{
+"sku": "sku-0264",
+"name": "part 264",
+"qty": 49,
+"bin": "B00"
+},
+{
+"sku": "sku-0265",
+"name": "part 265",
+"qty": 6,
+"bin": "B01"
+},
+{
+"sku": "sku-0266",
+"name": "part 266",
+"qty": 13,
+"bin": "B02"
+},
+{
+"sku": "sku-0267",
+"name": "part 267",
+"qty": 20,
+"bin": "B03"
+},
+{
+"sku": "sku-0268",
+"name": "part 268",
+"qty": 27,
+"bin": "B04"
+},
+{
+"sku": "sku-0269",
+"name": "part 269",
+"qty": 34,
+"bin": "B05"
+},
+{
+"sku": "sku-0270",
+"name": "part 270",
+"qty": 41,
+"bin": "B06"
+},
+{
+"sku": "sku-0271",
+"name": "part 271",
+"qty": 48,
+"bin": "B07"
+},
+{
+"sku": "sku-0272",
+"name": "part 272",
+"qty": 5,
+"bin": "B08"
+},
+{
+"sku": "sku-0273",
+"name": "part 273",
+"qty": 12,
+"bin": "B09"
+},
+{
+"sku": "sku-0274",
+"name": "part 274",
+"qty": 19,
+"bin": "B10"
+},
+{
+"sku": "sku-0275",
+"name": "part 275",
+"qty": 26,
+"bin": "B11"
+},
+{
+"sku": "sku-0276",
+"name": "part 276",
+"qty": 33,
+"bin": "B00"
+},
+{
+"sku": "sku-0277",
+"name": "part 277",
+"qty": 40,
+"bin": "B01"
+},
+{
+"sku": "sku-0278",
+"name": "part 278",
+"qty": 47,
+"bin": "B02"
+},
+{
+"sku": "sku-0279",
+"name": "part 279",
+"qty": 4,
+"bin": "B03"
+},
+{
+"sku": "sku-0280",
+"name": "part 280",
+"qty": 11,
+"bin": "B04"
+},
+{
+"sku": "sku-0281",
+"name": "part 281",
+"qty": 18,
+"bin": "B05"
+},
+{
+"sku": "sku-0282",
+"name": "part 282",
+"qty": 25,
+"bin": "B06"
+},
+{
+"sku": "sku-0283",
+"name": "part 283",
+"qty": 32,
+"bin": "B07"
+},
+{
+"sku": "sku-0284",
+"name": "part 284",
+"qty": 39,
+"bin": "B08"
+},
+{
+"sku": "sku-0285",
+"name": "part 285",
+"qty": 46,
+"bin": "B09"
+},
+{
+"sku": "sku-0286",
+"name": "part 286",
+"qty": 3,
+"bin": "B10"
+},
+{
+"sku": "sku-0287",
+"name": "part 287",
+"qty": 10,
+"bin": "B11"
+},
+{
+"sku": "sku-0288",
+"name": "part 288",
+"qty": 17,
+"bin": "B00"
+},
+{
+"sku": "sku-0289",
+"name": "part 289",
+"qty": 24,
+"bin": "B01"
+},
+{
+"sku": "sku-0290",
+"name": "part 290",
+"qty": 31,
+"bin": "B02"
+},
+{
+"sku": "sku-0291",
+"name": "part 291",
+"qty": 38,
+"bin": "B03"
+},
+{
+"sku": "sku-0292",
+"name": "part 292",
+"qty": 45,
+"bin": "B04"
+},
+{
+"sku": "sku-0293",
+"name": "part 293",
+"qty": 2,
+"bin": "B05"
+},
+{
+"sku": "sku-0294",
+"name": "part 294",
+"qty": 9,
+"bin": "B06"
+},
+{
+"sku": "sku-0295",
+"name": "part 295",
+"qty": 16,
+"bin": "B07"
+},
+{
+"sku": "sku-0296",
+"name": "part 296",
+"qty": 23,
+"bin": "B08"
+},
+{
+"sku": "sku-0297",
+"name": "part 297",
+"qty": 30,
+"bin": "B09"
+},
+{
+"sku": "sku-0298",
+"name": "part 298",
+"qty": 37,
+"bin": "B10"
+},
+{
+"sku": "sku-0299",
+"name": "part 299",
+"qty": 44,
+"bin": "B11"
+},
+{
+"sku": "sku-0300",
+"name": "part 300",
+"qty": 1,
+"bin": "B00"
+}
+]

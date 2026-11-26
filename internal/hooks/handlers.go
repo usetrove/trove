@@ -255,6 +255,7 @@ func (h *handler) subagent(in Input, key string) ([]byte, error) {
 	if in.ToolName != "Agent" && in.ToolName != "Task" {
 		return nil, nil
 	}
+	h.recordSpawn(in, key)
 	if out := h.subagentModelControl(in, key); out != nil {
 		return out, nil
 	}
@@ -314,14 +315,15 @@ func (h *handler) codeWrite(in Input, key string) ([]byte, error) {
 	return nil, nil
 }
 
-// postOutput is post_tool_output. For Bash, Grep and Glob it runs the engine's
-// tool-output optimizers and, if one in "on" state shortened the text, replaces
-// what the model sees with updatedToolOutput in the tool's own response shape.
-// It counts what each optimizer did (estimated, from sizes). Anything it does not
-// understand, or any failure, lets the original output through.
+// postOutput is post_tool_output. For Bash, PowerShell, Grep, Glob and MCP tools
+// it runs the engine's tool-output optimizers and, if one in "on" state shortened
+// the text, replaces what the model sees with updatedToolOutput in the tool's own
+// response shape. It counts what each optimizer did (estimated, from sizes).
+// Anything it does not understand, or any failure, lets the original output through.
 func (h *handler) postOutput(in Input, key string) ([]byte, error) {
-	switch in.ToolName {
-	case "Bash", "Grep", "Glob":
+	switch {
+	case in.ToolName == "Bash", in.ToolName == "PowerShell", in.ToolName == "Grep", in.ToolName == "Glob":
+	case strings.HasPrefix(in.ToolName, "mcp__") && in.ToolName != fetchTool && in.ToolName != runTool:
 	default:
 		return nil, nil
 	}
@@ -332,13 +334,19 @@ func (h *handler) postOutput(in Input, key string) ([]byte, error) {
 	if !ok || interrupted(in.ToolResponse) {
 		return nil, nil
 	}
-	h.featResults(in, key, texts)
+	// Session features keep counting Bash, Grep and Glob only, as docs/features.md defines them: the MCP and
+	// PowerShell calls this hook now also sees for hook_output_preview would change what the features mean.
+	if in.ToolName == "Bash" || in.ToolName == "Grep" || in.ToolName == "Glob" {
+		h.featResults(in, key, texts)
+	}
 	st := h.session(key, in)
 	// The trimmer needs the recovery store, and the store is only useful when the
 	// agent can fetch the text back, so ask for it only then.
 	pinned := st.Pins[config.OptimizerOutputTrimmer]
 	dedup := st.Pins[config.OptimizerHookOutputDedup]
-	h.recover = h.snap.TroveRun && ((in.ToolName == "Bash" && pinned != "" && pinned != stateOff) || (dedup != "" && dedup != stateOff))
+	preview := st.Pins[config.OptimizerHookOutputPreview]
+	h.recover = h.snap.TroveRun && ((in.ToolName == "Bash" && pinned != "" && pinned != stateOff) || (dedup != "" && dedup != stateOff) ||
+		(preview != "" && preview != stateOff && optimize.PreviewTool(in.ToolName)))
 	res, reps := h.engine().TransformToolOutput(context.Background(), toolCall(in), outputForEngine(texts), h.sess(key, st, in.ToolName))
 	if err := failure(reps); err != nil {
 		return nil, err
@@ -378,6 +386,9 @@ func (h *handler) postOutput(in Input, key string) ([]byte, error) {
 		for _, id := range optimize.DedupIDs(t) {
 			sess.Ledger.Put(optimize.DedupKey(id), optimize.ReadEntry{Prompt: sess.Ledger.Prompts(), At: h.now().Unix()})
 		}
+		for _, id := range optimize.PreviewIDs(t) {
+			sess.Ledger.Put(optimize.PreviewKey(id), optimize.ReadEntry{Prompt: sess.Ledger.Prompts(), At: h.now().Unix()})
+		}
 	}
 	if err := sess.Ledger.Save(); err != nil {
 		return nil, err
@@ -392,6 +403,10 @@ const fetchTool = "mcp__trove__trove_fetch_full"
 // trimmed, it counts one fetched_back for the trimmer. The guardrail uses the
 // share of trimmed outputs that come back: if the agent keeps needing them, the
 // trimming is too aggressive and the trimmer goes back to shadow.
+//
+// The event also carries the size of what the fetch put into the context
+// (estimated tokens, from the reply's size), so reports show the saving net of
+// expansions: what the shortening kept out minus what fetching it back put in.
 func (h *handler) postFetch(in Input, key string) error {
 	if in.ToolName != fetchTool {
 		return nil
@@ -409,6 +424,7 @@ func (h *handler) postFetch(in Input, key string) error {
 	owners := []struct{ key, optimizer string }{
 		{optimize.TrimmedKey(a.ID), config.OptimizerOutputTrimmer},
 		{optimize.DedupKey(a.ID), config.OptimizerHookOutputDedup},
+		{optimize.PreviewKey(a.ID), config.OptimizerHookOutputPreview},
 	}
 	var charged []string
 	for _, o := range owners {
@@ -429,8 +445,11 @@ func (h *handler) postFetch(in Input, key string) error {
 	if err := sess.Ledger.Save(); err != nil {
 		return err
 	}
+	// Each charged optimizer is charged the whole fetch: each one, on its own, would have needed it.
+	fetched := int64(fetchedBytes(in.ToolResponse))
+	tokens := optimize.EstTokensAt(fetched, h.bpt)
 	for _, name := range charged {
-		if err := h.emit(key, name, KindFetchedBack, 0, 0); err != nil {
+		if err := h.emit(key, name, KindFetchedBack, fetched, tokens); err != nil {
 			return err
 		}
 	}
@@ -438,6 +457,22 @@ func (h *handler) postFetch(in Input, key string) error {
 		return h.emit(key, config.OptimizerHookReadOutline, KindExtraRead, 0, 0)
 	}
 	return nil
+}
+
+// fetchedBytes is the size of the text a trove_fetch_full reply put into the context, from the hook's own copy
+// of the reply. For a shape the adapter does not know it is the size of the whole reply, JSON and all, so an
+// unknown shape can only make the net saving look smaller, never larger (PRINCIPLES.md rule 9). It does not
+// include the extra turn the fetch took; the A/B comparison, not this figure, decides whether shortening paid.
+func fetchedBytes(resp json.RawMessage) int {
+	_, texts, ok := responseTexts(resp)
+	if !ok {
+		return len(resp)
+	}
+	n := 0
+	for _, t := range texts {
+		n += len(t)
+	}
+	return n
 }
 
 // runTool is trove_run as the agent names it (server "trove").

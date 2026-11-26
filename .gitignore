@@ -17,6 +17,7 @@ bench/results/
 bench/runs/
 bench/tasks/*/
 !bench/tasks/smoke/
+!bench/tasks/largeout/
 *.egg-info/
 .pytest_cache/
 bench/cache/
