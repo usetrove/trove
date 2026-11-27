@@ -2,7 +2,9 @@ package report
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -43,6 +45,41 @@ func seedHandoff(t *testing.T, db *store.DB, optimizer string, n int, onFactor f
 	}
 }
 
+// toRoundedJSON is toJSON with every number rounded to 8 significant digits and float noise around zero dropped. Bootstrap ranges differ in the last
+// bits between CPUs (fused multiply-add on arm64), so a golden of the raw floats would hold only on one platform.
+func toRoundedJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var x any
+	if err := json.Unmarshal(b, &x); err != nil {
+		t.Fatal(err)
+	}
+	var round func(any) any
+	round = func(v any) any {
+		switch v := v.(type) {
+		case float64:
+			if v > -1e-9 && v < 1e-9 {
+				return 0.0 // float noise around zero, such as -2e-16, differs between CPUs too
+			}
+			r, _ := strconv.ParseFloat(strconv.FormatFloat(v, 'g', 8, 64), 64)
+			return r
+		case []any:
+			for i := range v {
+				v[i] = round(v[i])
+			}
+		case map[string]any:
+			for k := range v {
+				v[k] = round(v[k])
+			}
+		}
+		return v
+	}
+	return toJSON(t, round(x))
+}
+
 // weekFit is a limit fit with only an API-price scale for each meter.
 var weekFit = &limitfit.Result{
 	FiveHour: limitfit.MeterFit{PerUSD: &limitfit.Range{Point: 2, Lo: 1.5, Hi: 2.5}},
@@ -73,7 +110,7 @@ func TestReportExternalHookToolUsesTheRandomizedTest(t *testing.T) {
 		t.Errorf("label %q evidence %q", v.Label, tool.Evidence)
 	}
 	golden(t, "external_randomized.txt", Render(r, Options{Width: 80}))
-	golden(t, "external_randomized.json", toJSON(t, r.ExternalTools))
+	golden(t, "external_randomized.json", toRoundedJSON(t, r.ExternalTools))
 	assertLabeled(t, r)
 }
 

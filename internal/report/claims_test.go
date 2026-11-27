@@ -45,7 +45,7 @@ func TestClaimsTableGolden(t *testing.T) {
 	}
 	golden(t, "claims.md", md)
 	golden(t, "claims.txt", RenderClaimsText(c, 100))
-	golden(t, "claims.json", toJSON(t, c))
+	golden(t, "claims.json", toRoundedJSON(t, c))
 }
 
 func TestClaimsTableEmpty(t *testing.T) {
