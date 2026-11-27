@@ -219,18 +219,9 @@ func (h *handler) reset(in Input, key string) ([]byte, error) {
 
 func (h *handler) ruleTrialAgent() bool { return h.agent == "" || h.agent == AgentClaude }
 
-// ruleTrialContext is the SessionStart reply that adds the rules of every rule-set trial this session is in the
-// "on" arm of, or nil. The pin decides, so a session keeps its arm when the trial ends mid-way (rule 5). A tool
-// Trove does not ship, or any error, adds nothing (rule 4).
-func ruleTrialContext(pins map[string]string) []byte {
-	t := ruleTrialText(pins)
-	if t == "" {
-		return nil
-	}
-	return sessionContextJSON(t)
-}
-
-// ruleTrialText is the text ruleTrialContext adds, or "".
+// ruleTrialText is the rules of every rule-set trial this session is in the "on" arm of, added at SessionStart, or
+// "". The pin decides, so a session keeps its arm when the trial ends mid-way (rule 5). A tool Trove does not ship,
+// or any error, adds nothing (rule 4).
 func ruleTrialText(pins map[string]string) string {
 	var names []string
 	for n, v := range pins {

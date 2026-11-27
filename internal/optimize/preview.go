@@ -231,7 +231,7 @@ func buildPreview(lines []string, header string, head, tail, clip, limit int) (s
 		return "", false
 	}
 	for i, l := range lines {
-		if keep[i] || len(l) > maxTrimLineBytes || !(failureRe.MatchString(l) || logAlertRe.MatchString(l) || previewSignalRe.MatchString(l)) {
+		if keep[i] || len(l) > maxTrimLineBytes || !failureRe.MatchString(l) && !logAlertRe.MatchString(l) && !previewSignalRe.MatchString(l) {
 			continue
 		}
 		keep[i] = true

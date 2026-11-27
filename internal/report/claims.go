@@ -259,10 +259,10 @@ func claimText(c ExternalClaim) string {
 }
 
 func dateRange(r ClaimRow) string {
-	switch {
-	case r.From == "":
+	switch r.From {
+	case "":
 		return "-"
-	case r.From == r.To:
+	case r.To:
 		return r.From
 	}
 	return r.From + " to " + r.To

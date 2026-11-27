@@ -24,8 +24,6 @@ import (
 // and re-read 8 + 160,000 + 3,000 = 163,008 tokens, writing to the 1-hour cache.
 var coldLastRequest = time.Date(2026, 10, 30, 9, 2, 30, 0, time.UTC)
 
-const coldLastPrompt = 163008
-
 type coldRig struct {
 	*rig
 	transcript string

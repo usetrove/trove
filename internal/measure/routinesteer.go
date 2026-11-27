@@ -292,7 +292,7 @@ func SteerLimits(dir, model string, tokens float64, now time.Time) *limitfit.Est
 	return limitfit.ReadCache(dir).Percent(d)
 }
 
-// SteerText is the verdict's figures in one line, every number labeled.
+// Text is the verdict's figures in one line, every number labeled.
 func (v SteerVerdict) Text() string {
 	if !v.Enough {
 		return fmt.Sprintf("%d sessions with the steer and %d without have routine turns with a thinking figure so far", v.On.Sessions, v.Off.Sessions)

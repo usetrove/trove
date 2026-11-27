@@ -196,7 +196,7 @@ func fitOnce(ivs []*Interval, s fitSpec) fitResult {
 func symmetric(G [][]float64) {
 	for a := range G {
 		for b := 0; b < a; b++ {
-			G[a][b] = G[b][a]
+			G[a][b] = G[b][a] //nolint:gosec // G602: b < a and G is square, so both indexes are in range
 		}
 	}
 }
@@ -316,13 +316,13 @@ func seedOf(ivs []*Interval) uint64 {
 	var buf [8]byte
 	put := func(v uint64) {
 		for i := range buf {
-			buf[i] = byte(v >> (8 * i))
+			buf[i] = byte(v >> (8 * i)) //nolint:gosec // G115: taking one byte of v is intended
 		}
 		_, _ = h.Write(buf[:])
 	}
 	for _, iv := range ivs {
-		put(uint64(iv.Start))
-		put(uint64(iv.End))
+		put(uint64(iv.Start)) //nolint:gosec // G115: a wrapping conversion feeds a hash, which is intended
+		put(uint64(iv.End))   //nolint:gosec // G115: as above
 		put(math.Float64bits(iv.Delta))
 		put(math.Float64bits(iv.total()))
 	}
@@ -353,7 +353,7 @@ func bootstrap(fitIvs, all []*Interval, s fitSpec, rounds int) []replicate {
 		inFit[iv] = true
 	}
 	// Draw every round's resample first, in order, so the result does not depend on scheduling.
-	rng := rand.New(rand.NewPCG(seedOf(all), 0x7472_6f76_65))
+	rng := rand.New(rand.NewPCG(seedOf(all), 0x7472_6f76_65)) //nolint:gosec // G404: reproducible statistics, not security
 	type draw struct{ all, fit []*Interval }
 	draws := make([]draw, rounds)
 	for r := range draws {

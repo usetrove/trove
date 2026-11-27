@@ -213,7 +213,7 @@ func SetSubagentTTL(_ context.Context, e *Env, value, why string, usdPerSession 
 // RevertSubagentTTL undoes Autopilot's own change. When the file was edited since (Claude Code itself
 // writes to it), the byte-exact undo leaves it alone; then only the key is deleted, as a new recorded
 // change, and only while it still holds the value Autopilot wrote.
-func RevertSubagentTTL(ctx context.Context, e *Env, fixID, value string) error {
+func RevertSubagentTTL(_ context.Context, e *Env, fixID, value string) error {
 	res, err := setup.UndoSelected(e.DataDir, []string{fixID})
 	if err != nil {
 		return err

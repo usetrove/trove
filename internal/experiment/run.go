@@ -162,8 +162,6 @@ func (r Result) rows() []store.ExperimentRow {
 	return out // empty while there is not enough data: nothing measured, nothing stored
 }
 
-// isHandoffTool reports whether n is a third-party hook tool whose sessions the hooks split (ext_<tool>, plan item
-// 9.3). Rule-set trials share the prefix but are judged by Autopilot's own rule-trial path, so they are excluded.
 // IsHookTrial reports whether an optimizer's sessions are split by the hooks, so its comparison reads the agent's
 // local history (AnalyzeHookTrial) rather than only the gateway's priced sessions.
 func IsHookTrial(n string) bool {
@@ -171,6 +169,8 @@ func IsHookTrial(n string) bool {
 		n == tasks.FeatureExplore || isHandoffTool(n) || config.HookAssignsTrial(n)
 }
 
+// isHandoffTool reports whether n is a third-party hook tool whose sessions the hooks split (ext_<tool>, plan item
+// 9.3). Rule-set trials share the prefix but are judged by Autopilot's own rule-trial path, so they are excluded.
 func isHandoffTool(n string) bool {
 	return strings.HasPrefix(n, "ext_") && !config.IsRuleTrial(n)
 }

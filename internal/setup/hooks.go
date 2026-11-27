@@ -162,11 +162,6 @@ func handlerCommand(h json.RawMessage) string {
 	return c.Command
 }
 
-func hasHandler(groups []json.RawMessage, command string) bool {
-	_, ok := findHandler(groups, command)
-	return ok
-}
-
 // findHandler returns the index of the first group holding a handler with this command.
 func findHandler(groups []json.RawMessage, command string) (int, bool) {
 	for i, grp := range groups {

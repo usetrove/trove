@@ -458,7 +458,7 @@ func TestReplaceGrepContentTouchesOnlyTheText(t *testing.T) {
 
 func TestVerifySessionLeavesTheGrepTextCaseToTheLiveProbe(t *testing.T) {
 	a, err := Arm(filepath.Join(t.TempDir(), "s"), ArmOptions{Tools: []string{"Grep", ToolGrepContent},
-		HookCommand: func(mode, state string) (string, []string) { return "fake", []string{mode} }})
+		HookCommand: func(mode, _ string) (string, []string) { return "fake", []string{mode} }})
 	if err != nil {
 		t.Fatal(err)
 	}

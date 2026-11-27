@@ -12,21 +12,6 @@ import (
 	"github.com/usetrove/trove/internal/config"
 )
 
-// autopilotConsent is what the user agrees to. It is shown by `trove setup` and
-// `trove autopilot on`, and says what Autopilot will not do.
-const autopilotConsent = `Autopilot lets Trove watch your usage, test savings in the background without
-changing anything, and turn on only the ones that prove safe for your sessions.
-
-  - It starts in shadow mode: nothing is changed until there is enough evidence.
-  - Only lossless optimizers that leave your cached prompt alone are eligible.
-  - Changes reach only sessions that start afterwards, never one in progress.
-  - Anything you set yourself in config.toml is left exactly as you set it.
-  - A guardrail turns an optimizer back to shadow if it stops paying off.
-  - It never touches your login or your traffic beyond what you already set up.
-  - Nothing leaves your machine.
-
-Undo it any time with ` + "`trove autopilot off`" + ` (or ` + "`trove undo`" + ` for everything).`
-
 // optimizeItems says, in plain English, what each item of the optimize policy does. It is the text the user agrees
 // to, so every name the policy names must have a line here (TestOptimizeConsentNamesEveryItem).
 var optimizeItems = map[string]string{

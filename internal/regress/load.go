@@ -181,7 +181,7 @@ func Refresh(ctx context.Context, db *store.DB, dir string, tbl *pricing.Table, 
 	return &r
 }
 
-// MaxStatusAge: the status line shows an alert from a saved result no older than this.
+// MaxStatusAge is how old a saved result may be for the status line to show its alert.
 const MaxStatusAge = 36 * time.Hour
 
 // StatusSentence is the strongest alert's sentence for the status line, or "".

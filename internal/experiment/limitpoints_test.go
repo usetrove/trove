@@ -2,7 +2,6 @@ package experiment
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -108,6 +107,6 @@ func TestPassChangeIsSeededAndBracketsTheEstimate(t *testing.T) {
 		t.Error("an empty arm must give no figure")
 	}
 	if c := passChange(50, 50, 50, 50, 1); c.Value != 0 || c.Low != 0 || c.High != 0 {
-		t.Error(fmt.Sprintf("all pass in both arms should be exactly zero: %+v", c))
+		t.Errorf("all pass in both arms should be exactly zero: %+v", c)
 	}
 }

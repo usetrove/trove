@@ -458,7 +458,7 @@ func TestRoutineSteerDefersToAColdBlock(t *testing.T) {
 	r := newColdRig(t, stateOn, config.ColdResumeAsk, true)
 	r.snapshot(Snapshot{States: map[string]string{config.OptimizerHookColdResume: stateOn, config.OptimizerHookRoutineSteer: stateOn},
 		ColdResume: ColdResumeSettings{Action: config.ColdResumeAsk, MinTokens: 150000, MinWeekPct: 3}})
-	r.rig.now = coldLastRequest.Add(3 * time.Hour)
+	r.now = coldLastRequest.Add(3 * time.Hour)
 	in := r.fill("claude_session_start_resume.json", "{{SOURCE}}", "resume", "{{SECONDS}}", "7200",
 		"{{TOKENS}}", "200000", "{{EXPIRED}}", "true", "{{USD}}", "1.5")
 	// The resume fixture's model is Opus 5.5, so the steer would act if the guard let the prompt through.

@@ -336,7 +336,7 @@ func (f *fakeSource) Name() string { return logs.SourceClaudeCode }
 func (f *fakeSource) Discover(context.Context, []string) ([]logs.File, error) {
 	return []logs.File{{Source: logs.SourceClaudeCode, Path: "x", Key: "k", Size: 1, MTime: time.Now().UnixMilli()}}, nil
 }
-func (f *fakeSource) Parse(_ context.Context, _ logs.File, cp logs.Checkpoint, emit func(logs.Event)) (logs.Checkpoint, logs.Stats, error) {
+func (f *fakeSource) Parse(_ context.Context, _ logs.File, _ logs.Checkpoint, emit func(logs.Event)) (logs.Checkpoint, logs.Stats, error) {
 	emit(f.ev)
 	return logs.Checkpoint{Offset: 1, Lines: 1, Turns: 1}, logs.Stats{}, nil
 }

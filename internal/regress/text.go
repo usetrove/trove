@@ -17,7 +17,7 @@ const (
 )
 
 // metricPhrase is what each metric reads as in a sentence.
-var metricPhrase = map[string]string{
+var metricPhrase = map[string]string{ //nolint:gosec // G101: metric names and phrases, not credentials
 	MetricRebuilds:    "unexplained cache rebuilds",
 	MetricThinkTokens: "thinking per request",
 	MetricThinkShare:  "requests with thinking",

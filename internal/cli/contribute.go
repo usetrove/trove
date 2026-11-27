@@ -54,6 +54,10 @@ func newContribute(a *App) *cobra.Command {
 				}
 			}
 			text := "This is the whole summary. Share it only if you choose to.\n\n" + string(body)
+			if p.Limits != nil {
+				// The plain-English line for the limits fields (docs/decisions/limit-report.md).
+				text += "\n" + limitsExplained + "\n"
+			}
 			if export != "" {
 				text += "\nSaved to " + export + "."
 			}

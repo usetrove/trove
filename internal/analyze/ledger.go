@@ -333,7 +333,7 @@ func OpusSonnetToggles(entries []RebuildEntry, from, to int64) PlanToggles {
 		}
 		a, _, _, ok1 := modelVersion(e.FromModel)
 		b, _, _, ok2 := modelVersion(e.Model)
-		if !ok1 || !ok2 || !((a == "opus" && b == "sonnet") || (a == "sonnet" && b == "opus")) {
+		if !ok1 || !ok2 || (a != "opus" || b != "sonnet") && (a != "sonnet" || b != "opus") {
 			continue
 		}
 		p.Switches++

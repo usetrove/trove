@@ -102,7 +102,7 @@ func newReportClaims(a *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			c := report.Claims{}
+			var c report.Claims
 			if db == nil {
 				c, err = report.BuildClaims(context.Background(), nil, report.Inputs{Config: cfg, Now: time.Now()}, r)
 			} else {

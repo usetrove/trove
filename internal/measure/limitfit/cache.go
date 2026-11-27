@@ -58,7 +58,7 @@ func writeJSON(dir, file string, v any) error {
 
 // ReadScales returns a fit holding only the API-price scales, enough for PercentUSD, or nil.
 func ReadScales(dir string) *Result {
-	b, err := os.ReadFile(filepath.Join(dir, ScaleFile))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, ScaleFile)))
 	if err != nil {
 		return nil
 	}
@@ -79,7 +79,7 @@ func ReadScales(dir string) *Result {
 // ReadCache returns the saved fit, or nil when there is none or it cannot be read (fail open: a
 // caller then shows no percentage).
 func ReadCache(dir string) *Result {
-	b, err := os.ReadFile(filepath.Join(dir, CacheFile))
+	b, err := os.ReadFile(filepath.Clean(filepath.Join(dir, CacheFile)))
 	if err != nil {
 		return nil
 	}

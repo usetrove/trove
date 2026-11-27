@@ -297,16 +297,16 @@ func agentText(e AgentEffect, m config.Measure) (text, recommend string) {
 	if bf := e.Before; bf != nil && bf.RunsWithTokens > 0 && a.RunsWithTokens > 0 {
 		fmt.Fprintf(&b, ". Before: %s tokens per run over %d run(s) (measured; observational, not an A/B)", humanInt(bf.TokensPerRun), bf.RunsWithTokens)
 	}
-	min := max(m.MinSessions, 1)
+	minRuns := max(m.MinSessions, 1)
 	if a.FailureRate != nil {
 		known := a.Runs - a.Status[tasks.StatusUnknown]
 		fmt.Fprintf(&b, ". Failed or unsure: %d of %d with a status (measured), %d handed to general-purpose", int(math.Round(*a.FailureRate*float64(known))), known, a.Redelegated)
-		if known >= min && *a.FailureRate > SubagentFailureRate {
+		if known >= minRuns && *a.FailureRate > SubagentFailureRate {
 			recommend = fmt.Sprintf("%s failed or was unsure in more than %.0f%% of its runs. Run `trove tasks remove %s`, or set a stronger routine_model under [tasks] and apply again.",
 				e.AgentType, SubagentFailureRate*100, featureArg(e.Feature))
 		}
 	}
-	if a.Runs < min {
+	if a.Runs < minRuns {
 		b.WriteString(". Not enough runs yet to judge")
 	}
 	b.WriteString(".")

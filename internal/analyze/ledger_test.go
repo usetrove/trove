@@ -87,8 +87,8 @@ func TestRebuildSubagentAndTTL(t *testing.T) {
 		t.Errorf("subagent: %+v", got)
 	}
 	// Main conversation on a subscription: documented default 1h, so 30 minutes idle is not expiry.
-	m := func(min int64) LedgerRequest {
-		r := lreq(min, 0, 25_000)
+	m := func(at int64) LedgerRequest {
+		r := lreq(at, 0, 25_000)
 		r.Plan, r.CacheWrite5m, r.CacheWriteNA = "subscription", 0, 25_000
 		return r
 	}
@@ -97,8 +97,8 @@ func TestRebuildSubagentAndTTL(t *testing.T) {
 		t.Errorf("subscription main: %+v", got)
 	}
 	// A 1h write seen in the log beats the default for an API key.
-	h := func(min int64) LedgerRequest {
-		r := lreq(min, 0, 25_000)
+	h := func(at int64) LedgerRequest {
+		r := lreq(at, 0, 25_000)
 		r.CacheWrite5m, r.CacheWrite1h = 0, 25_000
 		return r
 	}

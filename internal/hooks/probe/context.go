@@ -241,9 +241,9 @@ func analyseContextLines(f *ContextFindings, lines [][]byte, marker string) {
 	promptAt := [4]int{-1, -1, -1, -1}
 	markerAt := -1
 	type req struct {
-		at              int
-		prompt, read    int64
-		hasUsage, valid bool
+		at           int
+		prompt, read int64
+		hasUsage     bool
 	}
 	var reqs []req
 	for i, ln := range lines {
