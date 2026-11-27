@@ -543,14 +543,33 @@ func BillWeigher(tr measure.Traffic, fit *limitfit.Result, now time.Time) experi
 			return u.USD, u.HasUSD
 		}}
 	}
-	if !CanWeighLimits(fit) {
+	return LimitWeigher(fit, false, now)
+}
+
+// LimitWeigher weighs a session as percent of one plan limit per session from the user's limit fit (estimated):
+// the 5-hour limit, or the weekly one when week is true. It is the zero Weigher when the fit cannot weigh that
+// limit. A session the fit cannot weigh is left out, never counted as zero.
+func LimitWeigher(fit *limitfit.Result, week bool, now time.Time) experiment.Weigher {
+	metric := experiment.MetricLimitPct
+	can := CanWeighLimits(fit)
+	if week {
+		metric = experiment.MetricWeekPct
+		can = fit != nil && (fit.Week.Tier == limitfit.TierFit || fit.Week.PerUSD != nil)
+	}
+	if !can {
 		return experiment.Weigher{}
+	}
+	pick := func(e *limitfit.Estimate) *limitfit.Share {
+		if week {
+			return e.Week
+		}
+		return e.FiveHour
 	}
 	tbl, err := pricing.Default()
 	if err != nil {
 		tbl = nil // only the type fit can convert then
 	}
-	return experiment.Weigher{Metric: experiment.MetricLimitPct, Weigh: func(u experiment.SessionUsage) (float64, bool) {
+	return experiment.Weigher{Metric: metric, Weigh: func(u experiment.SessionUsage) (float64, bool) {
 		var e *limitfit.Estimate
 		if u.FromGateway {
 			if !u.HasUSD {
@@ -567,9 +586,9 @@ func BillWeigher(tr measure.Traffic, fit *limitfit.Result, now time.Time) experi
 			limitfit.PriceDelta(tbl, &d, now)
 			e = fit.Percent(d)
 		}
-		if e == nil || e.FiveHour == nil {
+		if e == nil || pick(e) == nil {
 			return 0, false
 		}
-		return e.FiveHour.Point, true
+		return pick(e).Point, true
 	}}
 }

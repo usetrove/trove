@@ -105,6 +105,31 @@ func bootstrap(on, off byStratum, minPer int, relative bool, seed int64) (est, l
 	return est, quantile(draws, 0.025), quantile(draws, 0.975), len(keys), true
 }
 
+// passChange is the difference of two pass rates (passed out of n, on minus off) with a 95% percentile bootstrap
+// range: each arm's sessions are resampled separately, as pass or fail. It is nil when either arm is empty.
+func passChange(onPass, onN, offPass, offN int, seed int64) *RateChange {
+	if onN <= 0 || offN <= 0 {
+		return nil
+	}
+	rate := func(p, n int) float64 { return float64(p) / float64(n) }
+	r := rand.New(rand.NewSource(seed)) // #nosec G404 -- reproducible statistics, not security
+	draw := func(p, n int) float64 {
+		k := 0
+		for i := 0; i < n; i++ {
+			if r.Intn(n) < p {
+				k++
+			}
+		}
+		return rate(k, n)
+	}
+	draws := make([]float64, Resamples)
+	for i := range draws {
+		draws[i] = draw(onPass, onN) - draw(offPass, offN)
+	}
+	sort.Float64s(draws)
+	return &RateChange{Value: rate(onPass, onN) - rate(offPass, offN), Low: quantile(draws, 0.025), High: quantile(draws, 0.975)}
+}
+
 // quantile of a sorted slice, linear interpolation.
 func quantile(sorted []float64, q float64) float64 {
 	pos := q * float64(len(sorted)-1)

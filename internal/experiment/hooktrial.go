@@ -115,6 +115,10 @@ func AnalyzeHookTrialBy(ctx context.Context, db *store.DB, optimizer string, x c
 		return res, err
 	}
 	res.TestFail = &TestFailResult{OnRate: on.Rate(), OffRate: off.Rate(), OnSessions: on.Sessions, OffSessions: off.Sessions, Label: measure.Measured}
+	if on.Sessions >= x.MinSessionsPerArm && off.Sessions >= x.MinSessionsPerArm && x.MinSessionsPerArm > 0 {
+		res.TestFail.PassChange = passChange(on.Sessions-on.Failed, on.Sessions, off.Sessions-off.Failed, off.Sessions,
+			seedFor(x.Seed, optimizer, "pass_rate"))
+	}
 	return res, nil
 }
 
