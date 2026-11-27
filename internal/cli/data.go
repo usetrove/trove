@@ -17,6 +17,7 @@ import (
 
 	"github.com/usetrove/trove/internal/contribute"
 	"github.com/usetrove/trove/internal/measure/limitfit"
+	"github.com/usetrove/trove/internal/regress"
 	"github.com/usetrove/trove/internal/store"
 )
 
@@ -34,9 +35,9 @@ import (
 var hooksKept = map[string]bool{"config.json": true, "capabilities.json": true}
 
 var (
-	dataDeleteFiles = []string{"contribute.json", "gateway.log", limitfit.CacheFile, limitfit.ScaleFile}
+	dataDeleteFiles = []string{"contribute.json", "gateway.log", limitfit.CacheFile, limitfit.ScaleFile, regress.CacheFile}
 	dataDeleteDirs  = []string{"recovery", store.LimitSpoolDir}
-	dataDeleteGlobs = []string{"hooks.log*", "contribute.json.*", ".limitfit-*.json"}
+	dataDeleteGlobs = []string{"hooks.log*", "contribute.json.*", ".limitfit-*.json", ".regress-*.json"}
 )
 
 func newData(a *App) *cobra.Command {

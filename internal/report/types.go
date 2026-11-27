@@ -58,6 +58,8 @@ type Report struct {
 	// docs/analyze.md, "History ledgers"). Nil when there is nothing to show.
 	Rebuilds  *Rebuilds  `json:"cache_rebuilds,omitempty"`
 	OutputMix *OutputMix `json:"output_mix,omitempty"`
+	// Regressions is the regression watch (docs/regress.md). Nil when nothing was checked.
+	Regressions *Regressions `json:"regression_watch,omitempty"`
 	// PlanLimits is the per-user estimate of how tokens move Claude Code's plan-usage meters (see
 	// docs/limit-fit.md). Nil when the meter has never been seen.
 	PlanLimits *PlanLimits `json:"plan_limits,omitempty"`

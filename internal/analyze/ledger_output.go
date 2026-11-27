@@ -23,6 +23,7 @@ const (
 // OutputEntry is one request's output split.
 type OutputEntry struct {
 	TS      int64
+	Session string // hashed session key, for counting sessions
 	Phase   string
 	Model   string
 	Effort  string
@@ -117,7 +118,7 @@ func OutputLedger(reqs []LedgerRequest) ([]OutputEntry, []BytesPerToken) {
 			prev.Model != r.Model || r.Compacted || r.Phase == "compact" {
 			carry = 0 // a new agent, a model switch or a compaction leaves no earlier thinking in context
 		}
-		e := OutputEntry{TS: r.TS, Phase: r.Phase, Model: r.Model, Effort: r.Effort, Version: r.AgentVersion,
+		e := OutputEntry{TS: r.TS, Session: r.SessionKey, Phase: r.Phase, Model: r.Model, Effort: r.Effort, Version: r.AgentVersion,
 			Output: r.Output, Context: r.context()}
 		visBytes := r.TextBytes + r.ToolInputBytes
 		switch {

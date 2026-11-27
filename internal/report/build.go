@@ -17,6 +17,7 @@ import (
 	"github.com/usetrove/trove/internal/optimize/suggest"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/recommend"
+	"github.com/usetrove/trove/internal/regress"
 	"github.com/usetrove/trove/internal/store"
 	"github.com/usetrove/trove/internal/technique"
 )
@@ -51,6 +52,8 @@ type Inputs struct {
 	Providers []recommend.Provider
 	// LimitFit is the per-user fit of Claude Code's plan-usage meters (limitfit.Refresh), or nil.
 	LimitFit *limitfit.Result
+	// Regressions is the regression watch's latest result (regress.Refresh), or nil.
+	Regressions *regress.Result
 	// ClaudeModelSetting is the `model` in the user's Claude Code settings (~/.claude/settings.json), read by the
 	// caller; "" when unset or unreadable. Only "opusplan" changes anything: it turns on the plan-mode finding.
 	ClaudeModelSetting string
@@ -60,6 +63,7 @@ type Inputs struct {
 func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, error) {
 	w := p.Window()
 	r := newReport(p, in.KillSwitch)
+	r.Regressions = regressionsFrom(in.Regressions)
 
 	byAgent, err := measure.TotalsBy(ctx, db, w, measure.ByAgent)
 	if err != nil {

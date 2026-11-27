@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/usetrove/trove/internal/measure/limitfit"
+	"github.com/usetrove/trove/internal/regress"
 	"github.com/usetrove/trove/internal/report"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -91,6 +92,15 @@ func statusLine(a *App, format string, in claudeInput, now time.Time) statusOutp
 		status.SavedLimit = limitfit.ReadScales(dir).PercentUSD(status.Saved.Value)
 	}
 	color := format != report.FormatShell && !a.NoColor && a.Getenv("NO_COLOR") == ""
-	line := report.RenderStatus(status, format, color) + autopilotSuffix(dir)
+	line := report.RenderStatus(status, format, color) + autopilotSuffix(dir) + regressSuffix(dir, now)
 	return statusOutput{Line: line, Status: &status, LimitSample: recordLimitSample(db, dir, in, now)}
+}
+
+// regressSuffix is the regression watch's strongest alert, in one sentence, from the saved result (one small
+// file read; the watch is recomputed at session end and by `trove report`). Empty when there is none.
+func regressSuffix(dir string, now time.Time) string {
+	if s := regress.StatusSentence(regress.ReadCache(dir), now); s != "" {
+		return " · " + s
+	}
+	return ""
 }

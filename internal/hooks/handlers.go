@@ -19,6 +19,8 @@ import (
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/optimize"
+	"github.com/usetrove/trove/internal/pricing"
+	"github.com/usetrove/trove/internal/regress"
 	"github.com/usetrove/trove/internal/store"
 	"github.com/usetrove/trove/internal/tasks"
 	"github.com/usetrove/trove/internal/tuning"
@@ -559,6 +561,10 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	// Refit the plan-usage meters when a newer reading arrived, for the status line and Autopilot.
 	// Best effort and cached: a stale or missing fit only means no percentages are shown.
 	_ = limitfit.Refresh(ctx, db, dir, now)
+	// The regression watch for the status line, at most every half hour. Best effort and advice only.
+	if tbl, err := pricing.Default(); err == nil {
+		_ = regress.Refresh(ctx, db, dir, tbl, now, false)
+	}
 	// Retention must not depend on the gateway running: subscription users never start it. Once a day
 	// across all processes, best effort (an old row surviving a day is never worth failing a hook for).
 	_, _ = db.PurgeIfDue(ctx, cfg.RetentionDays, now)

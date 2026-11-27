@@ -17,6 +17,7 @@ import (
 	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/pricing"
+	"github.com/usetrove/trove/internal/regress"
 	"github.com/usetrove/trove/internal/report"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -143,6 +144,8 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 	if perr != nil {
 		tbl = nil // suggestions that need prices are skipped
 	}
+	// The regression watch, on the history just read (best effort; advice only, it changes nothing).
+	regressions := regress.Refresh(context.Background(), db, dir, tbl, now, true)
 	registered := install.Registered(dir)
 	schemaTokens := 0
 	if registered {
@@ -152,7 +155,7 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 		}
 	}
 	r, err := report.Build(context.Background(), db, report.Inputs{Config: cfg, Now: now, Prices: tbl, KillSwitch: on, HistoryPlanEvidence: planEvidence, Recoverable: registered, SchemaTokens: schemaTokens,
-		RepoKey: repoKeyFor(context.Background(), db, ""), LimitFit: limitFit, ClaudeModelSetting: claudeModelSetting(a)}, p)
+		RepoKey: repoKeyFor(context.Background(), db, ""), LimitFit: limitFit, Regressions: regressions, ClaudeModelSetting: claudeModelSetting(a)}, p)
 	if err != nil {
 		return r, fmt.Errorf("cannot read recorded usage: %v. Run `trove doctor` for details", err)
 	}

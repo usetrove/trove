@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/usetrove/trove/internal/feedback"
 	"github.com/usetrove/trove/internal/pricing"
+	"github.com/usetrove/trove/internal/regress"
+	"github.com/usetrove/trove/internal/store"
 )
 
 type feedbackOutput struct {
@@ -20,7 +23,7 @@ type feedbackOutput struct {
 
 func newFeedback(a *App) *cobra.Command {
 	var note string
-	var noOpen bool
+	var noOpen, regression bool
 	c := &cobra.Command{
 		Use:   "feedback",
 		Short: "Prepare a GitHub issue with diagnostics, shown to you first",
@@ -52,13 +55,27 @@ func newFeedback(a *App) *cobra.Command {
 			} else {
 				feedback.Collect(context.Background(), nil, &d)
 			}
-			body := feedback.Body(d, note)
-			link, trunc := feedback.IssueURL("Beta feedback: ", body)
+			var body, link string
+			var trunc bool
+			if regression {
+				alerts := regressionAlerts(db, dir)
+				if len(alerts) == 0 {
+					return a.emit(feedbackOutput{Diagnostics: d}, "The regression watch has no alert right now, so there is nothing to report. `trove report` shows what it checked.")
+				}
+				body = feedback.RegressionBody(alerts, d, note)
+				link, trunc = feedback.RegressionURL(feedback.RegressionTitle(alerts[0]), body)
+			} else {
+				body = feedback.Body(d, note)
+				link, trunc = feedback.IssueURL("Beta feedback: ", body)
+			}
 			out := feedbackOutput{d, body, link, trunc}
 			if a.JSON {
 				return a.emit(out, "")
 			}
 			text := "This is exactly what would go into the issue:\n\n" + body + "\nLink: " + link
+			if regression {
+				text += "\n\nThis drafts an issue on Claude Code's GitHub repository; you can also use /feedback inside Claude Code."
+			}
 			if err := a.emit(out, text); err != nil {
 				return err
 			}
@@ -77,7 +94,28 @@ func newFeedback(a *App) *cobra.Command {
 	}
 	c.Flags().StringVar(&note, "note", "", "a short description to put at the top of the issue")
 	c.Flags().BoolVar(&noOpen, "no-open", false, "print the link and do not offer to open it")
+	c.Flags().BoolVar(&regression, "regression", false, "draft an issue for Claude Code with the regression watch's numbers only")
 	return c
+}
+
+// regressionAlerts is the regression watch's current alerts: recomputed from the database when the saved
+// result is old, else the saved one. Nil when there is none.
+func regressionAlerts(db *store.DB, dir string) []regress.Alert {
+	now := time.Now()
+	var r *regress.Result
+	if db != nil {
+		tbl, err := pricing.Default()
+		if err != nil {
+			tbl = nil
+		}
+		r = regress.Refresh(context.Background(), db, dir, tbl, now, false)
+	} else {
+		r = regress.ReadCache(dir)
+	}
+	if regress.StatusSentence(r, now) == "" {
+		return nil
+	}
+	return r.Alerts
 }
 
 func openBrowser(a *App, link string) error {
