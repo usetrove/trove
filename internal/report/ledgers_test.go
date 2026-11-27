@@ -63,7 +63,7 @@ func seedLedgers(t *testing.T, db *store.DB) {
 	installedDaysAgo(t, db, 60)
 	const s55, h55, o5 = "claude-sonnet-5-5", "claude-haiku-5-5", "claude-opus-5"
 	at := time.Date(2026, 10, 28, 10, 0, 0, 0, time.UTC)
-	m := func(min int) time.Time { return at.Add(time.Duration(min) * time.Minute) }
+	m := func(minute int) time.Time { return at.Add(time.Duration(minute) * time.Minute) }
 	n := func(v int64) any { return v }
 	for _, r := range []lrow{
 		// Session A, main conversation.

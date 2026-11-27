@@ -15,7 +15,7 @@ func TestOpusplanFinding(t *testing.T) {
 	installedDaysAgo(t, db, 60)
 	const op, so = "claude-opus-5-5", "claude-sonnet-5-5"
 	at := time.Date(2026, 10, 28, 10, 0, 0, 0, time.UTC)
-	m := func(min int) time.Time { return at.Add(time.Duration(min) * time.Minute) }
+	m := func(minute int) time.Time { return at.Add(time.Duration(minute) * time.Minute) }
 	for _, r := range []lrow{
 		{session: "c-p", at: m(0), model: op, write: 60_000, out: 100},
 		{session: "c-p", at: m(1), model: op, read: 60_000, write: 1_000, out: 100},
