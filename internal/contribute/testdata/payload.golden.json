@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "trove_version": "1.2.3",
   "os": "linux",
   "arch": "amd64",
@@ -27,5 +27,51 @@
     }
   ],
   "guardrail_trips": 1,
-  "install_id": "0123456789abcdef0123456789abcdef"
+  "install_id": "0123456789abcdef0123456789abcdef",
+  "limits": {
+    "plan": "max",
+    "claude_code_version": "2.1.89",
+    "five_hour": {
+      "ratios": {
+        "output": {
+          "ratio": 5,
+          "width": 1.2
+        },
+        "cache_read": {
+          "ratio": 0.083,
+          "width": 0.051
+        },
+        "cache_write_5m": {
+          "ratio": 1.3,
+          "width": 0.41
+        },
+        "cache_write_1h": {
+          "ratio": 13,
+          "width": 5.2
+        }
+      },
+      "unexplained_pct": 12
+    },
+    "seven_day": {
+      "unexplained_pct": 15
+    },
+    "version_checks": [
+      {
+        "version": "2.1.90",
+        "metric": "limit_pct_per_1k_output_equivalent",
+        "status": "alert",
+        "cause": "client"
+      },
+      {
+        "version": "2.1.90",
+        "metric": "unexplained_rebuild_rate",
+        "status": "normal"
+      },
+      {
+        "version": "2.1.89",
+        "metric": "unexplained_rebuild_rate",
+        "status": "normal"
+      }
+    ]
+  }
 }

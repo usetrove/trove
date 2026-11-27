@@ -114,12 +114,18 @@ func listOrNone(s []string) string {
 // IssueURL builds the prefilled new-issue link. If the body would make the link
 // too long it is cut, with a visible marker, so the link still works.
 func IssueURL(title, body string) (link string, truncated bool) {
+	return issueURL(Repo, "beta-feedback", title, body)
+}
+
+func issueURL(repo, label, title, body string) (link string, truncated bool) {
 	build := func(b string) string {
 		q := url.Values{}
 		q.Set("title", title)
 		q.Set("body", b)
-		q.Set("labels", "beta-feedback")
-		return "https://github.com/" + Repo + "/issues/new?" + q.Encode()
+		if label != "" {
+			q.Set("labels", label)
+		}
+		return "https://github.com/" + repo + "/issues/new?" + q.Encode()
 	}
 	link = build(body)
 	const marker = "\n\n[diagnostics shortened to fit a link; run `trove feedback --json` for the full set]"

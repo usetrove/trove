@@ -1,0 +1,6 @@
+Context from my previous session, which I cleared to avoid re-sending it:
+My last requests:
+- Add a retry with backoff to the uploader in internal/upload.
+- Now write tests for it, including the jitter.
+Files edited: internal/upload/upload.go, internal/upload/upload_test.go
+End of your last reply: Added the retry with exponential backoff and jitter, and tests covering the retry count and the jitter bounds. All tests pass.

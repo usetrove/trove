@@ -30,7 +30,7 @@ func implemented(t *testing.T) map[string]string {
 	add("internal/optimize", optimize.PipelineNames...)
 	add("internal/optimize (gateway)", optimize.GatewayNames...)
 	add("internal/hooks", hooks.OptimizerNames...)
-	add("internal/fixer", fixer.MCPPrune, fixer.ContextSlim, fixer.ContextSlimGeneric, fixer.CacheBreaker, fixer.ModelDefault, fixer.CacheTTLMain, fixer.CacheTTLSubagents, fixer.SettingsCheck, fixer.TaskScout, fixer.TaskCascade, fixer.RetypedCommand, fixer.MCPSnippet)
+	add("internal/fixer", fixer.MCPPrune, fixer.ContextSlim, fixer.ContextSlimGeneric, fixer.CacheBreaker, fixer.ModelDefault, fixer.CacheTTLMain, fixer.CacheTTLSubagents, fixer.SettingsCheck, fixer.TaskScout, fixer.TaskCascade, fixer.TaskRoutine, fixer.TaskExplore, fixer.RetypedCommand, fixer.MCPSnippet)
 	add("internal/optimize/suggest", suggest.KindCacheTTL)
 	ms, err := external.Builtin()
 	if err != nil {

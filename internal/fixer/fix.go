@@ -168,7 +168,7 @@ func (e *Env) now() time.Time {
 // meaning the same thing between runs.
 func fixID(kind string, parts ...string) string {
 	h := sha256.Sum256([]byte(kind + "\x00" + strings.Join(parts, "\x00")))
-	short := map[string]string{MCPPrune: "mcp", ContextSlim: "ctx", ContextSlimGeneric: "ctxg", CacheBreaker: "cache", ModelDefault: "model", CacheTTLMain: "ttl", CacheTTLSubagents: "ttlsub", SettingsCheck: "chk", SettingsProfile: "settings", TaskScout: "scout", TaskCascade: "cascade", TaskSubagentModel: "submodel", RetypedCommand: "run", MCPSnippet: "snip"}[kind]
+	short := map[string]string{MCPPrune: "mcp", ContextSlim: "ctx", ContextSlimGeneric: "ctxg", CacheBreaker: "cache", ModelDefault: "model", CacheTTLMain: "ttl", CacheTTLSubagents: "ttlsub", SettingsCheck: "chk", SettingsProfile: "settings", TaskScout: "scout", TaskCascade: "cascade", TaskSubagentModel: "submodel", TaskRoutine: "routine", TaskExplore: "explore", RetypedCommand: "run", MCPSnippet: "snip"}[kind]
 	return short + "-" + hex.EncodeToString(h[:])[:8]
 }
 

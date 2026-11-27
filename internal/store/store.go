@@ -106,11 +106,7 @@ func OpenReadOnly(dataDir string) (*DB, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, err
 	}
-	dsn := "file:" + filepath.ToSlash(path) + "?mode=ro&_pragma=busy_timeout(200)"
-	if !strings.HasPrefix(filepath.ToSlash(path), "/") {
-		dsn = "file:/" + filepath.ToSlash(path) + "?mode=ro&_pragma=busy_timeout(200)" // Windows drive paths
-	}
-	sdb, err := sql.Open("sqlite", dsn)
+	sdb, err := sql.Open("sqlite", fileURI(path)+"?mode=ro&_pragma=busy_timeout(200)")
 	if err != nil {
 		return nil, fmt.Errorf("cannot open the database %s: %v", path, err)
 	}

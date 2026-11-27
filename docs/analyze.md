@@ -116,6 +116,109 @@ Checked against the providers' own documentation on **2026-10-29**:
 
 Re-verify these before changing `facts.go`.
 
+## History ledgers (Claude Code, added 2026-11-23)
+
+Code: `internal/analyze/ledger.go`, `ledger_output.go`; loaded by
+`internal/measure/ledger.go`; shown by `trove report` as **Cache rebuilds** and
+**Output by kind**. Both ledgers are worked out when the report is built, from
+numbers and codes already in `history_requests` and `history_tool_calls` (see
+[logs.md](logs.md)). Nothing new is stored. They are pure functions: the same
+rows always give the same result, whatever order they arrive in.
+
+Requests are grouped by session and agent (the main conversation, or one
+subagent) and ordered by time. Every request of a session that has a request in
+the report period is loaded, so the period's first request is compared with its
+real predecessor; only entries inside the period are counted.
+
+### Rebuild ledger
+
+- **New content** = this request's context minus the agent's previous request's
+  context (never below 0), where context = uncached input + cache writes + cache
+  reads. All three are measured counts from the log.
+- **Rebuild**: a cache write over `RebuildMinTokens` (**20,000**) tokens **and**
+  over `RebuildFactor` (**3**) times the new content. Below that, a write is the
+  new turn's own content being cached. A test pins both constants.
+- A first request has no predecessor, so it counts when its write is over
+  20,000 tokens. For a subagent that is the `subagent_start` cause. For the main
+  conversation it is `session_start`: listed, not counted as a rebuild, because
+  it builds a cache rather than rebuilding one.
+- **Cause**, the first that matches wins:
+
+  | Code | Rule |
+  |---|---|
+  | `idle_expired` | Gap since the agent's previous request is longer than the cache lifetime in effect |
+  | `model_changed` | Model differs from the agent's previous request |
+  | `subagent_start` | A subagent's first request |
+  | `compaction` | A compaction boundary came since the previous request, or the request follows a compaction summary |
+  | `version_changed` | Claude Code version differs |
+  | `effort_changed` | Effort differs (per-turn effort when known), only on models that keep one cache per effort level |
+  | `fast_mode_changed` | Fast mode switched on or off |
+  | `unexplained` | None of the above: a candidate bug, or a cause the log does not show |
+
+- **Cache lifetime in effect**: from the agent's own writes in the log (a 1-hour
+  write means 1 hour, a 5-minute write 5 minutes). Before the log has shown one,
+  the documented default is used: 1 hour for the main conversation on a
+  subscription, 5 minutes otherwise. Those verdicts are counted and the report
+  says how many there were. The plan itself is estimated (see logs.md).
+- `unexplained` also covers causes that are documented but not in the log:
+  connecting or removing an MCP server, enabling or disabling a plugin, denying
+  a whole tool, many images. The report says so.
+- Labels: rebuild count and tokens are **measured** (a fixed rule applied to
+  measured numbers). The split by cause is **estimated**, because the cause is
+  inferred.
+
+### Output ledger
+
+- **Thinking**: `thinking_tokens` from the log, **measured**. It is already
+  inside `output_tokens` and is never added to it. When the log has no count,
+  thinking = output − estimated visible tokens (never below 0), **estimated**.
+- **Visible text and tool input**: the rest of the output, split by the byte
+  size of the response's text blocks and of its tool-call inputs. Always
+  **estimated**.
+- **Bytes per token**: calibrated per model family from requests with a measured
+  thinking count (their non-thinking output against their text and tool-input
+  bytes). It needs at least 20 such requests and 2,000 tokens; otherwise the
+  prior of 3.5 bytes per token is used. The report names the ratio and where it
+  came from.
+- **Phase**: what came right before the request in the log: a typed prompt
+  (`prompt`), a tool result (`tool_result`), a compaction summary (`compact`) or
+  nothing recognizable (`other`). Lines Claude Code writes itself (`isMeta`)
+  do not change it.
+- Requests read before Trove recorded sizes (parser version 3) and with no
+  thinking count cannot be split. Their output is counted in Output only. Their
+  table rows show `-`, and the report says how many tokens that covers.
+- **Thinking carried in context**: for each request, the agent's earlier
+  thinking since the last compaction or model switch, summed over requests.
+  Counted only on models that the preserved-thinking page lists as keeping
+  earlier thinking (Fable and Mythos 5.1 and 5.2, Opus 5.5, Sonnet 5.5, Haiku
+  5.5). It is an **estimated upper bound**: no page says the tokens carried
+  equal the original thinking count, the API drops blocks a model cannot use,
+  and Claude Code may trim what it sends back.
+
+### Verified (2026-11-23)
+
+- <https://code.claude.com/docs/en/prompt-caching>, read in full:
+  - Cache lifetime: one hour for the main conversation on a Claude subscription
+    within plan usage; five minutes on usage credits, an API key or a cloud
+    provider. Subagents, workflows, compaction, forks and session titles get
+    five minutes unless set otherwise (`promptCacheTtl`,
+    `subagentPromptCacheTtl`, `FORCE_PROMPT_CACHING_5M`,
+    `ENABLE_PROMPT_CACHING_1H`).
+  - Actions that invalidate the cache: switching models; changing effort
+    (except on Fable 5.1 and later, Opus 5.5, Sonnet 5.5 and Haiku 5.5);
+    turning on fast mode; MCP server or plugin changes; denying a whole tool;
+    compacting; many images; upgrading Claude Code.
+  - "Its first request doesn't read the parent's cache" (subagents).
+- <https://platform.claude.com/docs/en/build-with-claude/preserved-thinking>,
+  read in full: "On models with preserved thinking, usable blocks stay in
+  context and are billed as input." The extended-thinking page says Opus 4.5
+  and models numbered 4.6 and higher also keep earlier thinking. The two pages
+  disagree on Opus 5 and Sonnet 5, so only the preserved-thinking list is
+  counted.
+- Observed in local transcripts, not documented: compaction is a `system` line
+  with subtype `compact_boundary`, followed by a user line with
+  `isCompactSummary`. Subagent lines carry `agentId`. See logs.md.
+
 ## Known limits
 
 - Context-file detection and the noise detectors are heuristics; confidence is
@@ -125,3 +228,9 @@ Re-verify these before changing `facts.go`.
 - Request images and other non-text content have no segment bytes; their
   tokens are spread over the text segments by the calibration.
 - Gemini requests are not analyzed.
+- History ledgers: the compaction request itself does not appear to be written
+  to the transcript, so its own cost is not visible; only the rebuild after it
+  is. Causes the log does not record (MCP, plugin or tool-list changes) land in
+  `unexplained`. Text blocks are summed per log line. On the versions checked,
+  each line holds a different block, but a version that repeated blocks across
+  lines would overstate visible text. The ledgers cover Claude Code only.

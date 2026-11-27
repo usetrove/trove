@@ -1,6 +1,17 @@
 {
   "description": "Trove hooks. They stay inert until an optimizer is set to shadow or on in Trove's config, and every one exits quietly on any error.",
   "hooks": {
+    "PostModelSwitch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook post_model_switch",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Read",
@@ -43,7 +54,7 @@
         ]
       },
       {
-        "matcher": "Bash|Grep|Glob",
+        "matcher": "^(?:Bash|PowerShell|Grep|Glob)$|^mcp__",
         "hooks": [
           {
             "type": "command",
@@ -84,6 +95,27 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "matcher": "manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook pre_compact_cold_check",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreModelSwitch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook pre_model_switch",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "PreToolUse": [
@@ -103,6 +135,16 @@
           {
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook pre_tool_subagent",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook pre_tool_code_write",
             "timeout": 5
           }
         ]
@@ -145,6 +187,39 @@
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" plugin start",
             "timeout": 90
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook subagent_record",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook subagent_record",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/trove\" hook user_prompt_cold_check",
+            "timeout": 5
           }
         ]
       }

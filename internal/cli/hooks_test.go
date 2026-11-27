@@ -94,8 +94,9 @@ func TestHooksInstallAndUninstallKeepUserHooks(t *testing.T) {
 	}
 
 	pre := hookCommandsIn(t, hookClaudeSettings(home), "PreToolUse")
-	if len(pre) != 3 || pre[0] != "Bash|/home/me/no-rm.sh" || !strings.HasPrefix(pre[1], "Read|") || !strings.Contains(pre[1], "hook pre_tool_repeat_read") ||
-		!strings.HasPrefix(pre[2], "Agent|Task|") || !strings.Contains(pre[2], "hook pre_tool_subagent") {
+	if len(pre) != 4 || pre[0] != "Bash|/home/me/no-rm.sh" || !strings.HasPrefix(pre[1], "Read|") || !strings.Contains(pre[1], "hook pre_tool_repeat_read") ||
+		!strings.HasPrefix(pre[2], "Agent|Task|") || !strings.Contains(pre[2], "hook pre_tool_subagent") ||
+		!strings.HasPrefix(pre[3], "Write|Edit|MultiEdit|") || !strings.Contains(pre[3], "hook pre_tool_code_write") {
 		t.Fatalf("PreToolUse = %v", pre)
 	}
 	end := hookCommandsIn(t, hookClaudeSettings(home), "SessionEnd")
@@ -103,14 +104,26 @@ func TestHooksInstallAndUninstallKeepUserHooks(t *testing.T) {
 		t.Fatalf("SessionEnd = %v", end)
 	}
 	// PostToolUse: read and edit records and the test-pass signal, which also needs PostToolUseFailure.
-	for ev, n := range map[string]int{"PostToolUse": 3, "PostToolUseFailure": 1, "SessionStart": 1, "PreCompact": 1} {
+	for ev, n := range map[string]int{"PostToolUse": 3, "PostToolUseFailure": 1, "SessionStart": 1, "PreCompact": 2, "PreModelSwitch": 1, "PostModelSwitch": 1} {
 		if got := hookCommandsIn(t, hookClaudeSettings(home), ev); len(got) != n {
 			t.Errorf("%s = %v", ev, got)
 		}
 	}
+	// The cold-resume guard: one UserPromptSubmit hook with no matcher (the event has none).
+	if got := hookCommandsIn(t, hookClaudeSettings(home), "UserPromptSubmit"); len(got) != 1 || !strings.HasPrefix(got[0], "|") ||
+		!strings.Contains(got[0], "hook user_prompt_cold_check") {
+		t.Errorf("UserPromptSubmit = %v", got)
+	}
+	if got := hookCommandsIn(t, hookClaudeSettings(home), "PreCompact"); len(got) != 2 || !strings.HasPrefix(got[1], "manual|") ||
+		!strings.Contains(got[1], "hook pre_compact_cold_check") || !strings.Contains(got[0], "hook session_reset") {
+		t.Errorf("PreCompact = %v", got)
+	}
 	cx := hookCommandsIn(t, codexHooksFile(home), "SessionEnd")
 	if len(cx) != 1 || !strings.Contains(cx[0], "--agent codex") {
 		t.Fatalf("codex SessionEnd = %v", cx)
+	}
+	if got := hookCommandsIn(t, codexHooksFile(home), "UserPromptSubmit"); len(got) != 0 {
+		t.Errorf("the cold-resume guard reads Claude Code's resume fields, so Codex gets no prompt hook: %v", got)
 	}
 	if got := hookCommandsIn(t, codexHooksFile(home), "PreToolUse"); len(got) != 0 {
 		t.Fatalf("codex has no file-read tool to hook, and large-output is off: %v", got)
@@ -179,7 +192,7 @@ func TestHooksLargeOutputIsOptIn(t *testing.T) {
 	if code := h.run("hooks", "install", "--yes", "--large-output"); code != 0 {
 		t.Fatalf("exit %d: %s", code, h.err)
 	}
-	if got := hookCommandsIn(t, hookClaudeSettings(home), "PreToolUse"); len(got) != 3 || !strings.HasPrefix(got[2], "Bash|") {
+	if got := hookCommandsIn(t, hookClaudeSettings(home), "PreToolUse"); len(got) != 4 || !strings.HasPrefix(got[3], "Bash|") {
 		t.Fatalf("Claude PreToolUse = %v", got)
 	}
 	if got := hookCommandsIn(t, codexHooksFile(home), "PreToolUse"); len(got) != 1 || !strings.Contains(got[0], "pre_tool_large_output") {
@@ -282,7 +295,7 @@ func TestHooksRewriteIsOptInAndCodexGetsInputOnly(t *testing.T) {
 	}
 	var found bool
 	for _, c := range hookCommandsIn(t, hookClaudeSettings(home), "PostToolUse") {
-		found = found || (strings.HasPrefix(c, "Bash|Grep|Glob|") && strings.Contains(c, "post_tool_output"))
+		found = found || (strings.HasPrefix(c, PostOutputMatcher+"|") && strings.Contains(c, "post_tool_output"))
 	}
 	if !found {
 		t.Fatalf("Claude PostToolUse = %v", hookCommandsIn(t, hookClaudeSettings(home), "PostToolUse"))

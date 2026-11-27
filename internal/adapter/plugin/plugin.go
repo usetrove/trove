@@ -107,6 +107,7 @@ var needs = map[string]string{
 	config.OptimizerOutputTrimmer:     CannotRewriteOutput,
 	config.OptimizerHookOutputDedup:   CannotRewriteOutput,
 	config.OptimizerHookReadOutline:   CannotRewriteOutput,
+	config.OptimizerHookOutputPreview: CannotRewriteOutput,
 }
 
 func cannot(in Session, what string) bool {
@@ -194,6 +195,9 @@ type Options struct {
 	// asked on every call (the caller should cache), so a rollback takes effect at
 	// once, as it does for hooks. It only ever lowers a state.
 	RolledBack func() map[string]bool
+	// Passthrough is optimize.preview_passthrough: tools whose whole output always reaches the model, the same list
+	// the hooks adapter uses.
+	Passthrough []string
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
 }
@@ -355,7 +359,8 @@ func (s *Server) session(in Session) optimize.Session {
 	states := s.statesFor(st, in)
 	return optimize.Session{
 		Key: s.keyOf(in), Agent: agentOf(in), TroveRun: in.TroveRun,
-		Ledger: st.ledger(in.Prompts),
+		Ledger:      st.ledger(in.Prompts),
+		Passthrough: s.opts.Passthrough,
 		State: func(name string) string {
 			v := states[name]
 			// The harness said it cannot carry out what this optimizer does: count it
@@ -430,7 +435,8 @@ func (s *Server) statesFor(st *sessionState, in Session) map[string]string {
 	// model_router prices per-token API usage, so it changes nothing for any login but
 	// an API key (a Copilot bill is not per token); it still estimates in shadow.
 	// effort_tool_turns changes how a request is served, so it too acts for API-key logins only.
-	apiOnly := map[string]bool{optimize.OptimizerModelRouter: true, optimize.OptimizerEffortToolTurns: true}
+	apiOnly := map[string]bool{optimize.OptimizerModelRouter: true, optimize.OptimizerEffortToolTurns: true,
+		optimize.OptimizerEffortRoutinePrompts: true, optimize.OptimizerThinkingClear: true}
 	routeLocked := false
 	if in.Harness != "" && NormLogin(in.Login) != LoginAPIKey {
 		for k := range apiOnly {

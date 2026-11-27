@@ -1,0 +1,16 @@
+id: largeout-log
+source: largeout
+repo: "local:repo"
+base_commit: local
+license: MIT
+prompt: |
+  `python run.py` should process all 300 orders in orders.csv, but its summary says fewer were processed.
+  Run it, find out from its output why an order was skipped, and fix the data in orders.csv (do not change run.py).
+  `python run.py --check` must exit 0.
+image: python:3.12-slim
+setup: []
+grading_setup:
+  - git checkout HEAD -- run.py
+success_cmd: python run.py --check
+timeout_s: 900
+tags: [largeout, python, log]

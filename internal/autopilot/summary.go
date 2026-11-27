@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/measure/limitfit"
 )
 
 // Summary is the weekly view of what Autopilot did. Names, states and plain-English
@@ -108,11 +109,22 @@ func (s *Summary) Details() string {
 	var advice []string
 	for _, it := range s.Plan {
 		if it.Verdict != VerdictOn {
-			advice = append(advice, fmt.Sprintf("    %-28s %s: %s", it.Optimizer, strings.ReplaceAll(it.Verdict, "_", " "), it.Reason))
+			line := fmt.Sprintf("    %-28s %s: %s", it.Optimizer, strings.ReplaceAll(it.Verdict, "_", " "), it.Reason)
+			if l := it.Limit; l != nil && l.FiveHour != nil && l.FiveHour.Point > 0 {
+				line += fmt.Sprintf(" (about %.2g%% of 5h per session, %s)", l.FiveHour.Point, limitBasis(l.FiveHour.Basis))
+			}
+			advice = append(advice, line)
 		}
 	}
 	if len(advice) > 0 {
 		b.WriteString("  Planner advice (changes nothing; savings are estimated):\n" + strings.Join(advice, "\n") + "\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+func limitBasis(b string) string {
+	if t, ok := limitfit.BasisText[b]; ok {
+		return t
+	}
+	return "estimated"
 }

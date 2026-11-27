@@ -2,7 +2,9 @@
   "end": {
     "Offset": 2263,
     "Lines": 11,
-    "Turns": 2
+    "Turns": 2,
+    "Phase": "",
+    "Compacted": false
   },
   "events": [
     {
@@ -20,9 +22,19 @@
       "CacheRead": 800,
       "Output": 50,
       "ServiceTier": "",
+      "Thinking": null,
+      "AgentVersion": "",
+      "Entrypoint": "",
+      "Effort": "",
+      "TurnEffort": "",
+      "AgentKey": "",
+      "Phase": "",
+      "Compacted": false,
+      "TextBytes": 0,
       "Tools": [
         {
           "Name": "shell",
+          "InputBytes": 0,
           "ResultBytes": 32,
           "ResultHash": "236b49891f3d5f81",
           "Error": false
@@ -44,6 +56,15 @@
       "CacheRead": 1000,
       "Output": 70,
       "ServiceTier": "",
+      "Thinking": null,
+      "AgentVersion": "",
+      "Entrypoint": "",
+      "Effort": "",
+      "TurnEffort": "",
+      "AgentKey": "",
+      "Phase": "",
+      "Compacted": false,
+      "TextBytes": 0,
       "Tools": null
     }
   ],

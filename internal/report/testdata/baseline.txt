@@ -37,6 +37,7 @@ Optimizers
   optimizer only estimates and changes nothing.
   model_router: off
   effort_tool_turns: off
+  effort_routine_prompts: off
   volatile_prefix_mover: off
   noise_normalizer: shadow (set to on)
     Saved ~$0.50 (estimated).
@@ -44,6 +45,7 @@ Optimizers
   duplicate_result_collapser: off
     Would have saved ~$3.60 (estimated, shadow mode).
   verbosity_steer: off
+  thinking_clear: off
   cache_breakpoints: off
   Guardrail events: none.
 

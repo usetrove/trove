@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
+	"github.com/usetrove/trove/internal/hookcaps"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/recovery"
 )
@@ -84,7 +85,8 @@ func rewriteKind(name string) string {
 	switch name {
 	case config.OptimizerHookReadLimit, config.OptimizerHookQuietCommands:
 		return RewriteInput
-	case config.OptimizerNoiseNormalizer, config.OptimizerOutputTrimmer, config.OptimizerHookOutputDedup, config.OptimizerHookReadOutline:
+	case config.OptimizerNoiseNormalizer, config.OptimizerOutputTrimmer, config.OptimizerHookOutputDedup, config.OptimizerHookReadOutline,
+		config.OptimizerHookOutputPreview:
 		return RewriteOutput
 	}
 	return ""
@@ -103,10 +105,29 @@ func (h *handler) stateFor(name, pinned, tool string) string {
 	if st != stateOn {
 		return st
 	}
-	if kind := rewriteKind(name); kind != "" && (!expressible(h.agent, tool, kind) || !h.capabilities().Supports(h.agent, tool, kind)) {
+	if kind := rewriteKind(name); kind != "" && (!expressible(h.agent, tool, kind) || !h.capabilities().Supports(h.agent, capabilityToolFor(tool, kind), kind)) {
 		return stateShadow
 	}
 	return st
+}
+
+// CapabilityTool is the tool name a probe result is recorded under: every MCP tool shares one entry, "mcp",
+// because whether Claude Code honours a replacement is a property of MCP results in general, not of one server.
+func CapabilityTool(tool string) string {
+	if strings.HasPrefix(tool, "mcp__") {
+		return "mcp"
+	}
+	return tool
+}
+
+// capabilityToolFor is the entry a rewrite of one kind is gated on. A Grep output rewrite only ever changes a
+// text result (output_mode "content"; a file list is left alone), so it needs the probe to have seen a replaced
+// text reach the model, not a replaced file list.
+func capabilityToolFor(tool, kind string) string {
+	if tool == "Grep" && kind == RewriteOutput {
+		return hookcaps.ToolGrepContent
+	}
+	return CapabilityTool(tool)
 }
 
 // sess describes the hook's session to the engine.
@@ -120,6 +141,7 @@ func (h *handler) sess(key string, st *sessionState, tool string) optimize.Sessi
 		State:         func(name string) string { return h.stateFor(name, st.Pins[name], tool) },
 		Tuning:        pinnedTuning(st.Pins),
 		BytesPerToken: h.bpt, BytesPerTokenN: h.bptN,
+		Passthrough: h.snap.PreviewPassthrough,
 	}
 }
 

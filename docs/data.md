@@ -38,9 +38,14 @@ Last checked against the code and schema version 17 on 2026-11-06.
 | `mcp_installs.json`, `mcp_trust.json`, plugin state file | Where Trove's MCP server and plugin were registered, and which commands you trusted | Kept until uninstalled |
 | `hooks/` | Per-session hook journals (content hashes and sizes of files read, never the files or their names), feature lines, the counter spool (capped at 4 MB), `config.json` (optimizer states), `capabilities.json` | Journals are removed at session end and swept after a week. `config.json` and `capabilities.json` are setup state and are kept by `trove data delete`, since deleting them would quietly return the hooks to their defaults; the rest is removed by it |
 | `hooks.log`, `hooks.log.1` | Redacted hook errors, capped at 256 KB | Rotated at the cap |
+| `statusline/` | `limits.jsonl`: plan-usage samples from `trove status-line --format claude` waiting to be moved into `limit_samples` (the same numbers as that table, capped at 1 MB); `seen/`: one empty file per session whose name is the hashed session key and a hash of its latest values, so the status line can tell a change with one file check | The spool is moved into the database and deleted at session end and by `trove report`; a `seen/` file is swept a week after its last change. Removed by `trove data delete` |
+| `regress.json` | The regression watch's latest result ([regress.md](regress.md)): per Claude Code version and day, four numbers with their baselines, sample counts, version strings and dates, and the alert sentences. Numbers, versions and dates only; permissions 0600 | Recomputed at session end (at most every 30 minutes) and by `trove report`; removed by `trove data delete` |
+| `limitfit.json`, `limitfit-scale.json` | The latest per-user fit of Claude Code's plan-usage meters ([limit-fit.md](limit-fit.md)): weights per token type and model family with their intervals, the bootstrap rounds, interval counts, the share of meter movement from elsewhere, your context-token mix and most-used model. Numbers and one model id only; permissions 0600 | Recomputed at session end and by `trove report` when a newer meter reading arrived; removed by `trove data delete` |
 | `recovery/` | Full raw output of commands you ran through `trove_run`, kept so a trimmed result can be fetched back. **Can contain anything a command printed.** Opt-in; local; size-capped | 7 days, 200 MB cap, then deleted |
+| `recovery/checkpoints/` | Session notes for `hook_session_checkpoint`: your latest request texts, choices the agent stated, files changed, branch and failing test commands, one note per working folder (named by a hash). **Contains text from your session.** Only with `recovery.session_checkpoints = true`; owner-only files | 3 days, 8 KB per note, 1 MB cap, then deleted |
+| `hooks/checkpoint/` | Per-folder boundary records for `hook_session_checkpoint`: hashes of files read and of failed commands, sizes and times. No text, path or command | 3 days |
 | `contribute.json` | Whether sharing is on, your random install id, the date of the last upload | Kept until you disable and delete it; removed by `trove data delete` and `--purge-data` |
-| `autopilot.json` | Whether you agreed to Autopilot, the policy name, and for each optimizer Autopilot manages: its state (off, shadow, candidate, on, rolled_back), the time it entered that state, a short plain-English reason and a try count; the last 50 state changes; the planner's latest advice per optimizer (verdict, shadow session count, estimated net tokens, a reason); and the time of the last desktop notice. No prompts, paths or credentials | Kept until you run `trove autopilot off`; removed by `--purge-data`. Written only by `trove autopilot`, `trove setup` (with your yes) and Autopilot's own evaluation |
+| `autopilot.json` | Whether you agreed to Autopilot, the policy name, and for each optimizer Autopilot manages: its state (off, shadow, candidate, on, rolled_back), the time it entered that state, a short plain-English reason and a try count; the last 50 state changes; the planner's latest advice per optimizer (verdict, shadow session count, estimated net tokens, a reason); the time of the last desktop notice; and, under the settings policy, the setting's state, reason, the id of the fix Autopilot applied and its last estimate (requests, sessions, rebuild and read counts, net in dollars or percent of the 5-hour limit, basis and label); under the optimize policy, whether it runs the cold-resume guard in ask mode (`cold_resume_ask`). No prompts, paths or credentials | Kept until you run `trove autopilot off`; removed by `--purge-data`. Written only by `trove autopilot`, `trove setup` (with your yes) and Autopilot's own evaluation |
 | `gateway.json` | Process id and loopback address of a running gateway | Removed when the gateway stops |
 | `gateway.log` | Gateway service output on macOS | Kept until deleted |
 
@@ -244,6 +249,8 @@ Checkpoints for reading your agents' own session logs (read-only), so each file 
 | `turns` | Turns found |
 | `skipped_lines` | Lines that could not be parsed (counted, not stored) |
 | `updated_at` | When this checkpoint was written |
+| `carry_phase` | What came before the next unread request (a code such as tool_result), carried to the next read |
+| `carry_compacted` | 1 when a compaction boundary was read and no request has followed it yet |
 
 **Retention:** kept: a checkpoint of a path hash and offsets, so that history already purged is not read again. Removed by `trove data delete`.
 
@@ -273,6 +280,32 @@ One row per provider request found in an agent's session log (estimates, since t
 | `errors` | Count of errors |
 | `findings` | JSON: waste patterns as names and counts |
 | `shadow_savings` | JSON: estimated savings as numbers |
+| `thinking_tokens` | Output tokens spent on thinking, already counted in `output_tokens`; empty when the log did not say |
+| `agent_version` | Agent version that wrote the request, for example 2.1.331 |
+| `entrypoint` | How the agent was started, for example cli or sdk-cli (observed in the log, not documented) |
+| `effort` | Effort setting: low, medium, high, xhigh or max |
+| `turn_effort` | Effort for this turn, which can differ from the setting (observed in the log, not documented) |
+| `agent_key` | Hash of the subagent's id; empty for the main conversation |
+| `phase` | What came right before the request: prompt, tool_result, compact or other |
+| `compacted` | 1 when a compaction came since the agent's previous request |
+| `text_bytes` | Size of the response's visible text; the text is not stored |
+| `fast_mode` | 1 when the request ran in fast mode |
+
+**Retention:** deleted after `retention_days`.
+
+### `history_tool_calls`
+
+One row per tool call in a `history_requests` row: the tool's name and sizes, never its input or output.
+
+| Column | Meaning |
+|---|---|
+| `request_key` | The `history_requests` row the call belongs to |
+| `idx` | Position of the call in the request |
+| `ts` | Request time |
+| `tool_name` | Tool name (for example Read, Bash) |
+| `input_bytes` | Size of the call's input as logged; the input is not stored |
+| `result_bytes` | Size of the result; empty when no result was seen |
+| `error` | 1 when the result was an error |
 
 **Retention:** deleted after `retention_days`.
 
@@ -315,15 +348,50 @@ Config changes Trove made at your request (`trove fix`, `trove settings`, `trove
 |---|---|
 | `change_id` | Same id as `fixes.change_id` |
 | `fix_id` | Which fix |
-| `feature` | task_scout or task_cascade |
-| `role` | Role of the file written (scout, worker, escalate, cascade, snippet) |
+| `feature` | task_scout, task_cascade, task_subagent_model, task_routine_agents or task_explore |
+| `role` | Role of the file written (scout, worker, escalate, cascade, snippet, subagent, test_runner, lint_fixer, test_skill, lint_skill, explore) |
 | `scout_model` | Model alias chosen for the scout |
 | `worker_model` | Model alias chosen for the worker |
 | `escalation_model` | Model alias chosen for escalation |
 | `overhead_request` | Estimated tokens it adds to every request |
 | `overhead_use` | Estimated tokens it adds each time it is used |
+| `effort` | Effort level written into the file (routine agents, Explore override, scout); empty when none |
 
 **Retention:** deleted after `retention_days` together with its reverted fix; kept while the fix is in place.
+
+### `subagent_runs`
+
+One row per subagent run that Claude Code's SubagentStart and SubagentStop hooks reported. It ties a subagent's
+requests in `history_requests` to an agent type, so `trove report` can show tokens per agent type. The subagent's
+reply is read in memory for its first `STATUS:` line and never stored.
+
+| Column | Meaning |
+|---|---|
+| `session_key` | Hash of the session id |
+| `agent_key` | Hash of the subagent's id, the same hash as `history_requests.agent_key` |
+| `agent_type` | Trove's own `trove-*` names and Claude Code's built-in names as they are; any other name is stored as `user` |
+| `started_at` | When the subagent started (0 when only its stop was seen) |
+| `stopped_at` | When it stopped (0 while running or when the stop was not seen) |
+| `status` | done, failed, unsure or unknown, from the first `STATUS:` line of its reply |
+
+**Retention:** deleted after `retention_days`.
+
+### `subagent_spawns`
+
+One row per Agent (formerly Task) call that Claude Code's PreToolUse hook saw. It is the shadow of the sibling
+stagger ([sibling-stagger.md](sibling-stagger.md)): `trove tasks stagger` groups same-type calls made close together
+and checks in the history whether the later ones wrote or read the shared prefix. The call's prompt and description
+are never stored.
+
+| Column | Meaning |
+|---|---|
+| `session_key` | Hash of the session id |
+| `tool_key` | Hash of the call's `tool_use_id` |
+| `ts` | When the hook saw the call |
+| `agent_type` | Trove's own `trove-*` names and Claude Code's built-in names as they are; any other name is stored as `user` |
+| `type_key` | Hash of the raw agent type, so two of your own agent types are told apart without storing their names |
+
+**Retention:** deleted after `retention_days`.
 
 ### `external_tools`
 
@@ -386,7 +454,7 @@ One row per decision made by Trove's agent hooks.
 | `ts` | When |
 | `session_key` | Hash of the session id |
 | `hook` | Which optimizer (for example hook_repeat_read) |
-| `kind` | What happened: blocked, would_block, advised, would_advise, reread_anyway, rewritten, would_rewrite, reissued, fetched_back, extra_read or adopted |
+| `kind` | What happened: blocked, would_block, advised, would_advise, reread_anyway, rewritten, would_rewrite, reissued, fetched_back, extra_read, adopted, overridden (the user sent a prompt again after the cold-resume guard blocked one), cleared (the session ended with `/clear` after that block), and for `hook_routine_steer` steered, would_steer, reprompted (the prompt after a routine one read as a correction) or turn_end (the prompt after a routine one). The prompt itself is never stored |
 | `bytes` | Size of the file or output involved |
 | `tokens` | Estimated tokens kept out of the context, 0 when unknown |
 
@@ -431,6 +499,26 @@ Decisions and usage reports from harness plugins (such as the OpenCode plugin).
 | `cache_write_tokens` | Cache-write tokens the harness reported |
 | `cost_usd` | Cost the harness reported |
 | `detail` | A short fixed label for outcome rows (tool_error, retry, abort, session_end) |
+
+**Retention:** deleted after `retention_days`.
+
+### `limit_samples`
+
+Claude Code's plan-usage meter, as it passes it to `trove status-line --format claude` on stdin. A row is written only when a value changed since the session's previous row. Empty means Claude Code did not send that value (the 5-hour and weekly windows come only for Pro, Max and Ultra subscriptions, after the session's first response).
+
+| Column | Meaning |
+|---|---|
+| `id` | Row number |
+| `ts` | When |
+| `session_key` | Hash of the session id |
+| `five_hour_pct` | Share of the 5-hour limit used, 0 to 100, as Claude Code reported it |
+| `five_hour_resets_at` | When the 5-hour window resets |
+| `seven_day_pct` | Share of the weekly limit used, 0 to 100, as Claude Code reported it |
+| `seven_day_resets_at` | When the weekly window resets |
+| `cache_warm` | 1 if the main conversation's cached prefix was still within its lifetime, 0 if not |
+| `cache_ttl` | That cache's lifetime in seconds (300 or 3600) |
+| `model` | Model id, checked against a strict pattern |
+| `cc_version` | Claude Code version number, checked against a strict pattern |
 
 **Retention:** deleted after `retention_days`.
 

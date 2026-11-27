@@ -31,9 +31,48 @@ const AutopilotPolicyV2 = "lossless-v2"
 // because it widens what the user agreed to. It is what `trove autopilot trials on` offers now.
 const AutopilotPolicyV3 = "lossless-v3"
 
+// AutopilotPolicyOptimize is the "optimize" policy that `trove setup` offers (added 2026-11-24, docs/autopilot.md).
+// One yes covers a named list in three groups: guards that never change a request, switched on at the next session
+// boundary (the cold-resume guard in ask mode, the model-switch and cold-compact guards); techniques that start in
+// shadow and are promoted only by evidence (T2 and T3 ones only after a benchmark verdict as well); and two that stay
+// in shadow. It includes the settings policy's one setting. The guards' direct start is the rule 6 amendment the
+// project owner approved on 2026-11-24.
+const AutopilotPolicyOptimize = "optimize-v1"
+
+// AutopilotSettingsPolicy is the policy for changes to the agent's own settings files, agreed to on its own with
+// `trove autopilot settings on`, because it edits a file outside ~/.trove. It names exactly one setting:
+// the subagent prompt cache lifetime (cache_ttl_subagents). See docs/autopilot.md, "Settings policy".
+const AutopilotSettingsPolicy = "settings-v1"
+
+// AutopilotSetting is the state of one setting under the settings policy.
+type AutopilotSetting struct {
+	AutopilotEntry
+	// FixID is the fix Autopilot applied while State is on ("" otherwise). Never a value or a path.
+	FixID string `json:"fix_id,omitempty"`
+	// EvalMS is when the setting was last judged.
+	EvalMS int64 `json:"eval_ms,omitempty"`
+	// Estimate is the last judgement, numbers and labels only.
+	Estimate *AutopilotSettingEstimate `json:"estimate,omitempty"`
+}
+
+// AutopilotSettingEstimate is what the last judgement of a setting found. Every figure is an estimate.
+type AutopilotSettingEstimate struct {
+	Basis       string  `json:"basis"` // "api_prices" or "fit"
+	Label       string  `json:"label"` // always "estimated"
+	Requests    int     `json:"requests"`
+	Sessions    int     `json:"sessions"`
+	NetUSD      float64 `json:"net_usd"`                 // at API list prices; positive = the one-hour lifetime saves
+	NetPct5h    float64 `json:"net_pct_5h,omitempty"`    // basis fit: saving in percent of the 5-hour limit
+	NetPct5hLo  float64 `json:"net_pct_5h_lo,omitempty"` // and its 90% interval
+	NetPct5hHi  float64 `json:"net_pct_5h_hi,omitempty"`
+	WindowDays  int     `json:"window_days"`
+	GapRebuilds int     `json:"gap_rebuilds,omitempty"`
+	GapReads    int     `json:"gap_reads,omitempty"`
+}
+
 // KnownAutopilotPolicy reports whether this version understands the named policy.
 func KnownAutopilotPolicy(name string) bool {
-	return name == AutopilotPolicy || name == AutopilotPolicyV2 || name == AutopilotPolicyV3
+	return name == AutopilotPolicy || name == AutopilotPolicyV2 || name == AutopilotPolicyV3 || name == AutopilotPolicyOptimize
 }
 
 // hookAssignedTrials are the optimizers whose trial arms are assigned only by the hooks (a hash of the session
@@ -53,10 +92,20 @@ func HookAssignsTrial(name string) bool { return hookAssignedTrials[name] || IsR
 // Prefix), because the comparison is about that tool.
 const ruleTrialPrefix = "ext_"
 
-// IsRuleTrial reports whether an autopilot.json entry is a rule-set trial (a third-party behavior-rules tool, T2).
-// Such an entry is started only by the user (`trove autopilot trial <rule set>`), never by a policy, and Autopilot
-// never turns the rule set on: it only runs the comparison and reports the verdict.
-func IsRuleTrial(name string) bool { return strings.HasPrefix(name, ruleTrialPrefix) }
+// nativeRuleTrials are Trove's own T2 hook techniques that are trialled the way a rule set is: the user starts the
+// trial, the hooks assign the arms, and Autopilot only reports the verdict. Their entry is the optimizer's own name.
+var nativeRuleTrials = map[string]bool{OptimizerHookRoutineSteer: true}
+
+// IsRuleTrial reports whether an autopilot.json entry is a rule-set trial (a third-party behavior-rules tool, or one
+// of Trove's own T2 hook techniques in nativeRuleTrials). Such an entry is started only by the user (`trove autopilot
+// trial <name>`), never by a policy, and Autopilot never turns the technique on: it only runs the comparison and
+// reports the verdict.
+func IsRuleTrial(name string) bool {
+	return strings.HasPrefix(name, ruleTrialPrefix) || nativeRuleTrials[name]
+}
+
+// IsNativeRuleTrial reports whether name is one of Trove's own techniques trialled as a rule set is.
+func IsNativeRuleTrial(name string) bool { return nativeRuleTrials[name] }
 
 // RuleTrials returns the rule-set trials that are running, sorted, or nil when Autopilot is not active.
 func (f AutopilotFile) RuleTrials() []string {
@@ -113,11 +162,30 @@ type AutopilotFile struct {
 	// Plan is the shadow planner's latest advice (see internal/autopilot/planner.go).
 	Plan      []AutopilotPlanItem `json:"plan,omitempty"`
 	PlannedMS int64               `json:"planned_ms,omitempty"`
+	// SettingsPolicy is AutopilotSettingsPolicy once the user agreed to it with `trove autopilot settings on`,
+	// "" otherwise; SettingsConsentedAt is when. Settings holds the state of each setting it names.
+	SettingsPolicy      string                      `json:"settings_policy,omitempty"`
+	SettingsConsentedAt int64                       `json:"settings_consented_ms,omitempty"`
+	Settings            map[string]AutopilotSetting `json:"settings,omitempty"`
+	// ColdResumeAsk is true when the optimize policy runs the cold-resume guard in ask mode. It applies only while
+	// the guard's state is Autopilot's: a user who sets hook_cold_resume in config.toml gets their own
+	// cold_resume_action (see Config.ColdResumeAction).
+	ColdResumeAsk bool `json:"cold_resume_ask,omitempty"`
 }
 
-// HasTrials reports whether the user agreed to trials: the policy is one that has a probation list.
+// IsOptimize reports whether the user agreed to the optimize policy.
+func (f AutopilotFile) IsOptimize() bool { return f.Policy == AutopilotPolicyOptimize }
+
+// SettingsActive reports whether Autopilot may change the agent's settings: Autopilot is active and the user
+// agreed to the settings policy this version knows.
+func (f AutopilotFile) SettingsActive() bool {
+	return f.Active() && f.SettingsPolicy == AutopilotSettingsPolicy
+}
+
+// HasTrials reports whether the user agreed to the lossless trials (`trove autopilot trials on`): policy lossless-v2
+// or v3, or the optimize policy with that second yes recorded.
 func (f AutopilotFile) HasTrials() bool {
-	return f.Policy == AutopilotPolicyV2 || f.Policy == AutopilotPolicyV3
+	return f.Policy == AutopilotPolicyV2 || f.Policy == AutopilotPolicyV3 || (f.IsOptimize() && f.TrialsConsentedAt > 0)
 }
 
 // Active reports whether Autopilot may influence optimizer states: the user
@@ -146,15 +214,22 @@ func (f AutopilotFile) states(arms bool) map[string]string {
 	out := make(map[string]string, len(f.Entries))
 	for name, e := range f.Entries {
 		if IsRuleTrial(name) {
-			continue // a rule set lives in the agent's config; its trial arms come from the hooks, never a state
+			// A rule set lives in the agent's config; its trial arms come from the hooks, never a state. The one
+			// exception: the optimize policy names the routine steer, a hook technique, and runs it in shadow so its
+			// counts build up. Its trial still gets its arms from the hooks.
+			if f.IsOptimize() && IsNativeRuleTrial(name) && e.State != AutopilotProbation && e.State != AutopilotOn && e.State != "" && e.State != AutopilotOff {
+				out[name] = StateShadow
+			}
+			continue
 		}
 		switch e.State {
 		case AutopilotOn:
 			out[name] = StateOn
 		case AutopilotProbation:
 			out[name] = StateShadow
-			// Only a user who agreed to trials (policy v2) has any, so a stray entry under v1 is shadow.
-			if arms && f.Policy == AutopilotPolicyV2 {
+			// Only a user who agreed to trials has any, so a stray entry under v1 is shadow. Under the optimize
+			// policy only a request-level trial gets its arms here; the hooks assign the rest.
+			if arms && (f.Policy == AutopilotPolicyV2 || (f.IsOptimize() && !HookAssignsTrial(name))) {
 				out[name] = StateOn
 			}
 		case AutopilotShadow, AutopilotCandidate, AutopilotRolledBack:
@@ -166,7 +241,7 @@ func (f AutopilotFile) states(arms bool) map[string]string {
 
 // Trials returns the optimizers in probation, sorted, or nil when Autopilot is not active.
 func (f AutopilotFile) Trials() []string {
-	if !f.Active() || !f.HasTrials() {
+	if !f.Active() || (!f.HasTrials() && !f.IsOptimize()) {
 		return nil
 	}
 	var out []string
@@ -244,7 +319,18 @@ func SaveAutopilot(dataDir string, f AutopilotFile) error {
 func (c Config) WithAutopilot(f AutopilotFile) Config {
 	c.autopilot = f.States()
 	c.trials = f.Trials()
+	c.coldAsk = f.Active() && f.IsOptimize() && f.ColdResumeAsk
 	return c
+}
+
+// ColdResumeAction is what hook_cold_resume does when it is on. It is the user's optimize.cold_resume_action, except
+// while the guard's state comes from the optimize policy, which runs it in ask mode. A user who sets hook_cold_resume
+// in config.toml takes the guard over, action included.
+func (c Config) ColdResumeAction() string {
+	if _, mine := c.Optimizers[OptimizerHookColdResume]; !mine && c.coldAsk && c.autopilot[OptimizerHookColdResume] == StateOn {
+		return ColdResumeAsk
+	}
+	return c.Optimize.ColdResumeAction
 }
 
 // AutopilotTrials returns the optimizers on trial that this Config may run as a trial: Autopilot has them in
@@ -294,6 +380,24 @@ type AutopilotPlanItem struct {
 	Sessions  int    `json:"shadow_sessions"`
 	NetTokens int64  `json:"est_net_tokens"` // estimated
 	Reason    string `json:"reason"`
+	// Limit is the estimated net saving per shadow session as percent of Claude Code's plan limits
+	// (internal/measure/limitfit). Display only: no Autopilot decision reads it. Nil without a fit.
+	Limit *AutopilotLimitShare `json:"est_limit_pct_per_session,omitempty"`
+}
+
+// AutopilotLimitShare is a saving as percent of the 5-hour and weekly limits, each with its 90%
+// interval and basis ("fit" or "api_prices"). Estimated.
+type AutopilotLimitShare struct {
+	FiveHour *PercentRange `json:"five_hour,omitempty"`
+	Week     *PercentRange `json:"seven_day,omitempty"`
+}
+
+// PercentRange is a percentage with its interval and where it came from.
+type PercentRange struct {
+	Point float64 `json:"point"`
+	Lo    float64 `json:"lo"`
+	Hi    float64 `json:"hi"`
+	Basis string  `json:"basis"`
 }
 
 // Record appends an event, keeping the newest AutopilotHistoryMax.

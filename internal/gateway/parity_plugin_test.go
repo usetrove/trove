@@ -94,6 +94,23 @@ func requestOnlyBody(name string) []byte {
 		// A tool turn on a measured model with an explicit high effort: lowered to low.
 		return []byte(`{"model":"claude-sonnet-5-5","output_config":{"effort":"high"},"messages":[{"role":"user","content":"go"},` +
 			`{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}]}`)
+	case "effort_routine_prompts":
+		// A routine prompt after a real one, on a model with per-message effort: low after it.
+		return []byte(`{"model":"claude-opus-5-5","output_config":{"effort":"high"},"messages":[{"role":"user","content":"add a retry to the client"},` +
+			`{"role":"assistant","content":"Done."},{"role":"user","content":"go ahead"}]}`)
+	case "thinking_clear":
+		// A long session whose early turns carry thinking: everything but the last two turns' would be cleared.
+		think := enc(strings.Repeat("considering the options for this change in detail. ", 2400))
+		var b strings.Builder
+		b.WriteString(`{"model":"claude-opus-5-5","messages":[`)
+		for i := 0; i < 4; i++ {
+			if i > 0 {
+				b.WriteString(",")
+			}
+			b.WriteString(`{"role":"user","content":"next step"},{"role":"assistant","content":[{"type":"thinking","thinking":` + think + `,"signature":"sig"},{"type":"text","text":"ok"}]}`)
+		}
+		b.WriteString(`,{"role":"user","content":"next step"}]}`)
+		return []byte(b.String())
 	case "verbosity_steer":
 		return []byte(`{"model":"claude-opus-5-5","system":[{"type":"text","text":"You are a coding agent.","cache_control":{"type":"ephemeral"}}],"messages":[{"role":"user","content":"hi"}]}`)
 	case "duplicate_result_collapser":

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/usetrove/trove/internal/hookcaps"
 	"github.com/usetrove/trove/internal/hooks"
 )
 
@@ -36,6 +37,9 @@ var defaultShapes = map[string]string{
 	"Read": `{"type":"text","file":{"filePath":"/p/probe.txt","content":"L01 probe line\nL02 probe line","numLines":2}}`,
 	"Grep": `{"mode":"files_with_matches","filenames":["/p/a.txt"],"numFiles":1}`,
 	"Glob": `{"filenames":["/p/a.src"],"numFiles":1,"durationMs":3,"truncated":false}`,
+	// Grep in output_mode "content". A guess, not a recording: no live probe has captured this shape yet, and the
+	// documentation does not give it. Replace it with the recorded fixture once one exists.
+	ToolGrepContent: `{"mode":"content","numFiles":1,"filenames":[],"content":"/p/a.txt:1:TROVE_PROBE_SRC is here","numLines":1}`,
 }
 
 func (f *fakeAgent) Run(_ context.Context, _ string, env []string, name string, args ...string) ([]byte, error) {
@@ -87,7 +91,13 @@ func (f *fakeAgent) Run(_ context.Context, _ string, env []string, name string, 
 		_ = json.Unmarshal(out.Bytes(), &o)
 		ran = o.H.U
 	}
-	shape := defaultShapes[tool]
+	shape := f.shapes[plan.Tool] // by probe case first: two cases can call the same tool
+	if shape == "" {
+		shape = defaultShapes[plan.Tool]
+	}
+	if shape == "" {
+		shape = defaultShapes[tool]
+	}
 	post, _ := json.Marshal(map[string]any{"hook_event_name": "PostToolUse", "tool_name": tool, "tool_input": ran,
 		"tool_response": json.RawMessage(shape), "session_id": "s1", "cwd": "/tmp/x"})
 	out.Reset()
@@ -220,6 +230,29 @@ func TestDocsOnlyAgentsAreRecordedButUnlockNothing(t *testing.T) {
 	}
 }
 
+// The cold-resume guard may block a prompt only after a real session showed it reaches a typed prompt and print-mode
+// runs can be told apart; the documented entry is recorded for every probe, live or not, and unlocks nothing.
+func TestPromptBlockIsRecordedFromTheDocsAndUnlocksNothing(t *testing.T) {
+	for _, live := range []bool{false, true} {
+		o := opts(&fakeAgent{version: "2.1.999"})
+		o.Live = live
+		rep, err := Run(context.Background(), o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		e, ok := rep.Capabilities.Find("claude", hookcaps.ToolPrompt)
+		if !ok {
+			t.Fatalf("live=%v: no UserPromptSubmit entry", live)
+		}
+		if e.Method != "docs" || e.Block != hooks.CapUntested || e.InputRewrite != hooks.CapNo || e.AgentVersion != "2.1.999" {
+			t.Errorf("live=%v: %+v", live, e)
+		}
+		if rep.Capabilities.Supports("claude", hookcaps.ToolPrompt, hookcaps.PromptBlock) {
+			t.Errorf("live=%v: blocking counts from documentation alone", live)
+		}
+	}
+}
+
 func TestRecordedFixturesAreRedacted(t *testing.T) {
 	dir := t.TempDir()
 	o := opts(&fakeAgent{version: "2.1.999", by: map[string]behaviour{"Bash": {honourInput: true, honourOutput: true}}})
@@ -332,5 +365,104 @@ func TestProbeOnlyEverAsksCodexForItsVersion(t *testing.T) {
 		if !saw {
 			t.Errorf("live=%v: the probe never asked codex for its version; the check proves nothing", live)
 		}
+	}
+}
+
+func TestReplaceMarkerKnowsMCPShapes(t *testing.T) {
+	for _, in := range []string{
+		`{"content":[{"type":"text","text":"TROVE_PROBE_SRC is here"}]}`,
+		`[{"type":"text","text":"TROVE_PROBE_SRC is here"}]`,
+	} {
+		out, note, ok := replaceMarker(json.RawMessage(in), "MARK")
+		if !ok || !strings.Contains(string(out), `"text":"MARK"`) || !strings.Contains(string(out), `"type":"text"`) {
+			t.Errorf("%s: %s %q %v", in, out, note, ok)
+		}
+	}
+	if _, _, ok := replaceMarker(json.RawMessage(`[{"type":"image","data":"AA"}]`), "MARK"); ok {
+		t.Error("an image block must not be replaced")
+	}
+}
+
+func TestRewriteInputForTheNewCases(t *testing.T) {
+	p := plan{Tool: ToolMCP, AgentTool: mcpProbeTool, MarkerIn: "TROVE_PROBE_IN_x"}
+	out, ok := rewriteInput(p, json.RawMessage(`{"path":"/tmp/p/probe.txt"}`))
+	if !ok || !strings.Contains(string(out), "TROVE_PROBE_IN_x.txt") || !inputApplied(p, out) {
+		t.Fatalf("mcp: %s %v", out, ok)
+	}
+	p = plan{Tool: "PowerShell", MarkerIn: "TROVE_PROBE_IN_y"}
+	out, ok = rewriteInput(p, json.RawMessage(`{"command":"Write-Output TROVE_PROBE_SRC"}`))
+	if !ok || !strings.Contains(string(out), "Write-Output TROVE_PROBE_IN_y") {
+		t.Fatalf("PowerShell: %s %v", out, ok)
+	}
+	// The large case keeps its command: rewriting it would make the output small.
+	if _, ok := rewriteInput(plan{Tool: ToolBashLarge, AgentTool: "Bash"}, json.RawMessage(`{"command":"yes"}`)); ok {
+		t.Fatal("the large Bash case must not rewrite its command")
+	}
+}
+
+func TestLargeEvidenceSaysWhatTheHookSaw(t *testing.T) {
+	full := strings.Repeat(bashLargeLine, bashLargeLines)
+	whole, _ := json.Marshal(map[string]any{"stdout": full})
+	if got := largeEvidence([]seen{{Mode: "post", Response: whole}}); !strings.Contains(got, "before Claude Code saves it") {
+		t.Fatal(got)
+	}
+	short, _ := json.Marshal(map[string]any{"stdout": "Output too large. Full output saved to /x/tool-results/a.txt\n" + full[:2000]})
+	if got := largeEvidence([]seen{{Mode: "post", Response: short}}); !strings.Contains(got, "less than the whole output") {
+		t.Fatal(got)
+	}
+}
+
+func TestGrepTextIsProbedOnItsOwnAndOnlyItsTextCounts(t *testing.T) {
+	// Grep honours both rewrites. The text case gets its own entry, and only that entry unlocks Grep output rewrites.
+	f := &fakeAgent{version: "2.1.999", by: map[string]behaviour{"Grep": {honourInput: true, honourOutput: true}}}
+	o := opts(f)
+	o.Tools = []string{"Grep", ToolGrepContent}
+	rep, err := Run(context.Background(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := entry(t, rep, ToolGrepContent); e.InputRewrite != hooks.CapYes || e.OutputRewrite != hooks.CapYes {
+		t.Fatalf("GrepContent: %+v", e)
+	}
+	if !rep.Capabilities.Supports("claude", hookcaps.ToolGrepContent, hooks.RewriteOutput) {
+		t.Fatal("a probed text result must unlock Grep output rewrites")
+	}
+
+	// The model stayed in the default mode and returned a file list: the text case must not borrow the list's "yes".
+	f = &fakeAgent{version: "2.1.999", by: map[string]behaviour{"Grep": {honourInput: true, honourOutput: true}},
+		shapes: map[string]string{ToolGrepContent: defaultShapes["Grep"]}}
+	o = opts(f)
+	o.Tools = []string{ToolGrepContent}
+	rep, err = Run(context.Background(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := entry(t, rep, ToolGrepContent)
+	if e.OutputRewrite != hooks.CapUntested || !strings.Contains(e.Evidence, "no text content; fields: filenames,mode,numFiles") {
+		t.Fatalf("a file list must leave the text case untested: %+v", e)
+	}
+}
+
+func TestReplaceGrepContentTouchesOnlyTheText(t *testing.T) {
+	out, _, ok := replaceGrepContent(json.RawMessage(defaultShapes[ToolGrepContent]), "MARK")
+	var m map[string]any
+	if !ok || json.Unmarshal(out, &m) != nil || m["content"] != "MARK" || m["mode"] != "content" || m["numLines"] != float64(1) {
+		t.Fatalf("%s %v", out, ok)
+	}
+	for _, in := range []string{`"text"`, `[{"type":"text","text":"x"}]`, `{"content":[{"type":"text","text":"x"}]}`} {
+		if _, _, ok := replaceGrepContent(json.RawMessage(in), "MARK"); ok {
+			t.Errorf("%s is not a Grep text result and must not be replaced", in)
+		}
+	}
+}
+
+func TestVerifySessionLeavesTheGrepTextCaseToTheLiveProbe(t *testing.T) {
+	a, err := Arm(filepath.Join(t.TempDir(), "s"), ArmOptions{Tools: []string{"Grep", ToolGrepContent},
+		HookCommand: func(mode, _ string) (string, []string) { return "fake", []string{mode} }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(a.Tools) != 1 || a.Tools[0] != "Grep" {
+		t.Fatalf("armed %v", a.Tools)
 	}
 }

@@ -1,0 +1,1 @@
+{"session_id":"{{SESSION}}","transcript_path":"{{TRANSCRIPT}}","cwd":"{{CWD}}","hook_event_name":"PreModelSwitch","from_model":"claude-sonnet-5","to_model":"{{TO}}","requested_model":"opus","source":"{{SOURCE}}","context_tokens":{{TOKENS}},"prompt_cache_warm":{{WARM}},"cache_ttl":"5m","estimated_cache_write_usd":1.1396,"pricing":"catalog"}

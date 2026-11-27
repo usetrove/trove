@@ -17,6 +17,7 @@ import (
 	"github.com/usetrove/trove/internal/features"
 	"github.com/usetrove/trove/internal/mcp/install"
 	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/store"
 	"github.com/usetrove/trove/internal/tasks"
@@ -57,6 +58,7 @@ func (h *handler) postRead(in Input, key string) ([]byte, error) {
 		return nil, nil
 	}
 	h.featRead(in, key)
+	h.ckCall(in, key, ckRead)
 	st := h.session(key, in)
 	ol := st.Pins[config.OptimizerHookReadOutline]
 	h.recover = h.snap.TroveRun && ol != "" && ol != stateOff
@@ -140,11 +142,19 @@ func (h *handler) reset(in Input, key string) ([]byte, error) {
 		// SessionStart replies are not translated to carry context.
 		if h.ruleTrialAgent() {
 			for _, n := range h.snap.RuleTrial {
+				arm := stateOff
 				if measure.Arm(key, n) == config.StateOn {
-					st.do(op{T: "pin", N: n, V: stateOn})
+					arm = stateOn
+				}
+				st.do(op{T: "pin", N: n, V: arm})
+				if n == config.OptimizerHookRoutineSteer {
+					// The steer's pin is also its state, so its arm is kept apart: "off" there still counts routine
+					// prompts, for the comparison.
+					st.do(op{T: "pin", N: pinSteerArm, V: arm})
+				}
+				if arm == stateOn {
 					_ = h.emit(key, n, KindArmOn, 0, 0)
 				} else {
-					st.do(op{T: "pin", N: n, V: stateOff})
 					_ = h.emit(key, n, KindArmOff, 0, 0)
 				}
 			}
@@ -160,6 +170,9 @@ func (h *handler) reset(in Input, key string) ([]byte, error) {
 				_ = h.emit(key, n, KindArmOff, 0, 0)
 			}
 		}
+		if v := st.Pins[config.OptimizerHookSessionCheckpoint]; v != "" && v != stateOff && h.agent == AgentClaude {
+			startCkJournal(h.dir, key) // the per-call hooks record for the session checkpoint only while it exists
+		}
 		// Tuned values are pinned with the states, so they cannot change mid-session
 		// (rule 5). The repo is the hash of the working directory; none is pinned
 		// when the directory is unknown or the repo has no applied tuning.
@@ -169,24 +182,47 @@ func (h *handler) reset(in Input, key string) ([]byte, error) {
 			}
 		}
 	}
+	h.armColdResume(in, st)
+	if in.Event == "SessionStart" {
+		pinSteerModelFor(st, in.Model) // after the new-session check above, which looks for no pins at all
+	}
 	if in.Event == "PreCompact" || in.Event == "PostCompact" || (in.Event == "SessionStart" && in.Source != "" && in.Source != "startup") {
 		st.do(op{T: "clear"})
+	}
+	if in.Event == "SessionStart" && (in.Source == "compact" || in.Source == "clear") && st.Pins[pinCkFill] != "" && st.Pins[pinCkFill] != "0" {
+		st.do(op{T: "pin", N: pinCkFill, V: "0"}) // the context is small again; milestones count from here
 	}
 	if err := st.save(h.dir, key); err != nil {
 		return nil, err
 	}
+	if in.Event == "PreCompact" {
+		// Last, so the reset itself is saved first. Best effort: a note that is not saved costs only the restore.
+		if err := h.checkpoint(in, key, "precompact"); err != nil {
+			logf(h.dir, EventReset, "session checkpoint: %v", err)
+		}
+	}
 	if in.Event != "SessionStart" || !h.ruleTrialAgent() {
 		return nil, nil
 	}
-	return ruleTrialContext(st.Pins), nil
+	var texts []string
+	if t := ruleTrialText(st.Pins); t != "" {
+		texts = append(texts, t)
+	}
+	if t := h.ckRestore(in, key, st); t != "" {
+		texts = append(texts, t)
+	}
+	if len(texts) == 0 {
+		return nil, nil
+	}
+	return sessionContextJSON(strings.Join(texts, "\n\n")), nil
 }
 
 func (h *handler) ruleTrialAgent() bool { return h.agent == "" || h.agent == AgentClaude }
 
-// ruleTrialContext is the SessionStart reply that adds the rules of every rule-set trial this session is in the
-// "on" arm of, or nil. The pin decides, so a session keeps its arm when the trial ends mid-way (rule 5). A tool
-// Trove does not ship, or any error, adds nothing (rule 4).
-func ruleTrialContext(pins map[string]string) []byte {
+// ruleTrialText is the rules of every rule-set trial this session is in the "on" arm of, added at SessionStart, or
+// "". The pin decides, so a session keeps its arm when the trial ends mid-way (rule 5). A tool Trove does not ship,
+// or any error, adds nothing (rule 4).
+func ruleTrialText(pins map[string]string) string {
 	var names []string
 	for n, v := range pins {
 		if config.IsRuleTrial(n) && v == stateOn {
@@ -200,10 +236,7 @@ func ruleTrialContext(pins map[string]string) []byte {
 			texts = append(texts, m)
 		}
 	}
-	if len(texts) == 0 {
-		return nil
-	}
-	return sessionContextJSON(strings.Join(texts, "\n\n"))
+	return strings.Join(texts, "\n\n")
 }
 
 // subagent is pre_tool_subagent. In the "off" arm of a scout trial it declines a call to the scout subagent, so
@@ -213,21 +246,45 @@ func (h *handler) subagent(in Input, key string) ([]byte, error) {
 	if in.ToolName != "Agent" && in.ToolName != "Task" {
 		return nil, nil
 	}
+	h.recordSpawn(in, key)
 	if out := h.subagentModelControl(in, key); out != nil {
 		return out, nil
 	}
-	if in.ToolInput.SubagentType != tasks.ScoutName {
+	feat, ok := trialFeatureOf(in.ToolInput.SubagentType)
+	if !ok {
 		return nil, nil
 	}
-	if loadSession(h.dir, key).Pins[tasks.FeatureScout] != stateOff {
+	if loadSession(h.dir, key).Pins[feat] != stateOff {
 		return nil, nil
 	}
 	for _, n := range h.snap.RolledBack {
-		if n == tasks.FeatureScout {
+		if n == feat {
 			return nil, nil
 		}
 	}
-	return denyJSON("Trove is comparing sessions with and without the scout helper, and this session is one of the ones without it. Please do this work directly instead."), nil
+	if feat == tasks.FeatureExplore {
+		// The control for the Explore override is the built-in Explore, which a project file cannot be switched
+		// off for. The off arm gets the main conversation's model back for the call; the low effort, read-only
+		// tools and prompt of Trove's file stay, so this arm measures the model change only (docs/tasks.md).
+		if in.Cwd == "" || !troveExploreIn(in.Cwd) {
+			return nil, nil
+		}
+		return restoreMainModel(in), nil
+	}
+	return denyJSON("Trove is comparing sessions with and without this helper, and this session is one of the ones without it. Please do this work directly instead."), nil
+}
+
+// trialFeatureOf maps a subagent type to the tasks feature whose trial controls it.
+func trialFeatureOf(subagentType string) (string, bool) {
+	switch subagentType {
+	case tasks.ScoutName:
+		return tasks.FeatureScout, true
+	case tasks.TestRunnerName, tasks.LintFixerName:
+		return tasks.FeatureRoutine, true
+	case tasks.ExploreAgent:
+		return tasks.FeatureExplore, true
+	}
+	return "", false
 }
 
 // largeOutput is pre_tool_large_output: for a known-noisy shell command the
@@ -239,28 +296,48 @@ func (h *handler) largeOutput(in Input, key string) ([]byte, error) {
 	return h.preTool(in, key)
 }
 
-// postOutput is post_tool_output. For Bash, Grep and Glob it runs the engine's
-// tool-output optimizers and, if one in "on" state shortened the text, replaces
-// what the model sees with updatedToolOutput in the tool's own response shape.
-// It counts what each optimizer did (estimated, from sizes). Anything it does not
-// understand, or any failure, lets the original output through.
-func (h *handler) postOutput(in Input, key string) ([]byte, error) {
+// codeWrite is pre_tool_code_write: the engine's hook_write_to_edit and hook_edit_batch decide; this renders a
+// deny or a note and counts it.
+func (h *handler) codeWrite(in Input, key string) ([]byte, error) {
 	switch in.ToolName {
-	case "Bash", "Grep", "Glob":
+	case "Write", "Edit", "MultiEdit":
+		return h.preTool(in, key)
+	}
+	return nil, nil
+}
+
+// postOutput is post_tool_output. For Bash, PowerShell, Grep, Glob and MCP tools
+// it runs the engine's tool-output optimizers and, if one in "on" state shortened
+// the text, replaces what the model sees with updatedToolOutput in the tool's own
+// response shape. It counts what each optimizer did (estimated, from sizes).
+// Anything it does not understand, or any failure, lets the original output through.
+func (h *handler) postOutput(in Input, key string) ([]byte, error) {
+	switch {
+	case in.ToolName == "Bash", in.ToolName == "PowerShell", in.ToolName == "Grep", in.ToolName == "Glob":
+	case strings.HasPrefix(in.ToolName, "mcp__") && in.ToolName != fetchTool && in.ToolName != runTool:
 	default:
 		return nil, nil
+	}
+	if in.ToolName != "Bash" {
+		h.ckCall(in, key, ckOther) // Bash is counted once, by post_tool_test_result, which also sees failures
 	}
 	keys, texts, ok := responseTexts(in.ToolResponse)
 	if !ok || interrupted(in.ToolResponse) {
 		return nil, nil
 	}
-	h.featResults(in, key, texts)
+	// Session features keep counting Bash, Grep and Glob only, as docs/features.md defines them: the MCP and
+	// PowerShell calls this hook now also sees for hook_output_preview would change what the features mean.
+	if in.ToolName == "Bash" || in.ToolName == "Grep" || in.ToolName == "Glob" {
+		h.featResults(in, key, texts)
+	}
 	st := h.session(key, in)
 	// The trimmer needs the recovery store, and the store is only useful when the
 	// agent can fetch the text back, so ask for it only then.
 	pinned := st.Pins[config.OptimizerOutputTrimmer]
 	dedup := st.Pins[config.OptimizerHookOutputDedup]
-	h.recover = h.snap.TroveRun && ((in.ToolName == "Bash" && pinned != "" && pinned != stateOff) || (dedup != "" && dedup != stateOff))
+	preview := st.Pins[config.OptimizerHookOutputPreview]
+	h.recover = h.snap.TroveRun && ((in.ToolName == "Bash" && pinned != "" && pinned != stateOff) || (dedup != "" && dedup != stateOff) ||
+		(preview != "" && preview != stateOff && optimize.PreviewTool(in.ToolName)))
 	res, reps := h.engine().TransformToolOutput(context.Background(), toolCall(in), outputForEngine(texts), h.sess(key, st, in.ToolName))
 	if err := failure(reps); err != nil {
 		return nil, err
@@ -300,6 +377,9 @@ func (h *handler) postOutput(in Input, key string) ([]byte, error) {
 		for _, id := range optimize.DedupIDs(t) {
 			sess.Ledger.Put(optimize.DedupKey(id), optimize.ReadEntry{Prompt: sess.Ledger.Prompts(), At: h.now().Unix()})
 		}
+		for _, id := range optimize.PreviewIDs(t) {
+			sess.Ledger.Put(optimize.PreviewKey(id), optimize.ReadEntry{Prompt: sess.Ledger.Prompts(), At: h.now().Unix()})
+		}
 	}
 	if err := sess.Ledger.Save(); err != nil {
 		return nil, err
@@ -314,6 +394,10 @@ const fetchTool = "mcp__trove__trove_fetch_full"
 // trimmed, it counts one fetched_back for the trimmer. The guardrail uses the
 // share of trimmed outputs that come back: if the agent keeps needing them, the
 // trimming is too aggressive and the trimmer goes back to shadow.
+//
+// The event also carries the size of what the fetch put into the context
+// (estimated tokens, from the reply's size), so reports show the saving net of
+// expansions: what the shortening kept out minus what fetching it back put in.
 func (h *handler) postFetch(in Input, key string) error {
 	if in.ToolName != fetchTool {
 		return nil
@@ -331,6 +415,7 @@ func (h *handler) postFetch(in Input, key string) error {
 	owners := []struct{ key, optimizer string }{
 		{optimize.TrimmedKey(a.ID), config.OptimizerOutputTrimmer},
 		{optimize.DedupKey(a.ID), config.OptimizerHookOutputDedup},
+		{optimize.PreviewKey(a.ID), config.OptimizerHookOutputPreview},
 	}
 	var charged []string
 	for _, o := range owners {
@@ -351,8 +436,11 @@ func (h *handler) postFetch(in Input, key string) error {
 	if err := sess.Ledger.Save(); err != nil {
 		return err
 	}
+	// Each charged optimizer is charged the whole fetch: each one, on its own, would have needed it.
+	fetched := int64(fetchedBytes(in.ToolResponse))
+	tokens := optimize.EstTokensAt(fetched, h.bpt)
 	for _, name := range charged {
-		if err := h.emit(key, name, KindFetchedBack, 0, 0); err != nil {
+		if err := h.emit(key, name, KindFetchedBack, fetched, tokens); err != nil {
 			return err
 		}
 	}
@@ -360,6 +448,22 @@ func (h *handler) postFetch(in Input, key string) error {
 		return h.emit(key, config.OptimizerHookReadOutline, KindExtraRead, 0, 0)
 	}
 	return nil
+}
+
+// fetchedBytes is the size of the text a trove_fetch_full reply put into the context, from the hook's own copy
+// of the reply. For a shape the adapter does not know it is the size of the whole reply, JSON and all, so an
+// unknown shape can only make the net saving look smaller, never larger (PRINCIPLES.md rule 9). It does not
+// include the extra turn the fetch took; the A/B comparison, not this figure, decides whether shortening paid.
+func fetchedBytes(resp json.RawMessage) int {
+	_, texts, ok := responseTexts(resp)
+	if !ok {
+		return len(resp)
+	}
+	n := 0
+	for _, t := range texts {
+		n += len(t)
+	}
+	return n
 }
 
 // runTool is trove_run as the agent names it (server "trove").
@@ -393,6 +497,13 @@ func (h *handler) postRun(in Input, key string) error {
 func (h *handler) sessionEnd(in Input, key string) error {
 	defer func() { _ = os.Remove(sessionPath(h.dir, key)) }()
 	defer func() { _ = os.Remove(featPath(h.dir, key)) }()
+	defer func() { _ = os.Remove(ckJournalPath(h.dir, key)) }()
+	// First, while the transcript is complete and before the database work uses the time budget. Best effort.
+	if err := h.checkpoint(in, key, "session_end"); err != nil {
+		logf(h.dir, EventSessionEnd, "session checkpoint: %v", err)
+	}
+	sweepBoundaries(h.dir, h.now())
+	h.coldSessionEnd(in, key) // before Maintain, so its count is ingested now
 	h.sweepOldSessions()
 	ctx, cancel := context.WithTimeout(context.Background(), endDeadline-250*time.Millisecond)
 	defer cancel()
@@ -415,6 +526,11 @@ func (h *handler) sessionEnd(in Input, key string) error {
 	if cfg.Notifications.Desktop && h.notify != nil && len(recs) > 0 {
 		h.notify(recs[len(recs)-1])
 	}
+	// Autopilot's settings policy: judged here, at a session end, and only written while no other session is
+	// open (rule 5). Best effort, after the receipt, and before the notices so a change is announced at once.
+	settingsStep(ctx, db, h.dir, cfg, in, h.getenv, h.now())
+	// The regression watch for the status line, at most every half hour. Best effort and advice only.
+	regressStep(ctx, db, h.dir, cfg, h.getenv, h.now())
 	// Autopilot turn-on and rollback notices, once each. Best effort.
 	_ = autopilot.Announce(h.dir, cfg.Notifications.Desktop, h.notifyText)
 	// Last, and best effort: the receipt is already written.
@@ -431,6 +547,11 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	if _, err := IngestSpool(ctx, db, dir); err != nil {
 		return fmt.Errorf("cannot ingest hook counts: %v", err)
 	}
+	// The status line's plan-usage samples. Best effort: a spool left behind is picked up next time.
+	_, _ = db.IngestLimitSpool(ctx, dir)
+	// Refit the plan-usage meters when a newer reading arrived, for the status line and Autopilot.
+	// Best effort and cached: a stale or missing fit only means no percentages are shown.
+	_ = limitfit.Refresh(ctx, db, dir, now)
 	// Retention must not depend on the gateway running: subscription users never start it. Once a day
 	// across all processes, best effort (an old row surviving a day is never worth failing a hook for).
 	_, _ = db.PurgeIfDue(ctx, cfg.RetentionDays, now)

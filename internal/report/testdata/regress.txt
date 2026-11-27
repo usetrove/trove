@@ -1,0 +1,99 @@
+Trove report: this month (since Oct 1)
+Only 13 requests so far, so these numbers are rough. They firm up as you use
+your agent.
+
+Headline
+  Spend        ~$0.13 (estimated at list prices, not an invoice); 372K tokens
+               (measured)
+  From history 13 requests in 3 sessions read from your agent's local logs
+               (estimated, not seen by the gateway). Plan: API key (estimated
+               from local settings), so this counts as spend
+  Waste found  none yet (estimated)
+  Savings      none yet; no optimizer has been on (estimated)
+  Measured     not enough data yet to compare sessions with and without an
+               optimizer. The dollar savings above are estimates.
+
+Spend by agent and model
+  Agent                  Requests  Tokens (measured)  Cost (estimated)
+  claude_code (history)        13               372K            ~$0.13
+
+  Model              Requests  Tokens (measured)  Cost (estimated)
+  claude-sonnet-5-5         7               189K            ~$0.07
+  claude-haiku-5-5          3                88K            ~$0.03
+  claude-opus-5             3                94K            ~$0.03
+
+Cache rebuilds (Claude Code history)
+  8 rebuilds wrote 243K tokens to the cache again (measured), 86% of all cache
+  writes in this period.
+  Cause (estimated)             Count  Tokens  Share
+  Idle past the cache lifetime      1     36K    15%
+  Model changed                     1     37K    15%
+  Subagent's first request          1     22K     9%
+  Compaction                        1     25K    10%
+  Claude Code version changed       1     25K    10%
+  Effort level changed              1     31K    13%
+  Fast mode switched                1     32K    13%
+  Unexplained                       1     35K    14%
+  A rebuild is a cache write over 20K tokens and over 3 times the content that
+  was new since the agent's previous request.
+  Not counted: 1 session start, which build a cache rather than rebuild one (30K
+  tokens, measured).
+  Unexplained covers causes the log does not show (an MCP server, plugin or tool
+  list that changed) as well as possible Claude Code bugs.
+
+Output by kind (Claude Code history)
+  7K output tokens (measured): thinking 3.3K (estimated), visible text ~2.4K,
+  tool input ~625.
+
+  Phase                     Output  Thinking   Text  Tool input
+  After a prompt              4.5K     ~2.9K  ~1.4K        ~225
+  Tool-result continuation    1.8K      ~400    ~1K        ~400
+  (not recorded) *             700         -      -           -
+
+  Model                Output  Thinking   Text  Tool input
+  claude-sonnet-5-5 *    5.5K     ~2.8K  ~1.4K        ~625
+  claude-haiku-5-5       1.2K       500   ~700          ~0
+  claude-opus-5           300         0   ~300          ~0
+
+  Effort            Output  Thinking   Text  Tool input
+  high                3.4K        2K  ~1.3K        ~125
+  medium              2.9K     ~1.3K  ~1.1K        ~500
+  (not recorded) *     700         -      -           -
+
+  Claude Code       Output  Thinking  Text  Tool input
+  2.1.330             5.9K     ~3.3K   ~2K        ~625
+  (not recorded) *     700         -     -           -
+  2.1.329              300         0  ~300          ~0
+  2.1.331              100         0  ~100          ~0
+  Output is measured. Thinking is measured where the log has a count; ~ marks
+  estimates. Text and tool input are estimated by splitting the rest of the
+  output by their byte sizes.
+  Bytes per token for sonnet: 3.50 (the prior, too few requests to calibrate).
+  * includes 700 output tokens from requests read before Trove recorded sizes;
+  they count in Output only, and - means none of the row could be split.
+  Earlier thinking carried in context: up to 2.6K input tokens over 10 requests
+  on models that keep it, <1% of their input (estimated upper bound).
+
+Regression watch (Claude Code versions and days)
+  Claude Code 2.1.89: thinking per request up 71% on your usual (1,712 tokens vs
+  1,003 tokens, 300 requests in 8 sessions, measured).
+    Likely Claude Code 2.1.89 itself, since other versions running at the same
+    time did not change: pin Claude Code 2.1.88 (native installer: `curl -fsSL
+    https://claude.ai/install.sh | bash -s 2.1.88`) and turn auto-update off
+    with "DISABLE_AUTOUPDATER": "1" in the env block of settings.json
+    (https://code.claude.com/docs/en/setup).
+  An alert needs at least 200 requests in 3 sessions, a value 3.5 robust
+  deviations and 30% above your own baseline. Trove never pins a version, turns
+  auto-update off or changes effort for you.
+  1 check had too little data or no baseline yet.
+
+Biggest leaks (estimated, overlapping, not additive)
+  No waste found yet.
+
+Optimizers
+  Optimizers act on live requests, so they need the gateway. Your history above
+  is read-only. To route your agent through the gateway, run `trove setup
+  --gateway`.
+
+Recommendations (suggestions only; Trove changes nothing on its own)
+  None yet. These need more recorded usage.

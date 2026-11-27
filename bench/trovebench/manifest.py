@@ -15,7 +15,8 @@ from typing import Any
 import yaml
 
 ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
-SOURCES = {"swebench", "polyglot", "mined", "smoke"}
+# largeout: small tasks written for Trove whose natural workflow prints long, non-file output (hook_output_preview).
+SOURCES = {"swebench", "polyglot", "mined", "smoke", "largeout"}
 
 
 class ManifestError(ValueError):

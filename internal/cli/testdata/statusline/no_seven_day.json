@@ -1,0 +1,8 @@
+{
+  "session_id": "sess-abc",
+  "model": {"id": "claude-opus-5-5", "display_name": "Opus"},
+  "version": "2.1.290",
+  "rate_limits": {
+    "five_hour": {"used_percentage": 99.6, "resets_at": 4102444800}
+  }
+}

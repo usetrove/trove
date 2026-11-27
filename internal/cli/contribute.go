@@ -23,6 +23,7 @@ type contributeStatus struct {
 func newContribute(a *App) *cobra.Command {
 	var pf periodFlags
 	var export string
+	var preview bool
 	c := &cobra.Command{
 		Use:   "contribute",
 		Short: "Show, save or (if you opt in) share an anonymous summary of your results",
@@ -42,12 +43,21 @@ func newContribute(a *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if preview {
+				// The exact bytes an upload would send, and nothing else, whatever --json says.
+				_, err := a.Out.Write(body)
+				return err
+			}
 			if export != "" {
 				if err := os.WriteFile(export, body, 0o600); err != nil {
 					return fmt.Errorf("cannot write %s: %v. Choose a folder you can write to", export, err)
 				}
 			}
 			text := "This is the whole summary. Share it only if you choose to.\n\n" + string(body)
+			if p.Limits != nil {
+				// The plain-English line for the limits fields (docs/decisions/limit-report.md).
+				text += "\n" + limitsExplained + "\n"
+			}
 			if export != "" {
 				text += "\nSaved to " + export + "."
 			}
@@ -56,7 +66,8 @@ func newContribute(a *App) *cobra.Command {
 	}
 	pf.add(c)
 	c.Flags().StringVar(&export, "export", "", "write the summary to this file so you can share it yourself")
-	c.AddCommand(newContributeEnable(a), newContributeDisable(a), newContributeDelete(a), newContributeReset(a), newContributeStatus(a))
+	c.Flags().BoolVar(&preview, "preview", false, "print exactly the bytes an upload would send, and nothing else; sends nothing")
+	c.AddCommand(newContributeLimits(a), newContributeEnable(a), newContributeDisable(a), newContributeDelete(a), newContributeReset(a), newContributeStatus(a))
 	return c
 }
 
@@ -71,7 +82,7 @@ func summary(a *App, pf periodFlags, dir string) (contribute.Payload, []byte, er
 	if err != nil {
 		return contribute.Payload{}, nil, err
 	}
-	p := payloadOf(r)
+	p := payloadOf(r, st.LimitsPlan())
 	if st.Enabled {
 		p.InstallID = st.InstallID
 	}
@@ -79,8 +90,9 @@ func summary(a *App, pf periodFlags, dir string) (contribute.Payload, []byte, er
 	return p, b, err
 }
 
-func payloadOf(r report.Report) contribute.Payload {
-	return contribute.Build(r, contribute.Meta{TroveVersion: Version, OS: runtime.GOOS, Arch: runtime.GOARCH})
+// payloadOf builds the payload. plan is "" unless the user opted in to the limits section.
+func payloadOf(r report.Report, plan string) contribute.Payload {
+	return contribute.Build(r, contribute.Meta{TroveVersion: Version, OS: runtime.GOOS, Arch: runtime.GOARCH, Plan: plan})
 }
 
 func newContributeEnable(a *App) *cobra.Command {
@@ -113,7 +125,7 @@ func newContributeEnable(a *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			p := payloadOf(r)
+			p := payloadOf(r, st.LimitsPlan())
 			p.InstallID = st.InstallID
 			body, err := contribute.Encode(p)
 			if err != nil {
@@ -284,7 +296,11 @@ func autoContribute(a *App, r report.Report) {
 	if err != nil || cfg.Contribute.Endpoint == "" {
 		return
 	}
+	st, err := contribute.LoadState(dir)
+	if err != nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), contribute.Timeout)
 	defer cancel()
-	_, _ = contribute.Auto(ctx, dir, cfg.Contribute.Endpoint, payloadOf(r), time.Now())
+	_, _ = contribute.Auto(ctx, dir, cfg.Contribute.Endpoint, payloadOf(r, st.LimitsPlan()), time.Now())
 }

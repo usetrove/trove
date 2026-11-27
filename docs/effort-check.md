@@ -54,3 +54,12 @@ the OpenCode plugin it is shadow-only for any login that is not an API key.
 
 What is left is the session A/B. That is a benchmark condition (`alone:effort_tool_turns` in bench/), registered in
 the components study for a later run.
+
+### Why it does not use per-message effort (checked 2026-11-24)
+
+Per-message effort (beta `mid-conversation-output-config-2026-07-01`,
+platform.claude.com/docs/en/build-with-claude/effort-per-message) changes the level without touching the top-level
+value, so the cached prefix still matches on every supported model. It cannot serve this optimizer, though: a user
+turn that holds only tool results "doesn't count as new input", so a change placed there takes effect only at the
+next prompt. `effort_tool_turns` therefore stays on the top-level path for the models measured above. The per-prompt
+variant, which per-message effort can do, is `effort_routine_prompts` (B28, see [gateway.md](gateway.md#effort-and-thinking-controls)).

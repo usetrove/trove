@@ -1,0 +1,24 @@
+{
+  "blocked": 3,
+  "would_block": 1,
+  "advised": 1,
+  "would_advise": 1,
+  "overridden": 1,
+  "cleared": 2,
+  "overridden_share_percent": {
+    "value": 33.333333333333336,
+    "label": "measured",
+    "n": 3
+  },
+  "cleared_share_percent": {
+    "value": 66.66666666666667,
+    "label": "measured",
+    "n": 3
+  },
+  "tokens_avoided": {
+    "value": 499100,
+    "label": "estimated",
+    "n": 2
+  },
+  "hour_after_note": "Not enough sessions yet to compare the hour after: 0 stopped and 0 shadow events with meter readings in a matching size; 10 of each are needed."
+}

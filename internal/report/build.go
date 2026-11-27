@@ -12,10 +12,12 @@ import (
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/external"
 	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/optimize/suggest"
 	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/recommend"
+	"github.com/usetrove/trove/internal/regress"
 	"github.com/usetrove/trove/internal/store"
 	"github.com/usetrove/trove/internal/technique"
 )
@@ -48,12 +50,20 @@ type Inputs struct {
 	// Provider supplies the recommender's suggestions. Nil means the open local
 	// one; a hosted provider (opt-in, later) is composed in front by the caller.
 	Providers []recommend.Provider
+	// LimitFit is the per-user fit of Claude Code's plan-usage meters (limitfit.Refresh), or nil.
+	LimitFit *limitfit.Result
+	// Regressions is the regression watch's latest result (regress.Refresh), or nil.
+	Regressions *regress.Result
+	// ClaudeModelSetting is the `model` in the user's Claude Code settings (~/.claude/settings.json), read by the
+	// caller; "" when unset or unreadable. Only "opusplan" changes anything: it turns on the plan-mode finding.
+	ClaudeModelSetting string
 }
 
 // Build assembles the report for p. It reads only through the measurement layer.
 func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, error) {
 	w := p.Window()
 	r := newReport(p, in.KillSwitch)
+	r.Regressions = regressionsFrom(in.Regressions)
 
 	byAgent, err := measure.TotalsBy(ctx, db, w, measure.ByAgent)
 	if err != nil {
@@ -81,6 +91,20 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	r.Headline.Spend, r.Headline.Tokens, r.Requests = sumTotals(byAgent)
 	if hist != nil {
 		r.History = &hist.h
+		var rebuilds []analyze.RebuildEntry
+		if r.Rebuilds, r.OutputMix, rebuilds, err = buildLedgers(ctx, db, w); err != nil {
+			return r, err
+		}
+		r.Opusplan = opusplanFrom(rebuilds, w, in)
+		weekEnd := w.To
+		if !in.Now.IsZero() && in.Now.Before(weekEnd) {
+			weekEnd = in.Now // the week ending now, not at the end of a period still running
+		}
+		hw, err := measure.HeadlessWeek(ctx, db, weekEnd)
+		if err != nil {
+			return r, err
+		}
+		r.Headless = headlessFrom(hw, in)
 		r.Requests += hist.otherReqs
 		r.Headline.Tokens.Value += hist.otherTok
 		r.Headline.Tokens.N = r.Requests
@@ -199,6 +223,9 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 	if r.Tasks, err = measure.TasksEffects(ctx, db, in.Config.Measure); err != nil {
 		return r, err
 	}
+	if r.Agents, err = measure.AgentEffects(ctx, db, in.Config.Measure, in.LimitFit, in.Now); err != nil {
+		return r, err
+	}
 	ad, err := measure.AdoptionFor(ctx, db, w, in.Config.Measure)
 	if err != nil {
 		return r, err
@@ -208,6 +235,19 @@ func Build(ctx context.Context, db *store.DB, in Inputs, p Period) (Report, erro
 		if in.SchemaTokens > 0 {
 			r.Tools.SchemaTokens = &measure.Figure{Value: float64(in.SchemaTokens), Label: measure.Estimated}
 		}
+	}
+	r.PlanLimits = planLimitsFrom(in.LimitFit, r.Headline)
+	if r.ColdResume, err = measure.ColdResumeSummary(ctx, db, w); err != nil {
+		return r, err
+	}
+	if r.ModelSwitch, err = measure.GuardSummary(ctx, db, w, config.OptimizerHookModelSwitch); err != nil {
+		return r, err
+	}
+	if r.ColdCompact, err = measure.GuardSummary(ctx, db, w, config.OptimizerHookColdCompact); err != nil {
+		return r, err
+	}
+	if r.Checkpoint, err = measure.CheckpointSummary(ctx, db, w); err != nil {
+		return r, err
 	}
 	return r, nil
 }

@@ -1,0 +1,9 @@
+Plan mode with opusplan
+  Your model setting is opusplan. 2 switches between Opus and Sonnet in 1
+  session (2.0 per session) wrote 126K tokens to the cache again (measured),
+  about $0.47 at API prices (estimated).
+  Each switch between plan mode and execution rebuilds the whole context on the
+  other model. Plan in a short, fresh session and execute in another, or pick
+  one model for long sessions.
+  A /model switch between the same two models looks the same in the log, so
+  these counts are an upper bound.

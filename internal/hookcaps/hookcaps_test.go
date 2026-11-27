@@ -101,3 +101,63 @@ func TestFind(t *testing.T) {
 		t.Error("found an entry that is not there")
 	}
 }
+
+func TestPromptBlockNeedsALiveOrSessionCheck(t *testing.T) {
+	cases := []struct {
+		name string
+		e    Capability
+		want bool
+	}{
+		{"documented only", Capability{Agent: "claude", Tool: ToolPrompt, Block: Yes, Method: "docs"}, false},
+		{"seen in a live check", Capability{Agent: "claude", Tool: ToolPrompt, Block: Yes, Method: "live"}, true},
+		{"seen in the user's session", Capability{Agent: "claude", Tool: ToolPrompt, Block: Yes, Method: "session"}, true},
+		{"checked and not usable", Capability{Agent: "claude", Tool: ToolPrompt, Block: No, Method: "live"}, false},
+		{"not checked", Capability{Agent: "claude", Tool: ToolPrompt, Block: Untested, Method: "live"}, false},
+		{"a rewrite entry says nothing about blocking", Capability{Agent: "claude", Tool: "Bash", InputRewrite: Yes, OutputRewrite: Yes, Method: "live"}, false},
+	}
+	for _, c := range cases {
+		caps := Capabilities{V: Version, Entries: []Capability{c.e}}
+		if got := caps.Supports("claude", ToolPrompt, PromptBlock); got != c.want {
+			t.Errorf("%s: Supports = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+func TestBlockFieldRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	write(t, dir, Capabilities{V: Version, Entries: []Capability{{Agent: "claude", Tool: ToolPrompt, Block: Yes, Method: "session"}}})
+	if c := Load(dir); !c.Supports("claude", ToolPrompt, PromptBlock) {
+		t.Errorf("the block result was lost on the way through the file: %+v", c)
+	}
+	b, err := json.Marshal(Capability{Agent: "claude", Tool: "Bash"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != `{"agent":"claude","agent_version":"","tool":"Bash","input_rewrite":"","output_rewrite":"","method":"","evidence":"","probed_at":""}` {
+		t.Errorf("an entry without a block result must not grow a field: %s", b)
+	}
+}
+
+func TestPromptContextNeedsASessionCheckAndIsSeparateFromBlock(t *testing.T) {
+	cases := []struct {
+		name string
+		e    Capability
+		want bool
+	}{
+		{"documented only", Capability{Agent: "claude", Tool: ToolPrompt, Context: Yes, Method: "docs"}, false},
+		{"seen in the user's session", Capability{Agent: "claude", Tool: ToolPrompt, Context: Yes, Method: "session"}, true},
+		{"checked and not safe", Capability{Agent: "claude", Tool: ToolPrompt, Context: No, Method: "session"}, false},
+		{"a block result says nothing about context", Capability{Agent: "claude", Tool: ToolPrompt, Block: Yes, Method: "session"}, false},
+		{"another agent", Capability{Agent: "codex", Tool: ToolPrompt, Context: Yes, Method: "session"}, false},
+	}
+	for _, c := range cases {
+		caps := Capabilities{V: Version, Entries: []Capability{c.e}}
+		if got := caps.Supports("claude", ToolPrompt, PromptContext); got != c.want {
+			t.Errorf("%s: Supports = %v, want %v", c.name, got, c.want)
+		}
+	}
+	both := Capabilities{V: Version, Entries: []Capability{{Agent: "claude", Tool: ToolPrompt, Context: Yes, Method: "session"}}}
+	if both.Supports("claude", ToolPrompt, PromptBlock) {
+		t.Error("a context result must not allow blocking")
+	}
+}

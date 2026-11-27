@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/usetrove/trove/internal/hookcaps"
 	"github.com/usetrove/trove/internal/hooks"
 )
 
@@ -47,6 +48,35 @@ func GeminiDocs(ctx context.Context, o Options, now string) hooks.Capability {
 	return hooks.Capability{Agent: "gemini", AgentVersion: agentVersion(ctx, o, "gemini"), Tool: "Bash", Method: "docs", ProbedAt: now,
 		InputRewrite: hooks.CapUntested, OutputRewrite: hooks.CapUntested,
 		Evidence: "documentation only (not run): BeforeTool hookSpecificOutput.tool_input merges into the arguments; AfterTool decision \"deny\" replaces the result with reason"}
+}
+
+// ClaudePromptDocs is what Claude Code's documentation says about blocking a prompt, for the cold-resume guard.
+//
+// Read 2026-11-23 at code.claude.com/docs/en/hooks: UserPromptSubmit `decision: "block"` rejects the prompt and its
+// `reason` is "Shown to the user… Not added to context"; the hook cannot replace the prompt. It "also fires on turns
+// Claude Code starts on its own" (scheduled tasks and /loop, a background subagent reporting back, a message from
+// another session), and no input field tells those apart from a typed prompt. Nothing documented tells an unwatched
+// `claude -p` run from an interactive one (code.claude.com/docs/en/env-vars and /headless, same day). So blocking
+// stays untested until a live check or the user's own session sees it work.
+func ClaudePromptDocs(version, now string) hooks.Capability {
+	return hooks.Capability{Agent: "claude", AgentVersion: version, Tool: hookcaps.ToolPrompt, Method: "docs", ProbedAt: now,
+		InputRewrite: hooks.CapNo, OutputRewrite: hooks.CapNo, Block: hooks.CapUntested,
+		Evidence: "documentation only (not run): decision \"block\" rejects the prompt and its reason is shown to the user, not added to context; the prompt cannot be replaced; it also fires on turns Claude Code starts itself and on print-mode runs, and no documented field tells either apart"}
+}
+
+// codeWriteDocsEvidence is what the code-write nudges rely on.
+const codeWriteDocsEvidence = "documentation only (not run): PreToolUse permissionDecision \"deny\" blocks the call and its permissionDecisionReason is shown to Claude; additionalContext is added to Claude's context alongside the tool result; tool_input has file_path and content (Write) or file_path, old_string, new_string, replace_all (Edit); hook input carries prompt_id"
+
+// ClaudeCodeWriteDocs is what Claude Code's documentation says the code-write nudges (hook_write_to_edit,
+// hook_edit_batch) may do on Write and Edit.
+//
+// Read 2026-11-24 at code.claude.com/docs/en/hooks: for "deny", permissionDecisionReason is "shown to Claude";
+// additionalContext is a "String added to Claude's context alongside the tool result" (ignored only with "defer");
+// the page shows it only beside "allow", so its use with no decision rests on that table. Neither nudge rewrites
+// input or output, so both stay untested here.
+func ClaudeCodeWriteDocs(version, tool, now string) hooks.Capability {
+	return hooks.Capability{Agent: "claude", AgentVersion: version, Tool: tool, Method: "docs", ProbedAt: now,
+		InputRewrite: hooks.CapUntested, OutputRewrite: hooks.CapUntested, Evidence: codeWriteDocsEvidence}
 }
 
 // agentVersion asks an installed agent for its version; "" when it is not installed.

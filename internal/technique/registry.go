@@ -32,6 +32,34 @@ const mcpSnippetTokens = 70
 // test in internal/optimize keeps it equal to VerbositySteer{}.OverheadTokens().
 const verbositySteerTokens = 85
 
+// coldResumeNoteTokens is the most the cold-resume guard's note can cost if the user pastes it after /clear: its
+// 1,500-byte cap at 3.5 bytes per token, rounded up. Tests in internal/hooks and internal/measure keep them in step.
+const coldResumeNoteTokens = 450
+
+// coldWarnTokens is the most a rebuild warning (a systemMessage) can cost if it reaches the model: its 400-byte cap
+// at 3.5 bytes per token, rounded up. A test in internal/hooks keeps the cap and this in step.
+const coldWarnTokens = 120
+
+// routineSteerTokens is the most hook_routine_steer adds each time it steers a prompt: the 37-byte phrase plus up to
+// 68 bytes of the system-reminder wrapper Claude Code puts around additionalContext, at 3.5 bytes per token, rounded
+// up. The text stays in the transcript, so later requests carry it too (as cached input). A test in internal/hooks
+// keeps the phrase and this in step.
+const routineSteerTokens = 30
+
+// writeToEditTokens and editBatchTokens are the most hook_write_to_edit's deny reason and hook_edit_batch's note
+// cost each time they are sent: the text (at most 280 bytes with the numbers filled in) plus up to 68 bytes of
+// Claude Code's wrapper, at 3.5 bytes per token, rounded up. A test in internal/optimize keeps the texts and these in
+// step.
+const (
+	writeToEditTokens = 100
+	editBatchTokens   = 100
+)
+
+// sessionCheckpointTokens is the most hook_session_checkpoint adds at one /compact or /clear: its 2,000-byte cap
+// plus up to 68 bytes of Claude Code's wrapper, at 3.5 bytes per token, rounded up. A test in internal/hooks keeps
+// hooks.RestoreTokens, the cap and this in step.
+const sessionCheckpointTokens = 600
+
 const (
 	urlRTK       = "https://github.com/rtk-ai/rtk"
 	urlHeadroom  = "https://github.com/headroomlabs-ai/headroom"
@@ -111,6 +139,35 @@ var registry = []Technique{
 		HookNeeds:    []string{"Read:output"},
 		Requires:     []string{CapMCPServer, CapRecoveryStore},
 		Licence:      "Trove project", Note: "full reads of 40 KB or more of a file the outliner knows; the full text is kept locally and a second full Read goes through; stays in shadow until a live probe sees Read honour updatedToolOutput"},
+	{ID: "B30", Class: ClassRecoverable, Title: "Replace a long tool output with a short preview; the whole output stays fetchable", Names: []string{"hook_output_preview"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierRecover,
+		Subscription: true, AddsText: true, Overhead: use(trimmerToolDefTokens), UseOverhead: none(), UseNetted: true,
+		OverheadNote: noticeInCount + "; the four MCP tool definitions it relies on (about 351 tokens) are charged to it as a per-session cost, as they are to B3",
+		HookNeeds:    []string{"Bash:output"},
+		Requires:     []string{CapMCPServer, CapRecoveryStore},
+		Licence:      "Trove project", Note: "Bash, PowerShell, Grep text and MCP tools; at most 2,000 bytes; output past the agent's own inline limit is left to the agent; fetch-backs are charged against its saving"},
+	{ID: "B21", Class: ClassGuard, Title: "Warn, or ask once, before a prompt rebuilds a large session's expired cache", Names: []string{"hook_cold_resume"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusPartial, Effect: tierLossless, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(coldResumeNoteTokens),
+		OverheadNote: "nothing reaches the model unless the user pastes the resume note after /clear (at most about 450 tokens, once); the block reason is shown to the user and not added to context (code.claude.com/docs/en/hooks, 2026-11-23)",
+		Licence:      "Trove project",
+		Note:         "built: shadow, warn, and ask on the first prompt after a cold resume. Ask acts as warn until a live check or the user's own session shows a block reaches a typed prompt and print-mode runs can be told apart; a mid-session idle gap is only ever warned about, because self-started turns cannot be told from typed ones"},
+	{ID: "B22", Class: ClassGuard, Title: "Add the cost of a model switch on a large, warm context to the switch confirmation", Names: []string{"hook_model_switch"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierLossless, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(coldWarnTokens),
+		OverheadNote: "one systemMessage shown to the user beside Claude Code's own confirmation (code.claude.com/docs/en/hooks, 2026-11-24); whether it reaches the model is not documented, so its length (at most about 120 tokens) is declared per warning",
+		Licence:      "Trove project", Note: "warn only: it never answers allow, deny or ask, so Claude Code's own confirmation decides; the opusplan plan-mode toggles are a report finding instead"},
+	{ID: "B23", Class: ClassGuard, Title: "Stop a manual /compact once when the cache is cold and the history large", Names: []string{"hook_cold_compact"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierLossless, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(coldResumeNoteTokens),
+		OverheadNote: "the stop message is stderr shown to the user (code.claude.com/docs/en/hooks, 2026-11-24); the resume note costs its tokens once if the user pastes it after /clear (at most about 450)",
+		Licence:      "Trove project", Note: "manual compaction only: a blocked auto compaction can fail the current request; the second /compact of a session goes through"},
+	{ID: "B24", Class: ClassBehavior, Title: "Ask for a direct answer, without deliberating, on routine prompts", Names: []string{"hook_routine_steer"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusPartial, Effect: tierBehavior, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(routineSteerTokens),
+		OverheadNote: "the phrase \"Answer directly without deliberating.\" as UserPromptSubmit additionalContext on each routine prompt it steers (at most about 30 tokens with Claude Code's wrapper, estimated); it stays in the transcript, so every later request of the session carries it as cached input",
+		Licence:      "Trove project",
+		Note:         "built: the classifier, shadow counts and the session A/B trial; acts only on Claude Opus 5.5, where the per-message phrase is documented to reduce thinking without touching earlier cache breakpoints (platform.claude.com/docs/en/build-with-claude/adaptive-thinking, 2026-11-24); never on Haiku 5.5 or Fable 5.2, where it is documented as unreliable, or on an unknown model; on and the trial act as shadow until a live check records that the text lands after the cached prefix"},
 	{ID: "B9", Class: ClassLossless, Title: "Trove MCP tools: trove_read, trove_search, trove_run, trove_fetch_full", Names: []string{"trove_mcp"},
 		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierLossless,
 		Subscription: true, AddsText: true, OverheadNote: "tool definitions go into every request; measured by `trove mcp schema-size`",
@@ -136,6 +193,39 @@ var registry = []Technique{
 	{ID: "B11", Class: ClassSubagentRouting, Title: "Scout subagent and test-gated cascade", Names: []string{"task_scout", "task_cascade"},
 		Layers: []Layer{LayerInstructions, LayerConfig}, Route: RouteNative, Status: StatusBuilt, Effect: tierBehavior,
 		Subscription: true, AddsText: true, OverheadNote: "shown by `trove tasks plan`", Licence: "Trove project"},
+	{ID: "B25", Class: ClassSubagentRouting, Title: "Routine subagents (tests, lint) and an Explore override on a cheaper model at low effort", Names: []string{"task_routine_agents", "task_explore"},
+		Layers: []Layer{LayerConfig}, Route: RouteNative, Status: StatusBuilt, Effect: tierRouting, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, OverheadNote: "the subagent and skill descriptions are in every request; shown by `trove tasks plan agents|explore`",
+		Licence: "Trove project",
+		Note:    "files written with consent through the Fixer, never over a user's file; the subagent's effort field does not override CLAUDE_CODE_EFFORT_LEVEL (code.claude.com/docs/en/sub-agents, 2026-11-24); a session A/B declines the routine agents in the off arm, and gives the Explore override the main model back there"},
+	{ID: "B26", Class: ClassBehavior, Title: "Deny once a Write that rewrites a large file to change a few lines: use Edit", Names: []string{"hook_write_to_edit"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierBehavior,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(writeToEditTokens),
+		OverheadNote: "the deny reason, shown to Claude (PreToolUse permissionDecisionReason, code.claude.com/docs/en/hooks, 2026-11-24), at most about 100 tokens per deny (estimated)",
+		Licence:      "Trove project",
+		Note:         "off by default, explicit opt-in; the optimize policy names it in shadow only and never turns it on; judges a Write on a file of at least 300 lines whose content differs in at most 10% of lines (both placeholders), diffed in memory; once per file per session, and the same Write sent again goes through; saving estimated from the Write's size against the changed lines; guardrails: the same Write sent again, Edit failures and failing tests right after"},
+	{ID: "B27", Class: ClassBehavior, Title: "Suggest one Write or a sed on the third Edit to a file in one turn", Names: []string{"hook_edit_batch"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierBehavior, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(editBatchTokens),
+		OverheadNote: "a note added beside the Edit's result (PreToolUse additionalContext, code.claude.com/docs/en/hooks, 2026-11-24), at most about 100 tokens per note (estimated)",
+		Licence:      "Trove project",
+		Note:         "off by default, explicit opt-in; the optimize policy names it in shadow only and never turns it on; never denies; its shadow count carries the Edit input already spent on that file in that turn, an upper bound and not a saving; guardrails: Edit failures and failing tests right after"},
+	{ID: "B31", Class: ClassBehavior, Title: "Keep a session note across /compact and /clear, and add it back fenced as recovered data", Names: []string{"hook_session_checkpoint"},
+		Layers: []Layer{LayerToolBoundary}, Route: RouteNative, Status: StatusBuilt, Effect: tierBehavior, NoSavingEstimate: true,
+		Subscription: true, AddsText: true, Overhead: none(), UseOverhead: use(sessionCheckpointTokens),
+		OverheadNote: "the restored note as SessionStart additionalContext after /compact or /clear (code.claude.com/docs/en/hooks, 2026-11-26), at most 2,000 bytes, about 600 tokens with Claude Code's wrapper (estimated), once per boundary; the one-line pointer used without the recovery store is about 70 tokens",
+		Licence:      "Trove project",
+		Note:         "off by default, explicit opt-in; no Autopilot policy names it; notes are kept only in the recovery store with recovery.session_checkpoints on (0600, 8 KB each, 1 MB total, 3 days), built from the transcript tail and .git/HEAD with no model call; on is a session A/B split by a hash of the session key; measured on the 20 tool calls after each boundary: re-reads of unchanged files, repeated failed commands, calls to the first edit; guardrails: those windows against sessions without the restore, and failing tests right after a restore"},
+	{ID: "B28", Class: ClassEffort, Title: "Low effort for the turn after a routine prompt, with per-message effort", Names: []string{"effort_routine_prompts"},
+		Layers: []Layer{LayerRequest}, Route: RouteNative, Status: StatusPartial, Effect: tierBehavior, NoSavingEstimate: true,
+		Overhead: none(), Licence: "Trove project",
+		OverheadNote: "an empty system message (about 20 tokens of JSON, no text) where the level changes; nothing the model reads as instructions",
+		Note:         "gateway only (API key); per-message effort (beta mid-conversation-output-config-2026-07-01, platform.claude.com/docs/en/build-with-claude/effort-per-message, verified 2026-11-24) keeps the top-level value, so the cached prefix still matches; a tool-result turn is not new input, so it acts per prompt, not per tool turn; models documented to support it only; off by default, needs a benchmark verdict"},
+	{ID: "B29", Class: ClassEffort, Title: "Clear old thinking in very long sessions (context editing)", Names: []string{"thinking_clear"},
+		Layers: []Layer{LayerRequest}, Route: RouteNative, Status: StatusPartial, Effect: tierBehavior, NoSavingEstimate: true,
+		Overhead: none(), Licence: "Trove project", Prefix: true,
+		OverheadNote: "a context_management request parameter, no text; each new turn rewrites the cache after the thinking it newly clears, which its estimate charges",
+		Note:         "gateway only (API key); clear_thinking_20251015 with keep 2 turns (beta context-management-2025-06-27, platform.claude.com/docs/en/build-with-claude/context-editing, verified 2026-11-24); shadow estimate of context saved against cache rewritten, weighed with the plan-limit fit or API prices; promoted only when net positive; whether clearing acts on preserved-thinking models (Opus, Sonnet, Haiku 5.5) is not documented"},
 	{ID: "B12", Class: ClassGuard, Title: "Autopilot: promotion and rollback at session boundaries", Names: []string{"autopilot"},
 		Layers: []Layer{LayerConfig, LayerToolBoundary, LayerRequest}, Route: RouteNative, Status: StatusBuilt,
 		Subscription: true, Overhead: none(), Licence: "Trove project", Note: "a controller, not a saving of its own"},
@@ -150,7 +240,7 @@ var registry = []Technique{
 	{ID: "C1", Class: ClassCacheControl, Title: "Cache lifetime: 5 minutes or 1 hour", Names: []string{"cache_ttl", "cache_ttl_main", "cache_ttl_subagents"},
 		Layers: []Layer{LayerConfig, LayerRequest}, Route: RouteConfig, Status: StatusPartial, Effect: tierBehavior,
 		Subscription: true, Overhead: none(), Licence: "Trove project",
-		Note: "built: a per-user estimate (the cache_ttl suggestion) and a `trove fix` that writes the verified setting; not built: a per-breakpoint split in the gateway. A blanket downgrade is not a default (docs/techniques.md, finding 2)"},
+		Note: "built: a per-user estimate (the cache_ttl suggestion), a `trove fix` that writes the verified setting, and the subagent one-hour lifetime under Autopilot's settings-v1 policy with a 14-day tripwire (docs/autopilot.md); not built: a per-breakpoint split in the gateway. A blanket downgrade is not a default (docs/techniques.md, finding 2)"},
 	{ID: "C2", Class: ClassCacheControl, Title: "Hold sibling subagent requests until the first cache entry exists", Names: []string{"fan_out"},
 		Layers: []Layer{LayerRequest}, Route: RouteNative, Status: StatusCandidate, Effect: tierLossless,
 		Gateway: true, Claims: gatewayClaim, Licence: "Trove project",

@@ -25,11 +25,13 @@ Optimizers
   optimizer only estimates and changes nothing.
   model_router: off
   effort_tool_turns: off
+  effort_routine_prompts: off
   volatile_prefix_mover: off
   noise_normalizer: off
   output_trimmer: off
   duplicate_result_collapser: off
   verbosity_steer: off
+  thinking_clear: off
   cache_breakpoints: off
   Guardrail events: none.
 

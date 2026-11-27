@@ -21,6 +21,9 @@ type Input struct {
 	Event     string `json:"hook_event_name"`
 	Cwd       string `json:"cwd"` // a common input field (code.claude.com/docs/en/hooks, checked 2026-11-05); only hashed, never stored
 	ToolName  string `json:"tool_name"`
+	// ToolUseID is the call's id, a PreToolUse field (code.claude.com/docs/en/hooks.md, read 2026-11-24). Only
+	// its hash is stored.
+	ToolUseID string `json:"tool_use_id"`
 	// TranscriptPath is the session's transcript file (a common input field, seen live 2026-11-18 on Claude Code
 	// 2.1.327). Only the model of the newest main-thread reply is read from it, in memory; it is never stored.
 	TranscriptPath string `json:"transcript_path"`
@@ -37,6 +40,29 @@ type Input struct {
 	// (code.claude.com/docs/en/hooks, read 2026-11-17). Error is read in memory only, never stored.
 	Error       string `json:"error"`
 	IsInterrupt bool   `json:"is_interrupt"`
+	// SessionStart sends these when source is "resume" or "fork" and the transcript has a response (Claude Code
+	// v2.1.251 or later; code.claude.com/docs/en/hooks, read 2026-11-23). Only numbers are kept, for the cold-resume
+	// guard.
+	ContextTokens            *int64   `json:"context_tokens"`
+	PromptCacheLikelyExpired *bool    `json:"prompt_cache_likely_expired"`
+	EstimatedCacheWriteUSD   *float64 `json:"estimated_cache_write_usd"`
+	// PreModelSwitch and PostModelSwitch (read 2026-11-24): the models, whether the current model's cache is
+	// likely warm and its lifetime. context_tokens, estimated_cache_write_usd and source share the fields above.
+	FromModel       string `json:"from_model"`
+	ToModel         string `json:"to_model"`
+	PromptCacheWarm *bool  `json:"prompt_cache_warm"`
+	CacheTTL        string `json:"cache_ttl"`
+	// Trigger is PreCompact's "manual" (/compact) or "auto".
+	Trigger string `json:"trigger"`
+	// PromptText is UserPromptSubmit's prompt text. Only hook_routine_steer reads it, in memory, through
+	// routine.Classify; it is never stored, logged, hashed or written to the spool (rule 7).
+	PromptText string `json:"prompt"`
+	// SubagentStart and SubagentStop (code.claude.com/docs/en/hooks, read 2026-11-24). The id is hashed and the
+	// type stored only as tasks.AgentTypeLabel; LastAssistantMessage is read in memory for its STATUS line by
+	// tasks.ParseStatus and never stored, logged or hashed (rule 7).
+	AgentID              string `json:"agent_id"`
+	AgentType            string `json:"agent_type"`
+	LastAssistantMessage string `json:"last_assistant_message"`
 }
 
 // ToolInput is the tool's arguments. The named fields are the ones Trove reads.

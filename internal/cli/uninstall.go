@@ -29,7 +29,7 @@ var (
 		"config.toml", "changes.json", "fixqueue.json", "gateway.json", "gateway.log",
 		"mcp_installs.json", "mcp_trust.json", pluginStateFile, contribute.StateFile, config.AutopilotFileName,
 	}
-	ownedDirs  = []string{"backups", "recovery", "hooks"}
+	ownedDirs  = []string{"backups", "recovery", "hooks", store.LimitSpoolDir}
 	ownedGlobs = []string{"hooks.log*", ".mcp_trust-*", contribute.StateFile + ".*", config.AutopilotFileName + ".*"}
 )
 

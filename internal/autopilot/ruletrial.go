@@ -9,6 +9,7 @@ import (
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/experiment"
+	"github.com/usetrove/trove/internal/hookcaps"
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/store"
 	"github.com/usetrove/trove/internal/technique"
@@ -21,8 +22,14 @@ import (
 // a guardrail trips or the result is in. It never turns the rule set on: T2 needs a benchmark verdict before
 // Autopilot may do that, so a clean result is reported and the user decides.
 
-// RuleTrialName is the autopilot.json entry of a rule set's trial: the tool's optimizer name.
-func RuleTrialName(tool string) string { return "ext_" + tool }
+// RuleTrialName is the autopilot.json entry of a rule set's trial: the tool's optimizer name. One of Trove's own
+// techniques trialled this way keeps its own name.
+func RuleTrialName(tool string) string {
+	if config.IsNativeRuleTrial(tool) {
+		return tool
+	}
+	return "ext_" + tool
+}
 
 // RuleTrialTool is the tool a rule-set trial entry is about.
 func RuleTrialTool(name string) string { return strings.TrimPrefix(name, "ext_") }
@@ -66,8 +73,8 @@ func StartRuleTrial(dir, tool, blocker string, now time.Time) (config.AutopilotF
 	switch {
 	case !f.Active():
 		return f, fmt.Errorf("Autopilot is not on (or is paused). Run `trove autopilot on` first")
-	case !IsRuleSet(tool):
-		return f, fmt.Errorf("%s is not a rule set Trove can trial. Rule sets: %s", tool, strings.Join(RuleSets(), ", "))
+	case !IsRuleSet(tool) && !config.IsNativeRuleTrial(tool):
+		return f, fmt.Errorf("%s is not a rule set Trove can trial. Rule sets: %s; Trove's own technique: %s", tool, strings.Join(RuleSets(), ", "), config.OptimizerHookRoutineSteer)
 	case blocker != "":
 		return f, fmt.Errorf("%s", blocker)
 	}
@@ -76,8 +83,11 @@ func StartRuleTrial(dir, tool, blocker string, now time.Time) (config.AutopilotF
 		return f, fmt.Errorf("%s is on trial already, and one trial runs at a time. Wait for it to finish, or stop it with `trove autopilot trial %s --stop`", other, RuleTrialTool(other))
 	}
 	cur := f.Entries[name]
-	next := config.AutopilotEntry{State: config.AutopilotProbation, SinceMS: now.UnixMilli(), Attempts: cur.Attempts + 1,
-		Reason: "trial running: the rules are added at the start of about half of new sessions, chosen at random, to compare with the rest"}
+	reason := "trial running: the rules are added at the start of about half of new sessions, chosen at random, to compare with the rest"
+	if config.IsNativeRuleTrial(tool) {
+		reason = "trial running: routine prompts are steered in about half of new sessions, chosen at random, and only counted in the rest"
+	}
+	next := config.AutopilotEntry{State: config.AutopilotProbation, SinceMS: now.UnixMilli(), Attempts: cur.Attempts + 1, Reason: reason}
 	f.Entries[name] = next
 	f.Record(config.AutopilotEvent{AtMS: now.UnixMilli(), Optimizer: name, From: orOff(cur.State), To: next.State, Reason: "you started a trial"})
 	return f, config.SaveAutopilot(dir, f)
@@ -136,7 +146,7 @@ func DecideRuleTrial(cur config.AutopilotEntry, ev Evidence, v experiment.Result
 
 // advanceRuleTrials evaluates every running rule-set trial once. on lists what is on for new sessions. It returns
 // whether any entry changed, and the state changes made.
-func advanceRuleTrials(ctx context.Context, db *store.DB, cfg config.Config, f *config.AutopilotFile, on []string, traffic measure.Traffic, now time.Time) (bool, []config.AutopilotEvent, error) {
+func advanceRuleTrials(ctx context.Context, db *store.DB, dir string, cfg config.Config, f *config.AutopilotFile, on []string, traffic measure.Traffic, now time.Time) (bool, []config.AutopilotEvent, error) {
 	changed := false
 	var events []config.AutopilotEvent
 	idle := time.Duration(cfg.Gateway.IdleMinutes) * time.Minute
@@ -156,7 +166,31 @@ func advanceRuleTrials(ctx context.Context, db *store.DB, cfg config.Config, f *
 			CanProbation: probationBlocker(cfg, traffic, name),
 			Tests:        TestEvidence{Tier: technique.T2, On: tOn, Off: tOff},
 		}
-		d := DecideRuleTrial(cur, ev, v, now)
+		var d Decision
+		if config.IsNativeRuleTrial(name) {
+			sOn, sOff, err := measure.SteerTrialByArm(ctx, db, name, cur.SinceMS, now.Add(-idle).UnixMilli())
+			if err != nil {
+				return changed, events, fmt.Errorf("cannot read the routine turns of the trial of %s: %v", name, err)
+			}
+			s := measure.JudgeSteerTrial(sOn, sOff, TrialPolicy().probationMin(technique.T2), RepromptMarginPts)
+			if s.Enough && s.SavedPerTurn > 0 {
+				s.Limits = measure.SteerLimits(dir, steerLimitModel, s.SavedPerTurn, now)
+			}
+			ev.Blocked = firstNonEmpty(steerTrialBlocked(dir, cfg, name), ev.Blocked)
+			d = DecideSteerTrial(cur, ev, v, s, now)
+		} else if IsCodeRuleSet(tool) {
+			cOn, cOff, model, err := measure.CodeTrialByArm(ctx, db, name, cur.SinceMS, now.Add(-idle).UnixMilli())
+			if err != nil {
+				return changed, events, fmt.Errorf("cannot read the code written in the trial of %s: %v", tool, err)
+			}
+			c := measure.JudgeCodeTrial(cOn, cOff, tOn, tOff, TrialPolicy().probationMin(technique.T2))
+			if c.Enough && c.SavedPerSession > 0 && model != "" {
+				c.Limits = measure.CodeLimits(dir, model, c.SavedPerSession, now)
+			}
+			d = DecideCodeTrial(cur, ev, v, c, now)
+		} else {
+			d = DecideRuleTrial(cur, ev, v, now)
+		}
 		if d.Entry != cur {
 			f.Entries[name] = d.Entry
 			changed = true
@@ -179,4 +213,107 @@ func ruleTrialBlocked(on []string, tool string) string {
 		}
 	}
 	return blockedBy(on, tool)
+}
+
+// codeRuleSets are the rule sets whose purpose is less code (technique W9, "rules that make the agent write less
+// code"). Their trial is judged on the code the agent writes per session and on test results, not on tokens per turn.
+var codeRuleSets = map[string]bool{"ponytail": true}
+
+// IsCodeRuleSet reports whether tool is a rule set judged by a code-output trial.
+func IsCodeRuleSet(tool string) bool { return codeRuleSets[tool] && IsRuleSet(tool) }
+
+// DecideCodeTrial is DecideRuleTrial for a code rule set, a pure function of its inputs. Beside the trial's usual
+// guardrails (test failures, and sessions that come out worse on cost or turns) it stops when sessions with the
+// rules write more code, beyond chance. It finishes, never turning the rule set on, when they write less, beyond
+// chance, with test pass rate held by the guardrail. Its verdict names code tokens per session (estimated), the
+// share of the plan limits (estimated) and test pass rate on each side (measured).
+func DecideCodeTrial(cur config.AutopilotEntry, ev Evidence, v experiment.Result, c measure.CodeVerdict, now time.Time) Decision {
+	p := TrialPolicy()
+	next := cur
+	set := func(state, reason string) {
+		next.State, next.Reason, next.SinceMS = state, reason, now.UnixMilli()
+	}
+	if cur.State != config.AutopilotProbation {
+		return Decision{Entry: cur}
+	}
+	figures := c.Text()
+	testsTrip, testsWhy := measure.TestFailTrips(ev.Tests.On, ev.Tests.Off, p.TestFailMinSessions, p.testFailMargin(technique.T2))
+	switch {
+	case ev.Blocked != "":
+		set(config.AutopilotOff, "trial stopped: "+ev.Blocked)
+	case testsTrip:
+		set(config.AutopilotRolledBack, "trial stopped by the test_fail_rate guardrail: "+testsWhy+". So far: "+figures)
+	case ev.CanProbation != "":
+		set(config.AutopilotOff, "the trial cannot continue: "+ev.CanProbation)
+	case v.Status == experiment.WorseOutcomes || v.Status == experiment.CostsMore:
+		set(config.AutopilotRolledBack, "trial stopped: sessions with the rules came out worse ("+v.Reason+"). So far: "+figures)
+	case c.Enough && c.Worse:
+		set(config.AutopilotRolledBack, "trial stopped: more code written per session with the rules than without, beyond chance. "+figures)
+	case c.Enough && c.Saves:
+		set(config.AutopilotOff, "trial finished: less code written per session with the rules, beyond chance, and tests held. "+figures+
+			". Autopilot does not turn rule sets on; turn it on yourself if you want it")
+	case now.Sub(time.UnixMilli(cur.SinceMS)) >= time.Duration(p.ProbationMaxDays)*24*time.Hour:
+		set(config.AutopilotOff, fmt.Sprintf("trial finished after %d days with no clear effect on the code written. %s", p.ProbationMaxDays, figures))
+	default:
+		next.Reason = fmt.Sprintf("trial running: each side needs %d finished sessions. So far: %s", p.probationMin(technique.T2), figures)
+	}
+	return Decision{Entry: next}
+}
+
+// RepromptMarginPts is how many percentage points more often the prompt after a steered routine turn may be a
+// correction than after an unsteered one before the re-prompt guardrail stops the steer's trial.
+const RepromptMarginPts = 10
+
+// steerLimitModel is the model the steer acts on, used to express its saving as a share of the limits.
+const steerLimitModel = "claude-opus-5-5"
+
+// steerTrialBlocked says why the steer's trial cannot go on, or "": the user switched it on for every session, or
+// the live check that lets it send anything no longer passes on this machine.
+func steerTrialBlocked(dir string, cfg config.Config, name string) string {
+	if cfg.OptimizerState(name) == config.StateOn {
+		return name + " is now switched on for every session in your Trove config, so there is nothing to compare it with"
+	}
+	if !hookcaps.Load(dir).Supports("claude", hookcaps.ToolPrompt, hookcaps.PromptContext) {
+		return "the check that added prompt context keeps the cache (`trove hooks verify --prompt-context`) has not passed on this machine, so the steer would only count"
+	}
+	return ""
+}
+
+// DecideSteerTrial is DecideRuleTrial for hook_routine_steer, a pure function of its inputs. Beside the trial's usual
+// guardrails (test failures, and sessions that come out worse, which includes more turns per session) it stops on
+// the re-prompt guardrail and on more thinking per routine turn. It is judged on thinking per routine turn rather than
+// tokens per session, which a few routine turns cannot move beyond the noise. It never turns the steer on.
+func DecideSteerTrial(cur config.AutopilotEntry, ev Evidence, v experiment.Result, s measure.SteerVerdict, now time.Time) Decision {
+	p := TrialPolicy()
+	next := cur
+	set := func(state, reason string) {
+		next.State, next.Reason, next.SinceMS = state, reason, now.UnixMilli()
+	}
+	if cur.State != config.AutopilotProbation {
+		return Decision{Entry: cur}
+	}
+	figures := s.Text()
+	testsTrip, testsWhy := measure.TestFailTrips(ev.Tests.On, ev.Tests.Off, p.TestFailMinSessions, p.testFailMargin(technique.T2))
+	switch {
+	case ev.Blocked != "":
+		set(config.AutopilotOff, "trial stopped: "+ev.Blocked)
+	case testsTrip:
+		set(config.AutopilotRolledBack, "trial stopped by the test_fail_rate guardrail: "+testsWhy+". So far: "+figures)
+	case ev.CanProbation != "":
+		set(config.AutopilotOff, "the trial cannot continue: "+ev.CanProbation)
+	case s.RepromptTrips:
+		set(config.AutopilotRolledBack, "trial stopped by the re-prompt guardrail: "+s.RepromptWhy)
+	case v.Status == experiment.WorseOutcomes || v.Status == experiment.CostsMore:
+		set(config.AutopilotRolledBack, "trial stopped: sessions with the steer came out worse ("+v.Reason+"). So far: "+figures)
+	case s.Enough && s.Worse:
+		set(config.AutopilotRolledBack, "trial stopped: more thinking per routine turn with the steer than without, beyond chance. "+figures)
+	case s.Enough && s.Saves:
+		set(config.AutopilotOff, "trial finished: less thinking per routine turn with the steer, beyond chance. "+figures+
+			". Autopilot does not turn it on; set hook_routine_steer = \"on\" under [optimizers] yourself if you want it")
+	case now.Sub(time.UnixMilli(cur.SinceMS)) >= time.Duration(p.ProbationMaxDays)*24*time.Hour:
+		set(config.AutopilotOff, fmt.Sprintf("trial finished after %d days with no clear effect on thinking. %s", p.ProbationMaxDays, figures))
+	default:
+		next.Reason = fmt.Sprintf("trial running: each side needs %d sessions with routine turns. So far: %s", p.probationMin(technique.T2), figures)
+	}
+	return Decision{Entry: next}
 }

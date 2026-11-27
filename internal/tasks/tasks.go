@@ -67,6 +67,14 @@ type Options struct {
 	// SubagentModel is the model task_subagent_model writes into the user's own
 	// subagent files that name none. It has no default: the user picks it.
 	SubagentModel string `json:"subagent_model,omitempty"`
+	// ScoutEffort is the scout's effort level (default low).
+	ScoutEffort string `json:"scout_effort"`
+	// RoutineModel and RoutineEffort are the model and effort of the routine
+	// agents and the Explore override (defaults haiku and low).
+	RoutineModel  string `json:"routine_model"`
+	RoutineEffort string `json:"routine_effort"`
+	// LintCmd is the project's formatter or linter command; optional.
+	LintCmd string `json:"lint_cmd,omitempty"`
 }
 
 // Defaults fills empty fields.
@@ -83,6 +91,15 @@ func (o Options) Defaults() Options {
 	if o.MaxTurns == 0 {
 		o.MaxTurns = 25
 	}
+	if o.ScoutEffort == "" {
+		o.ScoutEffort = "low"
+	}
+	if o.RoutineModel == "" {
+		o.RoutineModel = "haiku"
+	}
+	if o.RoutineEffort == "" {
+		o.RoutineEffort = "low"
+	}
 	return o
 }
 
@@ -95,9 +112,23 @@ func (o Options) Validate(c *Catalog, needTest bool) error {
 	o = o.Defaults()
 	for _, m := range []struct{ field, v string }{
 		{"scout model", o.ScoutModel}, {"worker model", o.WorkerModel}, {"escalation model", o.EscalationModel},
+		{"routine model", o.RoutineModel},
 	} {
 		if !c.ModelOK(m.v) {
 			return fmt.Errorf("the %s %q is not one Claude Code documents (%s, or a full model ID such as claude-opus-5-5). Change it under [tasks] in config.toml", m.field, m.v, strings.Join(c.ModelAliases(), ", "))
+		}
+	}
+	for _, e := range []struct{ field, v string }{{"scout effort", o.ScoutEffort}, {"routine effort", o.RoutineEffort}} {
+		if !c.EffortOK(e.v) {
+			return fmt.Errorf("the %s %q is not a level Claude Code documents (%s). Change it under [tasks] in config.toml", e.field, e.v, strings.Join(c.EffortLevels(), ", "))
+		}
+	}
+	if l := strings.TrimSpace(o.LintCmd); strings.ContainsAny(l, "\r\n`") || len(l) > 200 {
+		return fmt.Errorf("lint_cmd must be one line of at most 200 characters without backticks")
+	}
+	if !needTest {
+		if t := strings.TrimSpace(o.TestCmd); strings.ContainsAny(t, "\r\n`") || len(t) > 200 {
+			return fmt.Errorf("test_cmd must be one line of at most 200 characters without backticks")
 		}
 	}
 	if o.MaxTurns < 1 || o.MaxTurns > 200 {
@@ -132,9 +163,13 @@ type File struct {
 // conversion internal/external uses. It is an estimate, never measured.
 func EstimateTokens(text string) int { return int(math.Ceil(float64(len(text)) / 3.5)) }
 
-func agentFile(role, name, desc, tools, model string, maxTurns int, body string) File {
+// agentFile renders a subagent file. An empty effort leaves the field out.
+func agentFile(role, name, desc, tools, model, effort string, maxTurns int, body string) File {
 	var b strings.Builder
 	b.WriteString("---\nname: " + name + "\ndescription: " + desc + "\ntools: " + tools + "\nmodel: " + model + "\n")
+	if effort != "" {
+		b.WriteString("effort: " + effort + "\n")
+	}
 	if maxTurns > 0 {
 		fmt.Fprintf(&b, "maxTurns: %d\n", maxTurns)
 	}
@@ -152,13 +187,14 @@ func ScoutFiles(c *Catalog, o Options) ([]File, error) {
 	}
 	scout := agentFile(RoleScout, ScoutName,
 		"Read-only explorer. Use proactively to search the codebase, find where something is defined or used, or summarize long logs, instead of reading many files yourself. Returns a short summary.",
-		strings.Join(c.ReadOnlyTools, ", "), o.ScoutModel, 20,
+		strings.Join(c.ReadOnlyTools, ", "), o.ScoutModel, o.ScoutEffort, 20,
 		"You explore code and logs for another agent. You can only read, search and list files.\n\n"+
 			"Rules:\n"+
 			"- Answer the question you were given and nothing else.\n"+
 			"- Reply in at most 15 lines: file paths with line numbers, and one sentence each.\n"+
 			"- Never paste long file contents or whole logs. Quote at most 3 lines when it matters.\n"+
-			"- If you did not find it, say so and list where you looked.\n")
+			"- If you did not find it, say so and list where you looked.\n"+
+			statusRule)
 	snip := SnippetOpen + "\n" +
 		"## Exploring\n" +
 		"For open-ended exploration (finding where code lives, tracing usage, summarizing long logs), delegate to the `" + ScoutName + "` subagent and work from its short summary. Read files yourself only once you know which ones matter.\n" +
@@ -175,12 +211,12 @@ func CascadeFiles(c *Catalog, o Options) ([]File, error) {
 	test := strings.TrimSpace(o.TestCmd)
 	worker := agentFile(RoleWorker, WorkerName,
 		"First-attempt implementer for /"+CascadeName+". Used only by that command.",
-		"Read, Grep, Glob, Edit, Write, Bash", o.WorkerModel, o.MaxTurns,
+		"Read, Grep, Glob, Edit, Write, Bash", o.WorkerModel, "", o.MaxTurns,
 		"You implement the task you are given in this project, then stop. You do not decide whether it worked; the caller runs the tests.\n\n"+
 			"When you finish, reply with: what you changed (file paths), and anything you were unsure about. Keep it under 10 lines.\n")
 	esc := agentFile(RoleEscalate, EscalateName,
 		"Stronger second attempt for /"+CascadeName+". Used only by that command, only after tests failed.",
-		"Read, Grep, Glob, Edit, Write, Bash", o.EscalationModel, 0,
+		"Read, Grep, Glob, Edit, Write, Bash", o.EscalationModel, "", 0,
 		"A cheaper model tried this task and the tests still fail. You get a short summary of what was tried and the failing test names, not the full history.\n\n"+
 			"Fix the task properly. Re-read the code you need; do not assume the earlier attempt was right. When done, reply with what you changed in under 10 lines.\n")
 	body := "Run this task with the cheapest model that can do it, and escalate only if the tests prove it failed.\n\n" +
@@ -225,6 +261,7 @@ type Catalog struct {
 	CheckedOn     string   `toml:"checked_on"`
 	Fields        []Field  `toml:"field"`
 	CommandFields []Field  `toml:"command_field"`
+	SkillFields   []Field  `toml:"skill_field"`
 	ReadOnly      readOnly `toml:"read_only"`
 	ReadOnlyTools []string `toml:"-"`
 }
@@ -266,7 +303,7 @@ func Builtin() (*Catalog, error) {
 		}
 	}
 	// The same gate as internal/settings: only fields read verbatim are written.
-	for _, f := range append(append([]Field{}, c.Fields...), c.CommandFields...) {
+	for _, f := range append(append(append([]Field{}, c.Fields...), c.CommandFields...), c.SkillFields...) {
 		if f.Verified != "verbatim" {
 			return nil, fmt.Errorf("tasks catalog field %q is not verified verbatim, so Trove must not write it", f.Name)
 		}
@@ -288,6 +325,22 @@ func (c *Catalog) Field(name string) (Field, bool) {
 func (c *Catalog) ModelAliases() []string {
 	f, _ := c.Field("model")
 	return f.Values
+}
+
+// EffortLevels lists the documented effort levels.
+func (c *Catalog) EffortLevels() []string {
+	f, _ := c.Field("effort")
+	return f.Values
+}
+
+// EffortOK reports whether v is a documented effort level.
+func (c *Catalog) EffortOK(v string) bool {
+	for _, l := range c.EffortLevels() {
+		if l == v {
+			return true
+		}
+	}
+	return false
 }
 
 // ModelOK reports whether v is a documented alias or looks like a full model ID.

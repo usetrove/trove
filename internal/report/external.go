@@ -42,6 +42,10 @@ type ExternalTool struct {
 	// periods, which is weaker evidence than interleaved sessions.
 	Evidence string `json:"evidence"`
 
+	// Randomized is the randomized session test for a hook tool (`trove hook handoff`), once any session has been
+	// assigned an arm. When it is set, the verdict comes from it, not from the before-and-after figures above.
+	Randomized *TrialFigures `json:"randomized_trial,omitempty"`
+
 	// RolledBack is Trove's reason for switching the tool off, if it did.
 	RolledBack string `json:"rolled_back,omitempty"`
 }
@@ -103,6 +107,9 @@ func relChange(on, off float64) string {
 
 const externalEvidence = "Sessions with the tool on are compared with later sessions without it. Sessions differ in size and task, so this supports a conclusion but does not prove it."
 
+// externalRandomEvidence is the evidence line for a hook tool in the randomized test.
+const externalRandomEvidence = "Each new session was given the tool or not at random (trove hook handoff), so the two groups differ only by chance and by the tool. Method: docs/benchmark-methodology.md section 11."
+
 // buildExternal assembles the rows for installed tools. It returns nothing when
 // no tool is installed.
 func buildExternal(ctx context.Context, db *store.DB, in Inputs) ([]ExternalTool, error) {
@@ -145,6 +152,20 @@ func buildExternal(ctx context.Context, db *store.DB, in Inputs) ([]ExternalTool
 			return nil, err
 		}
 		t.Verdict = externalVerdict(t)
+		if m.ActsAs == external.ActsHook {
+			f, err := trialFigures(ctx, db, in, opt)
+			if err != nil {
+				return nil, err
+			}
+			if f.HasSessions() {
+				t.Randomized, t.Evidence = &f, externalRandomEvidence
+				text, measured := trialVerdict(f)
+				t.Verdict = ExternalVerdict{Text: text}
+				if measured {
+					t.Verdict.Label = "measured"
+				}
+			}
+		}
 		for _, g := range events { // newest first
 			if g.Optimizer == opt && g.ClearedAt == nil {
 				t.RolledBack = g.Reason
@@ -175,11 +196,20 @@ func claimVerdictPairs(t ExternalTool) [2][2]string {
 
 // externalLines renders the rest of one tool, after its claim and verdict, as indented lines.
 func externalLines(t ExternalTool) []string {
-	lines := []string{"  " + externalPromptText(t)}
-	lines = append(lines, "  "+externalCostText(t))
+	var lines []string
+	// With a randomized test the before-and-after figures are secondary: shown only when there are some.
+	if t.Randomized == nil || t.PromptTokens != nil {
+		lines = append(lines, "  "+externalPromptText(t))
+	}
+	if t.Randomized == nil || t.Cost != nil {
+		lines = append(lines, "  "+externalCostText(t))
+	}
 	lines = append(lines, fmt.Sprintf("  Overhead: %s tokens on every request while on (estimated; %s). It is part of every prompt, so the measured figures above already include it.",
 		FormatTokens(float64(t.Overhead.PerRequest)), t.Overhead.Source))
-	if t.PromptTokens != nil || t.Cost != nil {
+	if t.Randomized != nil && t.Randomized.WeekNote != "" {
+		lines = append(lines, "  Weekly limit: "+t.Randomized.WeekNote+".")
+	}
+	if t.PromptTokens != nil || t.Cost != nil || t.Randomized != nil {
 		lines = append(lines, "  "+t.Evidence)
 	}
 	if t.RolledBack != "" {

@@ -1,0 +1,10 @@
+Cold-resume guard (hook_cold_resume)
+  Stopped 3 prompts once (measured). You sent 1 again (33%) and cleared 2 (67%);
+  the rest ended or went quiet.
+  Warned 1 time, in shadow would have stopped 1, in shadow would have warned 1
+  time (measured).
+  Context not written to the cache again after a clear: about 499K tokens
+  (estimated, less 450 per note you may have pasted).
+  Not enough sessions yet to compare the hour after: 0 stopped and 0 shadow
+  events with meter readings in a matching size; 10 of each are needed.
+

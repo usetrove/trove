@@ -16,6 +16,17 @@ server does with what it receives.
   storage if someone floods it with made-up install ids. Add a Cloudflare rate-limiting
   rule in the dashboard if you want a per-address limit; the Worker itself never sees addresses.
 - A daily cron deletes rows older than 365 days.
+- A weekly cron (Mondays, `WEEKLY_CRON` in `index.js`) builds the limit report for the week that just ended
+  (`aggregate.js`): medians and middle-half ranges over groups of at least 20 installs, and per-version flags. Only
+  that aggregate is stored, in `limit_reports`; `GET /v1/limit-report` serves the latest approved week as plain HTML
+  (`page.js`) and `/v1/limit-report.json` as JSON. See [docs/decisions/limit-report.md](../../docs/decisions/limit-report.md).
+- A week waits for a maintainer during the first 4 approved weeks, when a median moves by more than 50%, or when a
+  version is flagged. Review and approve it with:
+
+  ```
+  npx wrangler d1 execute trove-contribute --remote --command "SELECT week, approved, report FROM limit_reports ORDER BY week DESC LIMIT 1"
+  npx wrangler d1 execute trove-contribute --remote --command "UPDATE limit_reports SET approved = 1 WHERE week = '2026-W48'"
+  ```
 
 ## Deploy
 
@@ -23,11 +34,12 @@ server does with what it receives.
 cd server/worker
 cp wrangler.toml wrangler.local.toml             # gitignored: keep your own ids out of the repo
 npx wrangler d1 create trove-contribute          # copy the database id into wrangler.local.toml
-npx wrangler d1 execute trove-contribute --remote --file=schema.sql
+npx wrangler d1 execute trove-contribute --remote --file=schema.sql   # again after an update: it adds limit_reports
 npx wrangler deploy --config wrangler.local.toml
 ```
 
-`wrangler.toml` is the template and keeps a placeholder id. Put your real database id only in
+`wrangler.toml` is the template and keeps a placeholder id. Copy its `crons` line into `wrangler.local.toml` too,
+or the weekly report never runs. Put your real database id only in
 `wrangler.local.toml`, which git ignores, and pass `--config wrangler.local.toml` to every wrangler
 command that needs the binding (`deploy`, `tail`, `d1 execute` by name works without it).
 

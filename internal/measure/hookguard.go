@@ -37,6 +37,12 @@ type HookStats struct {
 	// ("estimated"). It says nothing about whether the agent needed them: judge
 	// that with the A/B comparison, not with this number.
 	TokensRewritten *Figure `json:"tokens_rewritten,omitempty"`
+	// TokensFetchedBack is the tokens the agent put back into the context by fetching shortened output with
+	// trove_fetch_full (estimated, from the size of each reply). TokensNet is TokensRewritten minus it: the
+	// saving net of expansions, which can be negative. Both are nil until something was rewritten. Neither counts
+	// the extra turn a fetch takes; the A/B comparison is the test of that.
+	TokensFetchedBack *Figure `json:"tokens_fetched_back,omitempty"`
+	TokensNet         *Figure `json:"tokens_net,omitempty"`
 	// Reissued counts quieted commands the agent ran again as first written;
 	// FetchedBack counts trimmed outputs it fetched back with trove_fetch_full.
 	Reissued    int `json:"reissued,omitempty"`
@@ -64,7 +70,8 @@ func HookTotals(ctx context.Context, db *store.DB, since time.Time) ([]HookStats
 		COALESCE(SUM(CASE WHEN kind = 'reread_anyway' THEN tokens END), 0),
 		SUM(kind = 'rewritten'), SUM(kind = 'would_rewrite'),
 		COALESCE(SUM(CASE WHEN kind = 'rewritten' THEN tokens END), 0),
-		SUM(kind = 'reissued'), SUM(kind = 'fetched_back'), SUM(kind = 'extra_read'), SUM(kind = 'adopted')
+		SUM(kind = 'reissued'), SUM(kind = 'fetched_back'), SUM(kind = 'extra_read'), SUM(kind = 'adopted'),
+		COALESCE(SUM(CASE WHEN kind = 'fetched_back' THEN tokens END), 0)
 		FROM hook_events WHERE ts >= ? GROUP BY hook ORDER BY hook`, since.UnixMilli())
 	if err != nil {
 		return nil, err
@@ -73,9 +80,9 @@ func HookTotals(ctx context.Context, db *store.DB, since time.Time) ([]HookStats
 	var out []HookStats
 	for rows.Next() {
 		var s HookStats
-		var blockedTok, rereadTok, rewriteTok int64
+		var blockedTok, rereadTok, rewriteTok, fetchedTok int64
 		if err := rows.Scan(&s.Hook, &s.Blocked, &s.WouldBlock, &s.Advised, &s.WouldAdvise, &s.RereadAnyway, &s.Sessions, &blockedTok, &rereadTok,
-			&s.Rewritten, &s.WouldRewrite, &rewriteTok, &s.Reissued, &s.FetchedBack, &s.ExtraRead, &s.Adopted); err != nil {
+			&s.Rewritten, &s.WouldRewrite, &rewriteTok, &s.Reissued, &s.FetchedBack, &s.ExtraRead, &s.Adopted, &fetchedTok); err != nil {
 			return nil, err
 		}
 		saved := blockedTok - rereadTok // a retried block put the file back, so it saved nothing
@@ -85,6 +92,8 @@ func HookTotals(ctx context.Context, db *store.DB, since time.Time) ([]HookStats
 		s.TokensSaved = Figure{Value: float64(saved), Label: Estimated, N: s.Blocked}
 		if s.Rewritten > 0 {
 			s.TokensRewritten = &Figure{Value: float64(rewriteTok), Label: Estimated, N: s.Rewritten}
+			s.TokensFetchedBack = &Figure{Value: float64(fetchedTok), Label: Estimated, N: s.FetchedBack}
+			s.TokensNet = &Figure{Value: float64(rewriteTok - fetchedTok), Label: Estimated, N: s.Rewritten}
 		}
 		if s.Blocked > 0 {
 			s.RereadRate = &Figure{Value: 100 * float64(s.RereadAnyway) / float64(s.Blocked), Label: Measured, N: s.Blocked}
@@ -104,6 +113,13 @@ const (
 	RuleHookExtraRead = "hook_extra_read"
 	// RuleHookUnusedAdvice: in sessions where hook_large_output suggested trove_run, the agent did not use it.
 	RuleHookUnusedAdvice = "hook_unused_advice"
+	// RuleColdResumeOverride: the user sent the prompt again after the cold-resume guard stopped it, so stopping it
+	// did not help them.
+	RuleColdResumeOverride = "cold_resume_override"
+	// RuleModelSwitchOverride: the user switched model anyway after the model-switch guard showed the cost.
+	RuleModelSwitchOverride = "model_switch_override"
+	// RuleColdCompactOverride: the user ran /compact again after the cold-compact guard stopped one.
+	RuleColdCompactOverride = "cold_compact_override"
 )
 
 // Placeholder limits for the rules that are not a plain "share the agent undid". They are not tuned by any
@@ -119,6 +135,9 @@ const (
 	// MinAdoptionPercent is the share of sessions where hook_large_output gave its hint in which the agent must
 	// then use trove_run, or the hint is only a cost. Below it the hook goes back to shadow.
 	MinAdoptionPercent = 10
+	// ColdResumeOverrideLimitPercent: the cold-resume guard is rolled back when users send the stopped prompt again
+	// more often than this ("most of the time"). A placeholder, not set by any benchmark.
+	ColdResumeOverrideLimitPercent = 50
 )
 
 // hookRule says how one hook optimizer is judged: of the events in the
@@ -135,6 +154,8 @@ type hookRule struct {
 	// sessions that were advised, numerator counts the sessions among them where the advice was followed,
 	// and the rest are the bad ones. It can only run when the hook that records adoption is installed.
 	adoption bool
+	// actor is who undid the action in the rollback reason; "" means "the agent".
+	actor string
 }
 
 func countsOf(format string) func(bad, acted int) string {
@@ -151,6 +172,10 @@ var hookRules = []hookRule{
 		limit: func(m config.Measure) int { return max(1, m.RefetchRatePercent/trimmerLimitDivisor) }},
 	{optimizer: config.OptimizerHookOutputDedup, rule: RuleHookFetchBack, denominator: "rewritten", numerator: "fetched_back",
 		what: countsOf("fetched back %d of %d outputs collapsed as repeats")},
+	// A preview hides most of an output, so it is judged as strictly as the trimmer.
+	{optimizer: config.OptimizerHookOutputPreview, rule: RuleHookFetchBack, denominator: "rewritten", numerator: "fetched_back",
+		what:  countsOf("fetched back %d of %d outputs shortened to a preview"),
+		limit: func(m config.Measure) int { return max(1, m.RefetchRatePercent/trimmerLimitDivisor) }},
 	{optimizer: config.OptimizerHookReadLimit, rule: RuleHookExtraRead, denominator: "rewritten", numerator: "extra_read",
 		what:  countsOf("read more of the file after %d of %d limited reads"),
 		limit: func(m config.Measure) int { return min(100, m.RefetchRatePercent*extraReadLimitFactor) }},
@@ -161,6 +186,17 @@ var hookRules = []hookRule{
 			return fmt.Sprintf("did not use trove_run in %d of %d sessions where Trove suggested it", bad, acted)
 		},
 		limit: func(config.Measure) int { return 100 - MinAdoptionPercent }},
+	{optimizer: config.OptimizerHookColdResume, rule: RuleColdResumeOverride, denominator: "blocked", numerator: "overridden", actor: "you",
+		what:  countsOf("sent the prompt again after %d of %d prompts it stopped"),
+		limit: func(config.Measure) int { return ColdResumeOverrideLimitPercent }},
+	{optimizer: config.OptimizerHookModelSwitch, rule: RuleModelSwitchOverride, denominator: "advised", numerator: "overridden", actor: "you",
+		what:  countsOf("switched model anyway after %d of %d warnings"),
+		limit: func(config.Measure) int { return ColdResumeOverrideLimitPercent }},
+	{optimizer: config.OptimizerHookWriteToEdit, rule: RuleCodeWriteRetry, denominator: "blocked", numerator: "overridden",
+		what: countsOf("sent the same Write again after %d of %d denied Writes")},
+	{optimizer: config.OptimizerHookColdCompact, rule: RuleColdCompactOverride, denominator: "blocked", numerator: "overridden", actor: "you",
+		what:  countsOf("ran /compact again after %d of %d stopped compactions"),
+		limit: func(config.Measure) int { return ColdResumeOverrideLimitPercent }},
 }
 
 // HookGuardOptions says what the guardrail can see in this install.
@@ -242,14 +278,34 @@ func EvaluateHooksWith(ctx context.Context, db *store.DB, m config.Measure, now 
 		if !seqRateExceeds(bad, acted, threshold) {
 			continue
 		}
+		actor := r.actor
+		if actor == "" {
+			actor = "the agent"
+		}
 		ev := Event{At: now.UTC(), Optimizer: r.optimizer, Rule: r.rule, Observed: rate, Threshold: threshold,
 			SampleOn: acted, Reference: RefNone,
-			Reason: fmt.Sprintf("Trove set %s back to shadow because the agent %s (%.0f%%, limit %d%%). This is measured from the hook's own counts; re-enable it deliberately if you disagree.",
-				r.optimizer, r.what(bad, acted), rate*100, limitPercent)}
+			Reason: fmt.Sprintf("Trove set %s back to shadow because %s %s (%.0f%%, limit %d%%). This is measured from the hook's own counts; re-enable it deliberately if you disagree.",
+				r.optimizer, actor, r.what(bad, acted), rate*100, limitPercent)}
 		if err := recordRollback(ctx, db, ev); err != nil {
 			return events, err
 		}
 		events = append(events, ev)
 	}
-	return events, nil
+	skip := map[string]bool{}
+	for n := range active {
+		skip[n] = true
+	}
+	for _, e := range events {
+		skip[e.Optimizer] = true
+	}
+	more, err := evaluateCodeWrites(ctx, db, m, now, skip)
+	events = append(events, more...)
+	if err != nil {
+		return events, err
+	}
+	for _, e := range more {
+		skip[e.Optimizer] = true
+	}
+	more, err = evaluateCheckpoint(ctx, db, m, now, skip)
+	return append(events, more...), err
 }

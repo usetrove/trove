@@ -160,7 +160,7 @@ type ToolOutputOptimizer interface {
 // ToolPipeline returns the tool-level optimizers in run order. The request-level
 // Pipeline is separate because its order is a byte-level cache contract.
 func ToolPipeline() []Base {
-	return []Base{OutputDedup{}, NoiseNormalizer{}, newOutputTrimmer(), RepeatRead{}, ReadLimit{}, QuietCommands{}, LargeOutputAdvice{}, ReadOutline{}}
+	return []Base{OutputDedup{}, NoiseNormalizer{}, newOutputTrimmer(), OutputPreview{}, RepeatRead{}, ReadLimit{}, QuietCommands{}, LargeOutputAdvice{}, ReadOutline{}, WriteToEdit{}, EditBatch{}}
 }
 
 // TransformToolInput runs the tool-input optimizers on one call. It never

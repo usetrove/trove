@@ -4,17 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/fixer"
+	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/setup"
 	"github.com/usetrove/trove/internal/tasks"
 )
 
 type tasksFlags struct {
 	project, testCmd, scoutModel, workerModel, escalationModel, model string
+	scoutEffort, routineModel, routineEffort, lintCmd                 string
 	maxTurns                                                          int
 	yes                                                               bool
 }
@@ -23,12 +29,16 @@ func newTasks(a *App) *cobra.Command {
 	var fl tasksFlags
 	c := &cobra.Command{
 		Use:   "tasks",
-		Short: "Add a read-only scout subagent or a test-gated cascade to a project, with approval and undo",
+		Short: "Add delegation subagents (scout, routine agents, cascade) to a project, with approval and undo",
 		Long: "Opt-in delegation features for Claude Code projects. Nothing is changed by this command alone.\n\n" +
 			"  trove tasks plan  scout     show the scout subagent (small model, read-only tools) and its CLAUDE.md note\n" +
 			"  trove tasks plan  cascade   show /trove-cascade: cheap model first, strong model only if your tests fail\n" +
+			"  trove tasks plan  agents    show the test runner and lint fixer subagents (cheaper model, low effort) and /trove-test, /trove-lint\n" +
+			"  trove tasks plan  explore   show a project Explore subagent that replaces the built-in one (cheaper model, low effort)\n" +
 			"  trove tasks plan  subagent-model --model M   set model M in your own subagent files that name none\n" +
-			"  trove tasks apply scout|cascade|subagent-model   write the files (asked first; backed up; `trove undo` reverses it)\n\n" +
+			"  trove tasks apply <feature>    write the files (asked first; backed up; `trove undo` reverses it)\n" +
+			"  trove tasks remove <feature>   remove what Trove wrote for a feature (your own files are never touched)\n" +
+			"  trove tasks stagger            shadow only: whether same-type subagents started together each wrote the shared prefix\n\n" +
 			"Files are written to the project's .claude folder, between sessions only. Trove never overwrites an agent or command\n" +
 			"file you wrote. The cascade needs your test command (--test-cmd, or test_cmd under [tasks] in config.toml) and tells you\n" +
 			"which model finished and why. Savings are not claimed: `trove report` compares your sessions once enough exist.",
@@ -44,16 +54,49 @@ func newTasks(a *App) *cobra.Command {
 		sub.Flags().StringVar(&fl.escalationModel, "escalation-model", "", "strong model for the retry (default opus)")
 		sub.Flags().IntVar(&fl.maxTurns, "max-turns", 0, "turn limit for the cheap worker (default 25)")
 		sub.Flags().StringVar(&fl.model, "model", "", "model to write into subagent files that name none (subagent-model only; no default)")
+		sub.Flags().StringVar(&fl.scoutEffort, "scout-effort", "", "effort level for the scout (default low)")
+		sub.Flags().StringVar(&fl.routineModel, "routine-model", "", "model for the routine agents and the Explore override (default haiku)")
+		sub.Flags().StringVar(&fl.routineEffort, "routine-effort", "", "effort level for the routine agents and the Explore override (default low)")
+		sub.Flags().StringVar(&fl.lintCmd, "lint-cmd", "", "the project's formatter or linter command (agents only; optional)")
 	}
-	plan := &cobra.Command{Use: "plan scout|cascade|subagent-model", Short: "Show what would be written; changes nothing", Args: feature, ValidArgs: []string{"scout", "cascade", "subagent-model"},
+	valid := []string{"scout", "agents", "explore", "cascade", "subagent-model"}
+	plan := &cobra.Command{Use: "plan scout|agents|explore|cascade|subagent-model", Short: "Show what would be written; changes nothing", Args: feature, ValidArgs: valid,
 		RunE: func(_ *cobra.Command, args []string) error { return runTasks(a, fl, args[0], false) }}
-	apply := &cobra.Command{Use: "apply scout|cascade|subagent-model", Short: "Write the files after showing the diff and asking", Args: feature, ValidArgs: []string{"scout", "cascade", "subagent-model"},
+	apply := &cobra.Command{Use: "apply scout|agents|explore|cascade|subagent-model", Short: "Write the files after showing the diff and asking", Args: feature, ValidArgs: valid,
 		RunE: func(_ *cobra.Command, args []string) error { return runTasks(a, fl, args[0], true) }}
 	apply.Flags().BoolVar(&fl.yes, "yes", false, "do not ask; you have reviewed what will change")
+	remove := &cobra.Command{Use: "remove scout|agents|explore|cascade|subagent-model", Short: "Undo what Trove wrote for one feature", Args: feature, ValidArgs: valid,
+		RunE: func(_ *cobra.Command, args []string) error { return runTasksRemove(a, fl, args[0]) }}
+	remove.Flags().BoolVar(&fl.yes, "yes", false, "do not ask")
+	remove.Flags().StringVar(&fl.project, "project", "", "project folder (default: the current folder)")
 	flags(plan)
 	flags(apply)
-	c.AddCommand(plan, apply)
+	stagger := &cobra.Command{Use: "stagger", Short: "Shadow only: what holding same-type sibling subagents would have saved", Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error { return runTasksStagger(cmd.Context(), a) }}
+	c.AddCommand(plan, apply, remove, stagger)
 	return c
+}
+
+// runTasksStagger shows the sibling stagger's shadow (docs/sibling-stagger.md). It reads the database only;
+// nothing is ever held.
+func runTasksStagger(ctx context.Context, a *App) error {
+	dir, _, err := loadConfig(a)
+	if err != nil {
+		return err
+	}
+	db, err := openExisting(dir)
+	if err != nil {
+		return err
+	}
+	if db == nil {
+		return a.emit(measure.StaggerShadow{Label: measure.Measured, WindowMs: measure.StaggerWindow.Milliseconds(), CapMs: measure.StaggerCap.Milliseconds()}, "No data yet. Run Claude Code with Trove's hooks installed, then `trove logs scan`.")
+	}
+	defer func() { _ = db.Close() }()
+	s, err := measure.LoadStaggerShadow(ctx, db)
+	if err != nil {
+		return err
+	}
+	return a.emit(s, "Sibling stagger (shadow only, nothing is held): "+s.Text)
 }
 
 // tasksOptions merges config values with flags; flags win.
@@ -67,7 +110,9 @@ func tasksOptions(cfg config.Tasks, fl tasksFlags) tasks.Options {
 	o := tasks.Options{
 		ScoutModel: pick(fl.scoutModel, cfg.ScoutModel), WorkerModel: pick(fl.workerModel, cfg.WorkerModel),
 		EscalationModel: pick(fl.escalationModel, cfg.EscalationModel), TestCmd: pick(fl.testCmd, cfg.TestCmd), MaxTurns: cfg.MaxTurns,
-		SubagentModel: fl.model,
+		SubagentModel: fl.model, ScoutEffort: pick(fl.scoutEffort, cfg.ScoutEffort),
+		RoutineModel: pick(fl.routineModel, cfg.RoutineModel), RoutineEffort: pick(fl.routineEffort, cfg.RoutineEffort),
+		LintCmd: pick(fl.lintCmd, cfg.LintCmd),
 	}
 	if fl.maxTurns != 0 {
 		o.MaxTurns = fl.maxTurns
@@ -90,9 +135,9 @@ func runTasks(a *App, fl tasksFlags, which string, apply bool) error {
 	if fl.yes && !apply {
 		return errors.New("--yes only makes sense with `apply`. Nothing was changed")
 	}
-	feat := map[string]string{"scout": tasks.FeatureScout, "cascade": tasks.FeatureCascade, "subagent-model": tasks.FeatureSubagentModel}[which]
+	feat := tasksFeature(which)
 	if feat == "" {
-		return fmt.Errorf("unknown feature %q; use scout, cascade or subagent-model", which)
+		return fmt.Errorf("unknown feature %q; use scout, agents, explore, cascade or subagent-model", which)
 	}
 	e, closeDB, err := fixEnv(a, fl.project)
 	if err != nil {
@@ -166,15 +211,18 @@ func runTasks(a *App, fl tasksFlags, which string, apply bool) error {
 		return err
 	}
 	tail := "\nStart a new Claude Code session to use it."
-	if feat == tasks.FeatureCascade {
+	switch feat {
+	case tasks.FeatureCascade:
 		tail += " Run it as /" + tasks.CascadeName + " <task>."
+	case tasks.FeatureRoutine:
+		tail += " The main agent delegates tests and lint to the new subagents; you can also run /" + tasks.TestSkillName + " and /" + tasks.LintSkillName + "."
 	}
 	return a.emit(out, renderResults(res)+tail)
 }
 
 func renderTasks(r tasksReport) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s for %s\n", map[string]string{tasks.FeatureScout: "Scout subagent", tasks.FeatureCascade: "Cascade workflow"}[r.Feature], r.Project)
+	fmt.Fprintf(&b, "%s for %s\n", tasksTitle[r.Feature], r.Project)
 	b.WriteString(taskWhyText(r.Feature) + "\n")
 	fmt.Fprintf(&b, "Overhead (estimated): about %d tokens in every request, about %d more each time it is used. Trove charges this against any saving.\n",
 		r.Overhead.PerRequestTokens, r.Overhead.PerUseTokens)
@@ -190,13 +238,102 @@ func renderTasks(r tasksReport) string {
 	for _, e := range r.Errors {
 		b.WriteString("\nCould not plan: " + e + "\n")
 	}
-	b.WriteString("\nNothing was changed. Apply with `trove tasks apply " + strings.TrimPrefix(r.Feature, "task_") + "`.\n")
+	b.WriteString("\nNothing was changed. Apply with `trove tasks apply " + tasksArg(r.Feature) + "`.\n")
 	return b.String()
 }
 
 func taskWhyText(feature string) string {
+	switch feature {
+	case tasks.FeatureRoutine:
+		return "Running tests and fixing format or lint move into subagents on a cheaper model at low effort that reply in a few lines; the main conversation keeps its model and effort."
+	case tasks.FeatureExplore:
+		return "Claude Code's built-in Explore is replaced in this project by one on a cheaper model at low effort, with read-only tools."
+	case tasks.FeatureSubagentModel:
+		return "A model is written into your own subagent files that name none."
+	}
 	if feature == tasks.FeatureScout {
 		return "Exploration moves into a small-model, read-only subagent that returns a short summary."
 	}
 	return "A task starts on a cheaper model; the strong model is used only if your tests fail, and you are told which one finished."
+}
+
+// tasksFeatures maps the command-line names to feature names.
+var tasksFeatures = map[string]string{
+	"scout": tasks.FeatureScout, "cascade": tasks.FeatureCascade, "subagent-model": tasks.FeatureSubagentModel,
+	"agents": tasks.FeatureRoutine, "explore": tasks.FeatureExplore,
+}
+
+var tasksTitle = map[string]string{
+	tasks.FeatureScout: "Scout subagent", tasks.FeatureCascade: "Cascade workflow", tasks.FeatureSubagentModel: "Model per subagent",
+	tasks.FeatureRoutine: "Routine agents (test runner, lint fixer)", tasks.FeatureExplore: "Explore override",
+}
+
+func tasksFeature(arg string) string { return tasksFeatures[arg] }
+
+func tasksArg(feature string) string {
+	for k, v := range tasksFeatures {
+		if v == feature {
+			return k
+		}
+	}
+	return feature
+}
+
+type tasksRemoveReport struct {
+	Project string             `json:"project"`
+	Feature string             `json:"feature"`
+	Undone  []setup.UndoResult `json:"undone"`
+}
+
+// runTasksRemove undoes the recorded changes of one feature in this project. Only files Trove
+// wrote are touched: a file edited since is left alone by undo, and a user's own file was never
+// written. Like apply, it does not change files while a session looks active (rule 5).
+func runTasksRemove(a *App, fl tasksFlags, which string) error {
+	feat := tasksFeature(which)
+	if feat == "" {
+		return fmt.Errorf("unknown feature %q; use scout, agents, explore, cascade or subagent-model", which)
+	}
+	e, closeDB, err := fixEnv(a, fl.project)
+	if err != nil {
+		return err
+	}
+	defer closeDB()
+	ctx := a.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ids, err := fixer.TaskChangeIDs(ctx, e, feat)
+	if err != nil {
+		return err
+	}
+	rep := tasksRemoveReport{Project: e.ProjectDir, Feature: feat, Undone: []setup.UndoResult{}}
+	if len(ids) == 0 {
+		return a.emit(rep, "Nothing to remove: Trove has not written the "+which+" files in "+e.ProjectDir+".")
+	}
+	if act := fixer.CheckActivity(ctx, e); act.Active {
+		return fmt.Errorf("%s Removing subagents mid-session would change what the agent can do partway through. Run `trove tasks remove %s` again when the session has ended", act.Reason, which)
+	}
+	if !fl.yes && !a.JSON && !a.confirm(fmt.Sprintf("Remove %d file change(s) Trove made for the %s? Files you edited since are left alone.", len(ids), which)) {
+		return a.emit(rep, "No changes made.")
+	}
+	res, err := setup.UndoSelected(e.DataDir, ids)
+	if err != nil {
+		return err
+	}
+	if err := fixer.MarkReverted(e.DataDir, res, time.Now()); err != nil {
+		_, _ = fmt.Fprintf(a.Err, "Note: the files were removed, but Trove could not update its record of them (%v).\n", err)
+	}
+	rep.Undone = res
+	for _, r := range res {
+		// A removed skill leaves its trove-* folder; remove it only if it is now empty.
+		if r.Action == "removed_file" && filepath.Base(r.Path) == "SKILL.md" && strings.HasPrefix(filepath.Base(filepath.Dir(r.Path)), "trove-") {
+			_ = os.Remove(filepath.Dir(r.Path))
+		}
+	}
+	var b strings.Builder
+	for _, r := range res {
+		fmt.Fprintf(&b, "%s: %s\n", r.Path, r.Detail)
+	}
+	b.WriteString("Start a new session for the change to take effect.")
+	return a.emit(rep, b.String())
 }

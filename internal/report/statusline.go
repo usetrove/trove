@@ -11,6 +11,7 @@ import (
 	"github.com/usetrove/trove/internal/gateway/session"
 	"github.com/usetrove/trove/internal/logs"
 	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/store"
 )
 
@@ -28,7 +29,10 @@ type Status struct {
 	Requests int            `json:"requests"`
 	Spend    measure.Figure `json:"spend_usd"`
 	Saved    measure.Figure `json:"saved_usd"`
-	Budget   *Pacing        `json:"budget,omitempty"`
+	// SavedLimit is Saved as percent of Claude Code's plan limits, by the per-user API-price scale
+	// (limitfit; "estimated from API prices"). Nil when there is no fit yet.
+	SavedLimit *limitfit.Estimate `json:"saved_limit_pct,omitempty"`
+	Budget     *Pacing            `json:"budget,omitempty"`
 	// Basis is what the figures are: spend (the gateway's requests, or session-log
 	// usage on an API key) or api_equivalent_value (session-log usage under a
 	// subscription or an unknown plan, which is not a bill). Empty when there is no usage.
@@ -263,7 +267,11 @@ func RenderStatus(s Status, format string, color bool) string {
 		parts = append(parts, p)
 	}
 	if s.Saved.Value >= 0.01 {
-		parts = append(parts, "saved "+Est(s.Saved))
+		p := "saved " + Est(s.Saved)
+		if l := s.SavedLimit; l != nil && l.FiveHour != nil {
+			p += " (~" + num(l.FiveHour.Point) + "% of 5h)"
+		}
+		parts = append(parts, p)
 	}
 	if v := s.Verdict; v != nil {
 		parts = append(parts, verdictText(v))

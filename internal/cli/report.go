@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/usetrove/trove/internal/mcp"
 	"github.com/usetrove/trove/internal/mcp/install"
@@ -13,8 +14,10 @@ import (
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/hooks"
+	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/optimize"
 	"github.com/usetrove/trove/internal/pricing"
+	"github.com/usetrove/trove/internal/regress"
 	"github.com/usetrove/trove/internal/report"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -67,6 +70,56 @@ func newReport(a *App) *cobra.Command {
 		RunE: func(*cobra.Command, []string) error { return runReport(a, pf) },
 	}
 	pf.add(c)
+	c.AddCommand(newReportClaims(a))
+	return c
+}
+
+// newReportClaims is `trove report claims`: each token-saving tool's own claim next to what Trove measured in a
+// randomized session test on this machine, Trove's own optimizers included.
+func newReportClaims(a *App) *cobra.Command {
+	var markdown bool
+	c := &cobra.Command{
+		Use:   "claims",
+		Short: "Show each tool's claim next to its measured effect on your weekly limit",
+		Long: "Lists every tool and optimizer that has been in a randomized session test on this machine: its own claim\n" +
+			"(quoted, not checked), the measured change in tokens per session, the estimated change in your weekly\n" +
+			"limit, the pass-rate change, the sample size and the dates. Rows with no clear effect are kept.\n" +
+			"--markdown prints a table ready to publish. Method: docs/benchmark-methodology.md section 11.",
+		Args: cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			if markdown && a.JSON {
+				return fmt.Errorf("choose one of --json and --markdown")
+			}
+			dir, cfg, err := loadConfig(a)
+			if err != nil {
+				return err
+			}
+			r, err := buildReport(a, periodFlags{})
+			if err != nil {
+				return err
+			}
+			db, err := openExisting(dir)
+			if err != nil {
+				return err
+			}
+			var c report.Claims
+			if db == nil {
+				c, err = report.BuildClaims(context.Background(), nil, report.Inputs{Config: cfg, Now: time.Now()}, r)
+			} else {
+				defer func() { _ = db.Close() }()
+				c, err = report.BuildClaims(context.Background(), db, report.Inputs{Config: cfg, Now: time.Now(), LimitFit: limitfit.ReadCache(dir)}, r)
+			}
+			if err != nil {
+				return fmt.Errorf("cannot read the trials: %v. Run `trove doctor` for details", err)
+			}
+			if markdown {
+				_, err = fmt.Fprint(a.Out, report.RenderClaimsMarkdown(c))
+				return err
+			}
+			return a.emit(c, trimNL(report.RenderClaimsText(c, a.termWidth())))
+		},
+	}
+	c.Flags().BoolVar(&markdown, "markdown", false, "print the table as Markdown, ready to publish")
 	return c
 }
 
@@ -76,9 +129,13 @@ func runReport(a *App, pf periodFlags) error {
 		return err
 	}
 	r.Autopilot = autopilotSummary(a)
+	r.OptimizePolicy = optimizePolicyView(a)
 	text := trimNL(report.Render(r, report.Options{Width: a.termWidth(), Color: a.Color()}))
 	if ap := r.Autopilot.Text(); ap != "" {
 		text += "\n\n" + ap
+	}
+	if op := r.OptimizePolicy.Text(); op != "" {
+		text += "\n\n" + op
 	}
 	err = a.emit(r, text)
 	// Only the default period is shared, so every upload covers the same span.
@@ -120,6 +177,11 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 		return report.EmptyReport(p), nil
 	}
 	defer func() { _ = db.Close() }()
+	// The status line's plan-usage samples, also for users who run the status line without the hooks.
+	// Best effort: a problem here must not stop the report.
+	_, _ = db.IngestLimitSpool(context.Background(), dir)
+	// The plan-limit fit, recomputed only when a newer meter reading arrived (best effort, fails open).
+	limitFit := limitfit.Refresh(context.Background(), db, dir, now)
 	if _, serr := os.Stat(filepath.Join(dir, "hooks")); serr == nil {
 		// Bring the hooks' counters and guardrail up to date first. Best effort:
 		// a problem here must not stop the report.
@@ -132,6 +194,8 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 	if perr != nil {
 		tbl = nil // suggestions that need prices are skipped
 	}
+	// The regression watch, on the history just read (best effort; advice only, it changes nothing).
+	regressions := regress.Refresh(context.Background(), db, dir, tbl, now, true)
 	registered := install.Registered(dir)
 	schemaTokens := 0
 	if registered {
@@ -141,7 +205,7 @@ func buildReport(a *App, pf periodFlags) (report.Report, error) {
 		}
 	}
 	r, err := report.Build(context.Background(), db, report.Inputs{Config: cfg, Now: now, Prices: tbl, KillSwitch: on, HistoryPlanEvidence: planEvidence, Recoverable: registered, SchemaTokens: schemaTokens,
-		RepoKey: repoKeyFor(context.Background(), db, "")}, p)
+		RepoKey: repoKeyFor(context.Background(), db, ""), LimitFit: limitFit, Regressions: regressions, ClaudeModelSetting: claudeModelSetting(a)}, p)
 	if err != nil {
 		return r, fmt.Errorf("cannot read recorded usage: %v. Run `trove doctor` for details", err)
 	}
@@ -169,4 +233,29 @@ func trimNL(s string) string {
 		s = s[:len(s)-1]
 	}
 	return s
+}
+
+// claudeModelSetting reads `model` from the user's Claude Code settings (~/.claude/settings.json, or
+// $CLAUDE_CONFIG_DIR/settings.json), read-only. "" when it is unset or anything goes wrong: only the opusplan finding
+// depends on it, and that finding is then left out.
+func claudeModelSetting(a *App) string {
+	dir := a.Getenv("CLAUDE_CONFIG_DIR")
+	if dir == "" {
+		home, err := a.HomeDir()
+		if err != nil {
+			return ""
+		}
+		dir = filepath.Join(home, ".claude")
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "settings.json")) //nolint:gosec // the user's own Claude Code settings
+	if err != nil {
+		return ""
+	}
+	var s struct {
+		Model string `json:"model"`
+	}
+	if json.Unmarshal(b, &s) != nil {
+		return ""
+	}
+	return s.Model
 }

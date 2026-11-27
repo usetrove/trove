@@ -111,10 +111,30 @@ func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.H
 		// Declines the scout subagent in the off arm of its A/B trial; a no-op otherwise. Agent was called Task
 		// before Claude Code v2.1.63 (code.claude.com/docs/en/sub-agents, read 2026-11-17).
 		{Event: "PreToolUse", Matcher: "Agent|Task", Command: build(hooks.EventSubagent), Timeout: 5},
+		// Which agent type each subagent run was, and the STATUS word of its reply, for per-agent figures
+		// (docs/tasks.md). SubagentStart and SubagentStop receive agent_id and agent_type; the stop also has
+		// last_assistant_message (code.claude.com/docs/en/hooks, read 2026-11-24). No matcher: every type counts.
+		{Event: "SubagentStart", Command: build(hooks.EventSubagentRecord), Timeout: 5},
+		{Event: "SubagentStop", Command: build(hooks.EventSubagentRecord), Timeout: 5},
 		// The test-pass signal. PostToolUse fires only when a tool call succeeds and PostToolUseFailure when it
 		// fails, with "Exit code N" in its error (code.claude.com/docs/en/hooks, read 2026-11-17), so both are needed.
 		{Event: "PostToolUse", Matcher: "Bash", Command: build(hooks.EventTestResult), Timeout: 5},
 		{Event: "PostToolUseFailure", Matcher: "Bash", Command: build(hooks.EventTestResult), Timeout: 5},
+		// The cold-resume guard (hook_cold_resume). It returns at once while the guard is off. UserPromptSubmit has
+		// no matcher and a default timeout of 30 s (code.claude.com/docs/en/hooks, read 2026-11-23); 5 s is far
+		// above the hook's own 250 ms safety net.
+		{Event: "UserPromptSubmit", Command: build(hooks.EventPromptSubmit), Timeout: 5},
+		// The model-switch guard (hook_model_switch). A PreModelSwitch hook that times out blocks the switch
+		// (code.claude.com/docs/en/hooks, read 2026-11-24); the hook's own safety net is 150 ms, far inside 5 s.
+		{Event: "PreModelSwitch", Command: build(hooks.EventModelSwitch), Timeout: 5},
+		{Event: "PostModelSwitch", Command: build(hooks.EventPostModelSwitch), Timeout: 5},
+		// The cold-compact guard (hook_cold_compact), manual /compact only: a blocked auto compaction can fail the
+		// request (code.claude.com/docs/en/hooks, read 2026-11-24). The session_reset entry above stays as it was.
+		{Event: "PreCompact", Matcher: "manual", Command: build(hooks.EventCompactCheck), Timeout: 5},
+		// The code-write nudges (hook_write_to_edit, hook_edit_batch). They return at once while both are off. A
+		// PreToolUse deny's reason is shown to Claude, and additionalContext is added beside the tool result
+		// (code.claude.com/docs/en/hooks, read 2026-11-24).
+		{Event: "PreToolUse", Matcher: "Write|Edit|MultiEdit", Command: build(hooks.EventCodeWrite), Timeout: 5},
 	}
 	if largeOutput || rewrite {
 		s = append(s, setup.HookSpec{Event: "PreToolUse", Matcher: "Bash", Command: build(hooks.EventLargeOutput), Timeout: 5})
@@ -126,12 +146,20 @@ func claudeSpecs(build func(string) string, largeOutput, rewrite bool) []setup.H
 		// PostToolUse can replace what the model sees (updatedToolOutput). Which
 		// tools honour it on the installed version is probed, not assumed:
 		// `trove hooks probe` and `trove doctor`.
-		s = append(s, setup.HookSpec{Event: "PostToolUse", Matcher: "Bash|Grep|Glob", Command: build(hooks.EventPostOutput), Timeout: 5})
+		s = append(s, setup.HookSpec{Event: "PostToolUse", Matcher: PostOutputMatcher, Command: build(hooks.EventPostOutput), Timeout: 5})
 		// Counts fetch-backs of trimmed output, which is what stops the trimmer if it is too aggressive.
 		s = append(s, setup.HookSpec{Event: "PostToolUse", Matcher: "mcp__trove__trove_fetch_full", Command: build(hooks.EventPostFetch), Timeout: 5})
 	}
 	return s
 }
+
+// PostOutputMatcher is the tools post_tool_output runs for on Claude Code: Bash, PowerShell, Grep and Glob by
+// exact name, and every MCP tool (for hook_output_preview; Trove's own are left alone by the handler). It has
+// characters outside the exact-match set, so Claude Code reads it as an unanchored JavaScript regular expression;
+// the anchors keep "Bash" from matching other tools whose names contain it (code.claude.com/docs/en/hooks,
+// Matcher patterns and Match MCP tools, read 2026-11-25). An install made by an older release with the matcher
+// "Bash|Grep|Glob" is updated by `trove hooks install --rewrite`.
+const PostOutputMatcher = "^(?:Bash|PowerShell|Grep|Glob)$|^mcp__"
 
 // codexSpecs leaves out repeat-read: Codex's hook page names no file-read tool to
 // match (checked 2026-10-30), so there is nothing to hook.

@@ -1,0 +1,15 @@
+id: largeout-search
+source: largeout
+repo: "local:repo"
+base_commit: local
+license: MIT
+prompt: |
+  Rename the function legacy_total to compute_total everywhere in the pkg package: its definition and every
+  call site and import. Do not change test_app.py or check.py. `python check.py` must pass.
+image: python:3.12-slim
+setup: []
+grading_setup:
+  - git checkout HEAD -- test_app.py check.py
+success_cmd: python check.py
+timeout_s: 900
+tags: [largeout, python, search]

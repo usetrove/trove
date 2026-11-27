@@ -104,6 +104,36 @@ func Render(r Report, o Options) string {
 		b.WriteString("\n" + heading("History usage by model (API-equivalent value, not a bill)"))
 		b.WriteString(spendTable("Model", r.History.ByModel, o))
 	}
+	if r.Rebuilds != nil {
+		renderRebuilds(&b, r.Rebuilds, o)
+	}
+	if r.OutputMix != nil {
+		renderOutputMix(&b, r.OutputMix, o)
+	}
+	if r.Regressions != nil {
+		renderRegressions(&b, r.Regressions, o)
+	}
+	if r.PlanLimits != nil {
+		renderPlanLimits(&b, r.PlanLimits, o)
+	}
+	if r.Opusplan != nil {
+		renderOpusplan(&b, r.Opusplan, o)
+	}
+	if r.Headless != nil {
+		renderHeadless(&b, r.Headless, o)
+	}
+	if r.ColdResume != nil {
+		renderColdResume(&b, r.ColdResume, o)
+	}
+	if r.ModelSwitch != nil {
+		renderModelSwitch(&b, r.ModelSwitch, o)
+	}
+	if r.ColdCompact != nil {
+		renderColdCompact(&b, r.ColdCompact, o)
+	}
+	if r.Checkpoint != nil {
+		renderCheckpoint(&b, r.Checkpoint, o)
+	}
 
 	b.WriteString("\n" + heading("Biggest leaks (estimated, overlapping, not additive)"))
 	if len(r.Leaks) == 0 {
@@ -152,6 +182,16 @@ func Render(r Report, o Options) string {
 			b.WriteString(wrap(t.Text, o.width(), "    ", "    ") + "\n")
 			if t.Recommend != "" {
 				b.WriteString(wrap("Trove suggests undoing it: "+t.Recommend, o.width(), "    ", "    ") + "\n")
+			}
+		}
+	}
+
+	if len(r.Agents) > 0 {
+		b.WriteString("\n" + heading("Per agent: cheaper model, low effort (before/after is observational; the session A/B is the evidence)"))
+		for _, a := range r.Agents {
+			b.WriteString(wrap(a.Text, o.width(), "  ", "    ") + "\n")
+			if a.Recommend != "" {
+				b.WriteString(wrap("Trove suggests: "+a.Recommend, o.width(), "    ", "    ") + "\n")
 			}
 		}
 	}
@@ -614,7 +654,15 @@ func hooksLines(stats []measure.HookStats) []string {
 				l += fmt.Sprintf("; the agent ran %d quieted commands again as first written (measured)", s.Reissued)
 			}
 			if s.FetchedBack > 0 {
-				l += fmt.Sprintf("; the agent fetched back %d trimmed outputs (measured)", s.FetchedBack)
+				l += fmt.Sprintf("; the agent fetched back %d shortened outputs (measured)", s.FetchedBack)
+				if s.TokensFetchedBack != nil && s.TokensNet != nil && s.TokensFetchedBack.Value > 0 {
+					l += fmt.Sprintf(", putting about %s tokens back (estimated)", FormatTokens(s.TokensFetchedBack.Value))
+					if net := s.TokensNet.Value; net >= 0 {
+						l += fmt.Sprintf("; net of those, about %s tokens kept out (estimated)", FormatTokens(net))
+					} else {
+						l += fmt.Sprintf("; net of those, about %s tokens more than without it (estimated)", FormatTokens(-net))
+					}
+				}
 			}
 		default:
 			l += "no activity"

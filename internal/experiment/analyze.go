@@ -40,6 +40,13 @@ const (
 	// per session. See AnalyzeHookTrial. The name only says "tokens"; it is not a credential.
 	MetricTokens = "tokens_per_session" //nolint:gosec // G101: a metric name
 	MetricTurns  = "turns"
+	// MetricLimitPct and MetricAPICost are the optimize policy's headlines for a hook trial (AnalyzeHookTrialBy):
+	// percent of the 5-hour plan limit per session for a subscriber, from the limit fit (estimated), and
+	// API-equivalent cost per session at list prices for API-key traffic.
+	MetricLimitPct = "pct_5h_limit_per_session"
+	// MetricWeekPct is MetricLimitPct for the weekly (7-day) limit. The published claims table uses it.
+	MetricWeekPct = "pct_week_limit_per_session"
+	MetricAPICost = "api_cost_per_session"
 	// MetricOutputPerTurn is output tokens per turn: what a rule set that asks for shorter replies should move.
 	// It is reported, never used to decide a status, so it cannot change the verdict of any other optimizer.
 	MetricOutputPerTurn = "output_tokens_per_turn" //nolint:gosec // G101: a metric name
@@ -88,6 +95,10 @@ type Result struct {
 	// Cost is the headline metric. It is cost per session unless Headline says otherwise.
 	Cost     *MetricResult `json:"cost,omitempty"`
 	Headline string        `json:"headline,omitempty"`
+	// HeadlinePoints is set only when the headline is a share of a plan limit: the same comparison as Cost, but as
+	// the difference in percentage points of the limit per session (on minus off, Kind "points", 1 = one point of
+	// the limit), with its own 95% range. Estimated, like the headline.
+	HeadlinePoints *MetricResult `json:"headline_points,omitempty"`
 	// CostPerTurn and CostPerUncached are measured on priced sessions only. Sessions with no turns, or no
 	// uncached input tokens, are left out of the figure they cannot have, never counted as zero.
 	CostPerTurn     *MetricResult `json:"cost_per_turn,omitempty"`
@@ -119,6 +130,9 @@ type Result struct {
 	InputsHash    string `json:"inputs_hash"`
 }
 
+// IsLimitMetric reports whether a metric is a share of a plan limit (estimated from the user's meter).
+func IsLimitMetric(m string) bool { return m == MetricLimitPct || m == MetricWeekPct }
+
 // TestFailResult is the test_fail_rate of each arm (measured: exit codes the hooks saw). Sessions that ran no
 // allowlisted test are not counted.
 type TestFailResult struct {
@@ -127,6 +141,18 @@ type TestFailResult struct {
 	OnSessions  int           `json:"on_sessions"`
 	OffSessions int           `json:"off_sessions"`
 	Label       measure.Label `json:"label"`
+	// PassChange is the change in the share of test-running sessions whose last test passed, on minus off, as a
+	// fraction (0.05 = 5 points more sessions passing), with a 95% bootstrap range. Nil until each arm has at
+	// least the minimum sessions per arm that ran a test.
+	PassChange *RateChange `json:"pass_rate_change,omitempty"`
+}
+
+// RateChange is a difference of two rates, on minus off, in fractions, with its 95% range.
+type RateChange struct {
+	Value float64       `json:"value"`
+	Low   float64       `json:"low"`
+	High  float64       `json:"high"`
+	Label measure.Label `json:"label"`
 }
 
 // sess is one assigned, finished session.
@@ -392,6 +418,9 @@ func analyzeAll(ctx context.Context, db *store.DB, optimizer string, x config.Ex
 		}
 		mr := MetricResult{Metric: sp.metric, Kind: kind, Value: est, Low: lo, High: hi, Label: measure.Measured,
 			NOn: nOn, NOff: nOff, Strata: used, UnadjustedValue: est, UnadjustedLow: lo, UnadjustedHigh: hi}
+		if IsLimitMetric(sp.metric) {
+			mr.Label = measure.Estimated // the sessions are measured; their weight in the limits is the fit's estimate
+		}
 		if sp.adjust {
 			keys, w := strata(on, off, minStratum)
 			if cupedUsable(onP, offP, keys) {
@@ -405,6 +434,13 @@ func analyzeAll(ctx context.Context, db *store.DB, optimizer string, x config.Ex
 		case headline:
 			c := mr
 			res.Cost = &c
+			if IsLimitMetric(headline) {
+				if pest, plo, phi, pused, pok := bootstrap(on, off, minStratum, false, seedFor(x.Seed, optimizer, headline+"_points")); pok {
+					res.HeadlinePoints = &MetricResult{Metric: headline, Kind: "points", Value: pest, Low: plo, High: phi,
+						Label: measure.Estimated, NOn: nOn, NOff: nOff, Strata: pused, UnadjustedValue: pest, UnadjustedLow: plo, UnadjustedHigh: phi,
+						Confidence: confidence(plo, phi, min(nOn, nOff), minPer)}
+				}
+			}
 		case MetricCostPerTurn:
 			res.CostPerTurn = &mr
 		case MetricCostPerUncached:
@@ -452,10 +488,19 @@ func decide(res *Result, x config.Experiment) {
 	if res.Headline == MetricTokens {
 		more, less, what = "use %s more tokens", "use %s fewer tokens", "tokens used"
 	}
+	lbl := "measured"
+	switch res.Headline {
+	case MetricLimitPct:
+		more, less, what = "use %s more of the 5-hour limit", "use %s less of the 5-hour limit", "share of the limit used"
+		lbl = "estimated from your meter"
+	case MetricWeekPct:
+		more, less, what = "use %s more of the weekly limit", "use %s less of the weekly limit", "share of the weekly limit used"
+		lbl = "estimated from your meter"
+	}
 	switch {
 	case c.Low > 0 && c.Value >= costLimit:
 		res.Status = CostsMore
-		res.Reason = fmt.Sprintf("with it on, sessions "+more+" (measured, 95%% range %s to %s) than the same kind of sessions without it", pct(c.Value), pct(c.Low), pct(c.High))
+		res.Reason = fmt.Sprintf("with it on, sessions "+more+" ("+lbl+", 95%% range %s to %s) than the same kind of sessions without it", pct(c.Value), pct(c.Low), pct(c.High))
 	default:
 		for _, o := range res.Outcomes {
 			limit := outLimit
@@ -471,10 +516,10 @@ func decide(res *Result, x config.Experiment) {
 		switch {
 		case c.High < 0:
 			res.Status = Saves
-			res.Reason = fmt.Sprintf("with it on, sessions "+less+" (measured, 95%% range %s to %s); %s", pct(-c.Value), pct(-c.High), pct(-c.Low), measure.TextNoRegression)
+			res.Reason = fmt.Sprintf("with it on, sessions "+less+" ("+lbl+", 95%% range %s to %s); %s", pct(-c.Value), pct(-c.High), pct(-c.Low), measure.TextNoRegression)
 		default:
 			res.Status = NoClearEffect
-			res.Reason = fmt.Sprintf("no clear difference in "+what+" yet (measured change %s, 95%% range %s to %s)", signed(c.Value), signed(c.Low), signed(c.High))
+			res.Reason = fmt.Sprintf("no clear difference in "+what+" yet ("+lbl+" change %s, 95%% range %s to %s)", signed(c.Value), signed(c.Low), signed(c.High))
 		}
 	}
 }

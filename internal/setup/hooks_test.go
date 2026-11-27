@@ -266,3 +266,43 @@ func TestHooksInstalledListsOnlyHooks(t *testing.T) {
 		t.Fatalf("%+v, %v", cs, err)
 	}
 }
+
+// A release that hooks more tools changes a matcher. Installing again updates the matcher of Trove's own group, and
+// leaves a group the user added a handler to exactly as it was.
+func TestHooksInstallUpdatesTrovesOwnMatcher(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	own := hookBase + "post_tool_output"
+	old := `{"hooks": {"PostToolUse": [{"matcher": "Bash|Grep|Glob", "hooks": [{"type": "command", "command": "` + own + `", "timeout": 5}]}]}}`
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	newer := HookSpec{Event: "PostToolUse", Matcher: "^(?:Bash|PowerShell|Grep|Glob)$|^mcp__", Command: own, Timeout: 5}
+	e, err := PlanClaudeHooks(path, []HookSpec{newer}, hookBase)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.NoOp || !strings.Contains(e.Show, "matcher") {
+		t.Fatalf("the old matcher should be updated, plan:\n%s", e.Show)
+	}
+	if _, err := Apply(filepath.Join(dir, "data"), []*Edit{e}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	m := readJSON(t, path)
+	g := m["hooks"].(map[string]any)["PostToolUse"].([]any)
+	if len(g) != 1 || g[0].(map[string]any)["matcher"] != newer.Matcher {
+		t.Fatalf("PostToolUse = %v", g)
+	}
+	if e, err := PlanClaudeHooks(path, []HookSpec{newer}, hookBase); err != nil || !e.NoOp {
+		t.Fatalf("installing the same matcher again must change nothing: %v %+v", err, e)
+	}
+
+	// The user put a handler of their own in Trove's group: its matcher is theirs too now.
+	shared := `{"hooks": {"PostToolUse": [{"matcher": "Bash|Grep|Glob", "hooks": [{"type": "command", "command": "` + own + `"}, {"type": "command", "command": "/home/me/log.sh"}]}]}}`
+	if err := os.WriteFile(path, []byte(shared), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if e, err := PlanClaudeHooks(path, []HookSpec{newer}, hookBase); err != nil || !e.NoOp {
+		t.Fatalf("a group with the user's handler in it must be left alone: %v %+v", err, e)
+	}
+}

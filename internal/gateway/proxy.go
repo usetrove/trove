@@ -336,10 +336,41 @@ func (s *Server) optimizeBody(r *http.Request, f *flight, body []byte) []byte {
 		optimize.RequestIn{Provider: f.provider, Path: f.usagePath, Header: withoutCredentials(r.Header), Body: body},
 		optimize.Session{Key: f.sessionKey, Agent: label})
 	f.opt = &res
+	if len(res.Betas) > 0 {
+		// The changed body needs these betas. The incoming header is updated, so the forwarded request, in-flight
+		// dedup and keep-warm pings all carry the same value; the original body never gets them.
+		mergeBetas(r.Header, res.Betas)
+	}
 	for _, fl := range res.Failures {
 		s.log.Warn("an optimizer could not finish, so the original request was forwarded unchanged", "optimizer", fl.Optimizer, "reason", fl.Class)
 	}
 	return res.Body
+}
+
+// mergeBetas adds the betas that are not already in h's anthropic-beta values, keeping the client's own values and
+// their order, as one comma-separated value. Nothing is removed.
+func mergeBetas(h http.Header, betas []string) {
+	var have []string
+	seen := map[string]bool{}
+	for _, v := range h.Values("Anthropic-Beta") {
+		for _, p := range strings.Split(v, ",") {
+			if p = strings.TrimSpace(p); p != "" && !seen[p] {
+				seen[p] = true
+				have = append(have, p)
+			}
+		}
+	}
+	added := false
+	for _, b := range betas {
+		if !seen[b] {
+			seen[b] = true
+			have = append(have, b)
+			added = true
+		}
+	}
+	if added {
+		h.Set("Anthropic-Beta", strings.Join(have, ","))
+	}
 }
 
 // headersKept are the only request headers anything after the credential check

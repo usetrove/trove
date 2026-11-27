@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -47,6 +48,26 @@ func setup(project string, p plan) (string, error) {
 			return "", err
 		}
 		return "Use the Glob tool exactly once with the pattern *.src in " + project + "." + tail, nil
+	case "PowerShell":
+		return "Use the PowerShell tool exactly once to run: Write-Output TROVE_PROBE_SRC." + tail, nil
+	case ToolGrepContent:
+		if err := write("a.txt", "TROVE_PROBE_SRC is here\n"); err != nil {
+			return "", err
+		}
+		if err := write("b.txt", p.MarkerIn+" is here\n"); err != nil {
+			return "", err
+		}
+		return `Use the Grep tool exactly once, with output_mode "content", to search for TROVE_PROBE_SRC in ` + project + "." + tail, nil
+	case ToolBashLarge:
+		return fmt.Sprintf("Use the Bash tool exactly once to run: yes TROVE_PROBE_SRC_LINE | head -n %d. Then reply with only the first line of what the tool returned, nothing else.", bashLargeLines), nil
+	case ToolMCP:
+		if err := write("probe.txt", "TROVE_PROBE_SRC is here\n"); err != nil {
+			return "", err
+		}
+		if err := write(p.MarkerIn+".txt", p.MarkerIn+" is here\n"); err != nil {
+			return "", err
+		}
+		return "Use the " + mcpProbeTool + " tool exactly once with the path " + filepath.Join(project, "probe.txt") + "." + tail, nil
 	}
 	return "", fmt.Errorf("%s is not probed by default; it needs the network and its own permission", p.Tool)
 }
@@ -78,7 +99,7 @@ func HookMain(mode string, stdin io.Reader, stdout io.Writer, getenv func(string
 		pb, perr = os.ReadFile(filepath.Join(state, "plan.json")) //nolint:gosec // our own temp dir
 	}
 	var p plan
-	if perr != nil || json.Unmarshal(pb, &p) != nil || in.Tool != p.Tool {
+	if perr != nil || json.Unmarshal(pb, &p) != nil || in.Tool != p.agentTool() {
 		return 0
 	}
 	s := seen{Mode: mode, Tool: in.Tool, Input: in.Input, Raw: raw}
@@ -92,7 +113,11 @@ func HookMain(mode string, stdin io.Reader, stdout io.Writer, getenv func(string
 		}
 	case "post":
 		s.Response = in.Response
-		if upd, note, ok := replaceMarker(in.Response, p.MarkerOut); ok {
+		replace := replaceMarker
+		if p.Tool == ToolGrepContent {
+			replace = replaceGrepContent
+		}
+		if upd, note, ok := replace(in.Response, p.MarkerOut); ok {
 			s.Replaced = true
 			out, _ = json.Marshal(map[string]any{"hookSpecificOutput": map[string]any{
 				"hookEventName": "PostToolUse", "updatedToolOutput": upd}})
@@ -111,7 +136,8 @@ func HookMain(mode string, stdin io.Reader, stdout io.Writer, getenv func(string
 	return 0
 }
 
-var toolNameRe = regexp.MustCompile(`^[A-Za-z]{1,32}$`)
+// toolNameRe accepts a tool name that is safe in a file name: a built-in tool, or an MCP tool (mcp__server__tool).
+var toolNameRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_]{0,63}$`)
 
 // expired reports whether the verify session in state has run out. A verify
 // session's hooks go inert by themselves, so a settings file left behind cannot
@@ -150,10 +176,19 @@ func rewriteInput(p plan, in json.RawMessage) (json.RawMessage, bool) {
 		ok = set("command", "echo "+p.MarkerIn)
 	case "Read":
 		ok = set("limit", 1)
-	case "Grep":
-		ok = set("pattern", p.MarkerIn)
+	case "Grep", ToolGrepContent:
+		ok = set("pattern", p.MarkerIn) // output_mode, if the model set it, is carried over unchanged
 	case "Glob":
 		ok = set("pattern", "*"+p.MarkerIn+"*")
+	case "PowerShell":
+		ok = set("command", "Write-Output "+p.MarkerIn)
+	case ToolMCP:
+		var cur struct {
+			Path string `json:"path"`
+		}
+		if json.Unmarshal(in, &cur) == nil && cur.Path != "" {
+			ok = set("path", filepath.Join(filepath.Dir(cur.Path), p.MarkerIn+".txt"))
+		}
 	}
 	if !ok {
 		return nil, false
@@ -175,11 +210,22 @@ func replaceMarker(resp json.RawMessage, marker string) (json.RawMessage, string
 		b, _ := json.Marshal(marker)
 		return b, "", true
 	}
+	var list []any
+	if json.Unmarshal(resp, &list) == nil {
+		if !isTextBlocks(list) {
+			return nil, "a list that is not MCP text blocks", false
+		}
+		list[0].(map[string]any)["text"] = marker
+		b, err := json.Marshal(list)
+		return b, "", err == nil
+	}
 	var m map[string]any
 	if json.Unmarshal(resp, &m) != nil {
 		return nil, "not an object or string", false
 	}
 	switch {
+	case isTextBlocks(m["content"]):
+		m["content"].([]any)[0].(map[string]any)["text"] = marker
 	case isStr(m["stdout"]):
 		m["stdout"] = marker
 	case isStr(m["content"]):
@@ -202,7 +248,39 @@ func replaceMarker(resp json.RawMessage, marker string) (json.RawMessage, string
 	return b, "", true
 }
 
+// replaceGrepContent replaces the text of a Grep result in output_mode "content", and nothing else. replaceMarker
+// would fall back to a file list, and a "yes" earned by a replaced file list would unlock text rewrites it never
+// tested. A response without a string "content" (the model left the default mode, or the shape differs) gets no
+// replacement and its fields are named, so the result is "untested" and the next probe can be taught.
+func replaceGrepContent(resp json.RawMessage, marker string) (json.RawMessage, string, bool) {
+	var m map[string]any
+	if json.Unmarshal(resp, &m) != nil || m == nil {
+		return nil, "not an object", false
+	}
+	if !isStr(m["content"]) {
+		keys := make([]string, 0, len(m))
+		for k := range m {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		return nil, "no text content; fields: " + strings.Join(keys, ","), false
+	}
+	m["content"] = marker
+	b, err := json.Marshal(m)
+	return b, "", err == nil
+}
+
 func isStr(v any) bool { _, ok := v.(string); return ok }
+
+// isTextBlocks reports whether v is a non-empty list of MCP content blocks whose first is a text block.
+func isTextBlocks(v any) bool {
+	l, ok := v.([]any)
+	if !ok || len(l) == 0 {
+		return false
+	}
+	b, ok := l[0].(map[string]any)
+	return ok && b["type"] == "text" && isStr(b["text"])
+}
 
 func isList(v any) bool { l, ok := v.([]any); return ok && len(l) > 0 }
 

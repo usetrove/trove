@@ -32,17 +32,19 @@ func dataFixture(t *testing.T, h *harness) string {
 	}
 	_ = db.Close()
 	files := map[string]string{
-		"config.toml":             "retention_days = 30\n",
-		"changes.json":            "[]",
-		"backups/claude.json":     `{"apiKey":"SECRET-IN-A-BACKUP"}`,
-		"recovery/aa/out.txt":     "RAW-COMMAND-OUTPUT",
-		"hooks/config.json":       `{"hook_repeat_read":"shadow"}`,
-		"hooks/capabilities.json": `{"verified":true}`,
-		"hooks/events.jsonl":      `{"kind":"blocked"}`,
-		"hooks/abc.log":           "journal of content hashes",
-		"hooks.log":               "a redacted line\n",
-		"contribute.json":         `{"enabled":true,"install_id":"0123456789abcdef0123456789abcdef"}`,
-		"notes-from-the-user":     "not Trove's",
+		"config.toml":                            "retention_days = 30\n",
+		"changes.json":                           "[]",
+		"backups/claude.json":                    `{"apiKey":"SECRET-IN-A-BACKUP"}`,
+		"recovery/aa/out.txt":                    "RAW-COMMAND-OUTPUT",
+		"hooks/config.json":                      `{"hook_repeat_read":"shadow"}`,
+		"hooks/capabilities.json":                `{"verified":true}`,
+		"hooks/events.jsonl":                     `{"kind":"blocked"}`,
+		"hooks/abc.log":                          "journal of content hashes",
+		"hooks.log":                              "a redacted line\n",
+		"statusline/limits.jsonl":                `{"t":1700000000000,"s":"c-abc","fp":23.5}`,
+		"statusline/seen/c-abc.0123456789abcdef": "",
+		"contribute.json":                        `{"enabled":true,"install_id":"0123456789abcdef0123456789abcdef"}`,
+		"notes-from-the-user":                    "not Trove's",
 	}
 	for name, body := range files {
 		p := filepath.Join(dir, name)
@@ -162,7 +164,7 @@ func TestDataDeleteRemovesUsageDataKeepsUndoStateAndPrintsTheSharedDataHint(t *t
 	}
 	left := walkAll(t, dir)
 	for name := range left {
-		for _, gone := range []string{"trove.db", "hooks/events.jsonl", "hooks/abc.log", "hooks.log", "recovery/", "contribute.json"} {
+		for _, gone := range []string{"trove.db", "hooks/events.jsonl", "hooks/abc.log", "hooks.log", "recovery/", "contribute.json", "statusline/"} {
 			if strings.HasPrefix(name, gone) {
 				t.Errorf("%s survived `trove data delete`", name)
 			}

@@ -2,14 +2,14 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/usetrove/trove/internal/measure/limitfit"
+	"github.com/usetrove/trove/internal/regress"
 	"github.com/usetrove/trove/internal/report"
 	"github.com/usetrove/trove/internal/store"
 )
@@ -18,7 +18,12 @@ import (
 type statusOutput struct {
 	Line   string         `json:"line"`
 	Status *report.Status `json:"status,omitempty"`
-	Error  string         `json:"error,omitempty"`
+	// PlanUsage is Claude Code's subscription meter from the status line input (claude format only).
+	PlanUsage *report.PlanUsage `json:"plan_usage,omitempty"`
+	// LimitSample says what happened to Claude Code's plan-usage meter: written, unchanged, or why it
+	// was skipped. Empty when the input carried no meter.
+	LimitSample string `json:"limit_sample,omitempty"`
+	Error       string `json:"error,omitempty"`
 }
 
 func newStatusLine(a *App) *cobra.Command {
@@ -29,7 +34,9 @@ func newStatusLine(a *App) *cobra.Command {
 		Long: "Prints spend, budget pace, the current session's cost and savings on one line, for example:\n" +
 			"  ~$612 / $1,500 · 41% used · 48% of month · on pace · session ~$3.20 · saved ~$47\n" +
 			"\"~\" marks an estimate from list prices. It reads a small summary the gateway keeps current, so it\n" +
-			"returns in a few milliseconds. Formats: claude (Claude Code's statusLine setting), tmux, shell.\n\n" +
+			"returns in a few milliseconds. Formats: claude (Claude Code's statusLine setting), tmux, shell.\n" +
+			"With claude, it also shows Claude Code's own plan usage when Claude Code sends it (\"5h 23% · wk 41%\")\n" +
+			"and records each change locally; it never calls a usage endpoint.\n\n" +
 			"Claude Code:  settings.json -> \"statusLine\": {\"type\": \"command\", \"command\": \"trove status-line --format claude\"}\n" +
 			"tmux:         set -g status-right '#(trove status-line --format tmux)'\n" +
 			"bash/zsh:     add $(trove status-line) to your prompt",
@@ -50,50 +57,50 @@ func newStatusLine(a *App) *cobra.Command {
 // runStatusLine never fails the agent's status bar: any problem becomes a short
 // line telling the user what to run, with exit code 0.
 func runStatusLine(a *App, format string) error {
-	line, st, problem := statusLine(a, format)
-	out := statusOutput{Line: line, Status: st, Error: problem}
-	return a.emit(out, line)
+	in, now := readClaudeInput(a, format), time.Now()
+	out := statusLine(a, format, in, now)
+	// Claude Code's plan-usage meter, shown whatever state Trove itself is in: it is the agent's number.
+	if u := report.CurrentPlanUsage(in.planUsage(), now); u != nil {
+		out.PlanUsage = u
+		out.Line += " · " + report.RenderPlanUsage(*u)
+	}
+	return a.emit(out, out.Line)
 }
 
-func statusLine(a *App, format string) (line string, st *report.Status, problem string) {
+func statusLine(a *App, format string, in claudeInput, now time.Time) statusOutput {
 	dir, cfg, err := loadConfig(a)
 	if err != nil {
-		return "Trove: settings problem, run `trove doctor`", nil, err.Error()
+		return statusOutput{Line: "Trove: settings problem, run `trove doctor`", Error: err.Error()}
 	}
 	db, err := store.OpenReadOnly(dir)
 	if err != nil {
+		// The meter is Claude Code's, not Trove's, so it is recorded even before Trove has a database.
 		if os.IsNotExist(err) {
-			return "Trove: no usage yet", nil, ""
+			return statusOutput{Line: "Trove: no usage yet", LimitSample: recordLimitSample(nil, dir, in, now)}
 		}
-		return "Trove: database problem, run `trove doctor`", nil, err.Error()
+		return statusOutput{Line: "Trove: database problem, run `trove doctor`", Error: err.Error(), LimitSample: recordLimitSample(nil, dir, in, now)}
 	}
 	defer func() { _ = db.Close() }()
 
-	status, err := report.BuildStatus(context.Background(), db, cfg, time.Now(), claudeSessionID(a, format))
+	status, err := report.BuildStatus(context.Background(), db, cfg, now, in.SessionID)
 	if err != nil {
-		return "Trove: database problem, run `trove doctor`", nil, err.Error()
+		return statusOutput{Line: "Trove: database problem, run `trove doctor`", Error: err.Error(), LimitSample: recordLimitSample(db, dir, in, now)}
+	}
+	if status.Saved.Value >= 0.01 {
+		// Savings as a share of the 5-hour limit, from the saved API-price scales (one tiny file read;
+		// no fit means no percentage).
+		status.SavedLimit = limitfit.ReadScales(dir).PercentUSD(status.Saved.Value)
 	}
 	color := format != report.FormatShell && !a.NoColor && a.Getenv("NO_COLOR") == ""
-	return report.RenderStatus(status, format, color) + autopilotSuffix(dir), &status, ""
+	line := report.RenderStatus(status, format, color) + autopilotSuffix(dir) + regressSuffix(dir, now)
+	return statusOutput{Line: line, Status: &status, LimitSample: recordLimitSample(db, dir, in, now)}
 }
 
-// claudeSessionID reads the session id Claude Code sends as JSON on stdin. It
-// reads only when stdin is a pipe or file, never a terminal, so running the
-// command by hand does not wait for input.
-func claudeSessionID(a *App, format string) string {
-	if format != report.FormatClaude || a.In == nil {
-		return ""
+// regressSuffix is the regression watch's strongest alert, in one sentence, from the saved result (one small
+// file read; the watch is recomputed at session end and by `trove report`). Empty when there is none.
+func regressSuffix(dir string, now time.Time) string {
+	if s := regress.StatusSentence(regress.ReadCache(dir), now); s != "" {
+		return " · " + s
 	}
-	if f, ok := a.In.(*os.File); ok {
-		if fi, err := f.Stat(); err != nil || fi.Mode()&os.ModeCharDevice != 0 {
-			return ""
-		}
-	}
-	var in struct {
-		SessionID string `json:"session_id"`
-	}
-	if json.NewDecoder(io.LimitReader(a.In, 1<<20)).Decode(&in) != nil {
-		return ""
-	}
-	return in.SessionID
+	return ""
 }

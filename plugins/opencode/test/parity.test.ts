@@ -36,10 +36,12 @@ test("fixtures exist for every request-level and tool-level optimizer", () => {
   assert.deepEqual(names, [
     "cache_breakpoints",
     "duplicate_result_collapser",
+    "effort_routine_prompts",
     "effort_tool_turns",
     "model_router",
     "noise_normalizer",
     "output_trimmer",
+    "thinking_clear",
     "verbosity_steer",
     "volatile_prefix_mover",
   ]);

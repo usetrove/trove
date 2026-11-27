@@ -77,8 +77,12 @@ type Request struct {
 	// string value (zero if absent).
 	Effort     string
 	EffortSpan Span
-	System     Span // zero if absent
-	Tools      Span // zero if absent
+	// ThinkingType is thinking.type ("adaptive", "enabled", "disabled", "between_tools", ...) when it is a string.
+	ThinkingType string
+	// ContextManagement is the span of a top-level context_management value (zero if absent).
+	ContextManagement Span
+	System            Span // zero if absent
+	Tools             Span // zero if absent
 	// SystemBlocks is set when system is an array; a string system leaves it nil.
 	SystemBlocks []SystemBlock
 	// ToolSpans are the elements of the tools array.
@@ -212,6 +216,22 @@ func scanRequest(body []byte) (*Request, error) {
 			return ve, err
 		case "messages":
 			return r.parseMessages(vs)
+		case "thinking":
+			ve, err := scanValue(body, vs)
+			if err == nil && body[vs] == '{' {
+				_, _ = walkObject(body, vs, func(k []byte, s int) (int, error) {
+					e, err := scanValue(body, s)
+					if err == nil && string(k) == "type" && body[s] == '"' {
+						r.ThinkingType, _ = decodeString(body[s:e])
+					}
+					return e, err
+				})
+			}
+			return ve, err
+		case "context_management":
+			ve, err := scanValue(body, vs)
+			r.ContextManagement = Span{vs, ve}
+			return ve, err
 		case "output_config":
 			ve, err := scanValue(body, vs)
 			if err == nil && body[vs] == '{' {

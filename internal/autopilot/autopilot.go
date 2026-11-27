@@ -16,6 +16,8 @@ import (
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/optimize"
+	"github.com/usetrove/trove/internal/tasks"
 	"github.com/usetrove/trove/internal/technique"
 )
 
@@ -60,6 +62,45 @@ type Policy struct {
 	ProbationMinByTier   map[technique.Tier]int
 	TestFailMarginByTier map[technique.Tier]float64
 	ThresholdSource      map[technique.Tier]string
+
+	// The optimize policy's groups (empty in every lossless policy).
+	//
+	// Direct are guards that never change a request: they only warn the user, or stop one prompt once. They are
+	// switched on when the user agrees, so the next session that starts has them, with no shadow period first (the
+	// rule 6 amendment of 2026-11-24). Each is still measured, and its own guardrail rolls it back.
+	Direct []string
+	// Held are T2 and T3 techniques the policy names that Autopilot cannot put on trial by itself: their trial is
+	// started from its own command (a rule set's or the routine steer's trial, or the routine agents' files). They
+	// sit in shadow, with the reason, until a benchmark verdict exists, and then Autopilot says which command starts
+	// the trial on the user's own sessions.
+	Held []string
+	// ShadowOnly are estimated in shadow and never promoted, whatever the evidence.
+	ShadowOnly []string
+	// Outcome says what a trial is judged on: OutcomeBill (percent of the plan limits for a subscriber, API-equivalent
+	// cost for an API key) or "" for the lossless policies' own metric.
+	Outcome string
+}
+
+// OutcomeBill judges a trial on the user's bill: percent of the plan limits (from the limit fit) for a subscriber,
+// API-equivalent cost for API-key traffic. See readTrial.
+const OutcomeBill = "bill"
+
+// IsDirect reports whether the policy switches the named guard on without a shadow period.
+func (p Policy) IsDirect(name string) bool { return contains(p.Direct, name) }
+
+// IsHeld reports whether the named technique waits for a command of its own to start its trial.
+func (p Policy) IsHeld(name string) bool { return contains(p.Held, name) }
+
+// IsShadowOnly reports whether the policy keeps the named technique in shadow for good.
+func (p Policy) IsShadowOnly(name string) bool { return contains(p.ShadowOnly, name) }
+
+func contains(list []string, name string) bool {
+	for _, e := range list {
+		if e == name {
+			return true
+		}
+	}
+	return false
 }
 
 // testFailMargin is the test_fail_rate margin for a tier: stricter for T3 than for T1 and T2.
@@ -114,16 +155,50 @@ func PolicyV3() Policy {
 // TrialPolicy is the policy `trove autopilot trials on` offers: the newest one with a probation list.
 func TrialPolicy() Policy { return PolicyV3() }
 
+// PolicyOptimize is "optimize-v1", the policy `trove setup` offers (docs/autopilot.md, "The optimize policy"). Its
+// numbers are v2's placeholders until a benchmark sets them.
+//
+//   - Direct, on at the next session boundary: the cold-resume guard (in ask mode), the model-switch guard and the
+//     cold-compact guard. None of them changes a request.
+//   - Shadow first, promoted only by evidence: the two lossless v1 optimizers; low effort after a routine prompt and
+//     clearing old thinking (T3, gateway only), which also need a benchmark verdict and then a session A/B; the
+//     routine steer, the routine subagents and the Explore override, and Ponytail (T2 and T3), held until a benchmark
+//     verdict exists and then tried on the user's own sessions; and the subagent cache lifetime, through the settings
+//     policy's own rules.
+//   - Shadow only: the two code-write nudges.
+func PolicyOptimize() Policy {
+	p := PolicyV2()
+	p.Name = config.AutopilotPolicyOptimize
+	p.Probation = []string{optimize.OptimizerEffortRoutinePrompts, optimize.OptimizerThinkingClear}
+	p.Direct = []string{config.OptimizerHookColdResume, config.OptimizerHookModelSwitch, config.OptimizerHookColdCompact}
+	p.Held = []string{config.OptimizerHookRoutineSteer, tasks.FeatureRoutine, tasks.FeatureExplore, RuleTrialName("ponytail")}
+	p.ShadowOnly = []string{config.OptimizerHookWriteToEdit, config.OptimizerHookEditBatch}
+	p.Outcome = OutcomeBill
+	return p
+}
+
 // PolicyFor returns the policy a consent record names, or DefaultPolicy for one this version does not know
 // (which only ever shrinks what Autopilot may do).
 func PolicyFor(name string) Policy {
 	switch name {
+	case config.AutopilotPolicyOptimize:
+		return PolicyOptimize()
 	case config.AutopilotPolicyV3:
 		return PolicyV3()
 	case config.AutopilotPolicyV2:
 		return PolicyV2()
 	}
 	return DefaultPolicy()
+}
+
+// PolicyOf is the policy a consent record gives: PolicyFor its name, plus, under the optimize policy, the lossless
+// trial candidates when the user also agreed to trials (`trove autopilot trials on`).
+func PolicyOf(f config.AutopilotFile) Policy {
+	p := PolicyFor(f.Policy)
+	if f.IsOptimize() && f.HasTrials() {
+		p.Probation = append(append([]string{}, p.Probation...), TrialPolicy().Probation...)
+	}
+	return p
 }
 
 // NeedsProbation reports whether the named optimizer must pass probation before it is kept.
@@ -136,9 +211,145 @@ func (p Policy) NeedsProbation(name string) bool {
 	return false
 }
 
-// Names returns every optimizer the policy may move: the lossless list, then the probation list.
+// Names returns every optimizer the policy names: the lossless list, the probation list, then the optimize policy's
+// direct, held and shadow-only groups.
 func (p Policy) Names() []string {
-	return append(append([]string{}, p.Eligible...), p.Probation...)
+	var out []string
+	for _, l := range [][]string{p.Eligible, p.Probation, p.Direct, p.Held, p.ShadowOnly} {
+		out = append(out, l...)
+	}
+	return out
+}
+
+// VerdictBlocker says why the named technique may not leave shadow yet because it is T2 or T3 and no committed
+// benchmark verdict clears it, or "". A T1 technique, or one the registry does not know, needs none.
+func VerdictBlocker(name string) string {
+	t, ok := technique.Get(RuleTrialTool(name))
+	if !ok || t.Tier == technique.T1 || t.Tier == "" || t.BenchVerdict != "" {
+		return ""
+	}
+	return "it is " + string(t.Tier) + " and no benchmark verdict clears it yet, so it stays in shadow"
+}
+
+// DecideFor is Decide for any name the policy names: the optimize policy's direct guards, held and shadow-only
+// techniques have their own rules; the rest go through the state machine. Pure, like Decide.
+func (p Policy) DecideFor(name string, cur config.AutopilotEntry, ev Evidence, now time.Time) Decision {
+	switch {
+	case p.IsDirect(name):
+		return p.decideDirect(cur, ev, now)
+	case p.IsHeld(name):
+		return decideHeld(name, cur, ev, now)
+	case p.IsShadowOnly(name):
+		return decideShadowOnly(cur, ev, now)
+	}
+	return p.Decide(cur, ev, now)
+}
+
+// Reasons the optimize policy's own groups give. Plain English, shown by `trove autopilot` and `trove status`.
+const (
+	reasonDirectOn    = "on from the optimize policy: a guard that never changes a request; measured, and rolled back if you keep overriding it"
+	reasonShadowOnly  = "shadow only: the optimize policy estimates it and never turns it on"
+	reasonHeldVerdict = "a benchmark verdict exists; try it on your own sessions with "
+)
+
+// decideDirect is the state machine for a guard the optimize policy switches on with no shadow period. A rollback
+// by its guardrail holds it off for the cool-down, after which it is on again, at most MaxAttempts times.
+func (p Policy) decideDirect(cur config.AutopilotEntry, ev Evidence, now time.Time) Decision {
+	next := cur
+	set := func(state, reason string) {
+		next.State, next.Reason, next.SinceMS = state, reason, now.UnixMilli()
+	}
+	turnOn := func() {
+		set(config.AutopilotOn, reasonDirectOn)
+		next.Attempts = cur.Attempts + 1
+	}
+	switch cur.State {
+	case config.AutopilotOn:
+		switch {
+		case ev.RolledBack:
+			set(config.AutopilotRolledBack, "its guardrail rolled it back to shadow")
+		case ev.Unavailable != "":
+			set(config.AutopilotShadow, "no longer available in your setup: "+ev.Unavailable)
+		case ev.Blocked != "":
+			set(config.AutopilotShadow, "held back: "+ev.Blocked)
+		}
+	case config.AutopilotRolledBack:
+		switch {
+		case cur.Attempts >= p.MaxAttempts:
+			next.Reason = "rolled back after the maximum number of tries; leaving it for you to decide"
+		case now.Sub(time.UnixMilli(cur.SinceMS)) >= time.Duration(p.CooldownDays)*24*time.Hour:
+			turnOn()
+			next.Reason = "cool-down over; " + reasonDirectOn
+			return Decision{Entry: next, ClearRollback: ev.RolledBack}
+		default:
+			next.Reason = "rolled back; waiting out the cool-down"
+		}
+	default: // off, shadow, candidate, or anything unknown
+		switch {
+		case ev.Unavailable != "":
+			if cur.State != config.AutopilotShadow {
+				set(config.AutopilotShadow, "not available in your setup: "+ev.Unavailable)
+			} else {
+				next.Reason = "not available in your setup: " + ev.Unavailable
+			}
+		case ev.Blocked != "":
+			if cur.State != config.AutopilotShadow {
+				set(config.AutopilotShadow, "held back: "+ev.Blocked)
+			} else {
+				next.Reason = "held back: " + ev.Blocked
+			}
+		case ev.RolledBack:
+			// A guardrail rollback is still in effect (for example from before the user agreed): wait it out.
+			set(config.AutopilotRolledBack, "its guardrail rolled it back to shadow")
+		default:
+			turnOn()
+		}
+	}
+	return Decision{Entry: next}
+}
+
+// decideHeld keeps a held technique in shadow with the reason, or leaves alone a trial the user started for it.
+func decideHeld(name string, cur config.AutopilotEntry, ev Evidence, now time.Time) Decision {
+	if cur.State == config.AutopilotProbation {
+		return Decision{Entry: cur} // the user's own trial; advanceRuleTrials judges it
+	}
+	why := VerdictBlocker(name)
+	switch {
+	case ev.Unavailable != "":
+		why = "not available in your setup: " + ev.Unavailable
+	case why == "":
+		why = reasonHeldVerdict + heldCommand(name)
+	}
+	return shadowWith(cur, why, now)
+}
+
+// heldCommand is the command that starts a held technique's trial on the user's own sessions.
+func heldCommand(name string) string {
+	switch name {
+	case tasks.FeatureRoutine:
+		return "`trove tasks apply agents`"
+	case tasks.FeatureExplore:
+		return "`trove tasks apply explore`"
+	}
+	return "`trove autopilot trial " + RuleTrialTool(name) + "`"
+}
+
+func decideShadowOnly(cur config.AutopilotEntry, ev Evidence, now time.Time) Decision {
+	why := reasonShadowOnly
+	if ev.Unavailable != "" {
+		why = "not available in your setup: " + ev.Unavailable
+	}
+	return shadowWith(cur, why, now)
+}
+
+// shadowWith puts an entry in shadow with the reason. The time changes only with the state.
+func shadowWith(cur config.AutopilotEntry, why string, now time.Time) Decision {
+	next := cur
+	if cur.State != config.AutopilotShadow {
+		next.State, next.SinceMS = config.AutopilotShadow, now.UnixMilli()
+	}
+	next.Reason = why
+	return Decision{Entry: next}
 }
 
 // IsEligible reports whether the policy may promote the named optimizer.

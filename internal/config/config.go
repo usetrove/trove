@@ -49,6 +49,8 @@ type Config struct {
 	// trials names the optimizers Autopilot has on trial (see AutopilotProbation), for readers that assign
 	// each session an arm themselves.
 	trials []string
+	// coldAsk is true when the optimize policy runs the cold-resume guard in ask mode (see ColdResumeAction).
+	coldAsk bool
 }
 
 // Contribute holds the setting for the optional anonymous summary upload (see
@@ -188,7 +190,27 @@ type Optimize struct {
 	// RouteTo is the cheaper model model_router may step down to on tool turns
 	// (plan item 7.2). Empty means model_router does nothing. Pinned per session.
 	RouteTo string `toml:"route_to"`
+	// ColdResumeAction is what hook_cold_resume does when it is on: ColdResumeWarn (default) shows a warning
+	// and lets the prompt go through, ColdResumeAsk stops the first prompt after a cold resume once. Pinned per
+	// session.
+	ColdResumeAction string `toml:"cold_resume_action"`
+	// ColdResumeMinTokens and ColdResumeMinWeekPct are the rebuild sizes from which hook_cold_resume acts: the
+	// tokens the next request would write to the cache again, or the low end of its estimated share of the
+	// weekly limit. Either one is enough. Pinned per session.
+	ColdResumeMinTokens  int64   `toml:"cold_resume_min_tokens"`
+	ColdResumeMinWeekPct float64 `toml:"cold_resume_min_week_pct"`
+	// PreviewPassthrough lists the tools whose whole output must always reach the model: hook_output_preview
+	// never shortens them. An entry is a tool name ("Bash", "mcp__github__get_file") or a prefix ending in "*"
+	// ("mcp__github__*"). Trove's own MCP tools always pass through. The hooks see a change once their settings
+	// are refreshed: when a session ends, or at `trove hooks install`.
+	PreviewPassthrough []string `toml:"preview_passthrough"`
 }
+
+// Actions for hook_cold_resume.
+const (
+	ColdResumeWarn = "warn"
+	ColdResumeAsk  = "ask"
+)
 
 // Verbosity levels for verbosity_steer.
 const (
@@ -268,6 +290,35 @@ const (
 	// OptimizerHookReadOutline replaces a very large full Read of a source file with its outline. Like the
 	// output trimmer it needs the Trove MCP server and the recovery store before "on" takes effect.
 	OptimizerHookReadOutline = "hook_read_outline"
+	// OptimizerHookOutputPreview replaces a long Bash, PowerShell, Grep or MCP tool output with a short preview
+	// (first and last lines, errors, warnings, summary lines); the whole output stays fetchable. Like the output
+	// trimmer it needs the Trove MCP server and the recovery store before "on" takes effect.
+	OptimizerHookOutputPreview = "hook_output_preview"
+	// OptimizerHookColdResume warns, or asks once, before a prompt that would write a large session's whole
+	// context to the cache again because the cache expired (UserPromptSubmit, docs/hooks.md). It changes no
+	// request; optimize.cold_resume_action says which.
+	OptimizerHookColdResume = "hook_cold_resume"
+	// OptimizerHookModelSwitch adds the cost of rebuilding a large, warm context on another model to Claude Code's
+	// own switch confirmation (PreModelSwitch systemMessage). It never blocks or asks.
+	OptimizerHookModelSwitch = "hook_model_switch"
+	// OptimizerHookColdCompact stops a manual /compact once when the cache has expired and the history is large,
+	// because the summarization would reprocess it as uncached input (PreCompact, exit 2).
+	OptimizerHookColdCompact = "hook_cold_compact"
+	// OptimizerHookRoutineSteer adds "Answer directly without deliberating." to the context of a routine prompt
+	// (a confirmation, "continue", "run the tests") through UserPromptSubmit additionalContext, to cut thinking on
+	// turns that need none (T2, technique B24). Only on models where the phrase is documented to work (Opus 5.5).
+	OptimizerHookRoutineSteer = "hook_routine_steer"
+	// OptimizerHookWriteToEdit denies, once per file and session, a Write that rewrites a large existing file to
+	// change only a small share of its lines, with the reason "use Edit for targeted changes" (T2, technique B26).
+	OptimizerHookWriteToEdit = "hook_write_to_edit"
+	// OptimizerHookEditBatch adds a note on the third Edit to the same file in one turn, suggesting one Write or a
+	// single sed when the edits are mechanical (T2, technique B27). It never denies.
+	OptimizerHookEditBatch = "hook_edit_batch"
+	// OptimizerHookSessionCheckpoint keeps a short note of the session's state (task, files changed, branch,
+	// failing tests) at PreCompact, SessionEnd and context-fill milestones, and adds it back, fenced as recovered
+	// data, at SessionStart after /compact or /clear (T2, technique B31). The note is kept only in the recovery
+	// store and only when recovery.session_checkpoints is true; without it the restore is a one-line pointer.
+	OptimizerHookSessionCheckpoint = "hook_session_checkpoint"
 	// OptimizerNoiseNormalizer is lossless; it also runs in hooks on tool output.
 	OptimizerNoiseNormalizer = "noise_normalizer"
 	// OptimizerInflightDedup is a behavior of the gateway itself: when identical requests
@@ -316,8 +367,9 @@ func Default() Config {
 		Gateway:    Gateway{Port: 8787, IdleMinutes: 30, KeepWarmMaxPings: 2, KeepWarmDailyCapUSD: 1},
 		Upstreams:  Upstreams{Anthropic: "https://api.anthropic.com", OpenAI: "https://api.openai.com"},
 		Optimizers: map[string]string{},
-		Optimize:   Optimize{CustomAgents: []string{}, BudgetMS: 25, Verbosity: VerbosityConcise},
-		Budget:     Budget{Period: "monthly", CapUSD: 0, WarnAtPercent: 80},
+		Optimize: Optimize{CustomAgents: []string{}, BudgetMS: 25, Verbosity: VerbosityConcise,
+			ColdResumeAction: ColdResumeWarn, ColdResumeMinTokens: 150000, ColdResumeMinWeekPct: 3, PreviewPassthrough: []string{}},
+		Budget: Budget{Period: "monthly", CapUSD: 0, WarnAtPercent: 80},
 		Measure: Measure{
 			BaselineDays: 7, BaselineSessions: 20, MinSessions: 20,
 			RetryIncreasePercent: 30, RefetchRatePercent: 25,
@@ -387,6 +439,20 @@ verbosity = "concise"
 # The cheaper model model_router may step down to on tool turns, for API-key
 # traffic only. Empty means model_router does nothing. Changes apply to new sessions.
 route_to = ""
+# What hook_cold_resume does when it is on: "warn" shows what continuing a session
+# whose cache expired will cost and lets the prompt go through; "ask" stops the first
+# prompt after resuming such a session, once, so you can /clear instead. Changes
+# apply to new sessions.
+cold_resume_action = "warn"
+# hook_cold_resume acts from this many tokens re-written to the cache (10000 to
+# 2000000), or from this estimated share of the weekly limit, in percent (above 0, at
+# most 100), whichever is reached first.
+cold_resume_min_tokens = 150000
+cold_resume_min_week_pct = 3.0
+# Tools whose whole output always reaches the model: hook_output_preview never
+# shortens them. A tool name ("Bash") or a prefix ending in * ("mcp__github__*").
+# Trove's own tools always pass through. Changes apply once a session ends.
+preview_passthrough = []
 
 [budget]
 # Budget period: "daily", "weekly" or "monthly".
@@ -486,6 +552,11 @@ allow_unproven = false
 max_mb = 200
 # Days an output is kept (1 to 365).
 ttl_days = 7
+# Let hook_session_checkpoint keep a short note of each session's state (your
+# latest requests, files changed, branch, failing test commands) here, so it can
+# be added back after /compact or /clear. Notes are capped at 8 KB each and
+# expire after 3 days. Off: nothing is kept and only a one-line pointer is added.
+session_checkpoints = false
 
 [contribute]
 # Where "trove contribute enable" sends the anonymous summary you approved.
@@ -572,6 +643,20 @@ func (c Config) Validate() error {
 	if v := c.Optimize.Verbosity; v != VerbosityConcise && v != VerbosityTerse {
 		add("optimize.verbosity is %q; use \"concise\" or \"terse\" (default \"concise\").", v)
 	}
+	if v := c.Optimize.ColdResumeAction; v != ColdResumeWarn && v != ColdResumeAsk {
+		add("optimize.cold_resume_action is %q; use \"warn\" or \"ask\" (default \"warn\").", v)
+	}
+	if v := c.Optimize.ColdResumeMinTokens; v < 10000 || v > 2000000 {
+		add("optimize.cold_resume_min_tokens is %d; use a number of tokens from 10000 to 2000000 (default 150000).", v)
+	}
+	if v := c.Optimize.ColdResumeMinWeekPct; !(v > 0 && v <= 100) {
+		add("optimize.cold_resume_min_week_pct is %v; use a percentage above 0 and at most 100 (default 3).", v)
+	}
+	for _, t := range c.Optimize.PreviewPassthrough {
+		if !validPassthrough(t) {
+			add("optimize.preview_passthrough contains %q; use a tool name such as \"Bash\" or \"mcp__github__get_file\", or a prefix ending in * such as \"mcp__github__*\".", t)
+		}
+	}
 	if v := c.Optimize.RouteTo; len(v) > 100 || strings.ContainsAny(v, " \t\r\n\"") {
 		add("optimize.route_to is not a model name; use a model ID such as the one your agent sends, or \"\" to leave model_router idle.")
 	}
@@ -602,6 +687,16 @@ func (c Config) Validate() error {
 	}
 	if t := c.Tasks.TestCmd; strings.ContainsAny(t, "\r\n`") || len(t) > 200 {
 		add("tasks.test_cmd must be one line of at most 200 characters without backticks.")
+	}
+	if t := c.Tasks.LintCmd; strings.ContainsAny(t, "\r\n`") || len(t) > 200 {
+		add("tasks.lint_cmd must be one line of at most 200 characters without backticks.")
+	}
+	for _, e := range []struct{ key, v string }{{"scout_effort", c.Tasks.ScoutEffort}, {"routine_effort", c.Tasks.RoutineEffort}} {
+		switch e.v {
+		case "", "low", "medium", "high", "xhigh", "max":
+		default:
+			add("tasks.%s is %q; use low, medium, high, xhigh or max, or leave it empty for low.", e.key, e.v)
+		}
 	}
 	if c.Recovery.MaxMB < 1 || c.Recovery.MaxMB > 10000 {
 		add("recovery.max_mb is %d; use a size in MB from 1 to 10000 (default 200).", c.Recovery.MaxMB)
@@ -843,6 +938,25 @@ type Recovery struct {
 	MaxMB int `toml:"max_mb"`
 	// TTLDays is how long an output is kept.
 	TTLDays int `toml:"ttl_days"`
+	// SessionCheckpoints lets hook_session_checkpoint keep its session notes (the latest request texts, files
+	// changed, branch, failing test commands) in the recovery store, under recovery/checkpoints. Off by default:
+	// without it the optimizer writes no text anywhere and restores only a one-line pointer.
+	SessionCheckpoints bool `toml:"session_checkpoints"`
+}
+
+// validPassthrough accepts a tool name (letters, digits, _ and -) with an optional trailing *. A bare "*" is
+// allowed: it lets every output through, which is the same as leaving hook_output_preview off.
+func validPassthrough(s string) bool {
+	name := strings.TrimSuffix(s, "*")
+	if len(s) == 0 || len(s) > 200 {
+		return false
+	}
+	for _, r := range name {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' && r != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // validTaskName accepts the shape of a task type name. Which names exist is
@@ -872,4 +986,13 @@ type Tasks struct {
 	TestCmd string `toml:"test_cmd"`
 	// MaxTurns limits the cheap worker before it must stop (0 means 25).
 	MaxTurns int `toml:"max_turns"`
+	// ScoutEffort is the scout's effort level (empty means low).
+	ScoutEffort string `toml:"scout_effort"`
+	// RoutineModel and RoutineEffort are the model and effort of the routine agents
+	// and the Explore override (empty means haiku and low).
+	RoutineModel  string `toml:"routine_model"`
+	RoutineEffort string `toml:"routine_effort"`
+	// LintCmd is the project's formatter or linter command, written into the lint
+	// fixer when set. Optional: without it the agent looks for one.
+	LintCmd string `toml:"lint_cmd"`
 }

@@ -1,0 +1,6 @@
+{
+  "session_id": "sess-abc",
+  "model": {"id": "claude-sonnet-5-5[1m]", "display_name": "Sonnet"},
+  "version": "2.1.290",
+  "prompt_cache": {"warm": true, "caching_observed": true, "ttl": "5m", "expires_at": 1738429200, "hit_ratio": 0.5, "misses": 0}
+}

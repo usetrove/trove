@@ -133,6 +133,9 @@ func Auto(ctx context.Context, dir, endpoint string, p Payload, now time.Time) (
 		return false, err
 	}
 	p.InstallID = st.InstallID
+	if st.LimitsPlan() == "" {
+		p.Limits = nil // never without its own consent, whatever the caller built
+	}
 	body, err := Encode(p)
 	if err != nil {
 		return false, err

@@ -156,7 +156,7 @@ The generated file starts with a header naming its inputs, and CI loads it with 
 | b | Cascading | Cheap model first, escalate on failing tests, vs the strong model alone | not built |
 | c | Scout subagent | With vs without | not built |
 | d | Settings profiles | Each profile vs default settings | not built |
-| e | Third-party tools | Each wrapped tool vs no tool, with its claimed saving shown next to the measurement | claim-vs-measurement analysis built; tool adapters not built |
+| e | Third-party tools | Each wrapped tool vs no tool, with its claimed saving shown next to the measurement | claim-vs-measurement analysis built; tool adapters not built. On real sessions, the claims table (section 11) does this for hook tools |
 | f | Open-weight and self-hosted models | Cost, success and latency through OpenAI-compatible upstreams | not built |
 
 ## 8. Threats to validity
@@ -194,3 +194,110 @@ python -m trovebench report --batch bench/results/<date>/<study-id>
 
 `--simulate <effects.yaml>` runs synthetic, Docker-free runs to exercise the pipeline. It measures
 nothing about any agent, and its reports and results are labeled and refused by `defaults`.
+
+## 11. The claims table
+
+Added 2026-11-26. Code: `internal/report/claims.go`, `internal/report/trial.go`, `internal/experiment`.
+
+`trove report claims` puts each token-saving tool's own claim next to what Trove measured on one
+machine's real sessions. Third-party tools Trove can hand calls to (RTK, ZTK) and Trove's own
+optimizers share one table. A row with no clear effect stays in it. `--markdown` prints the table
+ready to publish, and `--json` gives the same cells.
+
+This is not a lab study (sections 1 to 10). It runs on someone's everyday work, so it answers "what did
+this tool do to my usage", not "what does it do on a fixed task suite". The two complement each other:
+the lab controls the tasks, and the claims table measures the plan limit, which only a subscriber has.
+
+### Design
+
+- **Randomized per session.** When a hook tool is enabled, Trove writes its own Bash `PreToolUse` hook,
+  `trove hook handoff <tool>`, instead of the tool's ([external.md](external.md#randomized-test-for-hook-tools)).
+  At `SessionStart` each new Claude Code session is put in the "on" or "off" arm by a hash of its hashed
+  session key, and the arm is recorded. In "on" the tool gets the hook input byte for byte and its output
+  goes back unchanged. In "off" nothing runs. Trove's own hook optimizers are split the same way.
+  Request-level optimizers are split by the gateway.
+- **Intention to treat.** Every assigned session counts under its arm, whether or not the tool acted in it.
+  Dropping "on" sessions where it never acted would drop exactly the ones it could not change.
+- **Finished sessions only.** A session counts once it has been quiet for 30 minutes.
+- **Tools are not modified.** A tool is run only if it documents one hook command that can be handed the
+  input unchanged. A tool that needs several hooks across events, or its plugin's own layout, is not run.
+  Running part of it would measure something other than what it claims. See
+  [external.md](external.md#considered-and-not-run).
+
+### What each column means
+
+| Column | What it is | Label |
+|---|---|---|
+| Its claim | Quoted from the tool's own README or site, with the link. The date Trove checked it is in the tool's manifest. For Trove's own optimizers: the shadow estimate (what it would have saved had it been on) for the report period, or "none". | claimed / estimated |
+| Effect on the weekly limit per session | The relative change in the share of the weekly limit a session used, on against off, and the same as a difference in points of the limit (1 point = 1% of the weekly limit). Each session's tokens by type are turned into a share of the limit with this account's limit fit ([limit-fit.md](limit-fit.md)). When the weekly meter has a fit per token type, its weights are used. Otherwise it is API list prices times the fitted scale ("estimated from API prices"). | estimated |
+| Tokens or cost per session | Hook trials: tokens per session (input, cache reads and writes, output) from the agent's own logs. Gateway trials: cost per session at API list prices, from provider-reported usage. | measured / estimated |
+| Pass-rate change | Among sessions that ran a test command Trove recognizes, the share whose last test passed, on minus off, in points. | measured |
+| Sessions (on / off) | Sessions compared in each arm, after exclusions. | |
+| Dates | First and last assignment in the trial (UTC). | |
+
+A gateway trial's weekly-limit cell says "not applicable": those sessions use an API key, and API traffic
+does not draw on a plan limit.
+
+### Statistics
+
+- **Effect ranges.** 95% percentile bootstrap, 2,000 resamples, seeded from `[experiment] seed` and the
+  optimizer and metric names, so the same data always gives the same table. Sessions are stratified by
+  repo and task type. Each stratum's two arms are resampled separately, and strata are weighted by size. A
+  stratum with fewer than `min(min_sessions_per_arm, 10)` sessions in either arm is left out, never padded.
+- **Pass-rate range.** The same bootstrap on pass or fail per session, without strata.
+- **Minimum data.** Nothing is shown until each arm has `[experiment] min_sessions_per_arm` sessions
+  (default 20). The pass rate also needs that many test-running sessions in each arm.
+- **"No clear effect"** means the 95% range includes no change. It is reported as a result.
+- **What the limit range does not cover.** The range covers how sessions vary. It does not add the limit
+  fit's own uncertainty, because every session is weighed with the same point weights. Under the API-price
+  basis the relative change is exactly the relative change in API-equivalent cost, because the fitted
+  scale cancels. Under a fit per token type the relative change depends on the weight ratios, whose 90%
+  intervals `trove report` shows.
+
+### Exclusions
+
+- Sessions with no usage in the agent's logs yet, or still running.
+- Sessions the limit fit cannot weigh (for example an unpriced model under the API-price basis). They are
+  left out of the weekly-limit figure only.
+- Tools Trove has no built-in manifest for.
+
+### Threats to validity
+
+- **One account.** The weekly-limit figures come from one account's meter. Another account's weights may
+  differ, and the meter also moves with use from claude.ai and other machines (the fit's "outside" share).
+  Publish them as one account's estimate, never as official weights.
+- **One person's work.** The tasks are whatever the user did. A tool that helps on large shell output
+  looks weaker for someone who rarely runs shell commands. The table gives the dates. Say whose machine.
+- **Only Bash calls.** A hand-off tool sees only shell calls, not the agent's built-in Read, Grep or Glob.
+  That is the tool's own reach. A claim measured on shell output alone can read as larger.
+- **Pass rate is a weak signal.** It counts only sessions that ran a recognized test command, and only the
+  last result.
+- **Several rows.** Each row has its own 95% range, with no correction across rows. Read a single
+  borderline row with care.
+
+### Reproducing a row
+
+```
+trove setup --status-line            # Claude Code's status line records the plan meter (report.md)
+trove external install rtk           # shows licence, command and claim; asks before installing
+trove external enable rtk            # Trove writes `trove hook handoff rtk`; new sessions are split
+# use Claude Code normally until each arm has at least 20 finished sessions
+trove report                         # refreshes the limit fit and the trial
+trove report claims --markdown       # the table
+trove report claims --json           # the same cells, with every figure behind them
+```
+
+Each session's arm is in `experiment_assignments`, its tokens in `history_requests`, its test results in
+`test_runs`, and the fit in `limitfit.json`. Everything is local and holds metadata only.
+
+### Before publishing
+
+1. **Licence.** A tool whose licence restricts commercial use (for example PolyForm Noncommercial) is run
+   for a published table only with the author's written permission. Trove does not decide whether a
+   published comparison counts as noncommercial.
+2. **Invite each author.** Send the author of every third-party row this section, their row and its
+   `--json`, and invite them to check the method, the hook command and the quoted claim. Give them at
+   least 14 days. Fix any factual error they find. If they disagree with the method, publish their
+   response next to the row.
+3. **Versions and dates.** Publish the tool version, the Trove commit, the Claude Code version and the
+   dates with the table.

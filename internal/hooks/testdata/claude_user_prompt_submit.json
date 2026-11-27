@@ -1,0 +1,1 @@
+{"session_id":"{{SESSION}}","prompt_id":"{{PROMPT}}","transcript_path":"{{TRANSCRIPT}}","cwd":"{{CWD}}","permission_mode":"default","hook_event_name":"UserPromptSubmit","prompt":"PROMPT-TEXT-NEVER-STORED please continue"}

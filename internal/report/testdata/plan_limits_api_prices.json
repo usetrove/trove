@@ -1,0 +1,59 @@
+{
+  "label": "estimated",
+  "five_hour": {
+    "meter": "five_hour",
+    "tier": "api_prices",
+    "clean_intervals": 18,
+    "windows": 3,
+    "trimmed": 0,
+    "need_intervals": 22,
+    "need_windows": 1,
+    "hours_per_interval": 0.9,
+    "pct_per_api_usd": {
+      "point": 0.52,
+      "lo": 0.44,
+      "hi": 0.61
+    },
+    "outside_share_pct": {
+      "point": 9,
+      "lo": 5,
+      "hi": 14
+    },
+    "input_determined": false,
+    "label": "estimated",
+    "basis": "estimated from API prices"
+  },
+  "seven_day": {
+    "meter": "seven_day",
+    "tier": "api_prices",
+    "clean_intervals": 12,
+    "windows": 1,
+    "trimmed": 0,
+    "need_intervals": 28,
+    "need_windows": 1,
+    "hours_per_interval": 3,
+    "pct_per_api_usd": {
+      "point": 0.041,
+      "lo": 0.035,
+      "hi": 0.05
+    },
+    "input_determined": false,
+    "label": "estimated",
+    "basis": "estimated from API prices"
+  },
+  "waste": {
+    "five_hour_pct": {
+      "point": 0.4992,
+      "lo": 0.4224,
+      "hi": 0.5856,
+      "basis": "api_prices"
+    },
+    "seven_day_pct": {
+      "point": 0.03936,
+      "lo": 0.033600000000000005,
+      "hi": 0.048,
+      "basis": "api_prices"
+    },
+    "label": "estimated"
+  }
+}

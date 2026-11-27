@@ -282,6 +282,34 @@ agent's own session logs instead and says so:
 - When the gateway has traffic in the period, the status line uses it exactly as
   before and does not read the logs, so it stays fast.
 
+### Cold-resume guard
+
+`hook_cold_resume` (docs/hooks.md) changes no request, so it has no cost-per-session A/B. `trove report` (and
+`cold_resume` in `--json`) shows instead:
+
+- **What it did** (measured): prompts stopped, warnings, and in shadow what it would have stopped or warned about.
+- **What you did next** (measured): of the stopped prompts, the share you sent again (`overridden`) and the share
+  you cleared (`cleared`). The rest ended the session or went quiet. The guardrail `cold_resume_override` rolls the
+  guard back to shadow when more than half are sent again beyond chance (at least 20 blocks; a placeholder limit).
+- **Context not rebuilt** (estimated): the rebuild size of each cleared session, less 450 tokens for a note you may
+  have pasted. It assumes the work after a clear would otherwise have gone on in the old session.
+- **The hour after** (measured, not randomized): the 5-hour meter's movement in the hour after each stopped prompt,
+  against the hour after each prompt shadow mode would have stopped. The movement runs from the last status-line
+  reading before the event to the last reading within the hour, in the same 5-hour window. Events are matched in
+  three rebuild-size groups (under 150,000 tokens, under 300,000, larger), and the difference is the
+  block-weighted mean of the groups' differences, with a normal 95% interval.
+  - It is shown only once each side has 10 matched events.
+  - The meter is account-wide, and changes no status line saw count as none.
+  - Shadow and stopped prompts come from different periods.
+
+  So read it as a direction, not a verdict.
+
+The model-switch guard (`model_switch` in `--json`) and the cold-compact guard (`cold_compact`) get the same
+section. For the model-switch guard "overridden" is the share of warnings after which the switch went ahead, and it
+has no hour-after comparison because it never stops anything. With the `opusplan` model setting, the report also
+shows the Opus↔Sonnet switches in history and what they rebuilt (measured; cost and limit share estimated), an upper
+bound because a `/model` switch between the same families looks the same.
+
 ## 5. Limits you should know about
 
 - **Sessions are inferred.** Without a Claude Code session id, a session is a

@@ -1,0 +1,27 @@
+{
+  "label": "estimated",
+  "five_hour": {
+    "meter": "five_hour",
+    "tier": "none",
+    "clean_intervals": 3,
+    "windows": 1,
+    "trimmed": 0,
+    "need_intervals": 7,
+    "need_windows": 1,
+    "hours_per_interval": 0.8,
+    "input_determined": false,
+    "label": "estimated"
+  },
+  "seven_day": {
+    "meter": "seven_day",
+    "tier": "none",
+    "clean_intervals": 0,
+    "windows": 0,
+    "trimmed": 0,
+    "need_intervals": 10,
+    "need_windows": 2,
+    "hours_per_interval": 0,
+    "input_determined": false,
+    "label": "estimated"
+  }
+}

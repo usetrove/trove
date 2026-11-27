@@ -24,7 +24,19 @@ type Checkpoint struct {
 	Offset int64 // byte position after the last complete line read
 	Lines  int64
 	Turns  int // requests emitted so far, so Turn keeps counting across passes
+	// Parser state carried to the next pass, so a request read after a checkpoint still knows what
+	// came before it.
+	Phase     string // phase the next request gets unless a later line changes it
+	Compacted bool   // a compaction boundary was seen and no request has followed it yet
 }
+
+// Phases: what came right before a request in the agent's log.
+const (
+	PhasePrompt     = "prompt"      // a user prompt (or a subagent's task)
+	PhaseToolResult = "tool_result" // a tool result: the request continues a tool loop
+	PhaseCompact    = "compact"     // a compaction summary
+	PhaseOther      = "other"       // nothing recognizable, e.g. the start of a file
+)
 
 // Stats counts what a parse did, including what it could not read.
 type Stats struct {
@@ -55,12 +67,30 @@ type Event struct {
 	Output       int64
 	ServiceTier  string
 
+	// Thinking is the part of Output the model spent on reasoning. It is already inside Output and must
+	// never be added to it. nil means the log did not say (unknown), which is not the same as 0.
+	Thinking *int64
+
+	// Per-request context, checked against strict patterns so no free text gets through. Empty means
+	// the log did not carry a recognizable value.
+	AgentVersion string // agent version that wrote the line, e.g. "2.1.331"
+	Entrypoint   string // how the agent was started, e.g. "cli" or "sdk-cli" (observed, not documented)
+	Effort       string // effort setting for the request: low | medium | high | xhigh | max
+	TurnEffort   string // effort for this turn, which can differ from Effort (observed, not documented)
+
+	// Where the request sits in its agent's conversation (Claude Code only).
+	AgentKey  string // hashed subagent id; "" for the main conversation
+	Phase     string // one of the Phase constants; "" when the parser does not tell
+	Compacted bool   // a compaction boundary came between the agent's previous request and this one
+	TextBytes int64  // byte size of the response's visible text blocks; the text is never kept
+
 	Tools []ToolCall
 }
 
 // ToolCall is one tool use and, when its result was seen, the result's size.
 type ToolCall struct {
 	Name        string
+	InputBytes  int64  // byte size of the call's input JSON as logged; the input itself is never kept
 	ResultBytes int64  // 0 when no result was seen
 	ResultHash  string // hash of the result, for duplicate detection; never the text
 	Error       bool

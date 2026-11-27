@@ -218,7 +218,7 @@ func effectiveStateFor(name, state string, recoverable bool) string {
 	if config.IsGatewayBehavior(name) && !config.GatewayActive(name) && state == config.StateOn {
 		return config.StateShadow // this gateway behavior has no active mode yet; on would only estimate
 	}
-	if (name == config.OptimizerOutputTrimmer || name == config.OptimizerHookOutputDedup || name == config.OptimizerHookReadOutline) && state == config.StateOn && !recoverable {
+	if (name == config.OptimizerOutputTrimmer || name == config.OptimizerHookOutputDedup || name == config.OptimizerHookReadOutline || name == config.OptimizerHookOutputPreview) && state == config.StateOn && !recoverable {
 		return config.StateShadow
 	}
 	switch state {

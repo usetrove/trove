@@ -47,11 +47,38 @@ type Report struct {
 	// Tasks are the scout and cascade features from `trove tasks` that are still
 	// in place, with what the data shows about each (see docs/tasks.md).
 	Tasks []measure.TasksEffect `json:"tasks,omitempty"`
+	// Agents is per agent type for the scout, routine agents and Explore override (observational before/after).
+	Agents []measure.AgentEffect `json:"agents,omitempty"`
 	// Notes are plain-English caveats and next steps (for example the empty state).
 	Notes []string `json:"notes,omitempty"`
 	// History is the part of the figures that came from agents' local session
 	// logs. Nil when there is none.
 	History *History `json:"history,omitempty"`
+	// Rebuilds and OutputMix are the rebuild and output ledgers over Claude Code history (see
+	// docs/analyze.md, "History ledgers"). Nil when there is nothing to show.
+	Rebuilds  *Rebuilds  `json:"cache_rebuilds,omitempty"`
+	OutputMix *OutputMix `json:"output_mix,omitempty"`
+	// Regressions is the regression watch (docs/regress.md). Nil when nothing was checked.
+	Regressions *Regressions `json:"regression_watch,omitempty"`
+	// PlanLimits is the per-user estimate of how tokens move Claude Code's plan-usage meters (see
+	// docs/limit-fit.md). Nil when the meter has never been seen.
+	PlanLimits *PlanLimits `json:"plan_limits,omitempty"`
+	// ColdResume is what the cold-resume guard (hook_cold_resume) did and what followed. Nil when it did nothing in
+	// the period.
+	ColdResume *measure.ColdResume `json:"cold_resume,omitempty"`
+	// ModelSwitch and ColdCompact are the same for the model-switch and cold-compact guards. Nil when the guard did
+	// nothing in the period.
+	ModelSwitch *measure.ColdResume `json:"model_switch,omitempty"`
+	ColdCompact *measure.ColdResume `json:"cold_compact,omitempty"`
+	// Checkpoint is what the session checkpoint (hook_session_checkpoint) saved and restored, and its comparison of
+	// the 20 tool calls after /compact or /clear with and without the restore. Nil when it recorded nothing.
+	Checkpoint *measure.CheckpointWindows `json:"session_checkpoint,omitempty"`
+	// Opusplan is the plan-mode finding for users whose model setting is opusplan. Nil otherwise, or with no
+	// Opus<->Sonnet switch in the period.
+	Opusplan *Opusplan `json:"opusplan,omitempty"`
+	// Headless is the share of the last week's Claude Code use made by print-mode and SDK runs. Nil when there were
+	// none.
+	Headless *Headless `json:"headless,omitempty"`
 	// Tools is how the Trove MCP tools are doing. Nil when the server is not
 	// registered and no agent has used them.
 	Tools *Tools `json:"trove_tools,omitempty"`
@@ -65,6 +92,8 @@ type Report struct {
 	// Autopilot is what Autopilot did in the last week. Nil unless the user agreed to it.
 	// It states no saving figure, so nothing in it needs a measured or estimated label.
 	Autopilot *autopilot.Summary `json:"autopilot,omitempty"`
+	// OptimizePolicy is what the optimize policy turned on, measured and rolled back. Nil unless the user agreed to it.
+	OptimizePolicy *autopilot.PolicyView `json:"optimize_policy,omitempty"`
 	// Upstreams is capacity and cost per OpenAI-compatible server (self-hosted or
 	// open-weight). Empty when no such traffic was recorded.
 	Upstreams []measure.UpstreamRow `json:"upstreams,omitempty"`

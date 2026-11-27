@@ -34,6 +34,7 @@ Biggest leaks (estimated, overlapping, not additive)
 Optimizers
   model_router: off
   effort_tool_turns: off
+  effort_routine_prompts: off
   volatile_prefix_mover: off
   noise_normalizer: shadow (set to on)
     Rolled back: repeated tool calls rose 45% against the comparison sessions
@@ -44,6 +45,7 @@ Optimizers
     To turn on, add under [optimizers] in config.toml:
     duplicate_result_collapser = "on"
   verbosity_steer: off
+  thinking_clear: off
   cache_breakpoints: off
   Guardrail 2026-10-29: Trove set noise_normalizer back to shadow because
     repeated tool calls rose 45% against the comparison sessions. Review it with

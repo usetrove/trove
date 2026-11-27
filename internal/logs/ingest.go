@@ -216,7 +216,7 @@ func (in *Ingester) source(name string) Source {
 }
 
 func (in *Ingester) loadCheckpoints(ctx context.Context) (map[string]checkpointRow, error) {
-	rows, err := in.DB.QueryContext(ctx, `SELECT file_key, size, mtime, offset, lines, turns, parser_version, skipped_lines FROM history_files`)
+	rows, err := in.DB.QueryContext(ctx, `SELECT file_key, size, mtime, offset, lines, turns, parser_version, skipped_lines, carry_phase, carry_compacted FROM history_files`)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func (in *Ingester) loadCheckpoints(ctx context.Context) (map[string]checkpointR
 	for rows.Next() {
 		var k string
 		var c checkpointRow
-		if err := rows.Scan(&k, &c.size, &c.mtime, &c.cp.Offset, &c.cp.Lines, &c.cp.Turns, &c.parser, &c.skipped); err != nil {
+		if err := rows.Scan(&k, &c.size, &c.mtime, &c.cp.Offset, &c.cp.Lines, &c.cp.Turns, &c.parser, &c.skipped, &c.cp.Phase, &c.cp.Compacted); err != nil {
 			return nil, err
 		}
 		out[k] = c
@@ -291,30 +291,62 @@ func (in *Ingester) store(ctx context.Context, r result, prevSkipped int64) erro
 	stmt, err := tx.PrepareContext(ctx, `INSERT OR REPLACE INTO history_requests
 		(request_key, source, session_key, ts, model, input_tokens, cache_write_5m, cache_write_1h, cache_write_other,
 		 cache_read, output_tokens, cost_usd, pricing_status, plan, sidechain, tool_names, tool_result_bytes, errors,
-		 findings, shadow_savings)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+		 findings, shadow_savings, thinking_tokens, agent_version, entrypoint, effort, turn_effort,
+		 agent_key, phase, compacted, text_bytes, fast_mode)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = stmt.Close() }()
+	// A re-read request replaces its tool rows whole, so a rescan never leaves stale or duplicate calls.
+	delTools, err := tx.PrepareContext(ctx, `DELETE FROM history_tool_calls WHERE request_key = ?`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = delTools.Close() }()
+	addTool, err := tx.PrepareContext(ctx, `INSERT INTO history_tool_calls
+		(request_key, idx, ts, tool_name, input_bytes, result_bytes, error) VALUES (?,?,?,?,?,?,?)`)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = addTool.Close() }()
 	for _, x := range rows {
 		names, bytes, errs := toolSummary(x.Tools)
+		// The cleaners run again here so a parser that forgot them still cannot store free text.
 		if _, err := stmt.ExecContext(ctx, x.RequestKey, x.Source, x.SessionKey, x.TS, x.Model, x.Input,
 			x.CacheWrite5m, x.CacheWrite1h, x.CacheWriteNA, x.CacheRead, x.Output, nullFloat(x.CostUSD),
 			x.PricingStatus, string(x.Plan), boolInt(x.Sidechain), names, bytes, errs,
-			nullJSON(x.Findings), nullJSON(x.ShadowSavings)); err != nil {
+			nullJSON(x.Findings), nullJSON(x.ShadowSavings), nullInt(x.Thinking),
+			nullStr(CleanVersion(x.AgentVersion)), nullStr(CleanEntrypoint(x.Entrypoint)),
+			nullStr(CleanEffort(x.Effort)), nullStr(CleanEffort(x.TurnEffort)),
+			x.AgentKey, nullStr(CleanPhase(x.Phase)), boolInt(x.Compacted), x.TextBytes,
+			boolInt(strings.EqualFold(x.ServiceTier, "fast"))); err != nil {
 			return err
+		}
+		if _, err := delTools.ExecContext(ctx, x.RequestKey); err != nil {
+			return err
+		}
+		for i, c := range x.Tools {
+			var result any
+			if c.ResultHash != "" { // a result was seen (an empty result still has a hash)
+				result = c.ResultBytes
+			}
+			if _, err := addTool.ExecContext(ctx, x.RequestKey, i, x.TS, c.Name, c.InputBytes, result, boolInt(c.Error)); err != nil {
+				return err
+			}
 		}
 	}
 	now := time.Now()
 	if _, err := tx.ExecContext(ctx, `INSERT INTO history_files
-		(file_key, source, size, mtime, offset, parser_version, format_version, lines, turns, skipped_lines, updated_at)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?)
+		(file_key, source, size, mtime, offset, parser_version, format_version, lines, turns, skipped_lines, updated_at,
+		 carry_phase, carry_compacted)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(file_key) DO UPDATE SET size=excluded.size, mtime=excluded.mtime, offset=excluded.offset,
 		  parser_version=excluded.parser_version, format_version=excluded.format_version, lines=excluded.lines,
-		  turns=excluded.turns, skipped_lines=excluded.skipped_lines, updated_at=excluded.updated_at`,
+		  turns=excluded.turns, skipped_lines=excluded.skipped_lines, updated_at=excluded.updated_at,
+		  carry_phase=excluded.carry_phase, carry_compacted=excluded.carry_compacted`,
 		r.file.Key, r.file.Source, r.file.Size, r.file.MTime, r.cp.Offset, in.Versions[r.file.Source], r.stats.FormatVersion,
-		r.cp.Lines, r.cp.Turns, prevSkipped+r.stats.Skipped, now.UnixMilli()); err != nil {
+		r.cp.Lines, r.cp.Turns, prevSkipped+r.stats.Skipped, now.UnixMilli(), CleanPhase(r.cp.Phase), boolInt(r.cp.Compacted)); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -352,6 +384,20 @@ func nullJSON(j json.RawMessage) any {
 		return nil
 	}
 	return string(j)
+}
+
+func nullInt(p *int64) any {
+	if p == nil {
+		return nil
+	}
+	return *p
+}
+
+func nullStr(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 func boolInt(b bool) int {

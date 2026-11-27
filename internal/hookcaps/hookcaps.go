@@ -27,7 +27,22 @@ const (
 const (
 	RewriteInput  = "input"
 	RewriteOutput = "output"
+	// PromptBlock is not a rewrite: it is whether a UserPromptSubmit hook may block a prompt the user typed,
+	// telling it apart from a run nobody watches (`claude -p`). Only the cold-resume guard asks for it.
+	PromptBlock = "block"
+	// PromptContext is whether UserPromptSubmit additionalContext lands after the cached prefix, next to the new
+	// prompt, so the turns after it still read the earlier cache. Only hook_routine_steer asks for it.
+	PromptContext = "context"
 )
+
+// ToolPrompt is the Tool of an entry about the UserPromptSubmit event rather than a tool.
+const ToolPrompt = "UserPromptSubmit"
+
+// ToolGrepContent is the Tool of the entry for Grep in output_mode "content", whose result is text. The "Grep"
+// entry comes from Grep's default mode, which returns a file list: that it honoured a replaced list says nothing
+// about a replaced text, and the text is the only Grep output a hook ever rewrites. So output rewrites of Grep are
+// gated on this entry.
+const ToolGrepContent = "GrepContent"
 
 // Version is the schema version of the stored record.
 const Version = 1
@@ -39,6 +54,15 @@ type Capability struct {
 	Tool          string `json:"tool"`
 	InputRewrite  string `json:"input_rewrite"`
 	OutputRewrite string `json:"output_rewrite"`
+	// Block is set only on a ToolPrompt entry: "yes" when a live check or the user's own session saw a
+	// UserPromptSubmit block reach a typed prompt and Trove tell an unwatched print-mode run apart.
+	Block string `json:"block,omitempty"`
+	// Context is set only on a ToolPrompt entry: "yes" when a check in the user's own session saw UserPromptSubmit
+	// additionalContext land right after the prompt it came with and the next turn read the whole earlier prefix
+	// from the cache (`trove hooks verify --prompt-context`).
+	Context string `json:"context,omitempty"`
+	// ContextEvidence says what the context check saw; Evidence stays the block check's.
+	ContextEvidence string `json:"context_evidence,omitempty"`
 	// Method is "live" (Trove ran an agent session on the user's API key and it showed
 	// the model the rewritten value), "session" (the user ran the test in their own
 	// session with `trove hooks verify`; the output result is what they reported) or
@@ -91,6 +115,10 @@ func (c Capabilities) Supports(agent, tool, kind string) bool {
 			return e.InputRewrite == Yes
 		case RewriteOutput:
 			return e.OutputRewrite == Yes
+		case PromptBlock:
+			return e.Block == Yes
+		case PromptContext:
+			return e.Context == Yes
 		}
 	}
 	return false

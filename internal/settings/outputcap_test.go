@@ -15,7 +15,7 @@ func TestBuiltinOutputCaps(t *testing.T) {
 		limit int64
 	}{
 		"Bash": {CapChars, 30000},
-		"mcp":  {CapTokens, 25000},
+		"mcp":  {CapChars, 50000},
 		"Read": {CapTokens, 25000},
 	}
 	f, _ := c.File(ClaudeCode)
@@ -38,7 +38,11 @@ func TestBuiltinOutputCaps(t *testing.T) {
 		if !dateRE.MatchString(oc.VerifiedOn) || !strings.HasPrefix(oc.DocURL, "https://") {
 			t.Errorf("%s: needs verified_on and an https doc_url: %+v", tool, oc)
 		}
-		// The setting that raises or lowers the cap must exist in the catalog.
+		// The setting that raises or lowers the cap must exist in the catalog. MCP's 50,000-character limit
+		// has none: only the MCP server itself can raise it (anthropic/maxResultSizeChars).
+		if tool == "mcp" && oc.SettingKey == "" {
+			continue
+		}
 		if _, ok := c.Lookup(ClaudeCode, oc.SettingKey); !ok {
 			t.Errorf("%s: setting_key %q is not in the catalog", tool, oc.SettingKey)
 		}

@@ -29,6 +29,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -41,7 +42,18 @@ const StateEnv = "TROVE_PROBE_STATE"
 
 // DefaultTools are the built-in tools probed by default. WebFetch needs the
 // network and its own permission, so it is probed only when asked for.
-var DefaultTools = []string{"Bash", "Read", "Grep", "Glob"}
+var DefaultTools = defaultTools()
+
+// defaultTools are the built-in tools, PowerShell where Claude Code has it on by default (Windows with Git Bash,
+// code.claude.com/docs/en/tools-reference#powershell-tool, read 2026-11-25), and the MCP case. The large-Bash case
+// is evidence only and runs when asked for (--tools BashLarge).
+func defaultTools() []string {
+	t := []string{"Bash", "Read", "Grep", ToolGrepContent, "Glob"}
+	if runtime.GOOS == "windows" {
+		t = append(t, "PowerShell")
+	}
+	return append(t, ToolMCP)
+}
 
 // Executor runs a program. Tests replace it so no real agent is started.
 type Executor interface {
@@ -88,6 +100,8 @@ type Options struct {
 	Exec      Executor
 	Now       func() time.Time
 	Env       []string // default os.Environ()
+	// TroveBin is the trove binary, which serves the MCP server for the "mcp" case. Without it that case fails.
+	TroveBin string
 }
 
 // Report is the outcome of a run.
@@ -136,7 +150,8 @@ func Run(ctx context.Context, o Options) (Report, error) {
 		return rep, fmt.Errorf("cannot run %q to read its version: %v. Install the agent or pass its path with --claude", o.Claude, err)
 	}
 	now := o.Now().UTC().Format(time.RFC3339)
-	rep.Capabilities.Entries = append(rep.Capabilities.Entries, CodexDocs(ctx, o, now), CursorDocs(now), GeminiDocs(ctx, o, now))
+	rep.Capabilities.Entries = append(rep.Capabilities.Entries, CodexDocs(ctx, o, now), CursorDocs(now), GeminiDocs(ctx, o, now),
+		ClaudePromptDocs(ver, now), ClaudeCodeWriteDocs(ver, "Write", now), ClaudeCodeWriteDocs(ver, "Edit", now))
 	if !o.Live {
 		for _, t := range o.Tools {
 			rep.Capabilities.Entries = append(rep.Capabilities.Entries, hooks.Capability{
@@ -203,7 +218,39 @@ type plan struct {
 	Nonce     string `json:"nonce"`
 	MarkerIn  string `json:"marker_in"`
 	MarkerOut string `json:"marker_out"`
+	// AgentTool is the tool name the agent uses, when it differs from the probe's name for the case: "mcp" probes
+	// Trove's own MCP tool mcpProbeTool, "BashLarge" probes Bash with an output past Claude Code's inline limit, and
+	// "GrepContent" probes Grep in output_mode "content".
+	AgentTool string `json:"agent_tool,omitempty"`
 }
+
+// agentTool is the tool the agent calls for this plan.
+func (p plan) agentTool() string {
+	if p.AgentTool != "" {
+		return p.AgentTool
+	}
+	return p.Tool
+}
+
+// Probe cases beyond the built-in tools.
+const (
+	// ToolMCP stands for every MCP tool: whether Claude Code honours updatedToolOutput for an MCP result is a
+	// property of MCP results, so one probe with Trove's own read-only trove_read answers it for all.
+	ToolMCP = "mcp"
+	// ToolGrepContent is Grep with output_mode "content", whose result is text rather than the file list the
+	// "Grep" case gets. Grep output rewrites are gated on it (hookcaps.ToolGrepContent).
+	ToolGrepContent = "GrepContent"
+	// ToolBashLarge is a Bash call whose output is past Claude Code's 30,000-character inline limit. It records what
+	// a PostToolUse hook is given for such an output (the whole text, or the saved file's path and a preview) and
+	// whether a replacement still reaches the model. Its entry is evidence only: no optimizer is gated on it.
+	ToolBashLarge = "BashLarge"
+	// mcpProbeTool is the MCP tool the "mcp" case calls: trove_read from Trove's own server.
+	mcpProbeTool = "mcp__trove__trove_read"
+	// bashLargeLines is how many 21-byte lines the large Bash case prints: 42,000 bytes, past the 30,000 limit.
+	bashLargeLines = 2000
+	// bashLargeLine is the line the large Bash case prints, newline included.
+	bashLargeLine = "TROVE_PROBE_SRC_LINE\n"
+)
 
 // seen is one hook invocation, as the hooks record it.
 type seen struct {
@@ -232,6 +279,17 @@ func probeTool(ctx context.Context, o Options, ver, tool string, capUSD float64,
 	}
 	nonce := fmt.Sprintf("%x", o.Now().UnixNano()&0xffffff)
 	p := plan{Tool: tool, Nonce: nonce, MarkerIn: "TROVE_PROBE_IN_" + nonce, MarkerOut: "TROVE_PROBE_OUT_" + nonce}
+	switch tool {
+	case ToolMCP:
+		if o.TroveBin == "" {
+			return c, 0, errors.New("the MCP case needs the trove binary to serve trove_read")
+		}
+		p.AgentTool = mcpProbeTool
+	case ToolBashLarge:
+		p.AgentTool = "Bash"
+	case ToolGrepContent:
+		p.AgentTool = "Grep"
+	}
 	prompt, err := setup(project, p)
 	if err != nil {
 		return c, 0, err
@@ -241,8 +299,8 @@ func probeTool(ctx context.Context, o Options, ver, tool string, capUSD float64,
 		return c, 0, err
 	}
 	settings := map[string]any{"hooks": map[string]any{
-		"PreToolUse":  []any{map[string]any{"matcher": tool, "hooks": []any{map[string]any{"type": "command", "command": o.HookCommand("pre"), "timeout": 10}}}},
-		"PostToolUse": []any{map[string]any{"matcher": tool, "hooks": []any{map[string]any{"type": "command", "command": o.HookCommand("post"), "timeout": 10}}}},
+		"PreToolUse":  []any{map[string]any{"matcher": p.agentTool(), "hooks": []any{map[string]any{"type": "command", "command": o.HookCommand("pre"), "timeout": 10}}}},
+		"PostToolUse": []any{map[string]any{"matcher": p.agentTool(), "hooks": []any{map[string]any{"type": "command", "command": o.HookCommand("post"), "timeout": 10}}}},
 	}}
 	sb, _ := json.Marshal(settings)
 	settingsPath := filepath.Join(root, "settings.json")
@@ -250,9 +308,20 @@ func probeTool(ctx context.Context, o Options, ver, tool string, capUSD float64,
 		return c, 0, err
 	}
 	env := append(append([]string{}, orEnv(o.Env)...), StateEnv+"="+state)
-	args := []string{"-p", prompt, "--settings", settingsPath, "--setting-sources", "local", "--tools", tool,
-		"--allowedTools", tool, "--output-format", "json", "--max-budget-usd", fmt.Sprintf("%.2f", capUSD),
+	builtins := p.agentTool()
+	var extra []string
+	if tool == ToolMCP {
+		// No built-in tools, and only Trove's MCP server, with its own throwaway data directory
+		// (code.claude.com/docs/en/cli-reference: --tools "", --strict-mcp-config, --mcp-config; read 2026-11-25).
+		builtins = ""
+		mc, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{"trove": map[string]any{
+			"command": o.TroveBin, "args": []string{"mcp"}, "env": map[string]string{"TROVE_DATA_DIR": filepath.Join(root, "trove-data")}}}})
+		extra = []string{"--strict-mcp-config", "--mcp-config", string(mc)}
+	}
+	args := []string{"-p", prompt, "--settings", settingsPath, "--setting-sources", "local", "--tools", builtins,
+		"--allowedTools", p.agentTool(), "--output-format", "json", "--max-budget-usd", fmt.Sprintf("%.2f", capUSD),
 		"--model", o.Model, "--no-session-persistence"}
+	args = append(args, extra...)
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 	out, runErr := o.Exec.Run(ctx, project, env, orStr(o.Claude, "claude"), args...)
@@ -268,10 +337,13 @@ func probeTool(ctx context.Context, o Options, ver, tool string, capUSD float64,
 		if runErr != nil {
 			return c, spent, fmt.Errorf("%v: %s", runErr, firstLine(string(out)))
 		}
-		c.Evidence = "the hooks never ran: the agent did not call " + tool + " in this session"
+		c.Evidence = "the hooks never ran: the agent did not call " + p.agentTool() + " in this session"
 		return c, spent, nil
 	}
 	judge(&c, p, reply, events)
+	if tool == ToolBashLarge {
+		c.Evidence += "; " + largeEvidence(events)
+	}
 	return c, spent, nil
 }
 
@@ -359,6 +431,29 @@ func judge(c *hooks.Capability, p plan, reply string, ev []seen) {
 		why = append(why, "the model never saw the replacement output; updatedToolOutput was ignored")
 	}
 	c.Evidence = strings.Join(why, "; ")
+}
+
+// largeEvidence says what the PostToolUse hook was given for the large Bash case: how long stdout was, and so
+// whether the hook runs before or after Claude Code saves a long output to a file.
+func largeEvidence(ev []seen) string {
+	for _, e := range ev {
+		if e.Mode != "post" {
+			continue
+		}
+		var r struct {
+			Stdout string `json:"stdout"`
+		}
+		if json.Unmarshal(e.Response, &r) != nil {
+			return "the post hook's tool_response had no stdout string"
+		}
+		full := bashLargeLines * len(bashLargeLine)
+		what := "less than the whole output, so the hook sees what Claude Code keeps, not the full text"
+		if len(r.Stdout) >= full-1 {
+			what = "the whole output, so the hook runs before Claude Code saves it to a file"
+		}
+		return fmt.Sprintf("the PostToolUse hook was given %d characters of stdout for a %d-character output: %s", len(r.Stdout), full, what)
+	}
+	return "the post hook never ran"
 }
 
 func inputApplied(p plan, in json.RawMessage) bool {

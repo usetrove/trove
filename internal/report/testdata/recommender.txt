@@ -36,6 +36,7 @@ Biggest leaks (estimated, overlapping, not additive)
 Optimizers
   model_router: off
   effort_tool_turns: off
+  effort_routine_prompts: off
   volatile_prefix_mover: off
   noise_normalizer: on
     Saved ~$0.50 (estimated).
@@ -45,6 +46,7 @@ Optimizers
     To turn on, add under [optimizers] in config.toml:
     duplicate_result_collapser = "on"
   verbosity_steer: off
+  thinking_clear: off
   cache_breakpoints: off
   Guardrail events: none.
   No regression check yet: not enough finished sessions with an optimizer on to

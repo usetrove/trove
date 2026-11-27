@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/usetrove/trove/internal/gateway/auth"
+	"github.com/usetrove/trove/internal/hookcaps"
 	"github.com/usetrove/trove/internal/hooks"
 	hookprobe "github.com/usetrove/trove/internal/hooks/probe"
 )
@@ -19,7 +20,7 @@ import (
 // runProbeHook runs a probe hook (`trove hook probe_pre|probe_post`). It returns
 // false when args are not a probe event.
 func runProbeHook(args []string, stdin io.Reader, stdout io.Writer) bool {
-	if len(args) == 0 || (args[0] != "probe_pre" && args[0] != "probe_post") {
+	if len(args) == 0 || (args[0] != "probe_pre" && args[0] != "probe_post" && args[0] != "probe_prompt" && args[0] != "probe_context") {
 		return false
 	}
 	getenv := os.Getenv
@@ -33,6 +34,14 @@ func runProbeHook(args []string, stdin io.Reader, stdout io.Writer) bool {
 				return os.Getenv(k)
 			}
 		}
+	}
+	if args[0] == "probe_prompt" {
+		hookprobe.PromptHookMain(stdin, stdout, getenv)
+		return true
+	}
+	if args[0] == "probe_context" {
+		hookprobe.ContextHookMain(stdin, stdout, getenv)
+		return true
 	}
 	hookprobe.HookMain(strings.TrimPrefix(args[0], "probe_"), stdin, stdout, getenv)
 	return true
@@ -106,6 +115,7 @@ func runHooksProbe(ctx context.Context, a *App, fl hooksProbeFlags) error {
 		APIKeyAuth: apiKey,
 		Claude:     fl.claude, Live: fl.live, MaxUSD: fl.maxUSD, Model: fl.model, Tools: fl.tools, RecordDir: fl.recordDir,
 		HookCommand: func(mode string) string { return shellQuote(bin) + " hook probe_" + mode },
+		TroveBin:    bin,
 	})
 	if err != nil {
 		return err
@@ -118,19 +128,30 @@ func runHooksProbe(ctx context.Context, a *App, fl hooksProbeFlags) error {
 }
 
 // mergeCapabilities replaces the stored entries of every agent that was probed
-// and keeps the rest.
+// and keeps the rest. A prompt-block result from the user's own session is kept
+// over the documentation-only entry every probe writes: the probe never tests it.
 func mergeCapabilities(old, fresh hooks.Capabilities) hooks.Capabilities {
 	probed := map[string]bool{}
 	for _, e := range fresh.Entries {
 		probed[e.Agent] = true
 	}
 	var out hooks.Capabilities
+	kept := map[string]bool{}
 	for _, e := range old.Entries {
-		if !probed[e.Agent] {
+		switch {
+		case !probed[e.Agent]:
 			out.Entries = append(out.Entries, e)
+		case e.Tool == hookcaps.ToolPrompt && (e.Method == "live" || e.Method == "session"):
+			out.Entries = append(out.Entries, e)
+			kept[e.Agent] = true
 		}
 	}
-	out.Entries = append(out.Entries, fresh.Entries...)
+	for _, e := range fresh.Entries {
+		if e.Tool == hookcaps.ToolPrompt && e.Method == "docs" && kept[e.Agent] {
+			continue
+		}
+		out.Entries = append(out.Entries, e)
+	}
 	return out
 }
 
@@ -143,6 +164,13 @@ func RenderProbe(rep hookprobe.Report) string {
 	}
 	fmt.Fprintf(&b, "Hook capabilities, Claude Code %s, %s\n\n", rep.AgentVersion, mode)
 	for _, e := range rep.Capabilities.Entries {
+		if e.Tool == hookcaps.ToolPrompt {
+			fmt.Fprintf(&b, "%s %s: block a typed prompt %s [%s]\n    %s\n", e.Agent, e.Tool, orUntested(e.Block), e.Method, e.Evidence)
+			if e.Context != "" {
+				fmt.Fprintf(&b, "%s %s: added context stays after the cached prefix %s [%s]\n    %s\n", e.Agent, e.Tool, e.Context, e.Method, e.ContextEvidence)
+			}
+			continue
+		}
 		fmt.Fprintf(&b, "%s %s: rewrite input %s, rewrite output %s [%s]\n    %s\n", e.Agent, e.Tool, e.InputRewrite, e.OutputRewrite, e.Method, e.Evidence)
 	}
 	for _, n := range rep.Notes {
@@ -194,6 +222,13 @@ func hookRewritesCheck(a *App, dir string, optimizerState func(string) string) c
 		}
 	}
 	return check{name, statusOK, d, ""}
+}
+
+func orUntested(s string) string {
+	if s == "" {
+		return hookcaps.Untested
+	}
+	return s
 }
 
 func capReason(c hooks.Capabilities, tool string) string {

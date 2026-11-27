@@ -122,6 +122,71 @@ first byte (`ttft_ms`; for streams, the first SSE bytes, not the first generated
 Anthropic's HIPAA configuration does not cover Claude Code routed through a third-party cloud provider or a
 gateway (legal-and-compliance page, checked 2026-11-04). If you rely on a BAA, use the Trove plugin only.
 
+## Effort and thinking controls
+
+Added 2026-11-24. Three request optimizers change how hard the model thinks. All are gateway-only (API-key traffic),
+off by default, technique class effort (T3), and need a benchmark verdict before Autopilot may name them. Each is a
+pure function of the request, so the same history gives the same bytes (rule 5).
+
+| Optimizer | What it does | Cache |
+|---|---|---|
+| `effort_tool_turns` (C6) | Lowers the top-level `output_config.effort` to `low` on a tool turn | Only on models measured to keep the cache ([effort-check.md](effort-check.md)) |
+| `effort_routine_prompts` (B28) | Adds an empty `system` message with `output_config.effort: low` right after a routine prompt ("continue", "go ahead", "run the tests"), and one with the request's own level after the next prompt that is not routine | The top-level value never changes and every change stays where it was first sent. The docs give this as the way to keep the cached prefix |
+| `thinking_clear` (B29) | In sessions of about 100k tokens or more, adds `context_management` with `clear_thinking_20251015`, keeping the last 2 turns' thinking | Breaks the cache where it clears, so every new turn rewrites the context after the thinking it newly clears |
+
+### `effort_routine_prompts`
+
+Verified 2026-11-24 at platform.claude.com/docs/en/build-with-claude/effort-per-message:
+- **Shape:** `{"role":"system","content":[],"output_config":{"effort":"low"}}` placed in `messages`.
+- **Header:** `anthropic-beta: mid-conversation-output-config-2026-07-01`.
+- **Timing:** placed directly after a user turn with new input, the reply to that turn uses the new level. A turn
+  that only returns tool results is not new input, so the level holds for the whole turn, tool calls included.
+- **Supported models:** Fable 5.2 and 5.1, Mythos 5.2 and 5.1, Opus 5.5, Opus 5, Sonnet 5.5, Haiku 5.5. Every other
+  model is left alone.
+- **Documented 400s, all avoided:**
+  - no beta header;
+  - a model without support;
+  - Sonnet 5.5 with `thinking.type` `between_tools`, or Haiku 5.5 with `disabled` (both skipped on every model).
+- It also never acts on a conversation that already has a system message, or when the request sets no effort or
+  sets `low`.
+
+The prompt is read from the user message's one text block that is not a `<system-reminder>` and classified in memory
+by the same classifier the routine steer uses (internal/routine). Nothing of it is stored.
+
+The gateway adds the beta to the request's `anthropic-beta` header only when the changed body is forwarded. It
+keeps the client's own values. In-flight dedup and keep-warm pings see the same header.
+
+### `thinking_clear`
+
+Verified 2026-11-24 at platform.claude.com/docs/en/build-with-claude/context-editing:
+- **Shape:** `context_management.edits[{type: clear_thinking_20251015, keep: {type: thinking_turns, value: N}}]`.
+- **Header:** `anthropic-beta: context-management-2025-06-27`.
+- **Server side:** clearing happens on the server; the client keeps the full history.
+- **Cache:** "the cache is invalidated at the point where clearing occurs".
+- **Defaults:** Opus 4.5 and later, Sonnet 4.6 and later, Haiku 5.5 and later, Fable and Mythos keep all earlier
+  thinking by default.
+- **Response:** reports `context_management.applied_edits[].cleared_thinking_turns` and `cleared_input_tokens`.
+- **Ordering:** the strategy must come first in `edits`. Trove never adds it when the client sent its own
+  `context_management`.
+
+**Not documented:** the page also says "On models with preserved thinking, server-side context management never
+invalidates thinking blocks" and lists Opus, Sonnet and Haiku 5.5 among those models. It does not say whether
+clearing removes earlier thinking on them. That is one reason the optimizer is shadow first. The response's
+`applied_edits` would show it once it runs.
+
+Each request where it would act records an estimate in `optimizations_applied` (estimated from byte sizes):
+- `saved_tokens`: the old thinking it would not send, which was read from the cache;
+- `lost_cache_tokens`: on the first request of a new turn, the context after the thinking that turn newly clears,
+  which would be written to the cache again.
+
+`measure.ThinkingClearShadow` weighs both sides over 14 days:
+- with the [plan-limit fit](limit-fit.md) when it converts every model seen (per-type weights, or API prices on the
+  fitted scale), in % of the weekly limit;
+- otherwise with API list prices, in USD.
+
+Autopilot refuses to move it out of shadow unless that is net positive over at least 20 requests. The thresholds
+(100k tokens, keep 2 turns, 20 requests) are placeholders.
+
 ## Known gaps
 - Cloud backends (Vertex, Foundry, Bedrock) have no list prices in `pricing.json`, so their cost is empty. The
   Bedrock event stream decoder is tested on hand-built frames; confirm against a real capture.

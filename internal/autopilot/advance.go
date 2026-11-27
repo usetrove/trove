@@ -3,13 +3,16 @@ package autopilot
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sort"
 	"time"
 
 	"github.com/usetrove/trove/internal/config"
 	"github.com/usetrove/trove/internal/experiment"
 	"github.com/usetrove/trove/internal/measure"
+	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/optimize"
+	"github.com/usetrove/trove/internal/pricing"
 	"github.com/usetrove/trove/internal/store"
 	"github.com/usetrove/trove/internal/technique"
 )
@@ -22,12 +25,53 @@ func Enable(dir string, p Policy, now time.Time) (config.AutopilotFile, error) {
 	if err != nil {
 		f = config.AutopilotFile{Entries: map[string]config.AutopilotEntry{}}
 	}
-	f.Enabled, f.Paused, f.Policy, f.ConsentedAt = true, false, config.AutopilotPolicy, now.UnixMilli()
-	for _, name := range p.Eligible {
-		if _, ok := f.Entries[name]; !ok {
-			f.Entries[name] = config.AutopilotEntry{State: config.AutopilotShadow, SinceMS: now.UnixMilli(), Reason: "collecting shadow estimates"}
-			f.Record(config.AutopilotEvent{AtMS: now.UnixMilli(), Optimizer: name, From: config.AutopilotOff, To: config.AutopilotShadow, Reason: "Autopilot turned on"})
+	name := p.Name
+	if name == "" || !config.KnownAutopilotPolicy(name) {
+		name = config.AutopilotPolicy
+	}
+	if name != config.AutopilotPolicyOptimize {
+		name = config.AutopilotPolicy // `trove autopilot trials on` is the only way to the lossless trial policies
+	}
+	prev := f.Policy
+	f.Enabled, f.Paused, f.Policy, f.ConsentedAt = true, false, name, now.UnixMilli()
+	ms := now.UnixMilli()
+	if f.IsOptimize() {
+		// Trials agreed under lossless-v2 named two candidates; under this policy they would name five. Widening
+		// is a new yes, so they are withdrawn here and `trove autopilot trials on` brings them back.
+		if prev == config.AutopilotPolicyV2 {
+			f.TrialsConsentedAt = 0
+			for _, n := range TrialPolicy().Probation {
+				if e, ok := f.Entries[n]; ok {
+					f.Record(config.AutopilotEvent{AtMS: ms, Optimizer: n, From: orOff(e.State), To: config.AutopilotOff, Reason: "trials need a new yes under the optimize policy"})
+					delete(f.Entries, n)
+				}
+			}
 		}
+		f.ColdResumeAsk = true
+		// The policy names the settings policy's one setting, so the same yes covers it.
+		if _, err := enableSettingsIn(&f, now); err != nil {
+			return f, err
+		}
+	}
+	pp := PolicyOf(f)
+	for _, n := range pp.Names() {
+		if _, ok := f.Entries[n]; ok {
+			continue
+		}
+		e := config.AutopilotEntry{State: config.AutopilotShadow, SinceMS: ms, Reason: "collecting shadow estimates"}
+		why := "Autopilot turned on"
+		switch {
+		case pp.IsDirect(n):
+			// The rule 6 amendment: a guard that never changes a request is on for the next session that starts.
+			e = config.AutopilotEntry{State: config.AutopilotOn, SinceMS: ms, Reason: reasonDirectOn, Attempts: 1}
+			why = "you agreed to the optimize policy"
+		case pp.IsShadowOnly(n):
+			e.Reason = reasonShadowOnly
+		case VerdictBlocker(n) != "":
+			e.Reason = VerdictBlocker(n)
+		}
+		f.Entries[n] = e
+		f.Record(config.AutopilotEvent{AtMS: ms, Optimizer: n, From: config.AutopilotOff, To: e.State, Reason: why})
 	}
 	return f, config.SaveAutopilot(dir, f)
 }
@@ -39,7 +83,7 @@ func CurrentPolicy(dir string) Policy {
 	if err != nil {
 		return DefaultPolicy()
 	}
-	return PolicyFor(f.Policy)
+	return PolicyOf(f)
 }
 
 // EnableTrials records the user's agreement to trials under policy p (lossless-v2 or v3) and lists p's trial
@@ -57,7 +101,12 @@ func EnableTrials(dir string, p Policy, now time.Time) (config.AutopilotFile, er
 	if !f.Enabled {
 		return f, fmt.Errorf("Autopilot is not on. Run `trove autopilot on` first")
 	}
-	f.Policy, f.TrialsConsentedAt = p.Name, now.UnixMilli()
+	// Under the optimize policy the trials are a second yes on top of it: the policy name stays, and PolicyOf adds the
+	// candidates while TrialsConsentedAt is set.
+	if !f.IsOptimize() {
+		f.Policy = p.Name
+	}
+	f.TrialsConsentedAt = now.UnixMilli()
 	for _, name := range p.Probation {
 		if _, ok := f.Entries[name]; !ok {
 			f.Entries[name] = config.AutopilotEntry{State: config.AutopilotShadow, SinceMS: now.UnixMilli(), Reason: "collecting shadow estimates"}
@@ -75,7 +124,10 @@ func DisableTrials(dir string, now time.Time) (config.AutopilotFile, error) {
 	if err != nil {
 		return f, err
 	}
-	f.Policy, f.TrialsConsentedAt = config.AutopilotPolicy, 0
+	if !f.IsOptimize() {
+		f.Policy = config.AutopilotPolicy
+	}
+	f.TrialsConsentedAt = 0
 	for _, name := range PolicyV3().Probation {
 		if e, ok := f.Entries[name]; ok {
 			if e.State == config.AutopilotProbation || e.State == config.AutopilotOn {
@@ -90,7 +142,33 @@ func DisableTrials(dir string, now time.Time) (config.AutopilotFile, error) {
 // Disable withdraws consent and forgets Autopilot's states and plan. New sessions
 // go back to what config.toml says. Sessions already running keep their pins.
 func Disable(dir string) error {
-	return config.SaveAutopilot(dir, config.AutopilotFile{Entries: map[string]config.AutopilotEntry{}})
+	off := config.AutopilotFile{Entries: map[string]config.AutopilotEntry{}}
+	// A setting Autopilot changed in the agent's own files stays recorded, so it is taken back at the next
+	// session end with no other session open (withdrawSubTTL), never forgotten in place.
+	if cur, err := config.LoadAutopilot(dir); err == nil {
+		for n, st := range cur.Settings {
+			if st.State == config.AutopilotOn {
+				if off.Settings == nil {
+					off.Settings = map[string]config.AutopilotSetting{}
+				}
+				off.Settings[n] = st
+			}
+		}
+	}
+	return config.SaveAutopilot(dir, off)
+}
+
+// SettingChangeLeft returns the fix id of a settings change Autopilot made that is still recorded as on ("" if
+// none), so `trove autopilot off` can say it is taken back at the next quiet session end.
+func SettingChangeLeft(dir string) string {
+	f, err := config.LoadAutopilot(dir)
+	if err != nil {
+		return ""
+	}
+	if st, ok := f.Settings[SubTTLName]; ok && st.State == config.AutopilotOn {
+		return st.FixID
+	}
+	return ""
 }
 
 // SetPaused pauses or resumes Autopilot without losing its states.
@@ -176,14 +254,27 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 			continue
 		}
 		cur := f.Entries[name]
+		if p.IsHeld(name) && cur.State == config.AutopilotProbation {
+			continue // a trial the user started; advanceRuleTrials judges it
+		}
 		_, back := rolled[name]
 		sessions, events, tokens := combine(byName[name], hookShadow[name])
+		netBlock, err := netEstimateBlocker(ctx, db, dir, name, now)
+		if err != nil {
+			return res, err
+		}
+		blocked := firstNonEmpty(blockedBy(on, name), p.CannotJudge(name), netBlock, VerdictBlocker(name))
+		if p.IsDirect(name) || p.IsHeld(name) || p.IsShadowOnly(name) {
+			// These are never judged on a shadow saving: a guard has none to show, and the other two never leave
+			// shadow by this path. Only a real conflict holds a guard back.
+			blocked = blockedBy(on, name)
+		}
 		ev := Evidence{
 			BaselineDone:   baselineDone,
 			ShadowSessions: sessions,
 			NetTokens:      p.NetOf(name, sessions, events, tokens),
 			RolledBack:     back,
-			Blocked:        firstNonEmpty(blockedBy(on, name), p.CannotJudge(name)),
+			Blocked:        blocked,
 
 			NeedsProbation:   p.NeedsProbation(name),
 			NoSavingEstimate: NoSavingEstimate(name),
@@ -192,7 +283,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 			Unavailable:      whyUnavailable(name, setup),
 		}
 		if cur.State == config.AutopilotProbation {
-			pe, err := readTrial(ctx, db, cfg, name, cur, now)
+			pe, err := readTrial(ctx, db, dir, cfg, p, traffic, name, cur, now)
 			if err != nil {
 				return Result{File: f}, fmt.Errorf("cannot read the trial of %s: %v", name, err)
 			}
@@ -207,7 +298,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 				ev.Tests.Tier = t.Tier
 			}
 		}
-		d := p.Decide(cur, ev, now)
+		d := p.DecideFor(name, cur, ev, now)
 		if d.ClearRollback {
 			if err := measure.ClearOverride(ctx, db, name, now); err != nil {
 				return Result{File: f}, fmt.Errorf("cannot lift the rollback of %s: %v", name, err)
@@ -224,7 +315,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 		}
 	}
 	// Rule-set trials the user started: judged here, never promoted (see ruletrial.go).
-	if rc, evs, err := advanceRuleTrials(ctx, db, cfg, &f, onForAll, traffic, now); err != nil {
+	if rc, evs, err := advanceRuleTrials(ctx, db, dir, cfg, &f, onForAll, traffic, now); err != nil {
 		return Result{File: f}, err
 	} else if rc {
 		changed = true
@@ -244,6 +335,7 @@ func Advance(ctx context.Context, db *store.DB, dir string, cfg config.Config, p
 		}
 	}
 	plan := p.Plan(combinedRows(p.planNames(), byName, hookShadow), f.Entries, baselineDone, blocked, unavailable)
+	annotateLimits(plan, limitfit.ReadCache(dir), now)
 	if !samePlan(plan, f.Plan) {
 		f.Plan, f.PlannedMS = plan, now.UnixMilli()
 		changed = true
@@ -266,15 +358,36 @@ func orOff(s string) string {
 }
 
 func samePlan(a, b []config.AutopilotPlanItem) bool {
-	if len(a) != len(b) {
-		return false
+	return reflect.DeepEqual(a, b)
+}
+
+// annotateLimits adds each item's estimated net saving per shadow session as percent of the plan
+// limits, from the saved fit. Display only: nothing Autopilot decides reads it (PRINCIPLES.md rule 6).
+func annotateLimits(plan []config.AutopilotPlanItem, fit *limitfit.Result, now time.Time) {
+	if fit == nil {
+		return
 	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
+	tbl, err := pricing.Default()
+	if err != nil {
+		tbl = nil // only the type fit can convert then
+	}
+	conv := func(s *limitfit.Share) *config.PercentRange {
+		if s == nil {
+			return nil
+		}
+		return &config.PercentRange{Point: s.Point, Lo: s.Lo, Hi: s.Hi, Basis: s.Basis}
+	}
+	for i := range plan {
+		it := &plan[i]
+		if it.NetTokens <= 0 || it.Sessions <= 0 {
+			continue
+		}
+		d := fit.ContextDelta(it.NetTokens / int64(it.Sessions))
+		limitfit.PriceDelta(tbl, &d, now)
+		if e := fit.Percent(d); e != nil {
+			it.Limit = &config.AutopilotLimitShare{FiveHour: conv(e.FiveHour), Week: conv(e.Week)}
 		}
 	}
-	return true
 }
 
 // permissive is the setup the conflict check assumes: Autopilot asks only whether
@@ -355,6 +468,26 @@ func probationBlocker(cfg config.Config, tr measure.Traffic, name string) string
 	return ""
 }
 
+// netEstimateBlocker says why an optimizer whose cost and saving are both estimated per request cannot leave
+// shadow, or "". Only thinking_clear has such an estimate: clearing old thinking saves context but makes each new
+// turn rewrite the cache after it, and it may only be promoted when the weighed shadow estimate is net positive.
+func netEstimateBlocker(ctx context.Context, db *store.DB, dir, name string, now time.Time) (string, error) {
+	if name != optimize.OptimizerThinkingClear {
+		return "", nil
+	}
+	v, err := measure.ThinkingClearShadow(ctx, db, dir, now.Add(-measure.ThinkingClearWindow), now)
+	if err != nil {
+		return "", fmt.Errorf("cannot read the shadow estimate of %s: %v", name, err)
+	}
+	if v.NetPositive {
+		return "", nil
+	}
+	if v.Requests < measure.ThinkingClearMinRequests {
+		return fmt.Sprintf("its shadow estimate needs %d requests and has %d", measure.ThinkingClearMinRequests, v.Requests), nil
+	}
+	return "its shadow estimate is not net positive: " + v.Text(), nil
+}
+
 // otherInProbation returns the name of another optimizer in probation, or "".
 func otherInProbation(entries map[string]config.AutopilotEntry, name string) string {
 	for n, e := range entries {
@@ -371,12 +504,20 @@ func otherInProbation(entries map[string]config.AutopilotEntry, name string) str
 // session or else the agent's local history, because a user with no gateway has no priced sessions. Both use
 // the experiment package's own status rule and the user's [experiment] thresholds. A read error is returned,
 // never turned into a result, so a failure cannot keep an optimizer.
-func readTrial(ctx context.Context, db *store.DB, cfg config.Config, name string, cur config.AutopilotEntry, now time.Time) (ProbationEvidence, error) {
+//
+// Under the optimize policy (Outcome OutcomeBill) a hook technique is judged on the bill instead of tokens: see
+// BillWeigher. A request-level one already is: the gateway's comparison is on provider-reported cost at API list
+// prices, which is the API-equivalent cost.
+func readTrial(ctx context.Context, db *store.DB, dir string, cfg config.Config, p Policy, tr measure.Traffic, name string, cur config.AutopilotEntry, now time.Time) (ProbationEvidence, error) {
 	var r experiment.Result
 	var err error
 	if viaHooks(name) {
 		idle := time.Duration(cfg.Gateway.IdleMinutes) * time.Minute
-		r, err = experiment.AnalyzeHookTrial(ctx, db, name, cfg.Experiment, cur.SinceMS, now, idle)
+		var w experiment.Weigher
+		if p.Outcome == OutcomeBill {
+			w = BillWeigher(tr, limitfit.ReadCache(dir), now)
+		}
+		r, err = experiment.AnalyzeHookTrialBy(ctx, db, name, cfg.Experiment, cur.SinceMS, now, idle, w)
 	} else {
 		r, err = experiment.AnalyzeSince(ctx, db, name, cfg.Experiment, experiment.DefaultPriors(), cur.SinceMS)
 	}
@@ -384,4 +525,70 @@ func readTrial(ctx context.Context, db *store.DB, cfg config.Config, name string
 		return ProbationEvidence{}, err
 	}
 	return ProbationEvidence{Status: string(r.Status), NOn: r.NOn, NOff: r.NOff}, nil
+}
+
+// CanWeighLimits reports whether a limit fit can turn a session into a share of the 5-hour limit: by weights per
+// token type, or by its API-price scale.
+func CanWeighLimits(fit *limitfit.Result) bool {
+	return fit != nil && (fit.FiveHour.Tier == limitfit.TierFit || fit.FiveHour.PerUSD != nil)
+}
+
+// BillWeigher is the figure the optimize policy judges a hook trial on: API-equivalent cost per session when the
+// user's traffic goes through the gateway (an API key), otherwise percent of the 5-hour plan limit per session from
+// the user's limit fit (a subscriber, estimated). With neither, it is the zero Weigher, and the trial is judged on
+// tokens per session as before. A session the chosen figure cannot weigh is left out, never counted as zero.
+func BillWeigher(tr measure.Traffic, fit *limitfit.Result, now time.Time) experiment.Weigher {
+	if tr.Gateway {
+		return experiment.Weigher{Metric: experiment.MetricAPICost, Weigh: func(u experiment.SessionUsage) (float64, bool) {
+			return u.USD, u.HasUSD
+		}}
+	}
+	return LimitWeigher(fit, false, now)
+}
+
+// LimitWeigher weighs a session as percent of one plan limit per session from the user's limit fit (estimated):
+// the 5-hour limit, or the weekly one when week is true. It is the zero Weigher when the fit cannot weigh that
+// limit. A session the fit cannot weigh is left out, never counted as zero.
+func LimitWeigher(fit *limitfit.Result, week bool, now time.Time) experiment.Weigher {
+	metric := experiment.MetricLimitPct
+	can := CanWeighLimits(fit)
+	if week {
+		metric = experiment.MetricWeekPct
+		can = fit != nil && (fit.Week.Tier == limitfit.TierFit || fit.Week.PerUSD != nil)
+	}
+	if !can {
+		return experiment.Weigher{}
+	}
+	pick := func(e *limitfit.Estimate) *limitfit.Share {
+		if week {
+			return e.Week
+		}
+		return e.FiveHour
+	}
+	tbl, err := pricing.Default()
+	if err != nil {
+		tbl = nil // only the type fit can convert then
+	}
+	return experiment.Weigher{Metric: metric, Weigh: func(u experiment.SessionUsage) (float64, bool) {
+		var e *limitfit.Estimate
+		if u.FromGateway {
+			if !u.HasUSD {
+				return 0, false
+			}
+			e = fit.PercentUSD(u.USD)
+		} else {
+			d := limitfit.Delta{Model: u.Model}
+			d.Tokens[limitfit.TInput] = u.Input
+			d.Tokens[limitfit.TOutput] = u.Output
+			d.Tokens[limitfit.TCacheRead] = u.Read
+			d.Tokens[limitfit.TWrite5m] = u.Write5m + u.WriteOther // a write with no lifetime recorded counts as five minutes
+			d.Tokens[limitfit.TWrite1h] = u.Write1h
+			limitfit.PriceDelta(tbl, &d, now)
+			e = fit.Percent(d)
+		}
+		if e == nil || pick(e) == nil {
+			return 0, false
+		}
+		return pick(e).Point, true
+	}}
 }

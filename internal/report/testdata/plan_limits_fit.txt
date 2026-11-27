@@ -1,0 +1,39 @@
+Plan limits (your estimate, not official weights)
+  5-hour limit, estimated from your meter, from 112 clean intervals over 31
+  windows (9 set aside as outside use).
+  Token type            % of 5h per 1M tokens
+  Input                        2.1 (0.8 to 3)
+  Output                        12 (10 to 14)
+  Cache read              0.25 (0.24 to 0.27)
+  Cache write (5 min)        2.4 (2.1 to 2.8)
+  Cache write (1 hour)       3.9 (3.7 to 4.1)
+  Relative to input = 1: output 5.7 (4 to 9); cache read 0.12 (0.09 to 0.2);
+  cache write (5 min) 1.1 (0.8 to 1.6); cache write (1 hour) 1.9 (1.4 to 2.6).
+  Model families relative to sonnet: opus ×1.8 (1.6 to 2.1). Haiku counted like
+  sonnet (too little data to tell).
+  Not explained by this machine's Claude Code: 9% (5 to 14%) of the meter's
+  movement. That is claude.ai, Cowork, other devices, and calls Claude Code does
+  not log, such as compaction summaries.
+  The meter seems to count differently since 2026-10-09; only data since then is
+  used.
+  Weekly limit, estimated from your meter, from 30 clean intervals over 2
+  windows; it uses the 5-hour limit's mix of weights with a scale of its own,
+  until it has enough data for its own.
+  Token type            % of the week per 1M tokens
+  Input                        0.17 (0.064 to 0.24)
+  Output                          0.96 (0.8 to 1.1)
+  Cache read                  0.02 (0.019 to 0.022)
+  Cache write (5 min)           0.19 (0.17 to 0.22)
+  Cache write (1 hour)           0.31 (0.3 to 0.33)
+  Relative to input: not pinned down yet, because input is a small share of your
+  tokens and its weight is still uncertain.
+  Model families relative to sonnet: opus ×1.8 (1.6 to 2.1). Haiku counted like
+  sonnet (too little data to tell).
+  Not explained by this machine's Claude Code: 11% (6 to 16%) of the meter's
+  movement. That is claude.ai, Cowork, other devices, and calls Claude Code does
+  not log, such as compaction summaries.
+  Waste found in these terms: about 0.5% of 5h (0.42 to 0.59%), 0.039% of the
+  week (0.034 to 0.048%) (estimated from API prices).
+  Numbers in brackets are 90% intervals. These are estimates for your account
+  from Claude Code's own meter, not official weights.
+

@@ -45,7 +45,7 @@ test("an invalid summary is rejected and nothing is stored", async () => {
 test("not JSON and oversized bodies are rejected", async () => {
   const env = fakeEnv();
   assert.equal((await worker.fetch(post("nope"), env)).status, 400);
-  assert.equal((await worker.fetch(post("x".repeat(9000)), env)).status, 413);
+  assert.equal((await worker.fetch(post("x".repeat(17000)), env)).status, 413);
   assert.equal(env.calls.length, 0);
 });
 

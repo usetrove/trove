@@ -7,9 +7,10 @@ compatibility_date = "2026-10-01"
 [observability]
 enabled = false
 
-# Daily clean-up of rows older than 365 days.
+# Daily clean-up of rows older than 365 days, and the weekly limit report on Mondays
+# (WEEKLY_CRON in index.js must match the second entry).
 [triggers]
-crons = ["17 3 * * *"]
+crons = ["17 3 * * *", "41 4 * * 1"]
 
 # Create the database with `wrangler d1 create trove-contribute`, paste its id
 # below, then run `wrangler d1 execute trove-contribute --file=schema.sql`.

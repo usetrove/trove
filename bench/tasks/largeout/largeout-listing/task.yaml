@@ -1,0 +1,16 @@
+id: largeout-listing
+source: largeout
+repo: "local:repo"
+base_commit: local
+license: MIT
+prompt: |
+  One item in inventory.json has an impossible (negative) quantity. Find it by running `python inventory.py`,
+  which lists every item, and set that quantity to its absolute value (do not change inventory.py).
+  `python inventory.py --validate` must exit 0.
+image: python:3.12-slim
+setup: []
+grading_setup:
+  - git checkout HEAD -- inventory.py
+success_cmd: python inventory.py --validate
+timeout_s: 900
+tags: [largeout, python, adversarial]

@@ -524,6 +524,9 @@ func undoChange(c Change, res UndoResult) (UndoResult, bool, error) {
 	if IsFix(c.Agent) && sum(cur) != c.SHAAfter {
 		res.Action = "left_alone"
 		res.Detail = "the file was edited after the fix was applied, so Trove did not touch it. Your original is in " + c.Backup + "; undo later changes first or merge by hand"
+		if c.Created {
+			res.Detail = "the file was edited after Trove created it, so Trove did not remove it. Delete it yourself if you no longer want it"
+		}
 		return res, true, nil
 	}
 	if sum(cur) == c.SHAAfter { // untouched since setup: exact reversal

@@ -2,7 +2,7 @@
 
 <img src="docs/assets/trove-banner.svg" alt="Trove: the efficiency layer for AI coding agents" width="720">
 
-Find the tokens your agent wastes, fix them with changes you approve one at a time, and check that your results did not suffer.
+Say yes once. From your next session Trove warns you before costly cache rebuilds, tests every other saving on your own sessions, and keeps only what your own usage shows works.
 
 ![Release](https://img.shields.io/github/v/release/usetrove/trove?style=flat-square) ![License](https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square) ![Go](https://img.shields.io/badge/Go-1.27.3%2B-00ADD8?style=flat-square) ![Platforms](https://img.shields.io/badge/macOS%20%7C%20Linux-supported-brightgreen?style=flat-square) ![Status](https://img.shields.io/badge/status-pre--release-orange?style=flat-square)
 
@@ -12,19 +12,28 @@ Find the tokens your agent wastes, fix them with changes you approve one at a ti
 
 ---
 
-Trove reads the session history your agent already keeps on disk and finds where tokens go to waste: repeated reads, bloated context, cache breakers, unused tool definitions. It proposes fixes, shows you the exact change, and only applies it when you say yes. Then it measures whether the change helped.
+### What you get on day one
+
+Run `/trove:setup` in Claude Code (or `trove setup` in a terminal) and answer one question: **turn on the optimize policy?** It shows the whole list first. If you say yes, this is what happens from your next session:
+
+- **Three guards are on.** Some actions make Claude Code send a large session's whole context again, and you pay for all of it. Trove warns you before three of them, or stops the action once: resuming a session whose cache has expired, switching model on a large context, and a manual `/compact` on a cold cache. The guards never change what is sent to the model. Trove counts what each one did (measured).
+- **Everything else is tested first.** The other savings start in **shadow**: Trove estimates what each would save on your own sessions and changes nothing. One is turned on only when your own evidence shows it pays. For a subscription that means the share of your plan limit each session uses; for an API key it means the cost at API prices. Changes to what the agent is told, or to which model runs, also need a benchmark verdict first. None has one yet.
+- **Anything that hurts is rolled back.** Every change is measured once it is on, and goes back to shadow by itself if a guardrail trips: failing tests, extra turns, tool errors, or a cost that goes up.
+- **You can see all of it.** `trove status` shows what the policy turned on, what it measured and what it rolled back. `trove report` shows where your tokens went. Every number is labeled measured or estimated.
+
+Prefer to approve each change yourself? Say no. Trove still reads the session history your agent keeps on disk and finds where tokens go to waste: repeated reads, bloated context, cache breakers, unused tool definitions. It shows you the exact change for each fix and applies it only when you say yes (`trove fix`).
 
 One small program. No account. Nothing to sign up for.
 
 - **Local-first.** Everything lives in `~/.trove`. Nothing is sent anywhere unless you opt in.
 - **Honest numbers.** Every figure is labeled **measured** (counted from usage the provider reported) or **estimated** (derived from list prices or an assumption). Dollar figures are estimates, not invoices.
-- **Proves before acting.** Every optimization is opt-in, estimated in shadow mode first, measured once on, and rolled back if its guardrails trip.
+- **Proves before acting.** Every optimization is opt-in: one at a time, or through the one yes to the optimize policy. Each is estimated in shadow first, measured once it is on, and rolled back if its guardrails trip. The only exception is the three guards, which go on from your next session because they never change what is sent to the model.
 - **Works with** Claude Code, on a subscription plan or with your own API keys. See [Supported agents](#supported-agents) for exactly what works where.
 
 ## Get started
 
 > [!NOTE]
-> **Latest release: [v0.5.0](https://github.com/usetrove/trove/releases/tag/v0.5.0)** (2026-11-18). See [what's new](#whats-new-in-v050). Trove is still early: read [Measured results](#measured-results) before you expect a saving; the one confirmed saving is [model routing](#optional-model-routing-api-key-users) for API-key users.
+> **Latest release: [v0.6.0](https://github.com/usetrove/trove/releases/tag/v0.6.0)** (2026-11-26). See [what's new](#whats-new-in-v060). Trove is still early: read [Measured results](#measured-results) before you expect a saving; the one confirmed saving is [model routing](#optional-model-routing-api-key-users) for API-key users.
 
 ### 1. Install
 
@@ -49,7 +58,7 @@ curl -fsSL https://troverelay.com/install.sh | sh
 <details>
 <summary>What the script does</summary>
 
-It installs the latest release (v0.5.0) into `~/.local/bin`. To pin a version, set `TROVE_VERSION=0.5.0` before `sh`. If you have [cosign](https://github.com/sigstore/cosign) installed, it also verifies the release's signature; set `TROVE_REQUIRE_SIGNATURE=1` to refuse an install it cannot verify. It never edits your shell profile: if `~/.local/bin` is not on your `PATH`, it tells you to add it.
+It installs the latest release (v0.6.0) into `~/.local/bin`. To pin a version, set `TROVE_VERSION=0.6.0` before `sh`. If you have [cosign](https://github.com/sigstore/cosign) installed, it also verifies the release's signature; set `TROVE_REQUIRE_SIGNATURE=1` to refuse an install it cannot verify. It never edits your shell profile: if `~/.local/bin` is not on your `PATH`, it tells you to add it.
 
 </details>
 
@@ -116,14 +125,14 @@ Once it is set up there is nothing to run day to day:
 
 1. **Install and add the plugin** (the two steps above).
 2. **Start Claude Code.** On the first session Trove reads your existing history (read-only, metadata only) and shows a report: what you spent, the waste it found, and what it would suggest.
-3. **Run `/trove:setup` once.** It shows one screen, in plain English, and asks you to choose **Turn on Autopilot** or **Just show me reports**. It also offers optional extras (a status line, Trove's MCP tools, a scout subagent) and shows what each costs in tokens first. **Nothing is switched on until you say yes.**
-4. **Use Claude Code as normal.** With Autopilot on, each optimization starts in **shadow**, where it runs on a copy and only records what it would have saved, after paying for its own overhead. It is promoted only if it clears the bar over enough of your own sessions, and only at the start of a new session, never in the middle of one. Once on, it is measured, and it drops back to shadow by itself if the net saving goes negative, outcomes get worse, or errors rise. If anything fails inside Trove, your original request is forwarded unchanged.
+3. **Run `/trove:setup` once.** It shows the optimize policy's list in plain English and asks one question: turn it on, or just show reports. It also offers optional extras (a status line, Trove's MCP tools, a scout subagent) and shows what each costs in tokens first. **Nothing is switched on until you say yes.**
+4. **Use Claude Code as normal.** With the optimize policy on, the three guards act from your next session. Every other optimization starts in **shadow**: it runs on a copy and only records what it would have saved, after paying for its own overhead. It is promoted only if it clears the bar over enough of your own sessions, and only at the start of a new session, never in the middle of one. Once on, it is measured, and it drops back to shadow by itself if the net saving goes negative, outcomes get worse, or errors rise. If anything fails inside Trove, your original request is forwarded unchanged.
 5. **Glance at it now and then.** A status line, a one-line receipt when a session ends, and a weekly summary. You are only interrupted when a decision is needed, such as a rollback.
 
 Most people need three commands: `/trove:setup` once, `trove` for the report, and `trove status` to see what is on. To step back, use `trove autopilot pause`, `trove autopilot off`, `trove undo` or `trove uninstall`. The other commands are optional: finer control (`trove fix`, `trove hooks install`, `trove mcp install`), the API-key gateway, and developer tools (`trove bench`, `trove stress`).
 
 > [!NOTE]
-> Autopilot is a first version: how much shadow evidence it needs before turning an optimizer on (10 shadow sessions and 2,000 estimated net tokens) is a placeholder not yet validated by a benchmark. For trials, the sessions needed on each side come from the `launch-1` and `launch-3` benchmarks for safe (T1) and routing (T3) changes; behavioural (T2) changes still use placeholders, and the riskier optimizations need a separate, second yes (`trove autopilot trials on`). The plugin has run on real Claude Code only inside the benchmark (`launch-3`, Claude Code 2.1.319), where its hooks acted in 2 of 30 sessions; it has not yet been checked across everyday use. See [Supported agents](#supported-agents) and [Measured results](#measured-results).
+> Autopilot is a first version. The optimize policy was added on 2026-11-24 and has not yet run across everyday use. How much shadow evidence it needs before turning an optimizer on (10 shadow sessions and 2,000 estimated net tokens) is a placeholder not yet validated by a benchmark. For trials, the sessions needed on each side come from the `launch-1` and `launch-3` benchmarks for safe (T1) and routing (T3) changes; behavioural (T2) changes still use placeholders, and the riskier optimizations need a separate, second yes (`trove autopilot trials on`). The plugin has run on real Claude Code only inside the benchmark (`launch-3`, Claude Code 2.1.319), where its hooks acted in 2 of 30 sessions; it has not yet been checked across everyday use. See [Supported agents](#supported-agents) and [Measured results](#measured-results).
 
 ## How it works
 
@@ -195,19 +204,18 @@ Trove works with **Claude Code** on macOS and Linux. The table says what exists 
 > [!NOTE]
 > Claude Code's gateway, routing, plugin hooks and MCP server have run in benchmark sessions (Claude Code 2.1.319, Linux containers), but not yet on a person's own macOS or Linux machine; see the [test record](docs/supported-agents.md). If you try it, `trove feedback` is the fastest way to tell us what broke.
 
-## What's new in v0.5.0
+## What's new in v0.6.0
 
-Released 2026-11-18. Full notes in the [changelog](CHANGELOG.md) and on the [release page](https://github.com/usetrove/trove/releases/tag/v0.5.0).
+Released 2026-11-26. Full notes in the [changelog](CHANGELOG.md) and on the [release page](https://github.com/usetrove/trove/releases/tag/v0.6.0).
 
-- **Model routing (`model_router`, T3).** For API-key gateway traffic, tool turns go to a cheaper model you name, with a stickiness rule so each switch repays its cache write. Off by default. In the pre-registered `launch-3` study, Trove's full setup with routing on cut estimated cost per session by 25% with no drop in tasks passed. See [how to turn it on](#optional-model-routing-api-key-users).
-- **More levers, each opt-in and tiered.** Lower effort on tool turns (`effort_tool_turns`, T3), brevity steering at the gateway with a level learned from your own sessions (`verbosity_steer`, T2), a model per subagent (`trove tasks`), and keep-warm pings that keep an idle API-key session's cache alive (`keep_warm`).
-- **Smarter hooks** (each off until you or Autopilot turn it on). Duplicate tool output is replaced by a pointer, very large file reads show an outline first, and application logs are trimmed like test output; the full text stays fetchable in every case. A test-pass signal feeds a new `test_fail_rate` guardrail, and a turn-inflation guardrail charges any extra turns an optimizer causes.
-- **Real numbers for subscription users.** With no gateway, the status line and `trove` now read your agent's own session logs and show usage as API-equivalent value (estimated), with an optional usage budget (`trove budget set <amount> --usage`).
-- **Third-party tools, refereed.** RTK, ZTK, Token Savior, Ponytail, Caveman and `terse-rules` can be installed and removed through `trove external`, and `trove report` shows each tool's own claim next to what Trove measured. Rule sets can be trialled as a per-user A/B (`trove autopilot trial`).
-- **Sharper measurement.** Cost per turn and per uncached input token, adjustment for each session's prior cost (CUPED), and every technique labeled by tier (T1 safe, T2 behavioural, T3 routing) with an evidence label on every suggestion.
-- **Spend cap.** `spend_cap = "on"` warns at 80% and at your cap. It refuses requests past the cap only for agents that have passed `trove budget probe`; none has yet, so for now it only warns.
+- **One yes: the optimize policy.** `trove setup` and `trove autopilot on` ask one question and show the whole list first. Guards that never change a request (the cold-resume, model-switch and cold-compact guards) turn on at the next session boundary. Everything else starts in shadow and is promoted only on evidence, judged on your bill: share of your plan limit for a subscriber, API-equivalent cost for an API key. `trove status` shows what it turned on, measured and rolled back.
+- **Plan limits in your own terms.** Trove learns, for your account, how much each kind of token moves Claude Code's 5-hour and weekly meters, and shows costs and savings as a share of each limit. This is an estimate for one account, not official weights, and it is labeled so.
+- **Regression watch.** `trove report` and the status line say, with the numbers, when a new Claude Code version or a recent day uses more than your own baseline, and what to do about it. Advice only.
+- **New hooks, each off by default.** Long tool output becomes a preview the agent can expand (`hook_output_preview`, T1). A session's key state survives `/compact` and `/clear` (`hook_session_checkpoint`, T2). Routine prompts get a short "answer directly" note (`hook_routine_steer`, T2).
+- **Claims next to measurements.** `trove report claims` puts each token-saving tool's own claim next to what Trove measured in a randomized session test: share of the weekly limit, tokens, pass rate, sample size and dates, Trove's own optimizers included. RTK and ZTK are now judged on that randomized test.
+- **Headless jobs on your plan's API credits.** `trove headless` runs `claude -p`, cron and CI jobs through the gateway on the monthly API credits included with Max, Ultra and Team plans.
 
-Known gaps are listed in the changelog. The main ones: behavioural (T2) changes have no benchmark verdict yet, and the model-routing result is from one model family and one Claude Code version.
+Known gaps are listed in the changelog. The main ones: T2 and T3 items have no benchmark verdict yet, so the optimize policy keeps them in shadow, and the claims table has no measured rows yet.
 
 ## Measured results
 

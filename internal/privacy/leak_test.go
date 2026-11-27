@@ -199,40 +199,63 @@ func containsCanary(s string) []string {
 	return hit
 }
 
+// statusLineInput is what Claude Code sends the status line command (code.claude.com/docs/en/statusline,
+// 2026-11-23), with canaries in every field Trove must not keep and free text where the model id goes
+// (dropped by the model-id pattern; a model id itself is a model name, which rule 7 allows).
+func (w *world) statusLineInput(fiveHourPct float64) string {
+	return fmt.Sprintf(`{"cwd":%q,"session_id":%q,"session_name":"%s","transcript_path":%q,
+		"model":{"id":"fix %s now","display_name":"%s"},"workspace":{"current_dir":%q,"project_dir":%q,"git_worktree":"%s",
+		"repo":{"host":"github.com","owner":"alicecanary","name":"%s"}},"version":"2.1.302",
+		"prompt_cache":{"warm":true,"ttl":"5m"},
+		"rate_limits":{"five_hour":{"used_percentage":%v,"resets_at":4102444800},"seven_day":{"used_percentage":41,"resets_at":4103049600}}}`,
+		w.project, canaries["session id"], canaries["prompt text"], filepath.Join(w.home, ".claude", "projects", canaries["repo name"], "s.jsonl"),
+		canaries["ticket title"], canaries["prompt text"], w.project, w.file, canaries["ticket title"], canaries["repo name"], fiveHourPct)
+}
+
 func TestNoContentReachesTheDatabaseFilesOrAnythingShared(t *testing.T) {
 	w := newWorld(t)
 	w.history(t)
 	w.hookSession(t)
 
-	run := func(args ...string) string {
+	runIn := func(stdin string, args ...string) string {
 		t.Helper()
 		var out, errw bytes.Buffer
-		if code := cli.Execute(w.app(&out, &errw), args); code != 0 {
+		app := w.app(&out, &errw)
+		if stdin != "" {
+			app.In = strings.NewReader(stdin)
+		}
+		if code := cli.Execute(app, args); code != 0 {
 			t.Fatalf("trove %s exited %d\nstdout: %s\nstderr: %s", strings.Join(args, " "), code, out.String(), errw.String())
 		}
 		return out.String() + errw.String()
 	}
+	run := func(args ...string) string { t.Helper(); return runIn("", args...) }
+	// The status line's plan-usage meter: the first sample is ingested by `trove report` below, the
+	// second stays in the spool, so both the table and the spool file are scanned.
+	statusLine := runIn(w.statusLineInput(23.5), "status-line", "--format", "claude", "--json")
 	// `trove doctor` is a local diagnostic that prints the user's own data-folder path (it holds their
 	// username). Everything else it prints is checked: mask only that path.
 	doctor := strings.ReplaceAll(run("doctor"), w.home, "<HOME>")
 	outputs := map[string]string{
-		"report --json":   run("report", "--json"), // also reads the session history above
-		"report":          run("report"),
-		"contribute":      run("contribute"), // the exact text that would be sent
-		"feedback":        run("feedback"),
-		"doctor":          doctor,
-		"logs":            run("logs"),
-		"receipts":        run("receipts"),
-		"recommend":       run("recommend", "--repo", w.project),
-		"tune":            run("tune", "--repo", w.project),
-		"contribute json": run("contribute", "--json"),
+		"report --json":              run("report", "--json"), // also reads the session history above
+		"report":                     run("report"),
+		"contribute":                 run("contribute"), // the exact text that would be sent
+		"feedback":                   run("feedback"),
+		"doctor":                     doctor,
+		"logs":                       run("logs"),
+		"receipts":                   run("receipts"),
+		"recommend":                  run("recommend", "--repo", w.project),
+		"tune":                       run("tune", "--repo", w.project),
+		"contribute json":            run("contribute", "--json"),
+		"status-line":                statusLine,
+		"status-line, meter changed": runIn(w.statusLineInput(24.5), "status-line", "--format", "claude", "--json"),
 	}
 	export := filepath.Join(t.TempDir(), "export")
 	outputs["data export"] = run("data", "export", "--out", export)
 
 	// The test must prove something: the flows really did write rows.
 	text, counts := dbText(t, w.data)
-	for _, tbl := range []string{"history_requests", "hook_events", "session_features"} {
+	for _, tbl := range []string{"history_requests", "hook_events", "session_features", "limit_samples"} {
 		if counts[tbl] == 0 {
 			t.Errorf("%s has no rows, so the scan below proves nothing for that flow (counts: %v)", tbl, counts)
 		}

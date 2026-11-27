@@ -32,6 +32,11 @@ const (
 	KindExtraRead = "extra_read"
 	// KindAdopted: the agent used trove_run. Counted once per session, for hook_large_output's guardrail.
 	KindAdopted = "adopted"
+	// KindOverridden: the user sent a prompt again after the cold-resume guard blocked one (hook_cold_resume).
+	KindOverridden = "overridden"
+	// KindCleared: the session ended with /clear after the cold-resume guard blocked a prompt, before any prompt
+	// went through.
+	KindCleared = "cleared"
 	// KindArmOn and KindArmOff are not decisions. They record which side of a trial a session was
 	// assigned when it started, so a session that never ends is still counted. They go to
 	// experiment_assignments, not hook_events.
@@ -56,6 +61,11 @@ type event struct {
 	Samples int     `json:"ns,omitempty"`
 	// Exit is a test command's exit code, for KindTestRun only.
 	Exit int `json:"x,omitempty"`
+	// Agent is the hashed subagent id and Status the STATUS word, for KindSubagentStart and KindSubagentStop only.
+	Agent  string `json:"a,omitempty"`
+	Status string `json:"st,omitempty"`
+	// TypeKey is the hashed subagent_type, for KindSubagentSpawn only (Agent then holds the hashed tool_use_id).
+	TypeKey string `json:"ty,omitempty"`
 }
 
 const (
@@ -143,6 +153,26 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 		return 0, err
 	}
 	defer func() { _ = test.Close() }()
+	// A resumed subagent starts again: the first start is kept. A stop sets the latest stop and status.
+	subStart, err := tx.PrepareContext(ctx, `INSERT INTO subagent_runs (session_key, agent_key, agent_type, started_at) VALUES (?,?,?,?)
+		ON CONFLICT (session_key, agent_key) DO UPDATE SET started_at = CASE WHEN started_at = 0 THEN excluded.started_at ELSE started_at END,
+		agent_type = CASE WHEN agent_type = 'unknown' THEN excluded.agent_type ELSE agent_type END`)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = subStart.Close() }()
+	subStop, err := tx.PrepareContext(ctx, `INSERT INTO subagent_runs (session_key, agent_key, agent_type, stopped_at, status) VALUES (?,?,?,?,?)
+		ON CONFLICT (session_key, agent_key) DO UPDATE SET stopped_at = excluded.stopped_at, status = excluded.status,
+		agent_type = CASE WHEN agent_type = 'unknown' THEN excluded.agent_type ELSE agent_type END`)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = subStop.Close() }()
+	spawn, err := tx.PrepareContext(ctx, `INSERT OR IGNORE INTO subagent_spawns (session_key, tool_key, ts, agent_type, type_key) VALUES (?,?,?,?,?)`)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = spawn.Close() }()
 	n := 0
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
@@ -153,6 +183,32 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 		if e.Kind == KindArmOn || e.Kind == KindArmOff {
 			// The first record for a session and optimizer wins, so an arm never changes.
 			if _, err := arm.ExecContext(ctx, e.Key, e.Hook, strings.TrimPrefix(e.Kind, "arm_"), e.T); err != nil {
+				return 0, err
+			}
+			n++
+			continue
+		}
+		if e.Kind == KindSubagentStart || e.Kind == KindSubagentStop {
+			if e.Agent == "" {
+				continue
+			}
+			var err error
+			if e.Kind == KindSubagentStart {
+				_, err = subStart.ExecContext(ctx, e.Key, e.Agent, e.Hook, e.T)
+			} else {
+				_, err = subStop.ExecContext(ctx, e.Key, e.Agent, e.Hook, e.T, validStatus(e.Status))
+			}
+			if err != nil {
+				return 0, err
+			}
+			n++
+			continue
+		}
+		if e.Kind == KindSubagentSpawn {
+			if e.Agent == "" {
+				continue
+			}
+			if _, err := spawn.ExecContext(ctx, e.Key, e.Agent, e.T, e.Hook, e.TypeKey); err != nil {
 				return 0, err
 			}
 			n++
@@ -178,10 +234,22 @@ func ingestFile(ctx context.Context, db *store.DB, path string) (int, error) {
 
 func validKind(k string) bool {
 	switch k {
-	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindArmOn, KindArmOff, KindTestRun:
+	case KindBlocked, KindWouldBlock, KindAdvised, KindWouldAdvise, KindRereadAnyway, KindRewritten, KindWouldRewrite, KindReissued, KindFetchedBack, KindExtraRead, KindAdopted, KindOverridden, KindCleared, KindArmOn, KindArmOff, KindTestRun, KindSubagentStart, KindSubagentStop, KindSubagentSpawn,
+		// The routine steer's kinds (migration 0028) and the session checkpoint's (migration 0030).
+		KindSteered, KindWouldSteer, KindReprompted, KindTurnEnd,
+		KindCheckpointed, KindRestored, KindPointed, KindWouldRestore, KindRereadUnchanged, KindRepeatFailure, KindRecovered:
 		return true
 	}
 	return false
+}
+
+// validStatus keeps the CHECK constraint of subagent_runs.status from failing a whole spool on a bad line.
+func validStatus(s string) string {
+	switch s {
+	case "done", "failed", "unsure":
+		return s
+	}
+	return "unknown"
 }
 
 // scrub drops file names from an error so the log never holds a path the agent

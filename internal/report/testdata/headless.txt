@@ -1,0 +1,11 @@
+Headless and SDK runs
+  In the last 7 days 2 sessions started as sdk-cli made 3 requests (measured),
+  about $0.60 at API prices (estimated), 30% of Claude Code's use in that time
+  (estimated).
+  Which sessions are headless comes from the entrypoint Claude Code writes to
+  its log. It is observed, not documented.
+  Max, Ultra and Team plans include monthly API credits that pay for `claude -p`
+  and Agent SDK runs made with an API key from your linked Console organisation,
+  so those runs stop using your plan's limits. `trove headless` shows how to set
+  that up for those jobs only. Runs that already use an API key are not on your
+  plan's limits, so this is an upper bound.

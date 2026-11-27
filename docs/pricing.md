@@ -27,13 +27,13 @@ historical costs stay correct. Per entry:
 
 Prices are JSON **strings** (`"0.30"`), never numbers, so no float touches a price.
 
-## Pages used (read 2026-11-12)
+## Pages used (read 2026-11-26)
 
 | Provider | Prices | Dates |
 | --- | --- | --- |
 | Anthropic | https://platform.claude.com/docs/en/about-claude/pricing | https://platform.claude.com/docs/en/release-notes/overview |
 | OpenAI | https://developers.openai.com/api/docs/pricing (`.md` form for exact tables) | https://developers.openai.com/api/docs/changelog |
-| Google | https://ai.google.dev/gemini-api/docs/pricing (`.md.txt` form for exact tables) | https://ai.google.dev/gemini-api/docs/changelog |
+| Google | https://ai.google.dev/gemini-api/docs/pricing (`.md.txt` form for exact tables; on 2026-11-26 it redirected to https://aistudio.google.com/docs/pricing) | https://ai.google.dev/gemini-api/docs/changelog |
 
 Usage-field semantics were checked on the Anthropic prompt-caching and thinking pages, the OpenAI
 prompt-caching and reasoning guides, and the Gemini `generateContent` reference (`UsageMetadata`:
@@ -134,3 +134,13 @@ checked by this script; the review in step 2 of the checklist covers them.
 - Claude Sonnet 4.5 and Opus 4.5: the current page lists no long-context premium; the old
   1M-context beta premium is not described, so very long prompts could be under-priced.
 - Audio input (Gemini) is priced higher than text and usage does not say which is which.
+- Re-checked 2026-11-26: every bundled entry matched its page on every stored field (standard, batch, long
+  context, regional, fast, ultrafast, priority, flex and tool fees), so only `verified_at` changed. Models on the
+  pages that are not bundled come back unpriced: OpenAI gpt-6.2-astra and gpt-6.2-sol (and their Ultrafast, which
+  costs 3x Standard through 2027-02-28 and 6x from 2027-03-01), gpt-5.2-pro, gpt-4.1 and gpt-4o; Gemini Omni,
+  Genie, Live, TTS, image and transcription models; Claude Opus 4, Opus 4.1 and Sonnet 4 (retired on the Claude
+  API). Adding one needs its launch date from the release notes.
+- GPT-5.6 Sol's promotional price still ends on 2026-11-30 according to the page (read 2026-11-26), which does
+  not say what it becomes. Re-check it after that date.
+- Opus 4.8 fast mode: the pricing page says it is deprecated but gives no removal date; the 2026-11-30 date in
+  `pricing.json` comes from the release notes.

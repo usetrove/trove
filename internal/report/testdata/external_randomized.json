@@ -1,0 +1,206 @@
+[
+  {
+    "claimed": {
+      "label": "claimed",
+      "source_url": "https://github.com/rtk-ai/rtk",
+      "text": "reduces LLM token consumption by 60-90% on common dev commands"
+    },
+    "evidence": "Each new session was given the tool or not at random (trove hook handoff), so the two groups differ only by chance and by the tool. Method: docs/benchmark-methodology.md section 11.",
+    "license": "Apache-2.0",
+    "license_class": "permissive",
+    "name": "rtk",
+    "overhead": {
+      "extra_turns_estimate": 0,
+      "injected_tokens": 0,
+      "label": "estimated",
+      "per_request_tokens": 0,
+      "source": "declared",
+      "tool_def_tokens": 0
+    },
+    "randomized_trial": {
+      "first_assigned_at": 1792238400000,
+      "hook_trial": true,
+      "last_assigned_at": 1793091600000,
+      "optimizer": "ext_rtk",
+      "tokens": {
+        "cost": {
+          "adjusted": false,
+          "confidence": "high",
+          "high": -0.38325637,
+          "kind": "relative",
+          "label": "measured",
+          "low": -0.41642171,
+          "metric": "tokens_per_session",
+          "n_off": 40,
+          "n_on": 40,
+          "strata": 1,
+          "unadjusted_high": -0.38325637,
+          "unadjusted_low": -0.41642171,
+          "unadjusted_value": -0.39999731,
+          "value": -0.39999731
+        },
+        "excluded": 0,
+        "headline": "tokens_per_session",
+        "inputs_hash": "26c81f6dd2828588",
+        "n_off": 40,
+        "n_on": 40,
+        "optimizer": "ext_rtk",
+        "outcomes": [
+          {
+            "adjusted": false,
+            "confidence": "high",
+            "high": 0,
+            "kind": "relative",
+            "label": "measured",
+            "low": 0,
+            "metric": "turns",
+            "n_off": 40,
+            "n_on": 40,
+            "strata": 1,
+            "unadjusted_high": 0,
+            "unadjusted_low": 0,
+            "unadjusted_value": 0,
+            "value": 0
+          }
+        ],
+        "output_tokens_per_turn": {
+          "adjusted": false,
+          "confidence": "high",
+          "high": -0.3834054,
+          "kind": "relative",
+          "label": "measured",
+          "low": -0.41728211,
+          "metric": "output_tokens_per_turn",
+          "n_off": 40,
+          "n_on": 40,
+          "strata": 1,
+          "unadjusted_high": -0.3834054,
+          "unadjusted_low": -0.41728211,
+          "unadjusted_value": -0.40003491,
+          "value": -0.40003491
+        },
+        "overhead_label": "estimated",
+        "overhead_tokens_per_session": 0,
+        "reason": "with it on, sessions use 40.0% fewer tokens (measured, 95% range 38.3% to 41.6%); no regression detected locally; output quality was verified on benchmarks (Prompt 8), not on your data",
+        "status": "saves",
+        "suggest_on": false,
+        "suggest_reason": "no benchmark evidence for this optimizer yet, so Trove will not suggest turning it on",
+        "test_fail_rate": {
+          "label": "measured",
+          "off_rate": 0,
+          "off_sessions": 40,
+          "on_rate": 0.25,
+          "on_sessions": 40,
+          "pass_rate_change": {
+            "high": -0.125,
+            "label": "measured",
+            "low": -0.375,
+            "value": -0.25
+          }
+        },
+        "unpriced": 0
+      },
+      "weekly_limit": {
+        "cost": {
+          "adjusted": false,
+          "confidence": "high",
+          "high": -0.38272547,
+          "kind": "relative",
+          "label": "estimated",
+          "low": -0.41739997,
+          "metric": "pct_week_limit_per_session",
+          "n_off": 40,
+          "n_on": 40,
+          "strata": 1,
+          "unadjusted_high": -0.38272547,
+          "unadjusted_low": -0.41739997,
+          "unadjusted_value": -0.40001389,
+          "value": -0.40001389
+        },
+        "excluded": 0,
+        "headline": "pct_week_limit_per_session",
+        "headline_points": {
+          "adjusted": false,
+          "confidence": "high",
+          "high": -0.012662996,
+          "kind": "points",
+          "label": "estimated",
+          "low": -0.014302076,
+          "metric": "pct_week_limit_per_session",
+          "n_off": 40,
+          "n_on": 40,
+          "strata": 1,
+          "unadjusted_high": -0.012662996,
+          "unadjusted_low": -0.014302076,
+          "unadjusted_value": -0.01347478,
+          "value": -0.01347478
+        },
+        "inputs_hash": "87dbe6b3fd396300",
+        "n_off": 40,
+        "n_on": 40,
+        "optimizer": "ext_rtk",
+        "outcomes": [
+          {
+            "adjusted": false,
+            "confidence": "high",
+            "high": 0,
+            "kind": "relative",
+            "label": "measured",
+            "low": 0,
+            "metric": "turns",
+            "n_off": 40,
+            "n_on": 40,
+            "strata": 1,
+            "unadjusted_high": 0,
+            "unadjusted_low": 0,
+            "unadjusted_value": 0,
+            "value": 0
+          }
+        ],
+        "output_tokens_per_turn": {
+          "adjusted": false,
+          "confidence": "high",
+          "high": -0.3834054,
+          "kind": "relative",
+          "label": "measured",
+          "low": -0.41728211,
+          "metric": "output_tokens_per_turn",
+          "n_off": 40,
+          "n_on": 40,
+          "strata": 1,
+          "unadjusted_high": -0.3834054,
+          "unadjusted_low": -0.41728211,
+          "unadjusted_value": -0.40003491,
+          "value": -0.40003491
+        },
+        "overhead_label": "estimated",
+        "overhead_tokens_per_session": 0,
+        "reason": "with it on, sessions use 40.0% less of the weekly limit (estimated from your meter, 95% range 38.3% to 41.7%); no regression detected locally; output quality was verified on benchmarks (Prompt 8), not on your data",
+        "status": "saves",
+        "suggest_on": false,
+        "suggest_reason": "no benchmark evidence for this optimizer yet, so Trove will not suggest turning it on",
+        "test_fail_rate": {
+          "label": "measured",
+          "off_rate": 0,
+          "off_sessions": 40,
+          "on_rate": 0.25,
+          "on_sessions": 40,
+          "pass_rate_change": {
+            "high": -0.125,
+            "label": "measured",
+            "low": -0.375,
+            "value": -0.25
+          }
+        },
+        "unpriced": 0
+      },
+      "weekly_limit_basis": "estimated from API prices"
+    },
+    "state": "on",
+    "verdict": {
+      "label": "measured",
+      "text": "in a randomized test, with it on: tokens per session -40.0% (95% range -41.6% to -38.3%), measured; share of the weekly limit per session -40.0% (95% range -41.7% to -38.3%), -0.013 points of the weekly limit per session (95% range -0.014 to -0.013), estimated from API prices; pass rate -25.0 points (95% range -37.5 to -12.5; 40 and 40 sessions that ran tests), measured (40 sessions on, 40 off)"
+    },
+    "version": "1.1.0"
+  }
+]

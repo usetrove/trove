@@ -2,7 +2,9 @@
   "end": {
     "Offset": 1432,
     "Lines": 10,
-    "Turns": 2
+    "Turns": 2,
+    "Phase": "",
+    "Compacted": false
   },
   "events": [
     {
@@ -20,15 +22,26 @@
       "CacheRead": 8000,
       "Output": 420,
       "ServiceTier": "",
+      "Thinking": null,
+      "AgentVersion": "",
+      "Entrypoint": "",
+      "Effort": "",
+      "TurnEffort": "",
+      "AgentKey": "",
+      "Phase": "",
+      "Compacted": false,
+      "TextBytes": 0,
       "Tools": [
         {
           "Name": "read_file",
+          "InputBytes": 0,
           "ResultBytes": 60,
           "ResultHash": "3bbc9ec823feeb4c",
           "Error": false
         },
         {
           "Name": "run_shell_command",
+          "InputBytes": 0,
           "ResultBytes": 17,
           "ResultHash": "26e978e41993f735",
           "Error": true
@@ -50,6 +63,15 @@
       "CacheRead": 12000,
       "Output": 40,
       "ServiceTier": "",
+      "Thinking": null,
+      "AgentVersion": "",
+      "Entrypoint": "",
+      "Effort": "",
+      "TurnEffort": "",
+      "AgentKey": "",
+      "Phase": "",
+      "Compacted": false,
+      "TextBytes": 0,
       "Tools": null
     }
   ],

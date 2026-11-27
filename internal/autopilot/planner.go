@@ -68,6 +68,8 @@ func (p Policy) Plan(rows map[string]measure.ShadowRow, entries map[string]confi
 			it.Verdict, it.Reason = VerdictCollecting, "on trial for about half of new sessions: "+entries[name].Reason
 		case blocked[name] != "":
 			it.Verdict, it.Reason = VerdictBlocked, blocked[name]
+		case p.NeedsProbation(name) && VerdictBlocker(name) != "":
+			it.Verdict, it.Reason = VerdictBlocked, VerdictBlocker(name)
 		case unavailable[name] != "":
 			it.Verdict, it.Reason = VerdictUnavailable, unavailable[name]
 		case NoSavingEstimate(name) && !p.NeedsProbation(name):

@@ -3,7 +3,7 @@
 # Trove writes only the fields listed here. A field not in this file is never written.
 version = 1
 harness = "claude_code"
-checked_on = "2026-11-05"
+checked_on = "2026-11-24"
 
 [agent_dir]
 project = ".claude/agents"
@@ -39,6 +39,44 @@ verified = "verbatim"
 name = "maxTurns"
 since = "2.1.246"
 notes = "Output is marked partial when the limit is reached (needs v2.1.246 or later)."
+verified = "verbatim"
+
+[[field]]
+name = "effort"
+values = ["low", "medium", "high", "xhigh", "max"]
+notes = """sub-agents.md "Frontmatter reference", read 2026-11-24: "Effort level when this subagent is active. Overrides \
+the session effort level, but not the CLAUDE_CODE_EFFORT_LEVEL environment variable. Options: low, medium, high, \
+xhigh, max; available levels depend on the model." model-config.md: a model not in the effort table does not \
+support effort; Haiku 5.5 is in it and needs Claude Code v2.1.293 or later."""
+verified = "verbatim"
+
+# Frontmatter fields of a skill file, .claude/skills/<name>/SKILL.md (skills.md "Frontmatter reference",
+# read 2026-11-24). Trove sets model and effort on the subagent a skill forks into, never on the skill
+# itself: without context fork they apply to the rest of the main conversation's turn.
+[[skill_field]]
+name = "name"
+notes = "Command name shown in the / menu. Defaults to the directory name."
+verified = "verbatim"
+
+[[skill_field]]
+name = "description"
+notes = "What the skill does and when to use it."
+verified = "verbatim"
+
+[[skill_field]]
+name = "context"
+values = ["fork"]
+notes = "Set to fork to run in a forked subagent context."
+verified = "verbatim"
+
+[[skill_field]]
+name = "agent"
+notes = "Which subagent type to use when context: fork is set. Trove always names it: the default is not quoted verbatim."
+verified = "verbatim"
+
+[[skill_field]]
+name = "disable-model-invocation"
+notes = "true prevents Claude from automatically loading the skill; /name still runs it."
 verified = "verbatim"
 
 # Frontmatter fields of a command file (slash-commands.md). name is not allowed there.

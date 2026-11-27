@@ -53,7 +53,7 @@ func newEngine(a *App) *cobra.Command {
 				}
 			}
 			eng := optimize.New(engOpts)
-			opts := plugin.Options{Version: Version, Recoverable: recoverable}
+			opts := plugin.Options{Version: Version, Recoverable: recoverable, Passthrough: cfg.Optimize.PreviewPassthrough}
 			// The store is optional: without it nothing is recorded, rollbacks cannot be
 			// read, and so no optimizer may be "on" (fail safe, never fail loud).
 			db, derr := store.Open(dir)

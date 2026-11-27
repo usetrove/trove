@@ -5,9 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/usetrove/trove/internal/setup"
 	"github.com/usetrove/trove/internal/store"
 	"github.com/usetrove/trove/internal/tasks"
 )
@@ -19,11 +21,15 @@ const (
 	TaskCascade = tasks.FeatureCascade
 	// TaskSubagentModel sets a model on the user's own subagent files (plan item 7.3).
 	TaskSubagentModel = tasks.FeatureSubagentModel
+	// TaskRoutine installs the low-effort test runner and lint fixer subagents and their skills.
+	TaskRoutine = tasks.FeatureRoutine
+	// TaskExplore overrides the built-in Explore subagent with a low-effort one (separate opt-in).
+	TaskExplore = tasks.FeatureExplore
 )
 
 // IsTask reports whether kind is one of the tasks features.
 func IsTask(kind string) bool {
-	return kind == TaskScout || kind == TaskCascade || kind == TaskSubagentModel
+	return kind == TaskScout || kind == TaskCascade || kind == TaskSubagentModel || kind == TaskRoutine || kind == TaskExplore
 }
 
 // TasksRequest asks Detect to plan the files of one tasks feature. Nil leaves
@@ -49,8 +55,12 @@ func PlanTasks(e *Env) ([]tasks.File, error) {
 		return tasks.ScoutFiles(cat, e.Tasks.Options)
 	case tasks.FeatureCascade:
 		return tasks.CascadeFiles(cat, e.Tasks.Options)
+	case tasks.FeatureRoutine:
+		return tasks.RoutineFiles(cat, e.Tasks.Options)
+	case tasks.FeatureExplore:
+		return tasks.ExploreFiles(cat, e.Tasks.Options)
 	}
-	return nil, fmt.Errorf("unknown feature %q; use %s or %s", e.Tasks.Feature, tasks.FeatureScout, tasks.FeatureCascade)
+	return nil, fmt.Errorf("unknown feature %q; use %s, %s, %s or %s", e.Tasks.Feature, tasks.FeatureScout, tasks.FeatureCascade, tasks.FeatureRoutine, tasks.FeatureExplore)
 }
 
 func detectTasks(_ context.Context, e *Env) ([]*Fix, error) {
@@ -83,10 +93,18 @@ func detectTasks(_ context.Context, e *Env) ([]*Fix, error) {
 			fmt.Sprintf("Overhead (estimated): about %d tokens in every request for the descriptions and context text, and about %d more each time the feature is used. Trove charges this against any saving it reports.", oh.PerRequestTokens, oh.PerUseTokens),
 			"No saving is estimated yet: Trove has no measured result for this. After you apply it, `trove report` compares your sessions, and labels the result estimated until there are enough sessions to call it measured.",
 			"Applied only between sessions, backed up, and reversed with `trove undo`.")
-		if e.Tasks.Feature == tasks.FeatureCascade && e.getenv("CLAUDE_CODE_SUBAGENT_MODEL_FORCE") != "" {
-			f.Blocked = "CLAUDE_CODE_SUBAGENT_MODEL_FORCE is set, so Claude Code ignores the model in every subagent file and the cascade could not use a cheaper model. Unset it first"
+		f.Notes = append(f.Notes, envNotes(e)...)
+		if blocked := envBlock(e); blocked != "" {
+			f.Blocked = blocked
 			out = append(out, f)
 			continue
+		}
+		if tf.Role == tasks.RoleExplore {
+			if where := userExplore(e); where != "" {
+				f.Blocked = "you already have your own subagent named Explore (" + where + "). Trove does not replace it; set model and effort in that file yourself if you want them"
+				out = append(out, f)
+				continue
+			}
 		}
 		upd, blocked := taskContent(tf, old)
 		switch {
@@ -112,11 +130,27 @@ func taskTitle(tf tasks.File) string {
 		return "Add the cheap-model worker subagent for the cascade"
 	case tasks.RoleEscalate:
 		return "Add the strong-model escalation subagent for the cascade"
+	case tasks.RoleTestRunner:
+		return "Add the low-effort test runner subagent (.claude/agents/" + tasks.TestRunnerName + ".md)"
+	case tasks.RoleLintFixer:
+		return "Add the low-effort formatter and lint fixer subagent (.claude/agents/" + tasks.LintFixerName + ".md)"
+	case tasks.RoleTestSkill:
+		return "Add the /" + tasks.TestSkillName + " skill (runs in the test runner)"
+	case tasks.RoleLintSkill:
+		return "Add the /" + tasks.LintSkillName + " skill (runs in the lint fixer)"
+	case tasks.RoleExplore:
+		return "Replace the built-in Explore subagent in this project with a low-effort one (.claude/agents/" + tasks.ExploreFile + ".md)"
 	}
 	return "Add the /" + tasks.CascadeName + " command"
 }
 
 func taskWhy(feature string) string {
+	switch feature {
+	case tasks.FeatureRoutine:
+		return "Running tests and fixing formatting are mechanical. In a subagent on a cheaper model at low effort they cost less, and the output stays out of the main conversation, which keeps its own model and effort."
+	case tasks.FeatureExplore:
+		return "Claude Code's built-in Explore runs on the main conversation's model (Opus when the main model is Fable). A project Explore file replaces it with one on a cheaper model at low effort."
+	}
 	if feature == tasks.FeatureScout {
 		return "Exploration reads many files into the main conversation. A scout on a small model, limited to read-only tools, returns a short summary instead, which keeps those tokens out of the main context."
 	}
@@ -186,13 +220,133 @@ func registerTask(db *store.DB, e *Env, f *Fix, changeID string) error {
 		return err
 	}
 	oh := tasks.OverheadOf(files)
-	if f.Kind == TaskSubagentModel {
+	effort := ""
+	switch f.Kind {
+	case TaskSubagentModel:
 		// The model it wrote is recorded as the worker model; it adds no text (overhead 0).
 		o = tasks.Options{WorkerModel: e.Tasks.Options.SubagentModel}
+	case TaskScout:
+		effort = o.ScoutEffort
+	case TaskRoutine, TaskExplore:
+		// The routine model is recorded as the worker model.
+		o = tasks.Options{WorkerModel: o.RoutineModel}
+		effort = e.Tasks.Options.Defaults().RoutineEffort
 	}
 	_, err = db.ExecContext(context.Background(),
-		`INSERT OR REPLACE INTO task_installs (change_id, fix_id, feature, role, scout_model, worker_model, escalation_model, overhead_request, overhead_use)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		changeID, f.ID, f.Kind, f.Keys[0], o.ScoutModel, o.WorkerModel, o.EscalationModel, oh.PerRequestTokens, oh.PerUseTokens)
+		`INSERT OR REPLACE INTO task_installs (change_id, fix_id, feature, role, scout_model, worker_model, escalation_model, overhead_request, overhead_use, effort)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		changeID, f.ID, f.Kind, f.Keys[0], o.ScoutModel, o.WorkerModel, o.EscalationModel, oh.PerRequestTokens, oh.PerUseTokens, effort)
 	return err
+}
+
+// envBlock is why a routing feature cannot work in this environment, or "".
+func envBlock(e *Env) string {
+	switch e.Tasks.Feature {
+	case tasks.FeatureCascade, tasks.FeatureRoutine, tasks.FeatureExplore:
+		if e.getenv("CLAUDE_CODE_SUBAGENT_MODEL_FORCE") != "" {
+			return "CLAUDE_CODE_SUBAGENT_MODEL_FORCE is set, so Claude Code ignores the model in every subagent file and this could not use a cheaper model. Unset it first"
+		}
+	}
+	return ""
+}
+
+// envNotes are settings that weaken a feature without blocking it. Verified 2026-11-24 on
+// code.claude.com/docs/en/sub-agents.md: a subagent's effort "Overrides the session effort level,
+// but not the CLAUDE_CODE_EFFORT_LEVEL environment variable".
+func envNotes(e *Env) []string {
+	switch e.Tasks.Feature {
+	case tasks.FeatureScout, tasks.FeatureRoutine, tasks.FeatureExplore:
+	default:
+		return nil
+	}
+	var n []string
+	if v := e.getenv("CLAUDE_CODE_EFFORT_LEVEL"); v != "" {
+		n = append(n, "CLAUDE_CODE_EFFORT_LEVEL is set, and Claude Code lets it win over a subagent's effort field, so these subagents will run at that level instead of low. The cheaper model still applies. Unset it to get the low effort level.")
+	}
+	n = append(n, "The effort field works only on models that support effort (Haiku 5.5 needs Claude Code v2.1.293 or later); on another model Claude Code ignores it. An organisation's maxEffortLevel caps it, which does not matter for low.")
+	return n
+}
+
+// userExplore returns where a subagent named Explore that Trove did not write is defined (the
+// project's or the user's agents folder), or "". Files are read in memory only.
+func userExplore(e *Env) string {
+	dirs := []struct{ dir, label string }{{filepath.Join(e.ProjectDir, ".claude", "agents"), "the project's .claude/agents"}}
+	if e.ClaudeDir != "" {
+		dirs = append(dirs, struct{ dir, label string }{filepath.Join(e.ClaudeDir, "agents"), "your user agents folder"})
+	}
+	for _, d := range dirs {
+		ents, err := os.ReadDir(d.dir)
+		if err != nil {
+			continue
+		}
+		for _, ent := range ents {
+			if ent.IsDir() || !strings.HasSuffix(strings.ToLower(ent.Name()), ".md") {
+				continue
+			}
+			b, err := e.readFile(filepath.Join(d.dir, ent.Name()))
+			if err != nil || bytes.Contains(b, []byte(tasks.Managed)) {
+				continue
+			}
+			if frontmatterName(b) == tasks.ExploreAgent {
+				return d.label
+			}
+		}
+	}
+	return ""
+}
+
+// frontmatterName returns the name field of a file's frontmatter, or "".
+func frontmatterName(b []byte) string {
+	s := strings.ReplaceAll(string(b), "\r\n", "\n")
+	if !strings.HasPrefix(s, "---\n") {
+		return ""
+	}
+	for _, line := range strings.Split(s[4:], "\n") {
+		if line == "---" {
+			break
+		}
+		if v, ok := strings.CutPrefix(line, "name:"); ok {
+			return strings.Trim(strings.TrimSpace(v), `"'`)
+		}
+	}
+	return ""
+}
+
+// TaskChangeIDs lists the recorded change ids of one tasks feature that are still in place in
+// e.ProjectDir, newest last, for `trove tasks remove`. It needs the database: the feature of a
+// change is only known from task_installs.
+func TaskChangeIDs(ctx context.Context, e *Env, feature string) ([]string, error) {
+	if e.DB == nil {
+		return nil, nil
+	}
+	rows, err := e.DB.QueryContext(ctx, `SELECT t.change_id FROM task_installs t JOIN fixes f ON f.change_id = t.change_id
+		WHERE t.feature = ? AND f.reverted_at IS NULL`, feature)
+	if err != nil {
+		return nil, err
+	}
+	want := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			_ = rows.Close()
+			return nil, err
+		}
+		want[id] = true
+	}
+	_ = rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	cs, err := setup.LoadChanges(e.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	proj := norm(resolve(e.ProjectDir)) + "/"
+	var out []string
+	for _, c := range cs {
+		if want[c.ID] && strings.HasPrefix(norm(resolve(c.Path)), proj) {
+			out = append(out, c.ID)
+		}
+	}
+	return out, nil
 }
