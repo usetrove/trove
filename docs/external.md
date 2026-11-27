@@ -137,6 +137,31 @@ For a tool that acts as a Bash hook (RTK, ZTK), Trove does not write the tool's 
 So a hook tool is judged by a randomized session A/B, not by comparing a period before it with a period after, which
 mixes in everything else that changed. The comparison is the same hook-trial analysis the scout and cascade use.
 
+Once any session has an arm, the tool's entry in `trove report` takes its verdict from this test (added 2026-11-26):
+
+- tokens per session, on against off (measured, from the agent's own logs, so no gateway is needed)
+- the share of the weekly limit per session, as a relative change and in points of the limit (estimated from your
+  limit fit, see [limit-fit.md](limit-fit.md)). With no weekly fit yet the report says so instead.
+- the pass-rate change among sessions that ran tests (measured)
+
+Each figure has a 95% range. `--json`: `external_tools[].randomized_trial`. The before-and-after figures are then
+shown only when there are some. `trove report claims` puts every tool's claim next to these figures in one table,
+Trove's own optimizers included. See [benchmark-methodology.md](benchmark-methodology.md#11-the-claims-table).
+
+## Considered and not run
+
+Trove runs a tool for the claims table only if it can hand calls to that tool through one documented hook command,
+with the tool unmodified. Running part of a tool that needs several hooks would measure something other than its
+claim. Checked on 2026-11-26 from each project's own README, LICENSE and hook definitions.
+
+| Tool | Licence | Why it is not run | What would change that |
+|---|---|---|---|
+| Token Optimizer (`github.com/alexgreensh/token-optimizer`, v5.13.81) | PolyForm Noncommercial 1.0.0, plus a small-business permission | A Claude Code plugin with 16 hook commands across 12 events (Read, MCP and Agent `PreToolUse`, `PostToolUse`, `PreCompact`, `SessionStart`, `Stop` and more). Each needs the plugin's own folder (`${CLAUDE_PLUGIN_ROOT}`). No standalone hook command is documented. Its licence also leaves open whether running it for a published comparison is allowed. | The author's written permission, and a documented way to run its hooks from another hook. A different project, `ooples/token-optimizer-mcp`, shares the name. |
+| squeez (`github.com/claudioemmanuel/squeez`, 1.50.0) | Apache-2.0 | Its setup registers six events (`PreToolUse` for Bash, Read, Grep, Glob, Agent and Task, plus `SessionStart`, `PostToolUse`, `SubagentStop`, `PreCompact`, `PostCompact`) as bash scripts. | A hand-off that splits all of a tool's hooks by one arm per session. |
+| sqz (`github.com/ojuschugh1/sqz`, 2.2.0) | MIT OR Apache-2.0 (2.0.0 and earlier: Elastic License 2.0) | Its `PreToolUse` command (`sqz hook claude`) reads stdin and writes stdout, but it also installs `PostToolUse`, `PreCompact` and `SessionStart` hooks. The PyPI wheel looks pure Python; whether it ships the binary is unconfirmed. | As squeez. |
+| claude-compress (`github.com/prabhay759/claude-compress`, 0.1.0) | None found (no LICENSE file) | No licence, so Trove may not redistribute or recommend it. It also needs three hooks. No tagged release. | A licence and a tagged release. |
+| token-goat (PyPI `token-goat`) | Shows a PolyForm Noncommercial badge (not read) | Its PyPI page could not be read on 2026-11-26, so nothing about it is verified. | A check of its repository. |
+
 Checked live on 2026-11-18 on Claude Code 2.1.327, with a stand-in tool named `ztk` that rewrites `echo probe-N` the
 way ZTK rewrites commands: of six sessions, the two the hash put in the "on" arm returned the rewritten output
 (`HANDED-OFF-3`, `HANDED-OFF-4`) and the four in the "off" arm returned the original, and the recorded arms matched
@@ -154,8 +179,12 @@ each session. The real RTK and ZTK binaries were not run (they install with Home
 
 - Per-session on/off switching is possible for hook tools (see "Randomized test for hook tools") but not for
   config-wired ones (rules files), so those are still evaluated before against after.
-- Hooks-only sessions (no gateway) write no session pins, so they cannot yet be compared. Users
-  without the gateway see the claim, overhead and license, but not a measured verdict.
+- Hooks-only sessions (no gateway) write no session pins, so config-wired tools cannot yet be compared without the
+  gateway. Hook tools can: their randomized test reads the agent's own logs.
+- The hand-off splits one Bash `PreToolUse` command. Tools that need several hooks (see "Considered and not run")
+  cannot be tested this way yet.
+- The weekly-limit range covers session-to-session variation, not the limit fit's own uncertainty (see
+  [benchmark-methodology.md](benchmark-methodology.md#11-the-claims-table)).
 - RTK's hook entry is built from its documentation, not from running it. After a first real
   install, compare it with the output of `rtk init -g --no-patch`.
 - `rtk --version` output is unconfirmed; Trove only checks that it contains `1.1.0`.

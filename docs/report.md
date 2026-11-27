@@ -59,6 +59,11 @@ Sections, in order:
    no dollar figure. The recommender is steered by the folder you run `trove report` in; it is best effort and a
    failure there never fails the report.
 
+`trove report claims` is a separate table: every tool and optimizer that has been in a randomized session test,
+with its own claim, the estimated change in the weekly limit, the measured change in tokens and the pass-rate change,
+each with a 95% range, plus the sample size and dates. `--markdown` prints it ready to publish. Method:
+[benchmark-methodology.md](benchmark-methodology.md#11-the-claims-table).
+
 Empty states: no database yet, or no data in the period, prints what to do next
 (`trove setup`, `trove gateway`) and no zeros. Under 20 requests the report says its numbers
 are rough.
