@@ -2,7 +2,7 @@
 
 Status: APPROVED 2026-11-26 by the maintainer, with the recommended answer to every question below. Built in
 `internal/contribute` (limits.go), `internal/cli` (contribute_limits.go) and `server/worker` (aggregate.js, page.js).
-PRINCIPLES.md is unchanged: the proposed rule 1(b) wording is for the maintainer to apply.
+The rule 1(b) wording below was added to PRINCIPLES.md on 2026-11-26 at the maintainer's request.
 
 ## What the feature does
 
