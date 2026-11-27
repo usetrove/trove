@@ -33,7 +33,7 @@ One small program. No account. Nothing to sign up for.
 ## Get started
 
 > [!NOTE]
-> **Latest release: [v0.5.0](https://github.com/usetrove/trove/releases/tag/v0.5.0)** (2026-11-18). See [what's new](#whats-new-in-v050). Trove is still early: read [Measured results](#measured-results) before you expect a saving; the one confirmed saving is [model routing](#optional-model-routing-api-key-users) for API-key users.
+> **Latest release: [v0.6.0](https://github.com/usetrove/trove/releases/tag/v0.6.0)** (2026-11-26). See [what's new](#whats-new-in-v060). Trove is still early: read [Measured results](#measured-results) before you expect a saving; the one confirmed saving is [model routing](#optional-model-routing-api-key-users) for API-key users.
 
 ### 1. Install
 
@@ -58,7 +58,7 @@ curl -fsSL https://troverelay.com/install.sh | sh
 <details>
 <summary>What the script does</summary>
 
-It installs the latest release (v0.5.0) into `~/.local/bin`. To pin a version, set `TROVE_VERSION=0.5.0` before `sh`. If you have [cosign](https://github.com/sigstore/cosign) installed, it also verifies the release's signature; set `TROVE_REQUIRE_SIGNATURE=1` to refuse an install it cannot verify. It never edits your shell profile: if `~/.local/bin` is not on your `PATH`, it tells you to add it.
+It installs the latest release (v0.6.0) into `~/.local/bin`. To pin a version, set `TROVE_VERSION=0.6.0` before `sh`. If you have [cosign](https://github.com/sigstore/cosign) installed, it also verifies the release's signature; set `TROVE_REQUIRE_SIGNATURE=1` to refuse an install it cannot verify. It never edits your shell profile: if `~/.local/bin` is not on your `PATH`, it tells you to add it.
 
 </details>
 
@@ -204,19 +204,18 @@ Trove works with **Claude Code** on macOS and Linux. The table says what exists 
 > [!NOTE]
 > Claude Code's gateway, routing, plugin hooks and MCP server have run in benchmark sessions (Claude Code 2.1.319, Linux containers), but not yet on a person's own macOS or Linux machine; see the [test record](docs/supported-agents.md). If you try it, `trove feedback` is the fastest way to tell us what broke.
 
-## What's new in v0.5.0
+## What's new in v0.6.0
 
-Released 2026-11-18. Full notes in the [changelog](CHANGELOG.md) and on the [release page](https://github.com/usetrove/trove/releases/tag/v0.5.0).
+Released 2026-11-26. Full notes in the [changelog](CHANGELOG.md) and on the [release page](https://github.com/usetrove/trove/releases/tag/v0.6.0).
 
-- **Model routing (`model_router`, T3).** For API-key gateway traffic, tool turns go to a cheaper model you name, with a stickiness rule so each switch repays its cache write. Off by default. In the pre-registered `launch-3` study, Trove's full setup with routing on cut estimated cost per session by 25% with no drop in tasks passed. See [how to turn it on](#optional-model-routing-api-key-users).
-- **More levers, each opt-in and tiered.** Lower effort on tool turns (`effort_tool_turns`, T3), brevity steering at the gateway with a level learned from your own sessions (`verbosity_steer`, T2), a model per subagent (`trove tasks`), and keep-warm pings that keep an idle API-key session's cache alive (`keep_warm`).
-- **Smarter hooks** (each off until you or Autopilot turn it on). Duplicate tool output is replaced by a pointer, very large file reads show an outline first, and application logs are trimmed like test output; the full text stays fetchable in every case. A test-pass signal feeds a new `test_fail_rate` guardrail, and a turn-inflation guardrail charges any extra turns an optimizer causes.
-- **Real numbers for subscription users.** With no gateway, the status line and `trove` now read your agent's own session logs and show usage as API-equivalent value (estimated), with an optional usage budget (`trove budget set <amount> --usage`).
-- **Third-party tools, refereed.** RTK, ZTK, Token Savior, Ponytail, Caveman and `terse-rules` can be installed and removed through `trove external`, and `trove report` shows each tool's own claim next to what Trove measured. Rule sets can be trialled as a per-user A/B (`trove autopilot trial`).
-- **Sharper measurement.** Cost per turn and per uncached input token, adjustment for each session's prior cost (CUPED), and every technique labeled by tier (T1 safe, T2 behavioural, T3 routing) with an evidence label on every suggestion.
-- **Spend cap.** `spend_cap = "on"` warns at 80% and at your cap. It refuses requests past the cap only for agents that have passed `trove budget probe`; none has yet, so for now it only warns.
+- **One yes: the optimize policy.** `trove setup` and `trove autopilot on` ask one question and show the whole list first. Guards that never change a request (the cold-resume, model-switch and cold-compact guards) turn on at the next session boundary. Everything else starts in shadow and is promoted only on evidence, judged on your bill: share of your plan limit for a subscriber, API-equivalent cost for an API key. `trove status` shows what it turned on, measured and rolled back.
+- **Plan limits in your own terms.** Trove learns, for your account, how much each kind of token moves Claude Code's 5-hour and weekly meters, and shows costs and savings as a share of each limit. This is an estimate for one account, not official weights, and it is labeled so.
+- **Regression watch.** `trove report` and the status line say, with the numbers, when a new Claude Code version or a recent day uses more than your own baseline, and what to do about it. Advice only.
+- **New hooks, each off by default.** Long tool output becomes a preview the agent can expand (`hook_output_preview`, T1). A session's key state survives `/compact` and `/clear` (`hook_session_checkpoint`, T2). Routine prompts get a short "answer directly" note (`hook_routine_steer`, T2).
+- **Claims next to measurements.** `trove report claims` puts each token-saving tool's own claim next to what Trove measured in a randomized session test: share of the weekly limit, tokens, pass rate, sample size and dates, Trove's own optimizers included. RTK and ZTK are now judged on that randomized test.
+- **Headless jobs on your plan's API credits.** `trove headless` runs `claude -p`, cron and CI jobs through the gateway on the monthly API credits included with Max, Ultra and Team plans.
 
-Known gaps are listed in the changelog. The main ones: behavioural (T2) changes have no benchmark verdict yet, and the model-routing result is from one model family and one Claude Code version.
+Known gaps are listed in the changelog. The main ones: T2 and T3 items have no benchmark verdict yet, so the optimize policy keeps them in shadow, and the claims table has no measured rows yet.
 
 ## Measured results
 

@@ -103,7 +103,7 @@ func HooksJSON(specs []setup.HookSpec) ([]byte, error) {
 
 // ManifestVersion is the version written to plugin.json. Set it to the release version (no "v") with
 // plugin/trove/VERSION before tagging; release.yml fails the release if either differs from the tag.
-const ManifestVersion = "0.5.0"
+const ManifestVersion = "0.6.0"
 
 // Render returns every derived file. specs are the Claude Code hook specs built
 // with HookCommand.
