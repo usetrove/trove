@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+
+	"github.com/usetrove/trove/internal/measure"
 )
 
 // Resamples is the number of bootstrap resamples. It matches the benchmark
@@ -127,7 +129,7 @@ func passChange(onPass, onN, offPass, offN int, seed int64) *RateChange {
 		draws[i] = draw(onPass, onN) - draw(offPass, offN)
 	}
 	sort.Float64s(draws)
-	return &RateChange{Value: rate(onPass, onN) - rate(offPass, offN), Low: quantile(draws, 0.025), High: quantile(draws, 0.975)}
+	return &RateChange{Value: rate(onPass, onN) - rate(offPass, offN), Low: quantile(draws, 0.025), High: quantile(draws, 0.975), Label: measure.Measured}
 }
 
 // quantile of a sorted slice, linear interpolation.

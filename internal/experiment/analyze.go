@@ -149,9 +149,10 @@ type TestFailResult struct {
 
 // RateChange is a difference of two rates, on minus off, in fractions, with its 95% range.
 type RateChange struct {
-	Value float64 `json:"value"`
-	Low   float64 `json:"low"`
-	High  float64 `json:"high"`
+	Value float64       `json:"value"`
+	Low   float64       `json:"low"`
+	High  float64       `json:"high"`
+	Label measure.Label `json:"label"`
 }
 
 // sess is one assigned, finished session.
