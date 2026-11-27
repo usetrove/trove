@@ -175,6 +175,21 @@ trips. It has no prompts, code, file paths, hashes, model names, dollar amounts,
 or identifiers. [`internal/contribute` `TestBuildIsCoarseAndDeterministic`; `TestPayloadFieldsAreReviewed` fails
 if a field is added without review]
 
+**Plan-limit section (a second opt-in).** Only if you also run `trove contribute limits enable --plan <plan>` and
+answer yes, the summary gains a `limits` part: the plan you named (`pro`, `max`, `ultra`, `team`, `enterprise` or
+`unspecified`; Trove never finds it out for itself), the most used Claude Code version, and for each plan limit where
+your own estimate is fitted, how much output, cache reads and cache writes seemed to count compared with input
+(rounded) with the width of each 90% interval, and the share of the limit's use Trove could not explain (whole
+percent). It also says, for up to 5 recent Claude Code versions, whether the regression watch alerted on each of its
+four metrics and whether it blamed the client, the server or neither. It never holds absolute weights, token or
+request counts, model names, dates or times, session ids or the watch's own numbers.
+`trove contribute --preview` prints the exact bytes an upload would send. `trove contribute limits disable` leaves the
+part out from the next upload on. The receiver publishes only a weekly page of medians and middle-half ranges over
+at least 20 installs, plus per-version flags; no install's own numbers are published, and figures on a page already
+published cannot be withdrawn. See [docs/decisions/limit-report.md](docs/decisions/limit-report.md).
+[`internal/contribute` `TestLimitsNeedTheirOwnConsent`, `TestAutoDropsLimitsWithoutConsent`,
+`TestLimitsHoldOnlyTheApprovedFields`; `internal/cli` `TestContributePreviewIsExactlyTheUpload`]
+
 ## Your control
 
 - `trove uninstall` restores every file Trove edited and removes its registrations; add `--purge-data` to

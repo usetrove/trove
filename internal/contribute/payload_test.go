@@ -24,9 +24,18 @@ func TestPayloadFieldsAreReviewed(t *testing.T) {
 		"LabeledPercent.percent": true, "LabeledPercent.label": true,
 		"OptimizerSummary.name": true, "OptimizerSummary.effective": true,
 		"OptimizerSummary.rolled_back": true, "OptimizerSummary.percent_fewer_measured": true,
+		// The limits section, docs/decisions/limit-report.md (approved 2026-11-26).
+		"Payload.limits": true,
+		"Limits.plan":    true, "Limits.claude_code_version": true, "Limits.five_hour": true, "Limits.seven_day": true,
+		"Limits.version_checks": true,
+		"LimitMeter.ratios":     true, "LimitMeter.unexplained_pct": true,
+		"Ratios.output": true, "Ratios.cache_read": true, "Ratios.cache_write_5m": true, "Ratios.cache_write_1h": true,
+		"Ratio.ratio": true, "Ratio.width": true,
+		"VersionCheck.version": true, "VersionCheck.metric": true, "VersionCheck.status": true, "VersionCheck.cause": true,
 	}
 	var got []string
-	for _, typ := range []reflect.Type{reflect.TypeOf(Payload{}), reflect.TypeOf(LabeledPercent{}), reflect.TypeOf(OptimizerSummary{})} {
+	for _, typ := range []reflect.Type{reflect.TypeOf(Payload{}), reflect.TypeOf(LabeledPercent{}), reflect.TypeOf(OptimizerSummary{}),
+		reflect.TypeOf(Limits{}), reflect.TypeOf(LimitMeter{}), reflect.TypeOf(Ratios{}), reflect.TypeOf(Ratio{}), reflect.TypeOf(VersionCheck{})} {
 		for i := 0; i < typ.NumField(); i++ {
 			got = append(got, typ.Name()+"."+strings.Split(typ.Field(i).Tag.Get("json"), ",")[0])
 		}
@@ -98,7 +107,9 @@ func TestEmptyReportHasNoWasteFigure(t *testing.T) {
 // The golden file is also read by server/worker/validate.test.js, so the Go
 // payload and the server's validator cannot drift apart unnoticed.
 func TestEncodeGolden(t *testing.T) {
-	p := Build(sample(), Meta{TroveVersion: "1.2.3", OS: "linux", Arch: "amd64"})
+	r := sample()
+	r.PlanLimits, r.Regressions = limitsSample()
+	p := Build(r, Meta{TroveVersion: "1.2.3", OS: "linux", Arch: "amd64", Plan: "max"})
 	p.InstallID = "0123456789abcdef0123456789abcdef"
 	got, err := Encode(p)
 	if err != nil {

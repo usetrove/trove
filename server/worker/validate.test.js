@@ -37,7 +37,7 @@ test("rejects free text where a fixed vocabulary is expected", () => {
 
 test("rejects wrong types, ranges and schema versions", () => {
   const a = good(); a.period_days = 1.5;
-  const b = good(); b.schema_version = 2;
+  const b = good(); b.schema_version = 3;
   const c = good(); c.guardrail_trips = -1;
   for (const p of [a, b, c, null, [], "x"]) assert.notEqual(validate(p), null);
 });
@@ -51,4 +51,45 @@ test("accepts the payload the Go client produces (golden file)", async () => {
   const { readFileSync } = await import("node:fs");
   const p = JSON.parse(readFileSync(new URL("../../internal/contribute/testdata/payload.golden.json", import.meta.url), "utf8"));
   assert.equal(validate(p), null);
+});
+
+const limits = () => ({
+  plan: "max", claude_code_version: "2.1.90",
+  five_hour: { ratios: { output: { ratio: 5, width: 1.2 }, cache_read: { ratio: 0.083, width: 0.051 } }, unexplained_pct: 12 },
+  seven_day: { unexplained_pct: 15 },
+  version_checks: [
+    { version: "2.1.90", metric: "limit_pct_per_1k_output_equivalent", status: "alert", cause: "client" },
+    { version: "2.1.89", metric: "unexplained_rebuild_rate", status: "normal" },
+  ],
+});
+const withLimits = () => ({ ...good(), schema_version: 2, limits: limits() });
+
+test("accepts the limits section on schema 2, and schema 1 without it", () => {
+  assert.equal(validate(withLimits()), null);
+  assert.equal(validate({ ...good(), schema_version: 2 }), null);
+  assert.notEqual(validate({ ...withLimits(), schema_version: 1 }), null);
+});
+
+test("rejects anything in limits outside the approved fields", () => {
+  const cases = [
+    (l) => { l.model = "x"; },
+    (l) => { l.plan = "Max 20x"; },
+    (l) => { l.claude_code_version = "2.1.90 /home/me"; },
+    (l) => { l.five_hour.weights = {}; },
+    (l) => { l.five_hour.ratios.input = { ratio: 1, width: 0 }; },
+    (l) => { l.five_hour.ratios.output.lo = 4; },
+    (l) => { l.five_hour.ratios.output.ratio = -1; },
+    (l) => { l.five_hour.unexplained_pct = 12.5; },
+    (l) => { l.version_checks[0].key = "2026-11-20"; },
+    (l) => { l.version_checks[0].cause = undefined; },
+    (l) => { l.version_checks[1].cause = "client"; },
+    (l) => { l.version_checks[1].status = "too_little_data"; },
+    (l) => { l.version_checks[1].metric = "secret"; },
+    (l) => { l.version_checks = ["1", "2", "3", "4", "5", "6"].map((v) => ({ version: `2.1.${v}`, metric: "unexplained_rebuild_rate", status: "normal" })); },
+  ];
+  for (const change of cases) {
+    const p = withLimits();
+    change(p.limits);
+    assert.notEqual(validate(p), null, String(change));
+  }
 });

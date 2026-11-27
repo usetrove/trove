@@ -16,7 +16,7 @@ import (
 )
 
 // SchemaVersion changes whenever a field is added, removed or reinterpreted.
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 // Payload is everything that would be shared. Nothing outside it is ever sent.
 type Payload struct {
@@ -40,6 +40,9 @@ type Payload struct {
 	// only when the user has turned upload on; exports from `trove contribute`
 	// alone do not carry one.
 	InstallID string `json:"install_id,omitempty"`
+	// Limits is the plan-limit section (limits.go). It is present only when the user ran
+	// `trove contribute limits enable`, and only when there is something to report.
+	Limits *Limits `json:"limits,omitempty"`
 }
 
 // LabeledPercent is a whole-number percent with its measured/estimated label.
@@ -63,6 +66,9 @@ type OptimizerSummary struct {
 type Meta struct {
 	TroveVersion string
 	OS, Arch     string
+	// Plan is the plan the user named in `trove contribute limits enable`. Empty means the user did not
+	// opt in to the limits section, and Build leaves it out.
+	Plan string
 }
 
 // Build turns a report into the payload. It is deterministic.
@@ -80,6 +86,9 @@ func Build(r report.Report, m Meta) Payload {
 	}
 	if r.Requests > 0 && r.Headline.WastePercent.Label != "" {
 		p.WastePercent = &LabeledPercent{Percent: round(r.Headline.WastePercent.Value), Label: r.Headline.WastePercent.Label}
+	}
+	if m.Plan != "" {
+		p.Limits = buildLimits(r, m.Plan)
 	}
 	for _, o := range r.Optimizers.Rows {
 		s := OptimizerSummary{Name: o.Name, Effective: o.Effective, RolledBack: o.RolledBack != ""}

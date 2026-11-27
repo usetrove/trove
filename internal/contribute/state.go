@@ -26,6 +26,18 @@ type State struct {
 	InstallID string `json:"install_id,omitempty"`
 	// LastSent is the day (YYYY-MM-DD, UTC) of the last successful upload.
 	LastSent string `json:"last_sent,omitempty"`
+	// Limits is the separate consent for the plan-limit section, and Plan the plan the user named with it
+	// (docs/decisions/limit-report.md). Both are set only by `trove contribute limits enable`.
+	Limits bool   `json:"limits,omitempty"`
+	Plan   string `json:"plan,omitempty"`
+}
+
+// LimitsPlan is the plan to build the limits section with, or "" when the user has not opted in to it.
+func (s State) LimitsPlan() string {
+	if !s.Enabled || !s.Limits || !ValidPlan(s.Plan) {
+		return ""
+	}
+	return s.Plan
 }
 
 // LoadState reads the consent record. A missing file is the off state.
