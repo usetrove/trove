@@ -70,6 +70,56 @@ func newReport(a *App) *cobra.Command {
 		RunE: func(*cobra.Command, []string) error { return runReport(a, pf) },
 	}
 	pf.add(c)
+	c.AddCommand(newReportClaims(a))
+	return c
+}
+
+// newReportClaims is `trove report claims`: each token-saving tool's own claim next to what Trove measured in a
+// randomized session test on this machine, Trove's own optimizers included.
+func newReportClaims(a *App) *cobra.Command {
+	var markdown bool
+	c := &cobra.Command{
+		Use:   "claims",
+		Short: "Show each tool's claim next to its measured effect on your weekly limit",
+		Long: "Lists every tool and optimizer that has been in a randomized session test on this machine: its own claim\n" +
+			"(quoted, not checked), the measured change in tokens per session, the estimated change in your weekly\n" +
+			"limit, the pass-rate change, the sample size and the dates. Rows with no clear effect are kept.\n" +
+			"--markdown prints a table ready to publish. Method: docs/benchmark-methodology.md section 11.",
+		Args: cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			if markdown && a.JSON {
+				return fmt.Errorf("choose one of --json and --markdown")
+			}
+			dir, cfg, err := loadConfig(a)
+			if err != nil {
+				return err
+			}
+			r, err := buildReport(a, periodFlags{})
+			if err != nil {
+				return err
+			}
+			db, err := openExisting(dir)
+			if err != nil {
+				return err
+			}
+			c := report.Claims{}
+			if db == nil {
+				c, err = report.BuildClaims(context.Background(), nil, report.Inputs{Config: cfg, Now: time.Now()}, r)
+			} else {
+				defer func() { _ = db.Close() }()
+				c, err = report.BuildClaims(context.Background(), db, report.Inputs{Config: cfg, Now: time.Now(), LimitFit: limitfit.ReadCache(dir)}, r)
+			}
+			if err != nil {
+				return fmt.Errorf("cannot read the trials: %v. Run `trove doctor` for details", err)
+			}
+			if markdown {
+				_, err = fmt.Fprint(a.Out, report.RenderClaimsMarkdown(c))
+				return err
+			}
+			return a.emit(c, trimNL(report.RenderClaimsText(c, a.termWidth())))
+		},
+	}
+	c.Flags().BoolVar(&markdown, "markdown", false, "print the table as Markdown, ready to publish")
 	return c
 }
 

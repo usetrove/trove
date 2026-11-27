@@ -105,22 +105,21 @@ func changeText(m experiment.MetricResult) string {
 // limitPointsText is a difference in points of a limit per session, such as "-0.04 points of the weekly limit per
 // session (95% range -0.05 to -0.03)". A limit figure is a percent already, so a point is one percent of the limit.
 func limitPointsText(m experiment.MetricResult, limit string) string {
-	d := pointDecimals(m.Value, m.Low, m.High)
+	d := pointDecimals(m.Low, m.High)
+	if math.Abs(m.Value) < 0.5*math.Pow10(-d) {
+		m.Value = 0 // printed as +0.00, not -0.00
+	}
 	return fmt.Sprintf("%+.*f points of the %s per session (95%% range %+.*f to %+.*f)", d, m.Value, limit, d, m.Low, d, m.High)
 }
 
-// pointDecimals is enough decimals to show two significant figures of the smallest non-zero value, at least two
-// and at most six, so a small effect is not rounded to a range that reads "-0.01 to -0.01".
-func pointDecimals(vs ...float64) int {
-	d := 2
-	for _, v := range vs {
-		if v = math.Abs(v); v > 0 {
-			if need := 1 - int(math.Floor(math.Log10(v))); need > d {
-				d = need
-			}
-		}
+// pointDecimals is enough decimals to show two significant figures of the larger end of a range, at least two and
+// at most six, so a small effect is not rounded to a range that reads "-0.01 to -0.01".
+func pointDecimals(lo, hi float64) int {
+	v := math.Max(math.Abs(lo), math.Abs(hi))
+	if v == 0 {
+		return 2
 	}
-	return min(d, 6)
+	return min(max(2, 1-int(math.Floor(math.Log10(v)))), 6)
 }
 
 // passText is the pass-rate change, or "" when there is not enough to compare.

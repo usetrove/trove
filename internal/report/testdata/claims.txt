@@ -1,0 +1,30 @@
+Claims next to measurements (randomized session tests on this machine)
+  rtk (third-party): lower with it on, 40 sessions on / 40 off, 2026-10-17 to 2026-10-27
+    Claim         "reduces LLM token consumption by 60-90% on common dev commands" (claimed;
+                  https://github.com/rtk-ai/rtk)
+    Weekly limit  -40.0% (95% range -41.7% to -38.3%); -0.013 points of the weekly limit per session
+                  (95% range -0.014 to -0.013); lower, estimated from API prices
+    Usage         tokens per session -40.0% (95% range -41.6% to -38.3%); lower, measured
+    Tests         pass rate -25.0 points (95% range -37.5 to -12.5; 40 and 40 sessions that ran
+                  tests), measured
+  hook_repeat_read (trove): no clear effect, 40 sessions on / 40 off, 2026-10-17 to 2026-10-27
+    Claim         none: Trove published no estimate for it before the test (docs/techniques.md)
+    Weekly limit  -0.0% (95% range -2.8% to +2.9%); +0.00000 points of the weekly limit per session
+                  (95% range -0.00092 to +0.00099); no clear effect, estimated from API prices
+    Usage         tokens per session +0.0% (95% range -2.7% to +3.0%); no clear effect, measured
+    Tests         pass rate +0.0 points (95% range +0.0 to +0.0; 40 and 40 sessions that ran tests),
+                  measured
+
+  Every row is one randomized session test on this machine: each new session was given the tool or
+  optimizer, or not, by a hash of its key. Sessions are counted under the arm they were given,
+  whether or not it acted.
+  Weekly-limit figures are estimates for one account, from this machine's meter readings
+  (docs/limit-fit.md). They are not official weights.
+  Ranges are 95% bootstrap ranges. "No clear effect" means the range includes no change; that is a
+  result, not a gap.
+  A tool's claim is quoted from its own documentation and is not checked by Trove. Trove's own claim
+  is its shadow estimate, made before the test.
+  Tools Trove looked at and did not run, and why:
+  https://github.com/usetrove/trove/blob/main/docs/external.md#considered-and-not-run.
+  Method:
+  https://github.com/usetrove/trove/blob/main/docs/benchmark-methodology.md#11-the-claims-table
