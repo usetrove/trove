@@ -19,8 +19,6 @@ import (
 	"github.com/usetrove/trove/internal/measure"
 	"github.com/usetrove/trove/internal/measure/limitfit"
 	"github.com/usetrove/trove/internal/optimize"
-	"github.com/usetrove/trove/internal/pricing"
-	"github.com/usetrove/trove/internal/regress"
 	"github.com/usetrove/trove/internal/store"
 	"github.com/usetrove/trove/internal/tasks"
 	"github.com/usetrove/trove/internal/tuning"
@@ -540,6 +538,8 @@ func (h *handler) sessionEnd(in Input, key string) error {
 	// Autopilot's settings policy: judged here, at a session end, and only written while no other session is
 	// open (rule 5). Best effort, after the receipt, and before the notices so a change is announced at once.
 	settingsStep(ctx, db, h.dir, cfg, in, h.getenv, h.now())
+	// The regression watch for the status line, at most every half hour. Best effort and advice only.
+	regressStep(ctx, db, h.dir, cfg, h.getenv, h.now())
 	// Autopilot turn-on and rollback notices, once each. Best effort.
 	_ = autopilot.Announce(h.dir, cfg.Notifications.Desktop, h.notifyText)
 	// Last, and best effort: the receipt is already written.
@@ -561,10 +561,6 @@ func Maintain(ctx context.Context, db *store.DB, dir string, cfg config.Config, 
 	// Refit the plan-usage meters when a newer reading arrived, for the status line and Autopilot.
 	// Best effort and cached: a stale or missing fit only means no percentages are shown.
 	_ = limitfit.Refresh(ctx, db, dir, now)
-	// The regression watch for the status line, at most every half hour. Best effort and advice only.
-	if tbl, err := pricing.Default(); err == nil {
-		_ = regress.Refresh(ctx, db, dir, tbl, now, false)
-	}
 	// Retention must not depend on the gateway running: subscription users never start it. Once a day
 	// across all processes, best effort (an old row surviving a day is never worth failing a hook for).
 	_, _ = db.PurgeIfDue(ctx, cfg.RetentionDays, now)

@@ -87,6 +87,8 @@ type Request struct {
 	TS               int64 // unix ms
 	Session          string
 	Version          string // "" when the log did not give it
+	Model            string
+	Effort           string // "" when unknown
 	Unexplained      bool   // its cache write was an unexplained rebuild (analyze.CauseUnexplained)
 	Split            bool   // its output could be split, so Thinking means something
 	Thinking         int64
@@ -123,8 +125,11 @@ type Check struct {
 	N        int     `json:"n"`               // requests, or meter intervals for the plan-limit metric
 	Sessions int     `json:"sessions"`
 	Blocks   int     `json:"baseline_days"`
-	Label    string  `json:"label"`
-	Basis    string  `json:"basis,omitempty"`
+	// Stratum is the model and effort the thinking metrics were compared within, since both change how
+	// much a model thinks: the most common pair in the version or day checked.
+	Stratum string `json:"stratum,omitempty"`
+	Label   string `json:"label"`
+	Basis   string `json:"basis,omitempty"`
 }
 
 // Alert is a check that tripped, with its cause and the advice for the user.
@@ -242,6 +247,53 @@ type grouping struct {
 	loc  *time.Location
 	reqs []Request
 	ivs  []Interval
+	st   stratum // when on, only requests of this model and effort count, and no meter intervals
+}
+
+// stratum is one model and effort level.
+type stratum struct {
+	on            bool
+	model, effort string
+}
+
+func (s stratum) keeps(r *Request) bool { return !s.on || (r.Model == s.model && r.Effort == s.effort) }
+
+func (s stratum) String() string {
+	switch {
+	case !s.on:
+		return ""
+	case s.model == "" && s.effort == "":
+		return "model and effort unknown"
+	case s.model == "":
+		return "model unknown, " + s.effort + " effort"
+	case s.effort == "":
+		return s.model + ", effort unknown"
+	}
+	return s.model + ", " + s.effort + " effort"
+}
+
+func thinkingMetric(m string) bool { return m == MetricThinkTokens || m == MetricThinkShare }
+
+// stratumFor is, for a thinking metric, the most common model and effort among the split requests keep says
+// yes to (ties by name); off for the other metrics.
+func (g *grouping) stratumFor(m string, keep func(ts int64, version string) bool) stratum {
+	if !thinkingMetric(m) {
+		return stratum{}
+	}
+	n := map[stratum]int{}
+	for i := range g.reqs {
+		r := &g.reqs[i]
+		if r.Split && keep(r.TS, r.Version) {
+			n[stratum{on: true, model: r.Model, effort: r.Effort}]++
+		}
+	}
+	var best stratum
+	for s, c := range n {
+		if c > n[best] || (c == n[best] && (s.model < best.model || (s.model == best.model && s.effort < best.effort))) || !best.on {
+			best = s
+		}
+	}
+	return best
 }
 
 func (g *grouping) day(ts int64) string { return time.UnixMilli(ts).In(g.loc).Format("2006-01-02") }
@@ -250,12 +302,12 @@ func (g *grouping) day(ts int64) string { return time.UnixMilli(ts).In(g.loc).Fo
 func (g *grouping) collect(keep func(ts int64, version string) bool) *cell {
 	c := newCell()
 	for i := range g.reqs {
-		if keep(g.reqs[i].TS, g.reqs[i].Version) {
+		if g.st.keeps(&g.reqs[i]) && keep(g.reqs[i].TS, g.reqs[i].Version) {
 			c.addReq(&g.reqs[i])
 		}
 	}
 	for i := range g.ivs {
-		if keep(g.ivs[i].End, g.ivs[i].Version) {
+		if !g.st.on && keep(g.ivs[i].End, g.ivs[i].Version) {
 			c.addIv(&g.ivs[i])
 		}
 	}
@@ -274,12 +326,12 @@ func (g *grouping) blocks(m string, keep func(ts int64, version string) bool) []
 		return days[d]
 	}
 	for i := range g.reqs {
-		if keep(g.reqs[i].TS, g.reqs[i].Version) {
+		if g.st.keeps(&g.reqs[i]) && keep(g.reqs[i].TS, g.reqs[i].Version) {
 			get(g.reqs[i].TS).addReq(&g.reqs[i])
 		}
 	}
 	for i := range g.ivs {
-		if keep(g.ivs[i].End, g.ivs[i].Version) {
+		if !g.st.on && keep(g.ivs[i].End, g.ivs[i].Version) {
 			get(g.ivs[i].End).addIv(&g.ivs[i])
 		}
 	}
@@ -409,11 +461,14 @@ func Compute(d Data) Result {
 		prev := vs[i-1].name
 		for _, m := range Metrics {
 			name := v.name
-			c := g.collect(func(_ int64, ver string) bool { return ver == name })
+			mine := func(_ int64, ver string) bool { return ver == name }
+			g.st = g.stratumFor(m, mine)
+			c := g.collect(mine)
 			base := g.blocks(m, func(ts int64, ver string) bool {
 				return older[ver] && ts < v.first && ts >= v.first-BaselineDays*dayMS
 			})
 			ch := check(KindVersion, v.name, m, c, base)
+			ch.Stratum = g.st.String()
 			res.Checks = append(res.Checks, ch)
 			if ch.Status != StatusAlert {
 				continue
@@ -446,9 +501,11 @@ func Compute(d Data) Result {
 		inDay := func(ts int64, _ string) bool { return ts >= from && ts < to }
 		active := g.activeOn(from, to)
 		for _, m := range Metrics {
+			g.st = g.stratumFor(m, inDay)
 			c := g.collect(inDay)
 			base := g.blocks(m, func(ts int64, _ string) bool { return ts < from && ts >= from-BaselineDays*dayMS })
 			ch := check(KindDay, day, m, c, base)
+			ch.Stratum = g.st.String()
 			res.Checks = append(res.Checks, ch)
 			if ch.Status != StatusAlert {
 				continue

@@ -32,7 +32,7 @@ func FromLedger(reqs []analyze.LedgerRequest) []Request {
 	entries, _ := analyze.OutputLedger(reqs)
 	out := make([]Request, 0, len(entries))
 	for _, e := range entries {
-		r := Request{TS: e.TS, Session: e.Session, Version: e.Version, Split: !e.Unsplit,
+		r := Request{TS: e.TS, Session: e.Session, Version: e.Version, Model: e.Model, Effort: e.Effort, Split: !e.Unsplit,
 			Thinking: e.Thinking, ThinkingMeasured: e.ThinkingMeasured}
 		if k := (at{e.Session, e.TS}); unexplained[k] > 0 {
 			unexplained[k]--

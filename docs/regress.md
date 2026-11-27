@@ -24,6 +24,11 @@ Output-equivalent tokens are a request's tokens at API list prices, counted as o
 denominator comes from list prices, so the metric is always labeled "estimated from API prices", whether or not
 the per-user meter fit has reached its own gates. An interval that mixes versions counts for days only.
 
+The two thinking metrics are compared within one model and effort level: the most common pair in the version or
+day checked, against the baseline's requests on the same pair. Moving to a model or effort that thinks more is
+your choice, not a regression, so it does not alert. The sentence names the pair, for example "thinking per
+request (claude-opus-5-5, high effort) up 70%".
+
 ## The change test
 
 The baseline is one value per day over the 28 days before the version first appeared (counting only older
@@ -81,7 +86,9 @@ to that repository and to `/feedback` inside Claude Code.
 
 ## When it runs
 
-At session end (`hooks.Maintain`, at most every 30 minutes) and on every `trove report`. The result is saved as
-`regress.json` (0600) in the data folder; the status line only reads that file and shows the strongest alert while
-the result is under 36 hours old. It sees history as of the last history scan (`trove report`, `trove logs scan`,
-or an Autopilot session end), so "within hours" depends on one of those running.
+At every session end, when the saved result is older than 30 minutes: it first reads the newest Claude Code
+history (files written in the last 3 days, incremental, capped at 0.7 s), then recomputes. That read only happens
+where Trove already reads history: history on, and history already scanned once by `trove report` or
+`trove logs scan`. `trove report` recomputes every time. The result is saved as `regress.json` (0600) in the data
+folder; the status line only reads that file and shows the strongest alert while the result is under 36 hours
+old. So a regression shows within one session end of it reaching the minimum sample.

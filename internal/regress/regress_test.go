@@ -22,10 +22,14 @@ func newHist() *hist { return &hist{rng: rand.New(rand.NewPCG(1, 2))} }
 // day adds n requests on day d (0 = today, 1 = yesterday...) for version v over sessions, with thinking
 // around mean (± spread), a share withThinking of them thinking at all, and a rebuild rate.
 func (h *hist) day(d int, v string, n, sessions int, mean, spread float64, withThinking, rebuilds float64) {
+	h.dayOn(d, v, "claude-opus-5-5", "high", n, sessions, mean, spread, withThinking, rebuilds)
+}
+
+func (h *hist) dayOn(d int, v, model, effort string, n, sessions int, mean, spread float64, withThinking, rebuilds float64) {
 	start := time.Date(now.Year(), now.Month(), now.Day()-d, 1, 0, 0, 0, time.UTC).UnixMilli()
 	for i := 0; i < n; i++ {
 		r := Request{TS: start + int64(i)*1000, Session: fmt.Sprintf("%s-d%d-s%d", v, d, i%sessions), Version: v,
-			Split: true, ThinkingMeasured: true}
+			Model: model, Effort: effort, Split: true, ThinkingMeasured: true}
 		if h.rng.Float64() < withThinking {
 			r.Thinking = int64(mean + spread*(2*h.rng.Float64()-1))
 		}
@@ -72,7 +76,7 @@ func TestRealClientRegression(t *testing.T) {
 	if got.Cause != CauseClient || got.Version != "2.1.89" || got.Previous != "2.1.88" || got.N < MinRequests {
 		t.Fatalf("alert = %+v", got)
 	}
-	for _, want := range []string{"Claude Code 2.1.89: thinking per request up", "tokens vs 5", "300 requests in 8 sessions, measured)."} {
+	for _, want := range []string{"Claude Code 2.1.89: thinking per request (claude-opus-5-5, high effort) up", "tokens vs 5", "300 requests in 8 sessions, measured)."} {
 		if !strings.Contains(got.Sentence, want) {
 			t.Errorf("sentence %q lacks %q", got.Sentence, want)
 		}
@@ -166,7 +170,7 @@ func TestServerSpikeNeedsTwoVersions(t *testing.T) {
 	if !strings.Contains(day.Advice, "drop effort one level") || strings.Contains(day.Advice, "pin") {
 		t.Errorf("advice = %q", day.Advice)
 	}
-	if !strings.HasPrefix(day.Sentence, "On 2026-11-26: requests with thinking up") {
+	if !strings.HasPrefix(day.Sentence, "On 2026-11-26: requests with thinking (claude-opus-5-5, high effort) up") {
 		t.Errorf("sentence = %q", day.Sentence)
 	}
 }
@@ -231,5 +235,29 @@ func TestDeterministicInAnyOrder(t *testing.T) {
 	}
 	if b := fmt.Sprintf("%+v", h.run()); a != b {
 		t.Fatal("result depends on input order")
+	}
+}
+
+// Moving to a model or effort that thinks more is the user's choice, not a regression: thinking is compared
+// within the most common model and effort.
+func TestModelOrEffortSwitchDoesNotAlert(t *testing.T) {
+	h := newHist()
+	for d := 21; d >= 2; d-- {
+		h.dayOn(d, "2.1.88", "claude-sonnet-5-5", "medium", 60, 3, 400, 100, 0.5, 0.01)
+		h.dayOn(d, "2.1.88", "claude-opus-5-5", "high", 30, 2, 1500, 300, 0.9, 0.01)
+	}
+	for d := 1; d >= 0; d-- {
+		h.dayOn(d, "2.1.89", "claude-opus-5-5", "high", 150, 4, 1500, 300, 0.9, 0.01)
+		h.dayOn(d, "2.1.88", "claude-sonnet-5-5", "medium", 40, 2, 400, 100, 0.5, 0.01)
+	}
+	r := h.run()
+	for _, a := range r.Alerts {
+		if a.Metric == MetricThinkTokens || a.Metric == MetricThinkShare {
+			t.Errorf("alerted on a model switch: %s", a.Sentence)
+		}
+	}
+	c := find(r, KindVersion, "2.1.89", MetricThinkTokens)
+	if c == nil || c.Status != StatusNormal || c.Stratum != "claude-opus-5-5, high effort" {
+		t.Fatalf("check = %+v", c)
 	}
 }

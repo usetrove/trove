@@ -47,6 +47,9 @@ func RegressionBody(alerts []regress.Alert, d Diagnostics, note string) string {
 		} else {
 			fmt.Fprintf(&b, "- day: %s, Claude Code versions active: %s\n", a.Key, listOrNone(a.Active))
 		}
+		if a.Stratum != "" {
+			fmt.Fprintf(&b, "- compared within: %s\n", a.Stratum)
+		}
 		fmt.Fprintf(&b, "- now: %s, usual: %s (median of %d earlier days)\n", regress.FormatValue(a.Metric, a.Value), regress.FormatValue(a.Metric, a.Baseline), a.Blocks)
 		change := "from zero"
 		if a.Baseline > 0 {

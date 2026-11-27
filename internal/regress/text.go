@@ -88,8 +88,12 @@ func Sentence(a Alert) string {
 	if a.Basis != "" {
 		lbl = a.Basis
 	}
+	what := metricPhrase[a.Metric]
+	if a.Stratum != "" {
+		what += " (" + a.Stratum + ")"
+	}
 	return fmt.Sprintf("%s: %s %s on your usual (%s vs %s, %d %s in %d sessions, %s).",
-		subject, metricPhrase[a.Metric], change, FormatValue(a.Metric, a.Value), FormatValue(a.Metric, a.Baseline),
+		subject, what, change, FormatValue(a.Metric, a.Value), FormatValue(a.Metric, a.Baseline),
 		a.N, unitOf(a.Metric), a.Sessions, lbl)
 }
 
