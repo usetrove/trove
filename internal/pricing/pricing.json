@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "data_version": "2026-11-12.1",
+  "data_version": "2026-11-26.1",
   "notes": [
     "All prices are USD per million tokens (tool fees per 1,000 calls) from the providers' published list prices. Values derived from them are estimates, not invoices.",
     "Service tiers: Request.ServiceTier accepts fast (OpenAI, Anthropic Opus), ultrafast (OpenAI), priority (Gemini) and flex (OpenAI, Gemini; priced like batch). Premium tiers cannot be combined with batch. Adapters map each provider's own field value onto these names.",
@@ -41,7 +41,7 @@
       ],
       "tokenizer_note": "Uses the previous tokenizer; Claude 4.7 and later produce approximately 30% more tokens for the same text.",
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -78,7 +78,7 @@
       ],
       "tokenizer_note": "Uses the previous tokenizer; Claude 4.7 and later produce approximately 30% more tokens for the same text.",
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -115,7 +115,7 @@
       ],
       "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -166,7 +166,7 @@
       ],
       "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -217,7 +217,7 @@
       ],
       "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -271,7 +271,7 @@
         "Cache reads are 0.05x base input. The release notes list no cache-read change for this model since launch."
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -308,7 +308,7 @@
       ],
       "tokenizer_note": "Claude 4.7 and later use a newer tokenizer that produces approximately 30% more tokens for the same text than Claude Sonnet 4.6 and earlier; the exact increase depends on content. The same prompt can cost more per task even at an unchanged per-token price.",
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -348,7 +348,7 @@
         "Cache reads are 0.025x base input."
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -402,7 +402,7 @@
         "Cache reads are 0.025x base input."
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -439,7 +439,7 @@
         "The release notes schedule retirement of this model on the Claude API for 2026-11-30. It stays priced so earlier requests are still costed."
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -476,7 +476,7 @@
       ],
       "tokenizer_note": "Uses the previous tokenizer; Claude 4.7 and later produce approximately 30% more tokens for the same text.",
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -516,7 +516,7 @@
         "$2/$10 launched as introductory pricing and became the standard price on 2026-08-10; the scheduled increase to $3/$15 will not occur."
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -556,7 +556,7 @@
         "Superseded on 2026-10-07 when cache reads dropped from $0.20 to $0.10 per MTok."
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -596,7 +596,7 @@
         "Cache reads are 0.05x base input (changed from 0.1x on 2026-10-07)."
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -629,7 +629,7 @@
       ],
       "tokenizer_note": "Uses the previous tokenizer; Claude 4.7 and later produce approximately 30% more tokens for the same text.",
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -679,7 +679,7 @@
         "Priced per request by prompt length: prompts over 100,000 tokens (counting cache reads and writes) pay the higher prices for the whole request. The 1.1x US multiplier applies to both price sets."
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -720,7 +720,7 @@
         "Launched alongside Claude Fable 5 with the same prices."
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -761,7 +761,7 @@
         "Cache reads are 0.025x base input, like Claude Fable 5.1."
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "anthropic",
@@ -816,7 +816,7 @@
         "Launched alongside Claude Fable 5.2 with the same prices. Cache reads are 0.025x base input."
       ],
       "source_url": "https://platform.claude.com/docs/en/about-claude/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -909,7 +909,7 @@
         "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1002,7 +1002,7 @@
         "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1074,7 +1074,7 @@
         "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1146,7 +1146,7 @@
         "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1218,7 +1218,7 @@
         "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1291,7 +1291,7 @@
         "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1364,7 +1364,7 @@
         "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1437,7 +1437,7 @@
         "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1488,7 +1488,7 @@
         "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1539,7 +1539,7 @@
         "Long-context prices apply above 272K input tokens for the full request (stated on the gpt-6-astra, gpt-5.6-sol and gpt-5.5 model pages; assumed for the rest of the family)."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1579,7 +1579,7 @@
         }
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1610,7 +1610,7 @@
         }
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1647,7 +1647,7 @@
         "Not listed on the batch pricing table, so batch requests are unpriced."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1687,7 +1687,7 @@
         }
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1727,7 +1727,7 @@
         }
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1767,7 +1767,7 @@
         }
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1807,7 +1807,7 @@
         }
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1838,7 +1838,7 @@
         }
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1877,7 +1877,7 @@
         "No cache price: the page lists none. Batch and flex are listed only up to 272K tokens ($15/$90); above that they are unpriced."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1915,7 +1915,7 @@
         "No cache price: the page lists none."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1946,7 +1946,7 @@
         "No cache price: the page lists none."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -1977,7 +1977,7 @@
         "No cache price: the page lists none. Launched 2025-06-10."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "openai",
@@ -2019,7 +2019,7 @@
         "Effective date is the 2025-06-10 price reduction announced in the OpenAI changelog; the earlier price is not on any current page, so earlier requests are unpriced. The batch table lists no cached-input price. Flex input and output equal batch, but flex cached input ($0.25 for o3, $0.138 for o4-mini) differs from the batch rate, so flex cache reads are unpriced."
       ],
       "source_url": "https://developers.openai.com/api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2060,7 +2060,7 @@
         "Implicit caching only; no storage fee."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2101,7 +2101,7 @@
         "Implicit caching only; no storage fee."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2142,7 +2142,7 @@
         "Implicit caching only; no storage fee."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2183,7 +2183,7 @@
         "Implicit caching only; no storage fee."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2223,7 +2223,7 @@
         "Implicit caching only; no storage fee. The pricing page lists no scheduled price change."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2263,7 +2263,7 @@
         "Price is scheduled to change on 2027-01-01 (see the entry with that effective_from)."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2303,7 +2303,7 @@
         "Future-dated price published on the pricing page; effective_from comes from that page, not the changelog."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2343,7 +2343,7 @@
         "Price is scheduled to change on 2027-01-01 (see the entry with that effective_from)."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2383,7 +2383,7 @@
         "Future-dated price published on the pricing page; effective_from comes from that page, not the changelog."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2422,7 +2422,7 @@
         "Flex input and output equal batch, but flex cached input is $0.02 against $0.015 for batch, so flex requests are unpriced rather than priced wrongly."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2462,7 +2462,7 @@
         "Launch date is general availability; the preview launched 2026-03-03 and its price is not recorded."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2518,7 +2518,7 @@
         "Prompts over 200k tokens pay the higher prices for the whole request."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2558,7 +2558,7 @@
         "Launch date is the preview launch; the changelog records no price change since."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2610,7 +2610,7 @@
         "Prompts over 200k tokens pay the higher prices for the whole request."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2636,7 +2636,7 @@
         "The Gemini 3.8 Flash price doubles on 2027-01-01 (see the entry with that effective_from)."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2661,7 +2661,7 @@
         "The 2026-11-02 release notes say that from 2026-12-01 all requests to gemini-2.5-pro are routed to gemini-3.8-flash and billed at its rates. Only standard prices are listed here: the notes do not say the other tiers (batch, flex, priority) follow, so those come back unpriced."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2700,7 +2700,7 @@
         "Text/image/video input prices; audio input is priced higher and is not distinguished. Output price includes thinking tokens. Context-cache storage is billed per token-hour and is not computable from usage."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2725,7 +2725,7 @@
         "The 2026-11-02 release notes say that from 2026-12-01 all requests to gemini-2.5-flash are routed to gemini-3.5-flash-lite and billed at its rates. Only standard prices are listed here: the notes do not say the other tiers (batch, flex, priority) follow, so those come back unpriced."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     },
     {
       "provider": "google",
@@ -2765,7 +2765,7 @@
         "Launch date is general availability; the preview launched 2025-06-17 and its price is not recorded."
       ],
       "source_url": "https://ai.google.dev/gemini-api/docs/pricing",
-      "verified_at": "2026-11-12"
+      "verified_at": "2026-11-26"
     }
   ]
 }
